@@ -147,14 +147,15 @@ defect in an adapter.
 
 **Acceptance evidence.**
 
-- **`pnpm corpus` passes over fourteen repositories**, ten agent systems and four that are not. Every framework adapter
+- **`pnpm corpus:exercise` passes over fourteen entries**, ten agent systems and four that are not, across thirteen
+  distinct repositories: one is pinned twice, once measured statically and once with a run in it. Every framework adapter
   contributes to at least one: OpenAI Agents SDK in both languages, LangGraph in both, CrewAI, Pydantic AI, the Vercel
   AI SDK read from an application rather than from the library that defines it, and the model SDK adapter from
   `anthropic-quickstarts`. `tests/e2e/corpus.test.ts` holds that coverage claim rather than trusting it, and fails if a
   framework adapter stops appearing anywhere in the corpus.
-- **The summary reports parse rate, adapter contribution and blind spots per repository.** Thirteen of the fourteen
-  entries parse every file in a language this build reads; `pydantic-ai` parses 596 of 600 and the four it misses are
-  Python files past the size limit. Four blind spots are recorded across three repositories, each naming a framework a
+- **The summary reports parse rate, adapter contribution and blind spots per repository.** Twelve of the fourteen
+  entries parse every file in a language this build reads; the two that do not are the two pins of `pydantic-ai`, which
+  parse 596 of 600 because four Python files are past the size limit. Four blind spots are recorded across three repositories, each naming a framework a
   repository imports and the adapter that read nothing from it.
 - **The first number the corpus reported was wrong, and the corpus is what caught it.** The summary divided files
   parsed by files discovered and called it a parse rate, so `pydantic-ai` read as 33% when every Python file in it had
@@ -173,11 +174,11 @@ defect in an adapter.
 
 **What the corpus already says**, before a single new adapter is written:
 
-- **No relation was discarded anywhere.** The phase 16 fix holds across 14 repositories and 9198 components rather than
-  across the one repository that produced the crash.
-- **`pydantic-ai` is the only entry that does not read everything it claims to.** Four Python files are past the size
-  limit, so 596 of 600 are parsed. Every other entry reads all of them, which is a stronger statement than the corpus
-  could make before the denominator was fixed.
+- **No relation was discarded anywhere.** The phase 16 fix holds across fourteen entries and 9198 components rather
+  than across the one repository that produced the crash.
+- **`pydantic-ai` is the only repository that does not read everything it claims to.** Four Python files are past the
+  size limit, so 596 of 600 are parsed. Every other entry reads all of them, which is a stronger statement than the
+  corpus could make before the denominator was fixed.
 - **`axios` yields 128 components, all of them from the effect reader, and no agent system.** That is the ceiling for
   what the retry, timeout and side effect rules cost on code that has nothing to do with agents.
 - **`packages/discovery` yields nothing at all.** Every framework name this product knows appears in that directory as a
