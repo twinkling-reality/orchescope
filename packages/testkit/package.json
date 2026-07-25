@@ -1,0 +1,16 @@
+{
+  "name": "@orchescope/testkit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic fixtures, builders and temporary workspaces for Orchescope tests.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@orchescope/domain": "workspace:*",
+    "@orchescope/graph": "workspace:*",
+    "@orchescope/schema": "workspace:*"
+  }
+}
