@@ -8,3 +8,11 @@ savePrefix: ''
 onlyBuiltDependencies:
   - esbuild
   - '@biomejs/biome'
+
+# dependency-cruiser reads TypeScript through the compiler API and supports typescript@<7, while the repository
+# typechecks with typescript@7. Giving dependency-cruiser its own copy keeps the architecture rules actually
+# enforced instead of silently cruising nothing.
+packageExtensions:
+  dependency-cruiser:
+    dependencies:
+      typescript: 6.0.3

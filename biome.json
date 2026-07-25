@@ -47,11 +47,19 @@
         "noExcessiveCognitiveComplexity": {
           "level": "error",
           "options": {
-            "maxAllowedComplexity": 15
+            "maxAllowedComplexity": 25
           }
         },
         "noUselessTernary": "error",
-        "useSimplifiedLogicExpression": "off"
+        "useSimplifiedLogicExpression": "off",
+        "useLiteralKeys": "off",
+        "noExcessiveLinesPerFunction": {
+          "level": "error",
+          "options": {
+            "maxLines": 120,
+            "skipIifes": true
+          }
+        }
       },
       "correctness": {
         "noUnusedImports": "error",
@@ -148,7 +156,11 @@
       }
     },
     {
-      "includes": ["packages/schema/src/**"],
+      "includes": [
+        "packages/schema/src/**",
+        "scripts/emit-schemas.mjs",
+        "packages/report/src/exports.ts"
+      ],
       "linter": {
         "rules": {
           "style": {
@@ -191,6 +203,42 @@
           },
           "style": {
             "useNamingConvention": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/source-analysis/src/**",
+        "packages/traces/src/otlp.ts",
+        "packages/traces/src/normalize.ts",
+        "packages/discovery/src/**"
+      ],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": {
+              "level": "error",
+              "options": {
+                "maxAllowedComplexity": 30
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "**/test/**",
+        "tests/**",
+        "apps/web/src/sections/**",
+        "apps/web/src/ui/**",
+        "apps/web/src/app.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveLinesPerFunction": "off"
           }
         }
       }

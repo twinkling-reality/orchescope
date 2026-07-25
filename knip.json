@@ -2,8 +2,8 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.mjs", "playwright.config.ts"],
-      "project": ["scripts/**/*.mjs"]
+      "entry": ["scripts/*.mjs", "playwright.config.ts", "tests/**/*.test.ts"],
+      "project": ["scripts/**/*.mjs", "tests/**/*.ts"]
     },
     "packages/*": {
       "entry": ["src/index.ts"],
@@ -11,10 +11,11 @@
     },
     "apps/cli": {
       "entry": ["src/main.ts"],
-      "project": ["src/**/*.ts"]
+      "project": ["src/**/*.ts"],
+      "ignoreDependencies": ["oxc-parser", "tree-sitter-python", "web-tree-sitter"]
     },
     "apps/demo": {
-      "entry": ["src/main.ts", "src/scenario-driver.ts"],
+      "entry": ["src/main.ts"],
       "project": ["src/**/*.ts"]
     },
     "apps/web": {
@@ -22,7 +23,7 @@
       "project": ["src/**/*.{ts,tsx}"]
     }
   },
-  "ignore": ["**/fixtures/**", "**/dist/**", "tests/e2e/**"],
+  "ignore": ["**/dist/**"],
   "ignoreDependencies": ["@playwright/test"],
   "ignoreExportsUsedInFile": true,
   "includeEntryExports": false,

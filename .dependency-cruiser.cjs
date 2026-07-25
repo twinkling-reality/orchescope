@@ -95,7 +95,8 @@ module.exports = {
       comment:
         'The domain core computes stable identities with node:crypto and must not reach any other platform API.',
       from: { path: '^packages/domain/src' },
-      to: { dependencyTypes: ['core'], pathNot: '^node:crypto$' },
+      // dependency-cruiser reports a core module by its bare name, so both spellings are named here.
+      to: { dependencyTypes: ['core'], pathNot: '^(node:)?crypto$' },
     },
     {
       name: 'core-does-not-depend-outward',
@@ -165,7 +166,6 @@ module.exports = {
       exportsFields: ['exports'],
       conditionNames: ['import', 'require', 'node', 'default'],
       extensions: ['.ts', '.tsx', '.js', '.mjs', '.cjs'],
-      symlinks: false,
     },
     reporterOptions: {
       dot: { collapsePattern: 'node_modules/(@[^/]+/[^/]+|[^/]+)' },
