@@ -1,0 +1,266 @@
+schemaVersion: 1
+
+# The demonstration system is written by hand: it imports no agent framework and no model SDK, because it has to run
+# offline with no credentials. That is exactly the case this manifest exists for. Orchescope has no adapter that can
+# read a bespoke system's topology from source, so the topology is declared here and reconciled against what the runs
+# actually exercise. Manifest declared facts are labelled discovered, never observed.
+#
+# `runtimeName` is the name the running system reports on its spans, which is what reconciliation matches on.
+
+project:
+  name: orchescope-demo
+  description: Deterministic support desk agent system used to demonstrate Orchescope end to end.
+  ecosystem: javascript
+
+components:
+  - name: orchestrator
+    kind: agent
+    displayName: orchestrator
+    description: Plans the response, calls tools, hands off to workers and writes the final answer.
+    definedIn: src/agents/orchestrator.ts
+    definedAtLine: 1
+    runtimeName: orchestrator
+    tags: [demo, orchestrator]
+
+  - name: account-worker
+    kind: agent
+    description: Answers account questions from the account tool result.
+    definedIn: src/agents/workers.ts
+    definedAtLine: 1
+    runtimeName: account-worker
+    tags: [demo, worker]
+
+  - name: inventory-worker
+    kind: agent
+    description: Answers stock questions from the inventory tool result.
+    definedIn: src/agents/workers.ts
+    definedAtLine: 1
+    runtimeName: inventory-worker
+    tags: [demo, worker]
+
+  - name: shipping-worker
+    kind: agent
+    description: Added only when the worker count is raised above two.
+    definedIn: src/agents/definitions.ts
+    definedAtLine: 59
+    runtimeName: shipping-worker
+    tags: [demo, worker, optional]
+
+  - name: billing-worker
+    kind: agent
+    description: Added only when the worker count is raised above three.
+    definedIn: src/agents/definitions.ts
+    definedAtLine: 65
+    runtimeName: billing-worker
+    tags: [demo, worker, optional]
+
+  - name: demo-small
+    kind: model
+    description: Scripted local model. Deterministic given the seed, no credentials, no network.
+    definedIn: src/model.ts
+    definedAtLine: 1
+    runtimeName: demo-small
+    tags: [demo, model]
+
+  - name: demo-large
+    kind: model
+    description: Fallback model. Configured for the case where the small model fails, and not exercised on the default path.
+    definedIn: src/model.ts
+    definedAtLine: 1
+    runtimeName: demo-large
+    tags: [demo, model, fallback]
+
+  - name: lookup_account
+    kind: tool
+    description: Reads the account record for a customer.
+    definedIn: src/tools/account.ts
+    definedAtLine: 1
+    sideEffect: read_only
+    runtimeName: lookup_account
+    tags: [demo, tool]
+
+  - name: check_inventory
+    kind: tool
+    description: Reads stock levels for a stock keeping unit.
+    definedIn: src/tools/inventory.ts
+    definedAtLine: 1
+    sideEffect: read_only
+    runtimeName: check_inventory
+    tags: [demo, tool]
+
+  - name: issue_refund
+    kind: tool
+    description: Issues a refund against a payment. Retried on failure and does not pass an idempotency key.
+    definedIn: src/tools/refund.ts
+    definedAtLine: 1
+    sideEffect: financial
+    permissions:
+      - kind: network
+        scope: payments
+        mode: write
+    runtimeName: issue_refund
+    tags: [demo, tool, side-effect]
+
+  - name: send_notification
+    kind: tool
+    description: Sends a customer notification. Passes an idempotency key on every attempt.
+    definedIn: src/tools/notification.ts
+    definedAtLine: 1
+    sideEffect: idempotent_write
+    permissions:
+      - kind: network
+        scope: notifications
+        mode: write
+    runtimeName: send_notification
+    tags: [demo, tool, side-effect]
+
+  - name: search_policies
+    kind: tool
+    description: Reads the policy documents. The content is treated as untrusted input.
+    definedIn: src/tools/policies.ts
+    definedAtLine: 1
+    sideEffect: read_only
+    runtimeName: search_policies
+    tags: [demo, tool]
+
+  - name: escalate_to_human
+    kind: tool
+    description: Hands the request to a person. Registered and unreachable on the default path.
+    definedIn: src/tools/escalation.ts
+    definedAtLine: 1
+    sideEffect: external_notification
+    runtimeName: escalate_to_human
+    tags: [demo, tool, never-exercised]
+
+  - name: policy-store
+    kind: retrieval
+    description: Small in repository document set searched for refund policy text.
+    definedIn: src/tools/policies.ts
+    definedAtLine: 1
+    runtimeName: policy-store
+    tags: [demo, retrieval]
+
+  - name: conversation-memory
+    kind: memory
+    description: Per conversation state read and written by the orchestrator.
+    definedIn: src/memory.ts
+    definedAtLine: 1
+    runtimeName: conversation-memory
+    tags: [demo, memory]
+
+  - name: refunds
+    kind: queue
+    description: Pending refund requests, drained by a worker pool sized by the worker count.
+    definedIn: src/queue.ts
+    definedAtLine: 1
+    runtimeName: refunds
+    tags: [demo, queue]
+
+  - name: audit-log
+    kind: side_effect
+    description: Append only audit record written from a helper that the agent definitions do not reference.
+    definedIn: src/audit.ts
+    definedAtLine: 1
+    sideEffect: non_idempotent_write
+    runtimeName: audit-log
+    tags: [demo, side-effect]
+
+  - name: refund-approval
+    kind: approval_boundary
+    description: Explicit approval checked before a refund executes.
+    definedIn: src/tools/refund.ts
+    definedAtLine: 1
+    runtimeName: issue_refund
+    tags: [demo, approval]
+
+edges:
+  - from: orchestrator
+    to: demo-small
+    kind: invokes_model
+    policy:
+      timeoutMs: 2000
+      retry:
+        maxAttempts: 3
+        bounded: true
+        backoff: exponential
+        idempotency: declared
+
+  - from: demo-small
+    to: demo-large
+    kind: falls_back_to
+    note: Configured fallback that the default path does not reach.
+
+  - from: orchestrator
+    to: lookup_account
+    kind: calls_tool
+  - from: orchestrator
+    to: check_inventory
+    kind: calls_tool
+  - from: orchestrator
+    to: search_policies
+    kind: calls_tool
+  - from: orchestrator
+    to: send_notification
+    kind: calls_tool
+    policy:
+      retry:
+        maxAttempts: 2
+        bounded: true
+        backoff: fixed
+        idempotency: declared
+
+  - from: orchestrator
+    to: issue_refund
+    kind: calls_tool
+    policy:
+      timeoutMs: 1500
+      requiresApproval: true
+      retry:
+        maxAttempts: 3
+        bounded: true
+        backoff: fixed
+        idempotency: absent
+
+  - from: orchestrator
+    to: escalate_to_human
+    kind: calls_tool
+    note: Registered path that the default scenario never takes.
+
+  - from: orchestrator
+    to: account-worker
+    kind: hands_off_to
+  - from: orchestrator
+    to: inventory-worker
+    kind: hands_off_to
+  - from: orchestrator
+    to: shipping-worker
+    kind: hands_off_to
+  - from: orchestrator
+    to: billing-worker
+    kind: hands_off_to
+
+  - from: account-worker
+    to: demo-small
+    kind: invokes_model
+  - from: inventory-worker
+    to: demo-small
+    kind: invokes_model
+
+  - from: orchestrator
+    to: policy-store
+    kind: queries_retrieval
+  - from: orchestrator
+    to: conversation-memory
+    kind: reads_memory
+  - from: orchestrator
+    to: conversation-memory
+    kind: writes_memory
+  - from: orchestrator
+    to: refunds
+    kind: publishes_to_queue
+  - from: orchestrator
+    to: audit-log
+    kind: performs_side_effect
+  - from: issue_refund
+    to: refund-approval
+    kind: guarded_by

@@ -1,0 +1,62 @@
+schemaVersion: 1
+id: support-desk-duplicate
+name: Support desk with a refund whose outcome is unknown
+description: >
+  One fault, one consequence. A timeout on the refund tool means the payment gateway took the request and this process
+  does not know whether it committed. The retry has no idempotency key with which to ask, so the effect can happen
+  twice. This is the scenario the duplicate side effect finding is built from, and the scenario a fix has to pass.
+
+target:
+  command: ['node', 'src/main.ts']
+  resultSource: result_file
+  timeoutMs: 30000
+  stopSignal: SIGTERM
+
+input:
+  prompt: Where is my order 1234, and can I get a refund if it is late?
+
+variant:
+  agents: 3
+  workers: 2
+  concurrency: 1
+
+expect:
+  prohibitedEffects:
+    - kind: refund
+      maxCount: 1
+
+evaluators:
+  - kind: no_duplicate_effects
+  - kind: metric_threshold
+    metric: duplicateSideEffects
+    comparator: eq
+    value: 0
+
+budgets:
+  maxDurationMs: 30000
+  maxTokens: 200000
+  maxRetries: 20
+
+faults:
+  - kind: tool_timeout
+    target: issue_refund
+    delivery: cooperative
+    probability: 1
+    attempts: [1]
+    maxApplications: 1
+    delayMs: 10
+
+seed: 11
+repetitions: 1
+
+requiredPermissions:
+  - process:spawn
+  - network:loopback
+
+tags:
+  - support
+  - refund
+  - idempotency
+
+metadata:
+  owner: demonstration

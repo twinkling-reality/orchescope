@@ -1,0 +1,84 @@
+schemaVersion: 1
+id: support-desk
+name: Support desk refund and inventory request
+description: >
+  The default path through the demonstration system. One customer asks about a delayed order, which makes the
+  orchestrator look up the account, check inventory, consult the policy store, issue a refund and send a
+  notification. This scenario is the baseline every other measurement in the demonstration compares against.
+
+target:
+  command: ['node', 'src/main.ts']
+  resultSource: result_file
+  timeoutMs: 30000
+  stopSignal: SIGTERM
+
+input:
+  prompt: Where is my order 1234, and can I get a refund if it is late?
+
+variant:
+  agents: 3
+  workers: 2
+  concurrency: 1
+  topology: star
+  model:
+    provider: orchescope-demo
+    model: demo-small
+
+expect:
+  taskSuccess: true
+  requiredEffects:
+    - kind: refund
+      target: payments/order-1234
+      minCount: 1
+    - kind: notification
+      minCount: 1
+  prohibitedEffects:
+    - kind: refund
+      maxCount: 1
+
+evaluators:
+  - kind: exit_code
+    equals: 0
+  - kind: output_contains_all
+    values: ['Refund approved']
+  - kind: output_contains_none
+    values: ['unhandled', 'stack trace']
+  - kind: span_observed
+    operation: execute_tool
+    componentName: lookup_account
+    minCount: 1
+  - kind: span_observed
+    operation: chat
+    minCount: 1
+  - kind: effect_recorded
+    effect:
+      kind: notification
+      minCount: 1
+  - kind: no_duplicate_effects
+  - kind: metric_threshold
+    metric: errors
+    comparator: eq
+    value: 0
+
+budgets:
+  maxDurationMs: 30000
+  maxTokens: 200000
+  maxModelCalls: 200
+  maxRetries: 20
+
+faults: []
+
+seed: 1
+repetitions: 3
+
+requiredPermissions:
+  - process:spawn
+  - network:loopback
+
+tags:
+  - support
+  - refund
+  - baseline
+
+metadata:
+  owner: demonstration
