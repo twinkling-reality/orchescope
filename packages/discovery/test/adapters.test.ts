@@ -537,6 +537,86 @@ triage_agent = Agent(
 });
 
 /**
+ * The LangGraph prebuilt ReAct agent, which is the form the library's own example uses and the form most agents
+ * are written in: one call that names the model, the tools and the prompt.
+ */
+describe('a LangGraph prebuilt agent', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writePythonProject(workspace, { name: 'concierge', dependencies: ['langgraph>=0.2'] });
+    workspace.write(
+      'src/concierge.py',
+      `from langgraph.prebuilt import create_react_agent
+
+
+def check_weather(location: str) -> str:
+    """Return the weather forecast for the specified location."""
+    return f"It's always sunny in {location}"
+
+
+def book_flight(destination: str) -> str:
+    """Book a flight to the destination."""
+    return destination
+
+
+concierge = create_react_agent(
+    "anthropic:claude-3-7-sonnet-latest",
+    tools=[check_weather, book_flight],
+    prompt="You are a helpful assistant",
+)
+`,
+    );
+  };
+
+  it('discovers the agent, the model, the provider and the tools from one call', async () => {
+    const { ids, edges, adapters } = await scan(build);
+    assert.ok(
+      adapters.some(
+        (entry) => entry.adapterId === 'adapter:langgraph' && entry.status === 'completed',
+      ),
+      'the langgraph adapter did not apply',
+    );
+    assert.ok(ids.includes('agent:concierge'), `expected agent:concierge in ${ids.join(', ')}`);
+    assert.ok(ids.includes('model:anthropic/claude-3-7-sonnet-latest'));
+    assert.ok(ids.includes('provider:anthropic'));
+    assert.ok(ids.includes('tool:check_weather'), 'a function passed as a tool is a tool');
+    assert.ok(ids.includes('tool:book_flight'));
+    assert.ok(
+      edges.includes('invokes_model:agent:concierge->model:anthropic/claude-3-7-sonnet-latest'),
+      `expected the model relation in ${edges.join(', ')}`,
+    );
+    assert.ok(
+      edges.includes(
+        'served_by_provider:model:anthropic/claude-3-7-sonnet-latest->provider:anthropic',
+      ),
+    );
+    assert.ok(edges.includes('calls_tool:agent:concierge->tool:check_weather'));
+    assert.ok(edges.includes('calls_tool:agent:concierge->tool:book_flight'));
+  });
+
+  it('points a tool at the function that defines it rather than at the call', async () => {
+    const { result } = await scan(build);
+    const tool = result.graph.components.find((component) => component.id === 'tool:check_weather');
+    assert.equal(tool?.sourceLocations[0]?.file, 'src/concierge.py');
+    assert.equal(
+      tool?.sourceLocations[0]?.startLine,
+      4,
+      'the tool should be located where the function is defined',
+    );
+  });
+
+  it('takes the prompt as the description without claiming it is a separate component', async () => {
+    const { ids, result } = await scan(build);
+    const agent = result.graph.components.find((component) => component.id === 'agent:concierge');
+    assert.equal(agent?.description, 'You are a helpful assistant');
+    assert.equal(
+      ids.some((id) => id.startsWith('agent_group:')),
+      false,
+      'a prebuilt agent is one component, not a graph of them',
+    );
+  });
+});
+
+/**
  * Pydantic AI.
  *
  * The model is the first positional argument as `provider:model`, tools are registered by a decorator on the

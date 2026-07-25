@@ -80,6 +80,10 @@ and it is listed item by item because only some of it is done.
   when none is declared because that is what the library infers at run time, and records a tool's `retries` as a
   bounded retry with unknown backoff and unknown idempotency. Evidence: seven tests, and an audit of a Pydantic AI
   repository where the existing retry safety rule fires on the declared ceiling without any rule being changed.
+- **The LangGraph prebuilt agent is read.** `create_react_agent(model, tools=[...])` is the form the library's own
+  example uses, and it declared nothing at all before: no graph, no nodes, nothing. One call now yields the agent, the
+  model, the provider, the tools at their own definitions, and the relations between them. A model written as
+  `provider:model` is a shared concept between two frameworks, so it lives in `model-reference.ts` rather than twice.
 
 **Not done:**
 

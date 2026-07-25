@@ -1,16 +1,12 @@
 import { CONFIDENCE_BANDS, identityKey } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type { ComponentIdentity, EdgePolicy } from '@orchescope/schema';
-import type {
-  CallFact,
-  DefinitionFact,
-  ModuleFacts,
-  ObjectEntryFact,
-} from '@orchescope/source-analysis';
+import type { CallFact, DefinitionFact, ObjectEntryFact } from '@orchescope/source-analysis';
 import { booleanValue, findEntry, numberValue, stringValue } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
-import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
+import { createDrafts, sourceIdentity } from '../drafts.ts';
 import { decoratedDefinitions, definitionForCall, matchCalls, projectUses } from '../matching.ts';
+import { addModelReference } from '../model-reference.ts';
 
 /**
  * Pydantic AI.
@@ -33,23 +29,6 @@ const drafts = createDrafts(ADAPTER_ID);
 
 const TOOL_DECORATORS = ['tool', 'tool_plain'];
 
-const providerIdentity = (provider: string): ComponentIdentity =>
-  globalIdentity('provider', GLOBAL_NAMESPACES.provider, provider);
-
-const modelIdentity = (name: string): ComponentIdentity =>
-  globalIdentity('model', GLOBAL_NAMESPACES.model, name);
-
-/** `openai:gpt-4.1-mini` names both halves. A value without the separator names only a model. */
-const splitModel = (
-  value: string,
-): { readonly provider: string | undefined; readonly model: string } => {
-  const separator = value.indexOf(':');
-  if (separator <= 0 || separator === value.length - 1) {
-    return { provider: undefined, model: value };
-  }
-  return { provider: value.slice(0, separator), model: value.slice(separator + 1) };
-};
-
 /**
  * The keyword arguments of a call.
  *
@@ -66,8 +45,6 @@ const keywordEntries = (call: CallFact): readonly ObjectEntryFact[] => {
 
 type DiscoveredAgent = {
   readonly identity: ComponentIdentity;
-  readonly module: ModuleFacts;
-  readonly call: CallFact;
   /** Retries the agent declares, which a tool inherits when it declares none of its own. */
   readonly retries: number | undefined;
 };
@@ -97,66 +74,6 @@ const retryPolicy = (attempts: number | undefined): EdgePolicy | undefined =>
           idempotency: 'unknown',
         },
       };
-
-const addModel = (
-  builder: SystemGraphBuilder,
-  agent: DiscoveredAgent,
-  declared: string,
-): { readonly components: number; readonly edges: number } => {
-  const { provider, model } = splitModel(declared);
-  const identity = modelIdentity(provider === undefined ? model : `${provider}/${model}`);
-
-  builder.addComponent(
-    drafts.sourceComponent({
-      kind: 'model',
-      identity,
-      file: agent.module.file,
-      name: provider === undefined ? model : `${provider}/${model}`,
-      displayName: model,
-      location: agent.call.location,
-      symbol: `model: ${declared}`,
-      details: {
-        for: 'model',
-        modelId: model,
-        ...(provider === undefined ? {} : { provider }),
-      },
-      metadata: { framework: 'pydantic-ai' },
-    }),
-  );
-  builder.addEdge(
-    drafts.edge({
-      kind: 'invokes_model',
-      from: agent.identity,
-      to: identity,
-      location: agent.call.location,
-      symbol: `model: ${declared}`,
-    }),
-  );
-  if (provider === undefined) return { components: 1, edges: 1 };
-
-  builder.addComponent(
-    drafts.sourceComponent({
-      kind: 'provider',
-      identity: providerIdentity(provider),
-      file: agent.module.file,
-      name: provider,
-      location: agent.call.location,
-      symbol: `provider: ${provider}`,
-      permissions: [{ kind: 'network', scope: provider, mode: 'write' }],
-      metadata: { framework: 'pydantic-ai' },
-    }),
-  );
-  builder.addEdge(
-    drafts.edge({
-      kind: 'served_by_provider',
-      from: identity,
-      to: providerIdentity(provider),
-      location: agent.call.location,
-      symbol: `model: ${declared}`,
-    }),
-  );
-  return { components: 2, edges: 2 };
-};
 
 /** The model is the first positional argument or the `model` keyword. */
 const declaredModel = (call: CallFact, entries: readonly ObjectEntryFact[]): string | undefined =>
@@ -215,17 +132,20 @@ const addAgents = (
     }
     context.bindings.register(match.module.file, name, identity);
 
-    const agent: DiscoveredAgent = {
-      identity,
-      module: match.module,
-      call: match.call,
-      retries: numberValue(findEntry(entries, 'retries')?.value),
-    };
-    agents.push(agent);
+    agents.push({ identity, retries: numberValue(findEntry(entries, 'retries')?.value) });
 
     const model = declaredModel(match.call, entries);
     if (model === undefined) continue;
-    const added = addModel(builder, agent, model);
+    const added = addModelReference({
+      drafts,
+      builder,
+      declared: model,
+      file: match.module.file,
+      location: match.call.location,
+      framework: 'pydantic-ai',
+      invokedBy: identity,
+      confidence: match.confidence,
+    });
     components += added.components;
     edges += added.edges;
   }

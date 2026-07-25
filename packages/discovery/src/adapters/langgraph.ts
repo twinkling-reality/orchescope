@@ -1,10 +1,17 @@
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type { ComponentIdentity } from '@orchescope/schema';
-import type { ModuleFacts } from '@orchescope/source-analysis';
-import { calleeName, dotted, stringValue } from '@orchescope/source-analysis';
+import type { CallFact, ModuleFacts, ObjectEntryFact } from '@orchescope/source-analysis';
+import {
+  calleeName,
+  dotted,
+  findEntry,
+  identifierItems,
+  stringValue,
+} from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { createDrafts, sourceIdentity } from '../drafts.ts';
-import { importsAny, projectUses } from '../matching.ts';
+import { definitionForCall, importsAny, projectUses } from '../matching.ts';
+import { addModelReference } from '../model-reference.ts';
 
 /**
  * LangGraph, in both ecosystems.
@@ -79,6 +86,15 @@ const nodeNameFrom = (
     return last === undefined || SENTINELS.has(last) ? undefined : last;
   }
   return undefined;
+};
+
+/** Python keyword arguments arrive as one object argument appended after the positional ones. */
+const keywordEntries = (call: CallFact): readonly ObjectEntryFact[] => {
+  for (let index = call.args.length - 1; index >= 0; index -= 1) {
+    const argument = call.args[index];
+    if (argument !== undefined && argument.kind === 'object') return argument.entries;
+  }
+  return [];
 };
 
 type Counts = { components: number; edges: number };
@@ -217,6 +233,111 @@ const addConditionalEdges = (
   return edges;
 };
 
+/**
+ * The prebuilt ReAct agent, which is one call rather than a graph.
+ *
+ * `create_react_agent("anthropic:claude-3-7-sonnet-latest", tools=[check_weather])` is how the library's own
+ * example writes an agent, and it declares three things at once: the agent, the model reference with its
+ * provider, and the tools. A function named in that list is a tool by construction, so it is recorded even
+ * though nothing else in the repository marks it as one, at its definition rather than at the call.
+ *
+ * Only the Python spelling is read. The JavaScript helper takes a different shape, and reading it the same way
+ * would be a guess rather than a fact.
+ */
+const discoverReactAgents = (
+  module: ModuleFacts,
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+): Counts => {
+  let components = 0;
+  let edges = 0;
+  if (module.language !== 'python') return { components, edges };
+
+  for (const call of module.calls) {
+    if (calleeName(call) !== 'create_react_agent') continue;
+    const entries = keywordEntries(call);
+    const definition = definitionForCall(module, call);
+    const name = stringValue(findEntry(entries, 'name')?.value) ?? definition?.name;
+    if (name === undefined) continue;
+
+    const identity = sourceIdentity('agent', module.file, name);
+    const prompt = stringValue(findEntry(entries, 'prompt')?.value);
+    builder.addComponent(
+      drafts.sourceComponent({
+        kind: 'agent',
+        file: module.file,
+        name,
+        location: call.location,
+        symbol: 'create_react_agent',
+        ...(prompt === undefined ? {} : { description: prompt.slice(0, 240) }),
+        details: {
+          for: 'agent',
+          framework: 'langgraph',
+          role: 'worker',
+          ...(prompt === undefined ? {} : { instructionsRef: `inline:${name}` }),
+        },
+        metadata: { framework: 'langgraph', declaredName: name, prebuilt: 'react' },
+        tags: ['langgraph'],
+      }),
+    );
+    components += 1;
+    context.bindings.register(module.file, name, identity);
+    if (definition !== undefined) context.bindings.register(module.file, definition.name, identity);
+
+    const model = stringValue(call.args[0]) ?? stringValue(findEntry(entries, 'model')?.value);
+    if (model !== undefined) {
+      const added = addModelReference({
+        drafts,
+        builder,
+        declared: model,
+        file: module.file,
+        location: call.location,
+        framework: 'langgraph',
+        invokedBy: identity,
+      });
+      components += added.components;
+      edges += added.edges;
+    }
+
+    for (const toolName of identifierItems(findEntry(entries, 'tools')?.value)) {
+      const existing = context.bindings.lookup(module.file, toolName);
+      let toolIdentity = existing;
+      if (existing === undefined) {
+        const declaration = module.definitions.find(
+          (candidate) => candidate.name === toolName && candidate.kind === 'function',
+        );
+        toolIdentity = sourceIdentity('tool', module.file, toolName);
+        builder.addComponent(
+          drafts.sourceComponent({
+            kind: 'tool',
+            file: module.file,
+            name: toolName,
+            location: declaration?.location ?? call.location,
+            symbol: `tools: ${toolName}`,
+            details: { for: 'tool' },
+            metadata: { framework: 'langgraph', declaredName: toolName },
+            tags: ['langgraph'],
+          }),
+        );
+        components += 1;
+        context.bindings.register(module.file, toolName, toolIdentity);
+      }
+      if (toolIdentity === undefined) continue;
+      builder.addEdge(
+        drafts.edge({
+          kind: 'calls_tool',
+          from: identity,
+          to: toolIdentity,
+          location: call.location,
+          symbol: `tools: ${toolName}`,
+        }),
+      );
+      edges += 1;
+    }
+  }
+  return { components, edges };
+};
+
 const discoverModule = (
   module: ModuleFacts,
   context: DiscoveryContext,
@@ -236,7 +357,12 @@ const discoverModule = (
     }
   }
 
-  return { components: construction.components + nodes.components, edges };
+  const react = discoverReactAgents(module, context, builder);
+
+  return {
+    components: construction.components + nodes.components + react.components,
+    edges: edges + react.edges,
+  };
 };
 
 export const langGraphAdapter: AgentSystemAdapter = {
