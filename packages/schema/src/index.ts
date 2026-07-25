@@ -58,7 +58,6 @@ export {
   RedactionConfig,
   ReportConfig,
   RuntimeConfig,
-  SemanticAnalysisConfig,
 } from './config.ts';
 export {
   BackoffKind,

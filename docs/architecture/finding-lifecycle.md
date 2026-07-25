@@ -105,9 +105,10 @@ confidently wrong.
 
 ## Model produced findings
 
-Model based analysis is off by default. When it is enabled, anything a model proposes is reviewed before it can become a
-finding: it must cite evidence that exists, its claim must be about components that exist, and its severity is capped by
-the `model_interpreted` basis. A proposal that fails review is discarded, and the fact that it was discarded is recorded.
+There are none. Every finding comes from a rule, and a rule is a pure function from evidence to drafts, so a second scan
+of the same revision produces the same findings with the same identifiers. `model_interpreted` remains in the basis
+vocabulary with its severity cap, and nothing in this build produces it. See
+[ADR 0002](adr/0002-deterministic-analysis.md).
 
 ## Where to look
 
@@ -116,5 +117,5 @@ the `model_interpreted` basis. A proposal that fails review is discarded, and th
 - `packages/findings/src/grouping.ts`: the collapse of many instances into one finding, and the withheld count.
 - `packages/findings/src/rules/`: the four families.
 - `packages/domain/src/severity.ts`: the caps.
-- `packages/findings/src/review.ts`: conflict linking and model review.
+- `packages/findings/src/review.ts`: conflict linking.
 - [../protocols/finding-schema.md](../protocols/finding-schema.md): the document, field by field.

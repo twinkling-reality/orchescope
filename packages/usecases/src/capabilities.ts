@@ -1,4 +1,3 @@
-import { semanticAnalysisDecision } from '@orchescope/policy';
 import type { CapabilityInput } from '@orchescope/report';
 import type { ReportCapability } from '@orchescope/schema';
 import type { Workspace } from '@orchescope/workspace';
@@ -20,12 +19,7 @@ export type CapabilityContext = {
 };
 
 export const resolveCapabilities = (context: CapabilityContext): CapabilityInput => {
-  const { policy, semanticAnalysis } = context.workspace.config;
-  const semantic = semanticAnalysisDecision(
-    semanticAnalysis,
-    policy,
-    new Set(Object.keys(process.env)),
-  );
+  const { policy } = context.workspace.config;
 
   const reasons: Record<ReportCapability['name'], string> = {
     create_goal: context.hasEligibleFindings
@@ -63,9 +57,12 @@ export const resolveCapabilities = (context: CapabilityContext): CapabilityInput
       ? 'the served report can ask the local process to open an editor'
       : 'a standalone export cannot open a local editor',
     export_standalone: 'the report can be exported as a single self contained file',
-    model_interpretation: semantic.allowed
-      ? 'model based interpretation is enabled'
-      : semantic.reason,
+    /*
+     * Permanently unavailable, and answered rather than dropped: the workspace asks about every capability it
+     * knows, and a reader who has seen an older version of this product deserves the reason rather than silence.
+     */
+    model_interpretation:
+      'analysis in this build is deterministic, so nothing in it interprets a repository with a model',
   };
 
   return {
@@ -77,7 +74,7 @@ export const resolveCapabilities = (context: CapabilityContext): CapabilityInput
     canCompareRuns: context.runCount >= 2,
     canOpenSourceLocation: context.served,
     canExportStandalone: true,
-    modelInterpretationAvailable: semantic.allowed,
+    modelInterpretationAvailable: false,
     reasons,
   };
 };

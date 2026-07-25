@@ -178,7 +178,7 @@ describe('runScenario', () => {
       // The judged evaluator is skipped rather than failed, and it never blocks the pass.
       const judged = result.aggregate.evaluators.find((entry) => entry.kind === 'model_judge');
       assert.equal(judged?.skipped, true);
-      assert.equal(judged?.skipReason, 'model based evaluation is not enabled');
+      assert.match(judged?.skipReason ?? '', /deterministic/);
 
       assert.ok(
         result.limitations.some((note) => note.includes('cost was not reported')),

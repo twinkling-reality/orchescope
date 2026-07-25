@@ -29,9 +29,8 @@ import { resolvePointer } from './json-pointer.ts';
 
 const MAX_DETAIL = 1000;
 
-const JUDGE_DISABLED = 'model based evaluation is not enabled';
-const JUDGE_ASYNCHRONOUS =
-  'model based evaluation is applied by the caller because judging is asynchronous';
+const JUDGE_UNAVAILABLE =
+  'analysis in this build is deterministic, so a judged question is recorded and never answered';
 
 type OfKind<K extends Evaluator['kind']> = Extract<Evaluator, { kind: K }>;
 
@@ -49,8 +48,6 @@ export type EvaluationInput = {
   readonly spans: readonly NormalizedSpan[];
   readonly metrics: RunMetrics;
   readonly exitCode: number | undefined;
-  /** Supplied only by a caller that has model access and awaits the judged results itself. */
-  readonly judge?: (question: string, output: string) => Promise<boolean>;
 };
 
 const bounded = (text: string): string =>
@@ -269,11 +266,18 @@ const exitCodeEquals = (
   );
 };
 
-const modelJudge = (evaluator: OfKind<'model_judge'>, input: EvaluationInput): EvaluatorResult =>
+/**
+ * A judged question is a first class outcome that is never decided here.
+ *
+ * The evaluator kind stays in the scenario vocabulary because a scenario file that uses it is still readable and
+ * its question is still recorded. What changed is the reason: nothing in this build calls a model, so the skip is
+ * permanent rather than a setting away.
+ */
+const modelJudge = (evaluator: OfKind<'model_judge'>): EvaluatorResult =>
   skip(
     evaluator.kind,
     `the judged question was not evaluated: ${evaluator.question}`,
-    input.judge === undefined ? JUDGE_DISABLED : JUDGE_ASYNCHRONOUS,
+    JUDGE_UNAVAILABLE,
   );
 
 const parseJson = (text: string | undefined): unknown => {
@@ -308,7 +312,7 @@ const evaluateOne = (
     case 'exit_code':
       return exitCodeEquals(evaluator, input.exitCode);
     case 'model_judge':
-      return modelJudge(evaluator, input);
+      return modelJudge(evaluator);
   }
 };
 

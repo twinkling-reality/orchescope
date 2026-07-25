@@ -1,5 +1,5 @@
 {
-  "$id": "urn:orchescope:schema:config:1",
+  "$id": "urn:orchescope:schema:config:2",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
@@ -238,70 +238,8 @@
       "type": "object"
     },
     "schemaVersion": {
-      "const": 1,
+      "const": 2,
       "type": "number"
-    },
-    "semanticAnalysis": {
-      "additionalProperties": false,
-      "properties": {
-        "apiKeyEnv": {
-          "minLength": 1,
-          "type": "string"
-        },
-        "baseUrlEnv": {
-          "minLength": 1,
-          "type": "string"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "maxCostUsd": {
-          "minimum": 0,
-          "type": "number"
-        },
-        "maxTasks": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxTokensPerTask": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "model": {
-          "minLength": 1,
-          "type": "string"
-        },
-        "provider": {
-          "anyOf": [
-            {
-              "const": "none",
-              "type": "string"
-            },
-            {
-              "const": "openai_compatible",
-              "type": "string"
-            },
-            {
-              "const": "anthropic",
-              "type": "string"
-            }
-          ]
-        },
-        "requestTimeoutMs": {
-          "minimum": 1,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "enabled",
-        "provider",
-        "model",
-        "maxTasks",
-        "maxTokensPerTask",
-        "maxCostUsd",
-        "requestTimeoutMs"
-      ],
-      "type": "object"
     }
   },
   "required": [
@@ -310,7 +248,6 @@
     "runtime",
     "report",
     "policy",
-    "semanticAnalysis",
     "redaction"
   ],
   "type": "object"

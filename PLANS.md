@@ -355,7 +355,9 @@ extend it without reading every file.
 - **No answer quality measurement.** Behaviour, cost, reliability and structure only.
 - **Cost is derived from token counts and a configured price table.** No price table ships, so cost is absent until one is
   configured, and every cost figure carries the `estimated` basis.
-- **Model based analysis is off by default** and contributes only `model_interpreted` findings capped at medium severity.
+- **Nothing calls a model.** Analysis is deterministic, and the model based path that was scaffolded and never
+  implemented was removed rather than finished. The decision, the corpus evidence behind it and what would reverse it
+  are in [ADR 0002](docs/architecture/adr/0002-deterministic-analysis.md).
 - **The dependency direction check needs its own TypeScript.** dependency-cruiser supports the compiler API up to version 6,
   and the repository typechecks with 7, so it is given a private copy. Without that it silently cruises nothing.
 - **Browser tests run in Chromium only.** Support for other engines is not claimed because nothing tests it.

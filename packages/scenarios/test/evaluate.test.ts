@@ -278,21 +278,14 @@ describe('model_judge', () => {
     requiresModelAccess: true,
   };
 
-  it('is skipped with a reason when model based evaluation is not enabled', () => {
+  it('is skipped with the reason, and never counted as a pass', () => {
     const result = only(judged);
     assert.equal(result.skipped, true);
     assert.equal(result.passed, false);
-    assert.equal(result.skipReason, 'model based evaluation is not enabled');
+    assert.match(result.skipReason ?? '', /deterministic/);
   });
 
-  it('is left to the caller when a judge was supplied, because judging is asynchronous', () => {
-    const results = evaluate({
-      ...inputFor(judged),
-      judge: () => Promise.resolve(true),
-    });
-    const result = results[0];
-    assert.ok(result !== undefined);
-    assert.equal(result.skipped, true);
-    assert.match(result.skipReason ?? '', /applied by the caller/);
+  it('records the question that was not answered, so a reader knows what was left undecided', () => {
+    assert.match(only(judged).detail ?? '', /Did the agent explain the refund\?/);
   });
 });

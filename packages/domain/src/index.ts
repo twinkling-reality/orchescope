@@ -47,7 +47,6 @@ export {
   derivedEvidence,
   faultInjectionEvidence,
   metricEvidence,
-  modelInterpretationEvidence,
   scenarioOutcomeEvidence,
   sourceSpanEvidence,
   spanEvidence,

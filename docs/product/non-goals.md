@@ -51,11 +51,11 @@ alone; it is visible in the relation between them.
 
 ## Not a model based reviewer
 
-Model based analysis is off by default. When enabled it needs an explicit provider and a credential you supply, receives
-bounded excerpts rather than a repository, and its output is reviewed against supplied evidence before it can become a
-finding. Any finding it contributes to carries the `model_interpreted` basis, and its severity is capped accordingly.
+Nothing in Orchescope calls a model. Every finding comes from a deterministic rule over evidence, and a second run over
+the same revision reproduces it exactly. There is no setting that changes this.
 
-Why: an unreproducible claim is not evidence. A tool whose findings change between runs cannot be used as a gate.
+Why: an unreproducible claim is not evidence. A tool whose findings change between runs cannot be used as a gate. The
+decision and what would reverse it are in [ADR 0002](../architecture/adr/0002-deterministic-analysis.md).
 
 ## Not a fixer
 

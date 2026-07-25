@@ -14,6 +14,5 @@ export {
   deny,
   permissionDecision,
   permissionsDecision,
-  semanticAnalysisDecision,
   writeActionDecision,
 } from './decisions.ts';

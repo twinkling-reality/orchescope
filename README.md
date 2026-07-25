@@ -35,7 +35,8 @@ orchescope audit --open
 - It does not send your code, prompts, traces or findings anywhere. There is no account and no telemetry.
 - It does not evaluate answer quality. It measures behaviour, cost, reliability and structure, not whether an answer was
   good.
-- It does not guess at semantics with a model unless you enable that explicitly, and it never sends a whole repository.
+- It does not interpret your repository with a model. Analysis is deterministic: every claim comes from a rule over
+  evidence, and a second run reproduces it.
 - It does not claim your system is safe. It reports what it found and what it could not inspect.
 
 ## Install
@@ -136,8 +137,9 @@ See [docs/architecture/overview.md](docs/architecture/overview.md) and
 
 Everything stays on your machine.
 
-- No account, no network calls, no telemetry, no upload. Model based analysis is off by default and refuses to run
-  without an explicit setting, a provider and a credential you supply.
+- No account, no network calls, no telemetry, no upload, and nothing calls a model. Analysis is deterministic; the
+  reason that is a decision rather than an omission is in
+  [ADR 0002](docs/architecture/adr/0002-deterministic-analysis.md).
 - The report server binds to loopback, requires a capability token, and refuses a cross site read.
 - State lives in `.orchescope/state/` inside the repository you audit, which the `init` command adds to a local
   `.gitignore`. Configuration is meant to be committed; state is not.

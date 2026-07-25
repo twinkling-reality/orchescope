@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs';
 import { arch, platform, tmpdir } from 'node:os';
 import { integrityCheck } from '@orchescope/persistence';
-import { semanticAnalysisDecision } from '@orchescope/policy';
 import {
   probeJavaScriptParser,
   probePythonParser,
@@ -137,29 +136,11 @@ export const runDoctor = async (input: {
         }),
   });
 
-  const semantic = semanticAnalysisDecision(
-    workspace.config.semanticAnalysis,
-    workspace.config.policy,
-    new Set(Object.keys(process.env)),
-  );
-  checks.push({
-    name: 'model based interpretation',
-    status: semantic.allowed ? 'ok' : 'not_applicable',
-    detail: semantic.allowed
-      ? `enabled with ${workspace.config.semanticAnalysis.provider} and model ${workspace.config.semanticAnalysis.model}`
-      : semantic.reason,
-    ...(semantic.allowed
-      ? {}
-      : {
-          remediation:
-            'Optional. Static analysis, scenarios, benchmarks and chaos all work without it.',
-        }),
-  });
-
   checks.push({
     name: 'telemetry',
     status: 'ok',
-    detail: 'Orchescope contains no telemetry and makes no outbound request of its own',
+    detail:
+      'Orchescope contains no telemetry, calls no model, and makes no outbound request of its own',
   });
 
   const failed = checks.filter((check) => check.status === 'failed').length;

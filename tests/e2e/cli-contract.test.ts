@@ -298,14 +298,14 @@ describe('init', () => {
       policy: Record<string, unknown>;
       schemaVersion: number;
     };
-    assert.equal(config.schemaVersion, 1);
+    assert.equal(config.schemaVersion, 2, 'the configuration document is at version 2');
     assert.equal(config.policy['allowOutboundNetwork'], false);
     assert.equal(config.policy['allowPaidModels'], false);
     assert.equal(config.policy['allowFilesystemWrites'], false);
 
     writeFileSync(
       join(root, '.orchescope/config.json'),
-      `${JSON.stringify({ schemaVersion: 1, projectName: 'kept-by-the-user' }, null, 2)}\n`,
+      `${JSON.stringify({ schemaVersion: 2, projectName: 'kept-by-the-user' }, null, 2)}\n`,
     );
     const second = await run(['--cwd', root, 'init', '--json']);
     assert.equal(second.code, EXIT.success);

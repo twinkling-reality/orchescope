@@ -2,20 +2,16 @@ name: optional live checks
 
 # Nothing here is required, and nothing here runs automatically.
 #
-# These checks need something the required set deliberately refuses to depend on: a provider credential, outbound network
-# access, or a longer budget than a pull request should spend. Keeping them separate is what lets a fork run the entire
-# required gate with no secret at all.
+# These checks need something the required set deliberately refuses to depend on: outbound network access, or a longer
+# budget than a pull request should spend. Keeping them separate is what lets a fork run the entire required gate with
+# no secret at all.
 #
-# A maintainer starts this by hand. Costs are bounded by the same policy settings the product enforces, and the run
-# summary records what was spent.
+# A maintainer starts this by hand. Nothing here calls a model: analysis in this build is deterministic, and the job
+# that used to assert over an empty array of model produced findings was removed with the feature it was asserting on.
 
 on:
   workflow_dispatch:
     inputs:
-      model_analysis:
-        description: Run the model based analysis path against a real provider
-        type: boolean
-        default: false
       long_benchmark:
         description: Run the benchmark with enough repetitions to report quantiles
         type: boolean
@@ -32,59 +28,6 @@ env:
   NO_COLOR: '1'
 
 jobs:
-  model-analysis:
-    name: model based analysis against a real provider
-    if: inputs.model_analysis
-    runs-on: ubuntu-latest
-    environment: live-checks
-    steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-
-      - name: enable the path this check exists to exercise
-        run: |
-          pnpm orchescope --cwd apps/demo init
-          node --input-type=module -e "
-            import { readFileSync, writeFileSync } from 'node:fs';
-            const path = 'apps/demo/.orchescope/config.json';
-            const config = JSON.parse(readFileSync(path, 'utf8'));
-            config.policy.allowOutboundNetwork = true;
-            config.policy.allowPaidModels = true;
-            config.policy.maxCostUsd = 1;
-            config.semanticAnalysis = {
-              ...config.semanticAnalysis,
-              enabled: true,
-              provider: 'anthropic',
-              apiKeyEnv: 'ANTHROPIC_API_KEY',
-              maxTasks: 4,
-              maxCostUsd: 1,
-            };
-            writeFileSync(path, JSON.stringify(config, null, 2) + '\n');
-          "
-
-      - name: audit with model based analysis enabled
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          pnpm --silent orchescope --cwd apps/demo audit --json > audit.json
-          node --input-type=module -e "
-            import { readFileSync } from 'node:fs';
-            const { data } = JSON.parse(readFileSync('audit.json', 'utf8'));
-            const proposed = data.findings.filter((finding) => finding.basis === 'model_interpreted');
-            for (const finding of proposed) {
-              if (finding.evidence.length === 0) throw new Error(finding.id + ' has no evidence');
-              if (['critical', 'high'].includes(finding.severity)) {
-                throw new Error(finding.id + ' exceeds the cap for a model interpreted basis');
-              }
-            }
-            console.log(proposed.length + ' model interpreted finding(s), all within the severity cap');
-          "
-
   long-benchmark:
     name: benchmark with enough repetitions to report quantiles
     if: inputs.long_benchmark

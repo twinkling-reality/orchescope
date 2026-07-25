@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { OrchescopeError } from '@orchescope/domain';
-import type { PolicyConfig, SemanticAnalysisConfig } from '@orchescope/schema';
+import type { PolicyConfig } from '@orchescope/schema';
 import {
   assertAllowed,
   budgetDecision,
@@ -9,7 +9,6 @@ import {
   commandDecision,
   permissionDecision,
   permissionsDecision,
-  semanticAnalysisDecision,
   writeActionDecision,
 } from '../src/decisions.ts';
 
@@ -139,73 +138,6 @@ describe('budgetDecision', () => {
       budgetDecision(policy({ maxConcurrentRuns: 2 }), { ...usage, concurrentRuns: 3 }).allowed,
       false,
     );
-  });
-});
-
-describe('semanticAnalysisDecision', () => {
-  const config = (overrides: Partial<SemanticAnalysisConfig> = {}): SemanticAnalysisConfig => ({
-    enabled: false,
-    provider: 'none',
-    model: 'unset',
-    maxTasks: 0,
-    maxTokensPerTask: 4_000,
-    maxCostUsd: 0,
-    requestTimeoutMs: 60_000,
-    ...overrides,
-  });
-  const permissive = policy({ allowOutboundNetwork: true, allowPaidModels: true });
-
-  it('is refused when disabled, which is the default', () => {
-    const decision = semanticAnalysisDecision(config(), permissive, new Set());
-    assert.equal(decision.allowed, false);
-    if (!decision.allowed) assert.equal(decision.settingToChange, 'semanticAnalysis.enabled');
-  });
-
-  it('is refused when the credential variable is absent from the environment', () => {
-    const decision = semanticAnalysisDecision(
-      config({ enabled: true, provider: 'anthropic', apiKeyEnv: 'DEMO_KEY', maxTasks: 4 }),
-      permissive,
-      new Set(['PATH']),
-    );
-    assert.equal(decision.allowed, false);
-    if (!decision.allowed) assert.match(decision.reason, /DEMO_KEY is not set/);
-  });
-
-  it('is refused when the network or the cost is not granted, even if it is enabled', () => {
-    const enabled = config({
-      enabled: true,
-      provider: 'anthropic',
-      apiKeyEnv: 'DEMO_KEY',
-      maxTasks: 4,
-    });
-    const keys = new Set(['DEMO_KEY']);
-    assert.equal(
-      semanticAnalysisDecision(enabled, policy({ allowPaidModels: true }), keys).allowed,
-      false,
-    );
-    assert.equal(
-      semanticAnalysisDecision(enabled, policy({ allowOutboundNetwork: true }), keys).allowed,
-      false,
-    );
-  });
-
-  it('is allowed only when every condition holds', () => {
-    const decision = semanticAnalysisDecision(
-      config({ enabled: true, provider: 'anthropic', apiKeyEnv: 'DEMO_KEY', maxTasks: 4 }),
-      permissive,
-      new Set(['DEMO_KEY']),
-    );
-    assert.equal(decision.allowed, true);
-  });
-
-  it('is refused when the task budget is zero, so an enabled but useless configuration says so', () => {
-    const decision = semanticAnalysisDecision(
-      config({ enabled: true, provider: 'anthropic', apiKeyEnv: 'DEMO_KEY', maxTasks: 0 }),
-      permissive,
-      new Set(['DEMO_KEY']),
-    );
-    assert.equal(decision.allowed, false);
-    if (!decision.allowed) assert.equal(decision.settingToChange, 'semanticAnalysis.maxTasks');
   });
 });
 

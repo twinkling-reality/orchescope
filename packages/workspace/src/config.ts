@@ -23,7 +23,7 @@ import type { WorkspacePaths } from './paths.ts';
  */
 
 export const DEFAULT_CONFIG: OrchescopeConfig = {
-  schemaVersion: 1,
+  schemaVersion: SCHEMA_VERSIONS.config,
   analysis: {
     include: ['**/*'],
     exclude: [...DEFAULT_EXCLUDED_DIRECTORIES],
@@ -70,15 +70,6 @@ export const DEFAULT_CONFIG: OrchescopeConfig = {
       'bun',
     ],
   },
-  semanticAnalysis: {
-    enabled: false,
-    provider: 'none',
-    model: 'unset',
-    maxTasks: 0,
-    maxTokensPerTask: 4_000,
-    maxCostUsd: 0,
-    requestTimeoutMs: 60_000,
-  },
   redaction: {
     extraPatterns: [],
     sensitiveEnvFragments: [],
@@ -97,14 +88,19 @@ type Mutable<T> = { -readonly [K in keyof T]: T[K] };
  * Merges a partial configuration document over the defaults, one section at a time. A section is merged rather
  * than replaced so that setting one policy value does not silently reset the rest.
  */
-const SECTIONS = [
-  'analysis',
-  'runtime',
-  'report',
-  'policy',
-  'semanticAnalysis',
-  'redaction',
-] as const;
+const SECTIONS = ['analysis', 'runtime', 'report', 'policy', 'redaction'] as const;
+
+/**
+ * Settings that were real and are not any more.
+ *
+ * A retired setting is dropped with the reason stated rather than refused, because a configuration file is
+ * committed to a repository and a user who upgrades should not have their audit fail on a key that used to work.
+ * Refusing it would be honest and useless; dropping it silently would be neither.
+ */
+const RETIRED_SETTINGS: Readonly<Record<string, string>> = {
+  semanticAnalysis:
+    'model based analysis was removed in favour of deterministic analysis, so this setting no longer does anything and was ignored',
+};
 
 /**
  * A key that is present but wrong is refused rather than ignored.
@@ -114,7 +110,12 @@ const SECTIONS = [
  */
 const assertShape = (partial: Record<string, unknown>, file: string): void => {
   const problems: string[] = [];
-  const known = new Set<string>([...SECTIONS, 'schemaVersion', 'projectName']);
+  const known = new Set<string>([
+    ...SECTIONS,
+    ...Object.keys(RETIRED_SETTINGS),
+    'schemaVersion',
+    'projectName',
+  ]);
   for (const key of Object.keys(partial)) {
     if (!known.has(key)) problems.push(`${key} is not a setting Orchescope understands`);
   }
@@ -144,6 +145,15 @@ const assertShape = (partial: Record<string, unknown>, file: string): void => {
   }
 };
 
+/**
+ * A configuration written by an older build is read, not refused: the retired keys are named in the problems the
+ * caller reports, and the document is validated at the version this build writes.
+ */
+const retiredSettings = (partial: Record<string, unknown>): readonly string[] =>
+  Object.entries(RETIRED_SETTINGS)
+    .filter(([key]) => partial[key] !== undefined)
+    .map(([key, reason]) => `${key}: ${reason}`);
+
 const mergeConfig = (partial: Record<string, unknown>): OrchescopeConfig => {
   const merged: Mutable<OrchescopeConfig> = {
     ...DEFAULT_CONFIG,
@@ -151,7 +161,6 @@ const mergeConfig = (partial: Record<string, unknown>): OrchescopeConfig => {
     runtime: { ...DEFAULT_CONFIG.runtime },
     report: { ...DEFAULT_CONFIG.report },
     policy: { ...DEFAULT_CONFIG.policy },
-    semanticAnalysis: { ...DEFAULT_CONFIG.semanticAnalysis },
     redaction: { ...DEFAULT_CONFIG.redaction },
   };
   for (const section of SECTIONS) {
@@ -161,9 +170,6 @@ const mergeConfig = (partial: Record<string, unknown>): OrchescopeConfig => {
     }
   }
   if (typeof partial['projectName'] === 'string') merged.projectName = partial['projectName'];
-  if (typeof partial['schemaVersion'] === 'number') {
-    merged.schemaVersion = partial['schemaVersion'] as 1;
-  }
   return merged;
 };
 
@@ -199,8 +205,10 @@ export const loadConfig = (paths: WorkspacePaths): ConfigLoad => {
       },
     );
   }
-  assertShape(parsed as Record<string, unknown>, paths.configFile);
-  const merged = mergeConfig(parsed as Record<string, unknown>);
+  const document = parsed as Record<string, unknown>;
+  assertShape(document, paths.configFile);
+  const problems = retiredSettings(document);
+  const merged = mergeConfig(document);
   const validated = validateDocument(
     OrchescopeConfigSchema,
     SCHEMA_VERSIONS.config,
@@ -218,7 +226,7 @@ export const loadConfig = (paths: WorkspacePaths): ConfigLoad => {
       },
     );
   }
-  return { config: validated.value as OrchescopeConfig, source: 'file', problems: [] };
+  return { config: validated.value as OrchescopeConfig, source: 'file', problems };
 };
 
 export const writeConfig = (paths: WorkspacePaths, config: OrchescopeConfig): void => {

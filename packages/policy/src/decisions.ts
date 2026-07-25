@@ -1,10 +1,5 @@
 import { OrchescopeError } from '@orchescope/domain';
-import type {
-  ChaosEnvironment,
-  PolicyConfig,
-  ScenarioPermission,
-  SemanticAnalysisConfig,
-} from '@orchescope/schema';
+import type { ChaosEnvironment, PolicyConfig, ScenarioPermission } from '@orchescope/schema';
 
 /**
  * Policy decisions.
@@ -120,43 +115,6 @@ export const budgetDecision = (policy: PolicyConfig, usage: BudgetUsage): Decisi
       `${usage.concurrentRuns} concurrent runs exceeds the ceiling of ${policy.maxConcurrentRuns}`,
       'policy.maxConcurrentRuns',
     );
-  }
-  return allow();
-};
-
-/**
- * Model based analysis is optional in every mode. It is refused unless it was enabled, a provider was chosen
- * and the credential variable is actually present in the environment, so a configured but unusable provider
- * produces a clear refusal instead of a failed request in the middle of an audit.
- */
-export const semanticAnalysisDecision = (
-  config: SemanticAnalysisConfig,
-  policy: PolicyConfig,
-  environmentKeys: ReadonlySet<string>,
-): Decision => {
-  if (!config.enabled) {
-    return deny('model based analysis is disabled', 'semanticAnalysis.enabled');
-  }
-  if (config.provider === 'none') {
-    return deny('no model provider is configured', 'semanticAnalysis.provider');
-  }
-  if (!policy.allowOutboundNetwork) {
-    return deny(
-      'model based analysis needs outbound network access',
-      'policy.allowOutboundNetwork',
-    );
-  }
-  if (!policy.allowPaidModels) {
-    return deny('model based analysis may incur cost', 'policy.allowPaidModels');
-  }
-  if (config.apiKeyEnv === undefined) {
-    return deny('no credential variable name is configured', 'semanticAnalysis.apiKeyEnv');
-  }
-  if (!environmentKeys.has(config.apiKeyEnv)) {
-    return deny(`the environment variable ${config.apiKeyEnv} is not set`, config.apiKeyEnv);
-  }
-  if (config.maxTasks <= 0) {
-    return deny('the task budget is zero', 'semanticAnalysis.maxTasks');
   }
   return allow();
 };

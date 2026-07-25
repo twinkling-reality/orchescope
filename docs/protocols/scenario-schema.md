@@ -135,8 +135,9 @@ Nine kinds. Eight are deterministic:
 | `metric_threshold` | A run metric satisfies a comparator against a value |
 | `model_judge` | A language model judges the output |
 
-`model_judge` requires model based analysis to be enabled and is refused otherwise. When it runs, its verdict carries the
-`model_interpreted` basis and never decides a scenario alone.
+`model_judge` records a question and never answers it: analysis in this build is deterministic, so the evaluator is
+reported as skipped with that reason and the question it asked. It is kept in the vocabulary so a scenario file that uses
+it still parses and still says what it wanted judged.
 
 An evaluator that cannot run is reported as skipped with a reason, never as passed.
 

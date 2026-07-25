@@ -140,5 +140,5 @@ large document never fills the conversation.
 Read only tools touch nothing. The three executing tools respect `policy.allowProcessSpawn` and are refused with the setting
 named when it is off, which lets you give an agent the analysis without giving it the ability to run your system.
 
-Model based analysis is off by default and needs four settings plus a credential. An agent cannot enable it by calling a
-tool.
+Nothing in Orchescope calls a model, so an agent asking it for an audit is not spending anything at a provider. What it
+gets back is deterministic and reproduces on a second run.

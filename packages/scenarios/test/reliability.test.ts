@@ -113,7 +113,8 @@ describe('computeReliability', () => {
       passed: false,
       detail: 'not evaluated',
       skipped: true,
-      skipReason: 'model based evaluation is not enabled',
+      skipReason:
+        'analysis in this build is deterministic, so a judged question is recorded and never answered',
     };
     const reliability = computeReliability([repetition(0, true, [skipped])]);
     assert.equal(reliability.successes, 1);

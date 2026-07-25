@@ -47,8 +47,8 @@ These are documented properties of what Orchescope is, not defects:
   upload, and no phone home. The only network listeners it creates bind to loopback and exist for the duration of a
   command.
 - It will not retry an operation whose idempotency it could not establish, and it will not describe such a retry as safe.
-- It will not run model based analysis without an explicit setting, an explicit provider and a credential you supply, and
-  it will never send a whole repository to a model.
+- It will not interpret your repository with a model. Analysis is deterministic and there is no setting that changes
+  that, so no part of your code reaches a provider.
 - It will not publish itself. Releasing is a deliberate human action.
 
 ## Hardening notes

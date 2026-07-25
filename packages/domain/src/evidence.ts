@@ -180,31 +180,6 @@ export const absenceEvidence = (input: {
     inspectedCount: input.inspectedCount,
   });
 
-export const modelInterpretationEvidence = (input: {
-  readonly producer: string;
-  readonly taskId: string;
-  readonly provider: string;
-  readonly model: string;
-  readonly promptHash: string;
-  readonly groundedIn: readonly EvidenceId[];
-  readonly reviewed: boolean;
-  readonly reviewVerdict?: 'supported' | 'unsupported' | 'conflicting';
-  readonly transcriptRef?: string;
-}): Evidence =>
-  withId({
-    kind: 'model_interpretation' as const,
-    basis: 'model_interpreted' as const,
-    producer: input.producer,
-    taskId: input.taskId,
-    provider: input.provider,
-    model: input.model,
-    promptHash: input.promptHash,
-    groundedIn: [...input.groundedIn],
-    reviewed: input.reviewed,
-    ...(input.reviewVerdict === undefined ? {} : { reviewVerdict: input.reviewVerdict }),
-    ...(input.transcriptRef === undefined ? {} : { transcriptRef: input.transcriptRef }),
-  });
-
 /** Deduplicates evidence by identifier while preserving first insertion order. */
 export const dedupeEvidence = (records: readonly Evidence[]): readonly Evidence[] => {
   const byId = new Map<string, Evidence>();

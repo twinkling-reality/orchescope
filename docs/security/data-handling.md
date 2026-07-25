@@ -54,8 +54,9 @@ run.
 Nothing, unless you take it.
 
 - No account, no sign in, no license check, no update check, no telemetry, no crash reporting, no usage counting.
-- No outbound request of any kind unless model based analysis is explicitly enabled, and that path needs four separate
-  settings and a credential you supply.
+- No outbound request of any kind, and nothing calls a model: analysis is deterministic. The one remaining outbound
+  path is a fault proxy forwarding to a non local upstream, which a scenario has to declare and `policy.allowOutboundNetwork`
+  has to grant.
 - Every listening socket binds to `127.0.0.1` on a port the operating system chooses, and closes when the command ends.
 - Exports are written to a path you name, and nothing sends them anywhere.
 

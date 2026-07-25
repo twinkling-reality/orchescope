@@ -23,7 +23,7 @@ Everything below is untrusted input, whatever it claims about itself:
 - **Repository content.** Source, configuration, `.orchescope/manifest.yaml`, `scenarios/*.yaml`. A repository can be
   hostile, and a manifest or a scenario can name a command.
 - **Trace data.** Span names, attributes and events, whether from a local run or an imported file.
-- **Model output**, when model based analysis is enabled.
+- **Model output**, in a trace or a target result: an agent system's own model writes into the spans Orchescope reads.
 - **Tool output** recorded in a target's result file.
 - **Anything imported**: a graph, a report bundle, a trace file.
 - **HTTP requests to the report server**, including requests from pages the user did not open.
@@ -60,8 +60,8 @@ statement of intent.
 *An audit sends something somewhere.*
 
 - Orchescope makes no outbound request of its own. There is no telemetry, no update check and no registry call.
-- Model based analysis is refused unless it is enabled, a provider is chosen, `policy.allowOutboundNetwork` and
-  `policy.allowPaidModels` are granted, and the named credential variable exists.
+- Nothing in Orchescope calls a model, so no part of an audited repository reaches a provider. That is a decision with
+  a record, not an omission: [ADR 0002](../architecture/adr/0002-deterministic-analysis.md).
 - The chaos fault proxy refuses to forward anywhere other than loopback unless outbound network access has been granted.
 - Every listening socket binds to `127.0.0.1` on a port chosen by the operating system and closes when the command ends.
 

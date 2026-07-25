@@ -14,7 +14,7 @@ definitions are the source of truth and CI fails when these files drift from the
 - `report.v1.json`: report, version 1, readable from version 1
 - `trace-bundle.v1.json`: traceBundle, version 1, readable from version 1
 - `manifest.v1.json`: manifest, version 1, readable from version 1
-- `config.v1.json`: config, version 1, readable from version 1
+- `config.v2.json`: config, version 2, readable from version 1
 
 Every document carries a `schemaVersion`. A reader must refuse a version it does not understand rather than
 guessing, and the minimum readable version above is what this build accepts.

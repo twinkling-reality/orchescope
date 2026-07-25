@@ -4,7 +4,6 @@ import {
   Document,
   literals,
   NonEmptyString,
-  NonNegativeInt,
   NonNegativeNumber,
   PositiveInt,
 } from './primitives.ts';
@@ -85,23 +84,6 @@ export const PolicyConfig = Type.Object(
 );
 export type PolicyConfig = Static<typeof PolicyConfig>;
 
-export const SemanticAnalysisConfig = Type.Object(
-  {
-    enabled: Type.Boolean(),
-    provider: literals(['none', 'openai_compatible', 'anthropic'] as const),
-    model: NonEmptyString(),
-    /** Names of environment variables. Orchescope never stores a credential in configuration. */
-    apiKeyEnv: Type.Optional(NonEmptyString()),
-    baseUrlEnv: Type.Optional(NonEmptyString()),
-    maxTasks: NonNegativeInt,
-    maxTokensPerTask: PositiveInt,
-    maxCostUsd: NonNegativeNumber,
-    requestTimeoutMs: PositiveInt,
-  },
-  { additionalProperties: false },
-);
-export type SemanticAnalysisConfig = Static<typeof SemanticAnalysisConfig>;
-
 export const RedactionConfig = Type.Object(
   {
     /** Extra regular expressions applied to every string that leaves the process. */
@@ -122,7 +104,6 @@ export const OrchescopeConfig = Document(
     runtime: RuntimeConfig,
     report: ReportConfig,
     policy: PolicyConfig,
-    semanticAnalysis: SemanticAnalysisConfig,
     redaction: RedactionConfig,
   }),
 );

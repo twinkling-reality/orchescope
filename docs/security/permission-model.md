@@ -13,7 +13,7 @@ a property of the repository, not of whoever happens to be running the command.
 | --- | --- | --- |
 | `policy.allowProcessSpawn` | `true` | Starting a process at all: `trace`, `test`, `benchmark`, `chaos`. Set to `false` for a purely static audit. |
 | `policy.allowedCommands` | `node`, `npm`, `npx`, `pnpm`, `yarn`, `python3`, `python`, `uv`, `deno`, `bun` | Which executables may be started. Matched by exact path or by basename. |
-| `policy.allowOutboundNetwork` | `false` | Reaching anything other than loopback: model based analysis, and a fault proxy forwarding to a non local upstream. |
+| `policy.allowOutboundNetwork` | `false` | Reaching anything other than loopback, which today means only a fault proxy forwarding to a non local upstream. |
 | `policy.allowPaidModels` | `false` | Any operation that can incur provider cost. |
 | `policy.allowFilesystemWrites` | `false` | Writing outside the Orchescope state directory, including a git worktree for a comparison. |
 | `policy.maxCostUsd` | `0` | Ceiling on estimated cost for a command. Zero means anything with a non zero estimate is refused. |
@@ -21,10 +21,6 @@ a property of the repository, not of whoever happens to be running the command.
 | `policy.maxConcurrentRuns` | `4` | How many runs may execute at once. |
 | `policy.maxTotalRuns` | `200` | Ceiling on runs in one command, which is what bounds a benchmark or chaos suite. |
 | `policy.allowedChaosEnvironments` | `["local_deterministic"]` | Which chaos environments may be used. The others are `declared_test` and `live`. |
-| `semanticAnalysis.enabled` | `false` | Model based analysis at all. |
-| `semanticAnalysis.provider` | `none` | Which provider, if enabled. |
-| `semanticAnalysis.apiKeyEnv` | unset | The name of the environment variable holding the credential. Orchescope reads the variable; it never stores the value. |
-| `semanticAnalysis.maxTasks`, `maxTokensPerTask`, `maxCostUsd` | `0`, `4000`, `0` | Ceilings on what model based analysis may consume. |
 | `redaction.extraPatterns` | `[]` | Additional patterns to redact, in addition to the built in set. |
 | `redaction.sensitiveEnvFragments` | `[]` | Additional environment name fragments whose values are masked. |
 
@@ -94,15 +90,11 @@ states them so the person or the agent doing the work knows what has to happen f
 
 ## Model based analysis, specifically
 
-Every one of these has to hold, and a refusal names the first that does not:
+There is none. Nothing in Orchescope calls a model, so there is no setting to grant it and no credential to supply. The
+report still answers the `model_interpretation` capability, permanently unavailable and with that reason, because the
+browser workspace asks about every capability it knows and a reader deserves the answer rather than silence. The
+decision, the evidence behind it and what would reverse it are in
+[ADR 0002](../architecture/adr/0002-deterministic-analysis.md).
 
-1. `semanticAnalysis.enabled` is `true`.
-2. `semanticAnalysis.provider` is not `none`.
-3. `policy.allowOutboundNetwork` is `true`.
-4. `policy.allowPaidModels` is `true`.
-5. `semanticAnalysis.apiKeyEnv` is set and that variable exists in the environment.
-6. `semanticAnalysis.maxTasks` is greater than zero.
-
-Even then, a whole repository is never sent. Bounded excerpts go out, the output is reviewed against evidence that exists
-before it can become a finding, and the resulting finding carries the `model_interpreted` basis with severity capped
-accordingly.
+A configuration written before this decision still loads. The `semanticAnalysis` block is ignored and the load reports
+that it was, rather than refusing a file that used to be valid.
