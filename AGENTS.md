@@ -21,6 +21,8 @@ pnpm deps                    # dependency-cruiser, enforces the layering below
 pnpm unused                  # knip, unused files, exports and dependencies
 pnpm schemas                 # regenerate schemas/ from packages/schema
 pnpm check                   # everything above, plus a schema drift check
+pnpm corpus:offline          # discovery measured against the corpus entries that need no network
+pnpm corpus                  # the same across every pinned repository, cloning what the cache is missing
 pnpm test                    # unit and integration tests
 pnpm test:e2e                # end to end tests against the bundled demonstration
 pnpm test:ui                 # Playwright browser tests
@@ -115,7 +117,8 @@ Rules the tooling enforces:
 
 1. `pnpm verify` from a clean checkout.
 2. For anything touching discovery: run `pnpm --silent orchescope --cwd apps/demo audit --json` and read the coverage
-   block, not just the exit code.
+   block, not just the exit code, then run `pnpm corpus` and say what moved. A fixture written by the author of an
+   adapter agrees with its author; the corpus does not.
 3. For anything touching runtime: `pnpm orchescope trace -- node apps/demo/src/main.ts` and confirm spans arrived.
 4. For anything touching the report: `pnpm build:web` then `pnpm orchescope audit --serve` and look at the page.
 5. State what you ran and what it printed. Do not report a check as passing unless it ran.

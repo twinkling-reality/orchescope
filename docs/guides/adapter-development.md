@@ -193,6 +193,13 @@ Assert the identifiers, the relations and the evidence, not the count. A count p
 Then add the framework to the support table in the README, because that table is a claim and this test is what makes it
 true.
 
+## Then a corpus entry
+
+A fixture agrees with its author: it encodes what you already believed the framework looks like. Pin a real repository
+that uses it in [`corpus/corpus.yaml`](../../corpus/corpus.yaml), record what your adapter finds in it, and commit both.
+That is what turns the fixture from a demonstration into a measurement, and it is what tells you months later that the
+framework moved and your reader went quiet. The [corpus guide](corpus.md) has the steps.
+
 ## What not to do
 
 - **Do not infer from a name.** A function called `retry` is not a retry. The shape is the evidence.
