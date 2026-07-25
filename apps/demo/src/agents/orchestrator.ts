@@ -6,6 +6,7 @@ import { ATTR, SPAN_KIND_INTERNAL, type Span, sourceFile } from '../telemetry.ts
 import { lookupAccount } from '../tools/account.ts';
 import { checkInventory } from '../tools/inventory.ts';
 import { sendNotification } from '../tools/notification.ts';
+import { recordUsage } from '../tools/metering.ts';
 import { searchPolicies } from '../tools/policies.ts';
 import type { RefundOutcome } from '../tools/refund.ts';
 import { type AgentTopology, planTopology } from './definitions.ts';
@@ -188,6 +189,8 @@ const orchestrate = async (
     conversation.messages.push({ role: 'assistant', text: finding.summary });
   }
   const refund = await settle(context, span, conversation, orderId);
+  // Reported on every run, and discoverable from no source file: see INTENTIONAL ISSUE 10.
+  await recordUsage(context, span, conversation.messages.length);
   return await finish(context, span, conversation, findings, refund, orderId);
 };
 
