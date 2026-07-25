@@ -37,7 +37,14 @@ const result = await build({
   minify: false,
   sourcemap: false,
   banner: {
-    js: '#!/usr/bin/env node',
+    // A CommonJS dependency compiled into an ES module bundle can still call `require` for a Node builtin, and esbuild
+    // leaves that call to a shim that throws unless a `require` exists in scope. Creating one from this module's own URL
+    // is the supported way to make those calls work in an ES module.
+    js: [
+      '#!/usr/bin/env node',
+      "import { createRequire as __createRequire } from 'node:module';",
+      'const require = __createRequire(import.meta.url);',
+    ].join('\n'),
   },
   metafile: true,
   logLevel: 'warning',
