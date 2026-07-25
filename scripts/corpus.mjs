@@ -9,16 +9,18 @@
  *
  *   node scripts/corpus.mjs --check              every entry, cloning what the cache is missing
  *   node scripts/corpus.mjs --check --offline    only the entries that need no network
+ *   node scripts/corpus.mjs --check --exercise   also run the entries that can produce spans, and join the delta
  *   node scripts/corpus.mjs --record <name>...   rewrite expectations, to be read before committing
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { auditRepository } from './corpus/audit.mjs';
+import { auditRepository, clearStoredState } from './corpus/audit.mjs';
 import { cacheDirectory, checkout } from './corpus/checkout.mjs';
 import { claimDifference, differences } from './corpus/comparison.mjs';
 import { isOffline, readCorpus } from './corpus/definition.mjs';
+import { exerciseRepository, prepareEnvironment } from './corpus/exercise.mjs';
 import { observationOf } from './corpus/observation.mjs';
 import { describe } from './corpus/summary.mjs';
 
@@ -28,6 +30,7 @@ const { stableJson } = await import(join(root, 'packages/domain/src/index.ts'));
 const argv = process.argv.slice(2);
 const record = argv.includes('--record');
 const offline = argv.includes('--offline');
+const exercise = argv.includes('--exercise');
 const selected = argv.filter((argument) => !argument.startsWith('--'));
 
 if (record && argv.includes('--check')) {
@@ -56,10 +59,27 @@ if (entries.length === 0) {
 
 const results = [];
 for (const entry of entries) {
+  /*
+   * An entry that exercises itself is measured with its run in the graph, so it cannot also be measured without one:
+   * a stored run adds components and relations, and one expectation cannot describe both. It is skipped with the
+   * reason printed rather than compared against half of what it records.
+   */
+  if (entry.exercise !== undefined && !exercise) {
+    results.push({
+      entry,
+      skipped: 'needs --exercise, which installs an environment and runs the repository',
+    });
+    continue;
+  }
   try {
     const directory = checkout(root, entry, !offline);
+    clearStoredState(directory);
+    const exercised =
+      entry.exercise === undefined
+        ? undefined
+        : exerciseRepository(root, entry, directory, prepareEnvironment(root, entry, directory));
     const { audit, bundle } = auditRepository(root, entry.name, directory);
-    const observation = observationOf(entry, audit, bundle);
+    const observation = observationOf(entry, audit, bundle, exercised);
     const expected = readExpectation(entry.name);
     const found = [
       ...(expected === undefined
@@ -75,8 +95,14 @@ for (const entry of entries) {
 
 let differing = 0;
 let failed = 0;
+let skipped = 0;
 for (const result of results) {
   console.log('');
+  if (result.skipped !== undefined) {
+    skipped += 1;
+    console.log(`${result.entry.name}  not measured: ${result.skipped}`);
+    continue;
+  }
   if (result.error !== undefined) {
     failed += 1;
     console.log(`${result.entry.name}  could not be measured`);
@@ -114,9 +140,11 @@ writeFileSync(
     repositories: results.map((result) => ({
       name: result.entry.name,
       kind: result.entry.kind,
-      ...(result.error === undefined
+      ...(result.skipped !== undefined ? { skipped: result.skipped } : {}),
+      ...(result.error === undefined && result.skipped === undefined
         ? { observation: result.observation, differences: result.differences ?? [] }
-        : { error: result.error }),
+        : {}),
+      ...(result.error === undefined ? {} : { error: result.error }),
     })),
   })}\n`,
   { mode: 0o644 },
@@ -125,7 +153,8 @@ writeFileSync(
 console.log('');
 console.log(
   `${results.length} repositor${results.length === 1 ? 'y' : 'ies'}${offline ? ' (offline subset)' : ''}: ` +
-    `${results.length - differing - failed} ${record ? 'recorded' : 'matched'}, ${differing} differing, ${failed} not measured`,
+    `${results.length - differing - failed - skipped} ${record ? 'recorded' : 'matched'}, ${differing} differing, ` +
+    `${failed} not measured, ${skipped} skipped`,
 );
 console.log(`summary written to ${summaryPath.slice(root.length + 1)}`);
 

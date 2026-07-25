@@ -12,6 +12,7 @@ and it turns "does it work" into a gate.
 ```
 pnpm corpus:offline    # the entries that need no network, which is what CI requires
 pnpm corpus            # every entry, cloning what the cache is missing
+pnpm corpus:exercise    # the same, and also runs the entries that can produce spans
 node scripts/corpus.mjs --check langgraph flask     # named entries only
 ```
 
@@ -91,6 +92,22 @@ Then `node scripts/corpus.mjs --record some-repository` and commit both files.
 An entry with `source: local` names a directory of this repository by `path` instead, and is copied from its tracked files
 rather than cloned. Those are the offline subset the required gate runs, so they measure the working tree: an uncommitted
 change to an adapter shows up immediately.
+
+## An entry that runs
+
+Most entries are read and never executed. One is executed: `pydantic-ai-exercised` declares an `exercise` block, and
+`--exercise` builds a virtual environment under the cache, installs what the block lists, and runs
+`corpus/runs/pydantic-ai/exercise.py` through `orchescope trace`. The audit that follows has a stored run, so the
+expectation carries the declared against exercised delta as well as the static numbers.
+
+That entry is a second entry for a repository already in the corpus, at the same commit, because a stored run adds
+components and relations to the graph and one expectation cannot describe a repository both with and without its own
+run. Without `--exercise` it is skipped and the skip is printed.
+
+Nothing pays for a provider. The driver uses the library's own offline model, forces a placeholder API key so a real
+one in the environment cannot be picked up, and sets `ALLOW_MODEL_REQUESTS` to false so any attempt to reach a provider
+raises instead of sending a request. It does install and execute third party code, which is why it never happens
+unless it is asked for.
 
 ## Both polarities
 

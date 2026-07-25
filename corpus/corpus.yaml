@@ -15,6 +15,10 @@
 #   kind    agent_system or not_agent_system, which is the claim the expectation has to bear out
 #   why     what this entry is here to catch, in enough detail that removing it is a decision
 #
+# An entry may also carry an `exercise` block, which names a script that makes the repository emit spans so the
+# declared against exercised delta can be measured on it. Those entries install an environment and run third party
+# code, so they are skipped unless `--exercise` is passed, and the skip is printed rather than silent.
+#
 # Both polarities count. A repository that is not an agent system is a precision test: the number it holds is a
 # ceiling, and the guard against a reader being loosened until it matches ordinary English.
 
@@ -95,6 +99,38 @@ repositories:
     why: >-
       The newest adapter, so the one with the least field evidence behind it. It also has the lowest parse rate in
       the corpus, and that number is worth watching on its own.
+
+  - name: pydantic-ai-exercised
+    source: git
+    url: https://github.com/pydantic/pydantic-ai.git
+    commit: ed0f40c0e5061722f7d9f579ed7efff1b74e3ea5
+    kind: agent_system
+    why: >-
+      The same commit as the entry above, measured with a run in it. It is a second entry rather than a flag on the
+      first because a stored run adds components and relations to the graph, and one expectation cannot describe a
+      repository both with and without its own run. This is the only entry that exercises the declared against
+      exercised join on code this repository did not write.
+    exercise:
+      why: >-
+        The declared against exercised delta is the centre of this product and it had only ever been shown on the
+        demonstration this repository also wrote. This is the join on third party code: the library's own
+        bank_support example, driven by the library's own offline model, so a real run reaches a real declaration
+        and every name that fails to match is recorded rather than assumed.
+      script: corpus/runs/pydantic-ai/exercise.py
+      # In install order. The checkout pins its sibling packages by an exact version, so pydantic_graph has to be
+      # installed from the checkout before pydantic_ai_slim asks for it. The provider client is needed because the
+      # example names an OpenAI model and the constructor resolves the provider while the module is imported; no
+      # request is ever made, and the driver turns model requests off to guarantee it.
+      pythonPackages:
+        - pydantic_graph
+        - pydantic_ai_slim
+        - openai
+        - opentelemetry-sdk
+        - opentelemetry-exporter-otlp-proto-http
+      # The checkout is shallow and has no tags, so the version this build backend derives from git is empty. This
+      # tells it to use a fixed version instead of failing, which is what makes an install from a pinned commit work.
+      buildEnvironment:
+        UV_DYNAMIC_VERSIONING_BYPASS: 0.0.0
 
   - name: vercel-ai-chatbot
     source: git

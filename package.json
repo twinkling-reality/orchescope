@@ -15,6 +15,7 @@
     "build:web": "node scripts/build-web.mjs",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm deps && pnpm unused && pnpm schemas:verify",
     "corpus": "node scripts/corpus.mjs --check",
+    "corpus:exercise": "node scripts/corpus.mjs --check --exercise",
     "corpus:offline": "node scripts/corpus.mjs --check --offline",
     "demo": "node apps/demo/src/main.ts",
     "deps": "depcruise packages apps scripts --config .dependency-cruiser.cjs",

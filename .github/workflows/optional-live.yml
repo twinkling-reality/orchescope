@@ -138,8 +138,11 @@ jobs:
       # Third party source is never vendored, so each entry is cloned at its pinned commit into a directory git
       # ignores. That is the network access the required gate refuses to depend on, and the reason this job is
       # here rather than in ci.yml.
+      # --exercise installs a virtual environment and runs one repository's own example so the declared against
+      # exercised delta is measured on code this repository did not write. No provider is called: the driver uses
+      # the library's own offline model and turns model requests off.
       - name: every pinned repository still produces what is recorded
-        run: pnpm corpus
+        run: pnpm corpus:exercise
 
       - uses: actions/upload-artifact@v4
         if: always()

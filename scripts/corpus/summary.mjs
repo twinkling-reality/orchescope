@@ -27,6 +27,12 @@ export const describe = (observation) => {
     `  blind spots   ${observation.blindSpots.join('; ') || 'none'}`,
     `  findings      ${observation.findings.total} across ${Object.keys(observation.findings.byRule).length} rule(s), ${observation.findings.strengths} strength(s)`,
   ];
+  if (observation.runtime !== undefined) {
+    const runtime = observation.runtime;
+    lines.push(
+      `  runtime       ${runtime.spans} span(s), ${runtime.exercisedComponents} of ${runtime.declaredComponents} components exercised, ${runtime.exercisedNotDeclared.length} without a declaration`,
+    );
+  }
   if (observation.discardedRelations.length > 0) {
     lines.push(`  discarded     ${observation.discardedRelations.join('; ')}`);
   }

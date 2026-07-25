@@ -52,6 +52,27 @@ const checkLocalSource = (entry, problem) => {
   }
 };
 
+const checkExercise = (exercise, problem) => {
+  if (exercise === undefined) return;
+  if (!isRecord(exercise)) {
+    problem('exercise has to be a mapping');
+    return;
+  }
+  if (typeof exercise.script !== 'string' || !exercise.script.endsWith('.py')) {
+    problem('exercise.script has to name a Python file in this repository');
+  }
+  if (
+    !Array.isArray(exercise.pythonPackages) ||
+    exercise.pythonPackages.length === 0 ||
+    exercise.pythonPackages.some((name) => typeof name !== 'string')
+  ) {
+    problem('exercise.pythonPackages has to list what the environment needs, in install order');
+  }
+  if (typeof exercise.why !== 'string' || exercise.why.trim().length === 0) {
+    problem('exercise.why has to say what this run is meant to show');
+  }
+};
+
 const checkEntry = (entry, index, names, problems) => {
   const where =
     isRecord(entry) && typeof entry.name === 'string' ? entry.name : `entry ${index + 1}`;
@@ -64,6 +85,7 @@ const checkEntry = (entry, index, names, problems) => {
     return;
   }
   checkIdentity(entry, names, problem);
+  checkExercise(entry.exercise, problem);
   if (entry.source === 'git') checkGitSource(entry, problem);
   else if (entry.source === 'local') checkLocalSource(entry, problem);
   else problem('source has to be git or local');

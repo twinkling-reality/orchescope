@@ -19,7 +19,31 @@ const areasOfKind = (coverage, kind) =>
     .map((area) => area.area)
     .sort();
 
-export const observationOf = (entry, audit, bundle) => {
+/**
+ * The delta, held as identities rather than as counts alone.
+ *
+ * A name that failed to match is the thing worth reading here: the join is by name, so which identities joined and
+ * which arrived without a counterpart is the measurement, and a count would hide the one that moved.
+ */
+const runtimeOf = (exercise, bundle) => {
+  const delta = bundle.reconciliation;
+  const joined = bundle.graph.components
+    .filter((component) => component.presence.runtime && component.presence.static)
+    .map((component) => component.id)
+    .sort();
+  return {
+    runs: exercise.runs,
+    spans: exercise.spans,
+    declaredComponents: delta.coverage.declaredComponents,
+    exercisedComponents: delta.coverage.exercisedComponents,
+    joined,
+    exercisedNotDeclared: [...delta.exercisedNotDeclared.components].sort(),
+    contradictions: delta.contradictions.length,
+    duplicateSideEffects: delta.duplicateSideEffects.length,
+  };
+};
+
+export const observationOf = (entry, audit, bundle, exercise) => {
   const coverage = bundle.graph.coverage;
   const findings = bundle.findings;
   return {
@@ -53,6 +77,7 @@ export const observationOf = (entry, audit, bundle) => {
           },
         ]),
     ),
+    ...(exercise === undefined ? {} : { runtime: runtimeOf(exercise, bundle) }),
     languagesNotAnalysed: areasOfKind(coverage, 'language_not_analysed'),
     blindSpots: areasOfKind(coverage, 'adapter_blind_spot'),
     discardedRelations: areasOfKind(coverage, 'discarded_relation'),

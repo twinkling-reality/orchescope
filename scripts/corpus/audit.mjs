@@ -24,14 +24,19 @@ const parseDocument = (text) => {
 
 export const bundlePathFor = (root, name) => join(cacheDirectory(root), 'bundles', `${name}.json`);
 
-export const auditRepository = (root, name, directory) => {
-  /*
-   * State written by an earlier run would make the measurement depend on this machine: stored runs produce a
-   * reconciliation delta, and the corpus is about what a repository declares. The fact cache survives, because its
-   * keys carry the content digest and the analyser version.
-   */
+/**
+ * Removes state written by an earlier corpus run.
+ *
+ * Stored runs produce a reconciliation delta, so leaving them would make the measurement depend on this machine
+ * rather than on the repository. It is cleared before anything else happens, which is why an entry that exercises
+ * itself still measures exactly the one run it just produced. The fact cache survives, because its keys carry the
+ * content digest and the analyser version.
+ */
+export const clearStoredState = (directory) => {
   rmSync(join(directory, '.orchescope/state'), { recursive: true, force: true });
+};
 
+export const auditRepository = (root, name, directory) => {
   const bundlePath = bundlePathFor(root, name);
   mkdirSync(dirname(bundlePath), { recursive: true });
   rmSync(bundlePath, { force: true });
