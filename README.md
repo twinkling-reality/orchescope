@@ -179,6 +179,11 @@ Each row names an ecosystem with a fixture repository under `packages/discovery/
 documentation writes it, and a test asserting the components, the relations and the evidence. A framework with no fixture is
 one Orchescope does not claim to understand.
 
+A fixture agrees with its author, so every adapter is also measured against real repositories pinned at a commit in
+[`corpus/corpus.yaml`](corpus/corpus.yaml), with what it finds in each of them committed beside it. That is what says how
+much of a repository was actually parsed, which adapter contributed what, and which frameworks a repository uses that an
+adapter read nothing from. See [the corpus guide](docs/guides/corpus.md).
+
 Anything else can be declared in `.orchescope/manifest.yaml`, which is a first class input rather than a fallback. A file
 in a language Orchescope cannot parse is reported as not inspected rather than ignored.
 

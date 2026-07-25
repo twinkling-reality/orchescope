@@ -30,9 +30,9 @@ tool.
 | 14. Packaging and distribution | done | `pnpm package`: stage `release/stage`, install the tarball and audit a project with it |
 | 15. Documentation and open source setup | done | `README.md`, `docs/`, `SECURITY.md`, `CONTRIBUTING.md`, CI workflows |
 | 16. Installable product | in progress | see below |
-| 17. Measured against real repositories | not started | the plan is below, the evidence for needing it is in phase 16 |
+| 17. Measured against real repositories | in progress | milestone 1 done: `pnpm corpus` across thirteen pinned repositories |
 
-579 unit and integration tests, 78 end to end tests, 10 browser tests. `pnpm verify` is green.
+581 unit and integration tests, 85 end to end tests, 10 browser tests. `pnpm verify` is green.
 
 ## Phase 16: what a stranger meets
 
@@ -118,41 +118,71 @@ and it is listed item by item because only some of it is done.
 
 ## Phase 17: measured against real repositories
 
-Not started. This is the plan of record for the next effort, and the reason for it is in the numbers above: every
-defect in phase 16 that mattered was found by pointing the tool at a real repository, and none of them could have
-been found by the fixtures. Every adapter is validated against a fixture written by whoever wrote the adapter, which
-is circular: the fixture encodes what the author already believed.
+Milestone 1 is done, three remain. The reason for the phase is in the numbers above: every defect in phase 16 that
+mattered was found by pointing the tool at a real repository, and none of them could have been found by the fixtures.
+Every adapter is validated against a fixture written by whoever wrote the adapter, which is circular: the fixture
+encodes what the author already believed.
 
 **The thesis. Measurement before more features.** A harness that runs discovery across many pinned real repositories
 and holds the numbers is worth more than three more adapters, because it says which adapters matter, it catches
 framework drift in the field, and it turns "does it work" into a gate. Adapter count is linear grind; the corpus says
 where the grind pays.
 
-### Milestone 1: the corpus harness
+### Milestone 1: the corpus harness. Done.
 
-`corpus/corpus.yaml` pins one entry per repository: name, url, commit, `kind: agent_system | not_agent_system`, and
-why it is in the corpus. Third party source is never vendored into this repository; it is cloned at the pinned commit
-into a gitignored cache, because licence compliance is a constraint rather than a footnote.
+`corpus/corpus.yaml` pins thirteen repositories: name, source, commit, `kind: agent_system | not_agent_system`, and why
+each one is in the corpus. Third party source is never vendored; a git entry is cloned at its pinned commit into
+`corpus/.cache`, which git ignores, because licence compliance is a constraint rather than a footnote. A local entry
+names a directory of this repository and is copied from its tracked files, so it measures the working tree.
 
-`corpus/expected/<name>.json` is committed and holds what a scan must produce: component count by kind, which
-adapters contributed and how much, blind spots, discarded relations, findings by rule, files parsed over files
-discovered, and whether an agent system was detected. `scripts/corpus.mjs` runs the audit and diffs against the
-expectation. A change is a reviewed diff, never an automatic update, and that diff is the drift alarm: when a
-framework moves and an adapter goes quiet, this is what says so.
+`corpus/expected/<name>.json` is committed and holds what a scan produces: components by kind, relations by kind, which
+adapters contributed and how much, blind spots, discarded relations, findings by rule and by severity, files parsed over
+files discovered, and whether an agent system was detected. `scripts/corpus.mjs` runs the real command line, diffs
+against the expectation and never rewrites it: `--record` is a separate, explicit action whose output is a diff to read.
 
-Both polarities count. A repository that is not an agent system is a precision test: `seorak` at 28 components is
-the guard that catches the prompt adapter being loosened again. At least three such entries, each with a ceiling.
+Holding blind spots and discarded relations apart needed the coverage report to say which of the three causes an
+unsupported area has, so `UnsupportedArea` now carries `language_not_analysed`, `adapter_blind_spot` or
+`discarded_relation`. Nothing has to match prose to tell a limit of this release from a reader that is behind from a
+defect in an adapter.
 
-The required gate runs an offline subset. The network corpus runs from `optional-live.yml` on dispatch.
+**Acceptance evidence.**
 
-**Acceptance evidence.** `node scripts/corpus.mjs --check` passes over at least eight repositories covering all six
-framework adapters and three non agent repositories; breaking one adapter deliberately makes it fail and name that
-adapter; the summary reports parse rate, adapter contribution and blind spots per repository.
+- **`pnpm corpus` passes over thirteen repositories**, nine agent systems and four that are not. Every framework adapter
+  contributes to at least one: OpenAI Agents SDK in both languages, LangGraph in both, CrewAI, Pydantic AI, the Vercel
+  AI SDK read from an application rather than from the library that defines it, and the model SDK adapter from
+  `anthropic-quickstarts`. `tests/e2e/corpus.test.ts` holds that coverage claim rather than trusting it, and fails if a
+  framework adapter stops appearing anywhere in the corpus.
+- **The summary reports parse rate, adapter contribution and blind spots per repository.** The parse rates run from 33%
+  on `pydantic-ai` to 96% on `openai-agents-python`, which is a number nothing in this repository could previously have
+  told anyone. Four blind spots are recorded across three repositories, each naming a framework a repository imports and
+  the adapter that read nothing from it.
+- **Breaking one adapter deliberately fails the check and names it.** Making the LangGraph adapter skip every module it
+  had matched took `langgraphjs` from 750 components to 119, and the check exited 1 reporting
+  `adapters.adapter:langgraph.componentsFound: expected 1240, observed 0` first, with the blind spot line naming
+  `@langchain/langgraph, langgraph, @langchain/core used in source, read by adapter:langgraph`. The same break in the
+  manifest adapter fails the offline subset. Both were reverted; the working tree is clean.
+- **The required gate runs the offline subset.** `pnpm corpus:offline` is a job in `ci.yml` and is also run through the
+  real script by `tests/e2e/corpus.test.ts`. The pinned corpus needs network access the required gate refuses to depend
+  on, so it runs from `optional-live.yml` on dispatch and uploads its summary.
+
+**What the corpus already says**, before a single new adapter is written:
+
+- **No relation was discarded anywhere.** The phase 16 fix holds across 13 repositories and 7284 components rather than
+  across the one repository that produced the crash.
+- **`pydantic-ai` parses 596 of 1808 discovered files.** Two thirds of that repository is invisible to the readers, and
+  the expectation says so on every run instead of leaving it to be discovered again.
+- **`axios` yields 128 components, all of them from the effect reader, and no agent system.** That is the ceiling for
+  what the retry, timeout and side effect rules cost on code that has nothing to do with agents.
+- **`packages/discovery` yields nothing at all.** Every framework name this product knows appears in that directory as a
+  string literal, and no reader claims a component from it.
 
 ### Milestone 2: findings that survive a real repository
 
-`openai/openai-agents-python` produces 439 findings, 211 from one rule and 193 from another. Two hundred instances of
-one pattern is one problem, not two hundred, and a `low` finding repeated 193 times must not bury a `high` one.
+`openai/openai-agents-python` produces 439 findings, 211 from `topology-shape` and 193 from
+`configured-tool-has-no-caller`. Two hundred instances of one pattern is one problem, not two hundred, and a `low`
+finding repeated 193 times must not bury a `high` one. Those counts are now pinned in
+`corpus/expected/openai-agents-python.json`, so the before and after this milestone needs is a diff rather than a
+recollection.
 
 Group by rule into one finding with a representative instance, an occurrence count and the component list. Cap per
 rule output with the withheld count stated rather than silently. Rank by severity, then goal eligibility, then blast
