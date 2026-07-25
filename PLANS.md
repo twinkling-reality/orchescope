@@ -16,7 +16,7 @@ tool.
 | --- | --- | --- |
 | 1. Research and stack selection | done | `docs/research/`, `docs/architecture/adr/0001-stack-selection.md` |
 | 2. Contracts and domain core | done | `packages/schema`, `packages/domain`, twelve documents under `schemas/` |
-| 3. Source analysis and discovery | done | `pnpm orchescope --cwd apps/demo audit`, ten adapter fixtures |
+| 3. Source analysis and discovery | done | `pnpm --silent orchescope --cwd apps/demo audit`, adapter fixtures per ecosystem |
 | 4. Graph, identity, invariants | done | `packages/graph/test/graph.test.ts`, 23 tests |
 | 5. Runtime observation and reconciliation | done | `packages/traces/test/traces.test.ts`, the delta in the demo audit |
 | 6. Findings and severity policy | done | 23 rules evaluated against the demo, severity capping tested, `packages/findings/test/static-rules.test.ts` |
@@ -75,6 +75,11 @@ and it is listed item by item because only some of it is done.
   transport; and `needs_approval` on a `@function_tool` decorator was not read, so an approval boundary went unrecorded.
   Evidence: nine tests in `packages/discovery/test/adapters.test.ts`, and an audit of a two framework Python repository
   reporting six components across five relations.
+- **A sixth framework adapter: Pydantic AI.** It reads the `provider:model` string into a provider and a model with the
+  relation between them, attributes a tool to the agent its decorator names, takes the agent name from the variable
+  when none is declared because that is what the library infers at run time, and records a tool's `retries` as a
+  bounded retry with unknown backoff and unknown idempotency. Evidence: seven tests, and an audit of a Pydantic AI
+  repository where the existing retry safety rule fires on the declared ceiling without any rule being changed.
 
 **Not done:**
 
@@ -134,9 +139,10 @@ extend it without reading every file.
 
 - **Two language ecosystems.** JavaScript with TypeScript, and Python. Anything else is declared in the manifest and reported
   as not inspected.
-- **Five framework adapters**, each with a fixture: OpenAI Agents SDK, LangGraph, CrewAI, Vercel AI SDK, and model SDKs, plus
-  MCP configuration and the manifest. The OpenAI Agents SDK and LangGraph now carry a Python fixture as well as a
-  JavaScript one; CrewAI is Python only because the framework is; the Vercel AI SDK is JavaScript only for the same reason.
+- **Six framework adapters**, each with a fixture: OpenAI Agents SDK, LangGraph, CrewAI, Pydantic AI, Vercel AI SDK, and
+  model SDKs, plus MCP configuration and the manifest. The OpenAI Agents SDK and LangGraph carry a Python fixture as well
+  as a JavaScript one; CrewAI and Pydantic AI are Python only because the frameworks are; the Vercel AI SDK is JavaScript
+  only for the same reason.
 - **One repository at a time.** Cross repository identity is not designed.
 - **No answer quality measurement.** Behaviour, cost, reliability and structure only.
 - **Cost is derived from token counts and a configured price table.** No price table ships, so cost is absent until one is

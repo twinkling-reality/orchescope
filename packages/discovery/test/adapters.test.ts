@@ -536,6 +536,180 @@ triage_agent = Agent(
   });
 });
 
+/**
+ * Pydantic AI.
+ *
+ * The model is the first positional argument as `provider:model`, tools are registered by a decorator on the
+ * agent itself, and an agent with no `name` is named after the variable it is assigned to, which is what the
+ * library does at run time: "if `None`, we try to infer the agent name from the call frame". Every shape here is
+ * taken from the project's own README and the `Agent` signature.
+ */
+describe('Pydantic AI', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writePythonProject(workspace, { name: 'desk-pai', dependencies: ['pydantic-ai>=1.0'] });
+    workspace.write(
+      'src/support.py',
+      `from dataclasses import dataclass
+
+from pydantic import BaseModel
+from pydantic_ai import Agent, RunContext
+
+
+@dataclass
+class Deps:
+    customer_id: int
+
+
+class SupportOutput(BaseModel):
+    advice: str
+    block_card: bool
+
+
+support_agent = Agent(
+    'openai:gpt-4.1-mini',
+    deps_type=Deps,
+    output_type=SupportOutput,
+    instructions='Answer the customer and judge the risk of the request.',
+    retries=2,
+)
+
+triage_agent = Agent(
+    'anthropic:claude-sonnet-4-6',
+    name='triage',
+    instructions='Route the request to the right worker.',
+)
+
+
+@support_agent.instructions
+async def add_customer_name(ctx: RunContext[Deps]) -> str:
+    return f"The customer is {ctx.deps.customer_id}"
+
+
+@support_agent.tool
+async def customer_balance(ctx: RunContext[Deps], include_pending: bool) -> float:
+    """Return the customer's current account balance."""
+    return 0.0
+
+
+@support_agent.tool(retries=3, requires_approval=True)
+async def issue_refund(ctx: RunContext[Deps], order_id: str) -> str:
+    """Refund a charge against the payment gateway."""
+    return order_id
+
+
+@triage_agent.tool_plain
+def business_hours() -> str:
+    """Return the hours support is staffed."""
+    return "09:00 to 17:00"
+`,
+    );
+  };
+
+  it('discovers an agent under its declared name and under the variable when it has none', async () => {
+    const { ids, adapters } = await scan(build);
+    assert.ok(
+      adapters.some(
+        (entry) => entry.adapterId === 'adapter:pydantic-ai' && entry.status === 'completed',
+      ),
+      `the pydantic ai adapter did not apply: ${adapters.map((entry) => `${entry.adapterId}=${entry.status}`).join(', ')}`,
+    );
+    assert.ok(ids.includes('agent:triage'), `expected the declared name in ${ids.join(', ')}`);
+    assert.ok(
+      ids.includes('agent:support_agent'),
+      'an agent with no name is named after its variable, which is what the library infers',
+    );
+  });
+
+  it('splits the model string into the provider and the model it names', async () => {
+    const { ids, edges } = await scan(build);
+    assert.ok(ids.includes('provider:openai'), `expected provider:openai in ${ids.join(', ')}`);
+    assert.ok(ids.includes('provider:anthropic'));
+    assert.ok(ids.includes('model:openai/gpt-4.1-mini'));
+    assert.ok(ids.includes('model:anthropic/claude-sonnet-4-6'));
+    assert.ok(
+      edges.includes('served_by_provider:model:openai/gpt-4.1-mini->provider:openai'),
+      `expected the model to name its provider in ${edges.join(', ')}`,
+    );
+    assert.ok(edges.includes('invokes_model:agent:support_agent->model:openai/gpt-4.1-mini'));
+    assert.ok(edges.includes('invokes_model:agent:triage->model:anthropic/claude-sonnet-4-6'));
+  });
+
+  it('attributes a decorated tool to the agent the decorator names', async () => {
+    const { ids, edges } = await scan(build);
+    assert.ok(ids.includes('tool:customer_balance'));
+    assert.ok(ids.includes('tool:issue_refund'));
+    assert.ok(ids.includes('tool:business_hours'), 'expected the tool_plain decorator to register');
+    assert.ok(
+      edges.includes('calls_tool:agent:support_agent->tool:customer_balance'),
+      `expected the tool relation in ${edges.join(', ')}`,
+    );
+    assert.ok(edges.includes('calls_tool:agent:support_agent->tool:issue_refund'));
+    assert.ok(
+      edges.includes('calls_tool:agent:triage->tool:business_hours'),
+      'a tool_plain decorator belongs to the agent it was declared on',
+    );
+  });
+
+  it('records the retry ceiling on the relation and never claims the effect is safe to repeat', async () => {
+    const { result } = await scan(build);
+    const edge = result.graph.edges.find(
+      (candidate) =>
+        candidate.kind === 'calls_tool' &&
+        candidate.from === 'agent:support_agent' &&
+        candidate.to === 'tool:issue_refund',
+    );
+    assert.ok(edge !== undefined, 'the refund relation was not discovered');
+    assert.deepEqual(edge.policy?.retry, {
+      maxAttempts: 3,
+      bounded: true,
+      backoff: 'unknown',
+      idempotency: 'unknown',
+    });
+  });
+
+  it('records that the refund tool requires approval', async () => {
+    const { result } = await scan(build);
+    const refund = result.graph.components.find(
+      (component) => component.id === 'tool:issue_refund',
+    );
+    assert.equal(
+      (refund?.details as { approvalRequired?: boolean } | undefined)?.approvalRequired,
+      true,
+    );
+  });
+
+  it('cites a source location and the framework for everything it adds', async () => {
+    const { result } = await scan(build);
+    const own = result.graph.components.filter((component) =>
+      component.discoveredBy.includes('adapter:pydantic-ai'),
+    );
+    assert.ok(own.length >= 5, `expected several components, saw ${own.length}`);
+    for (const component of own) {
+      assert.equal(component.basis, 'discovered');
+      assert.ok(component.evidence.length > 0, `${component.id} carries no evidence`);
+      const cited = result.evidence.filter((record) => component.evidence.includes(record.id));
+      assert.ok(
+        cited.some((record) => record.kind === 'source_span'),
+        `${component.id} is not backed by a source span`,
+      );
+    }
+    const agent = result.graph.components.find((c) => c.id === 'agent:support_agent');
+    assert.equal((agent?.details as { framework?: string } | undefined)?.framework, 'pydantic-ai');
+    assert.equal(agent?.metadata['outputType'], 'SupportOutput');
+  });
+
+  it('stays quiet in a project that does not use it', async () => {
+    const { adapters } = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'plain-py', dependencies: ['requests'] });
+      workspace.write('src/plain.py', 'def add(a: int, b: int) -> int:\n    return a + b\n');
+    });
+    assert.equal(
+      adapters.find((entry) => entry.adapterId === 'adapter:pydantic-ai')?.status,
+      'not_applicable',
+    );
+  });
+});
+
 describe('the manifest', () => {
   const manifest = [
     'schemaVersion: 1',

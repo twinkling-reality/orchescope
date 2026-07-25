@@ -169,6 +169,7 @@ Only what is tested is claimed. Each of these has an adapter exercised by tests 
 | OpenAI Agents SDK (JavaScript, TypeScript and Python) | `new Agent({...})` and `Agent(name=...)`, handoffs, tools, `@function_tool` with `name_override` and `needs_approval`, MCP servers including a command nested in `params`, `maxTurns` |
 | LangGraph (JavaScript, TypeScript and Python) | `StateGraph`, `addNode("name", fn)` and `add_node(fn)`, edges, conditional edges |
 | CrewAI (Python) | `Agent(...)`, `Crew(...)`, `agents.yaml`, `crew.jsonc` |
+| Pydantic AI (Python) | `Agent('provider:model', ...)`, `@agent.tool` and `@agent.tool_plain`, `retries`, `requires_approval`, `output_type` |
 | Vercel AI SDK (JavaScript and TypeScript) | `generateText`, `streamText`, `generateObject`, `tool(...)`, `maxSteps` |
 | Model SDKs | OpenAI, Anthropic and compatible clients, including base URL overrides |
 | Model Context Protocol | `mcp.json`, `.mcp.json`, `.vscode/mcp.json`, `McpServer`, `FastMCP`, tool registration |

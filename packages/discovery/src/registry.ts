@@ -7,6 +7,7 @@ import { mcpAdapter } from './adapters/mcp.ts';
 import { modelSdkAdapter } from './adapters/model-sdk.ts';
 import { openAiAgentsAdapter } from './adapters/openai-agents.ts';
 import { promptsAdapter } from './adapters/prompts.ts';
+import { pydanticAiAdapter } from './adapters/pydantic-ai.ts';
 import { vercelAiSdkAdapter } from './adapters/vercel-ai-sdk.ts';
 
 /**
@@ -23,6 +24,7 @@ export const DEFAULT_ADAPTERS: readonly AgentSystemAdapter[] = [
   openAiAgentsAdapter,
   langGraphAdapter,
   crewAiAdapter,
+  pydanticAiAdapter,
   vercelAiSdkAdapter,
   modelSdkAdapter,
   effectsAdapter,

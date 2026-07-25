@@ -69,7 +69,16 @@ Four rules, and the tooling enforces the first three:
 1. **No filesystem, no network, no process.** An adapter receives facts. It never reads a file and never runs anything.
 2. **No severity decisions.** An adapter records what it found. Whether that is a problem is a rule's job.
 3. **Evidence with everything.** Every draft carries at least one evidence record with a location.
-4. **Report honestly.** Return the counts you actually added, and a `note` when something could not be resolved.
+4. **Report honestly.** Return the counts you actually added, a `note` when something could not be resolved, and a
+   `problem` when an input the project wrote on purpose could not be used at all, which records the run as failed.
+
+### Fixture first
+
+Write the fixture before the adapter, and write it the way the framework's own documentation writes it rather than the way
+you remember. The Python fixtures in this repository were written from each library's published examples and signatures,
+and doing it in that order is what found three defects in adapters that were assumed to work: a node registration form
+that was dropped, an MCP command nested one level deeper than the reader looked, and an approval flag under a different
+case convention. A fixture that agrees with the adapter you already wrote proves nothing.
 
 ### What you get
 
