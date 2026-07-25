@@ -172,6 +172,10 @@ importers:
       '@orchescope/schema':
         specifier: workspace:*
         version: link:../schema
+    devDependencies:
+      '@orchescope/testkit':
+        specifier: workspace:*
+        version: link:../testkit
 
   packages/goals:
     dependencies:

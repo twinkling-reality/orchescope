@@ -12,5 +12,8 @@
     "@orchescope/domain": "workspace:*",
     "@orchescope/graph": "workspace:*",
     "@orchescope/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "@orchescope/testkit": "workspace:*"
   }
 }

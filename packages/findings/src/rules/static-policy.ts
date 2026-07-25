@@ -590,8 +590,59 @@ export const unusedConfiguredToolRule: Rule = {
   },
 };
 
+/**
+ * The opposite shape of `retry-around-non-idempotent-operation`, reported for the same reason.
+ *
+ * A bounded retry with a declared idempotency key is what a correct retry looks like. Reporting it matters because a reader
+ * who has just been shown the unsafe case needs to see the intended pattern, in their own repository, with the location of
+ * the relation that already gets it right.
+ */
+export const safeRetryRule: Rule = {
+  id: 'bounded-retry-with-declared-idempotency',
+  category: 'reliability',
+  summary: 'A retry that is bounded and whose operation declares an idempotency key.',
+  evaluate: (context) => {
+    const safe = context.graph.graph.edges.filter((edge) => {
+      const retry = edge.policy?.retry;
+      return retry !== undefined && retry.bounded && retry.idempotency === 'declared';
+    });
+    if (safe.length === 0) {
+      return context.graph.graph.edges.some((edge) => edge.policy?.retry !== undefined)
+        ? clear('no retry relation declares both a ceiling and an idempotency key')
+        : notApplicable('no retry policy was discovered');
+    }
+
+    return fired(
+      safe.map((edge) => {
+        const target = context.graph.component(edge.to);
+        const source = context.graph.component(edge.from);
+        const retry = edge.policy?.retry;
+        return {
+          ruleId: 'bounded-retry-with-declared-idempotency',
+          category: 'reliability' as const,
+          polarity: 'strength' as const,
+          severity: 'info' as const,
+          confidence: CONFIDENCE_BANDS.strongStructural,
+          basis: 'discovered' as const,
+          title: `Retry around ${target?.displayName ?? edge.to} is bounded and keyed`,
+          explanation: `${source?.displayName ?? edge.from} retries ${target?.displayName ?? edge.to} at most ${retry?.maxAttempts ?? 'a declared number of'} times with ${retry?.backoff ?? 'unknown'} backoff, and the operation declares an idempotency key. A repeat of the same attempt cannot produce the effect twice.`,
+          impact:
+            'This relation recovers from a transient failure without the risk that makes an unkeyed retry dangerous.',
+          components: [edge.to, edge.from],
+          edges: [edge.id],
+          evidence: edge.evidence.slice(0, 3) as EvidenceId[],
+          goalEligible: false,
+          goalReason: 'Nothing to change.',
+          tags: ['positive', 'retry', 'idempotency'],
+        };
+      }),
+    );
+  },
+};
+
 export const STATIC_RULES: readonly Rule[] = [
   unsafeRetryRule,
+  safeRetryRule,
   unboundedRetryRule,
   missingTimeoutRule,
   approvalBoundaryRule,
