@@ -558,6 +558,9 @@ const HANDLERS: Readonly<
   export_report: exportReport,
 };
 
+/** The tools this module implements, so the contract test can hold the registry and the handlers together. */
+export const HANDLER_NAMES: readonly string[] = Object.keys(HANDLERS);
+
 export const callTool = (
   context: HandlerContext,
   name: string,

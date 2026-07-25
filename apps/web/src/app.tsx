@@ -183,7 +183,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = resolveTheme(state.theme);
+    document.documentElement.dataset['theme'] = resolveTheme(state.theme);
     storeTheme(state.theme);
   }, [state.theme]);
 

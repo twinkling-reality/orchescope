@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { stableJson } from '@orchescope/domain';
+import { OrchescopeError, stableJson } from '@orchescope/domain';
 import { renderStandaloneHtml, toMermaid, toSarif } from '@orchescope/report';
 import { openInBrowser, startReportServer } from '@orchescope/report-server';
 import { runDoctor } from '@orchescope/usecases';
@@ -64,10 +64,9 @@ export const openCommand = async (
 ): Promise<number> => {
   const bundle = context.workspace.store.latestReport(context.workspace.projectId);
   if (bundle === undefined) {
-    context.stderr(
-      `${context.style.bad('error')} no report has been generated for this project yet. Run: orchescope audit\n`,
-    );
-    return EXIT_CODES.user;
+    throw new OrchescopeError('NOT_FOUND', 'No report has been generated for this project yet.', {
+      remediation: 'Run: orchescope audit',
+    });
   }
   const assets = findAssetDirectory();
   const server = await startReportServer({
@@ -113,8 +112,9 @@ export const exportCommand = (
 ): number => {
   const bundle = context.workspace.store.latestReport(context.workspace.projectId);
   if (bundle === undefined) {
-    context.stderr(`${context.style.bad('error')} no report exists yet. Run: orchescope audit\n`);
-    return EXIT_CODES.user;
+    throw new OrchescopeError('NOT_FOUND', 'No report exists yet.', {
+      remediation: 'Run: orchescope audit',
+    });
   }
   const format = options.format ?? 'json';
   let contents: string;

@@ -4,7 +4,7 @@ import { assertAllowed, permissionsDecision } from '@orchescope/policy';
 import { loadScenarios, parseScenario, runScenarioWithArtifacts } from '@orchescope/scenarios';
 import type { FaultPlan, Scenario, ScenarioResult, ScenarioVariant } from '@orchescope/schema';
 import { formatIssues } from '@orchescope/schema';
-import type { Workspace } from '@orchescope/workspace';
+import { resolveInsideRoot, type Workspace } from '@orchescope/workspace';
 import { currentEnvironment } from './environment.ts';
 import { scenarioPolicyFrom } from './scenario-policy.ts';
 
@@ -28,15 +28,8 @@ export const loadScenario = (request: LoadScenarioRequest): Scenario => {
   if (stored !== undefined) return stored;
 
   if (request.reference.endsWith('.yaml') || request.reference.endsWith('.yml')) {
-    const resolved = request.reference.startsWith('/')
-      ? request.reference
-      : `${workspace.paths.root}/${request.reference}`;
-    if (!resolved.startsWith(workspace.paths.root)) {
-      throw new OrchescopeError(
-        'INVALID_ARGUMENT',
-        'A scenario path must be inside the repository.',
-      );
-    }
+    // Resolved and normalized before it is compared: a textual prefix check accepts `<root>/../../etc/passwd`.
+    const resolved = resolveInsideRoot(workspace.paths, request.reference);
     const text = readFileSync(resolved, 'utf8');
     const parsed = parseScenario(text, request.reference);
     if (!parsed.ok) {

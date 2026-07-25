@@ -1,5 +1,5 @@
 import { writeFileSync } from 'node:fs';
-import { stableJson } from '@orchescope/domain';
+import { OrchescopeError, stableJson } from '@orchescope/domain';
 import { renderAgentPrompt, renderGoalMarkdown, renderGoalSummary } from '@orchescope/goals';
 import { createGoalFromFinding, validateGoalOutcome } from '@orchescope/usecases';
 import type { CommandContext } from '../context.ts';
@@ -51,8 +51,9 @@ export const goalShowCommand = (
 ): number => {
   const goal = context.workspace.store.goalById(goalId);
   if (goal === undefined) {
-    context.stderr(`${context.style.bad('error')} no goal ${goalId}\n`);
-    return EXIT_CODES.user;
+    throw new OrchescopeError('NOT_FOUND', `There is no goal ${goalId}.`, {
+      remediation: 'List what exists with: orchescope goals',
+    });
   }
   const rendered =
     options.prompt === true
@@ -141,8 +142,9 @@ export const goalValidateCommand = (
       ? undefined
       : context.workspace.store.comparisonById(options.comparison);
   if (options.comparison !== undefined && comparison === undefined) {
-    context.stderr(`${context.style.bad('error')} no comparison ${options.comparison}\n`);
-    return EXIT_CODES.user;
+    throw new OrchescopeError('NOT_FOUND', `There is no comparison ${options.comparison}.`, {
+      remediation: 'Create one with: orchescope compare <baseline> <candidate>',
+    });
   }
   const outcome = validateGoalOutcome({
     workspace: context.workspace,

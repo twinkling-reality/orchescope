@@ -97,6 +97,53 @@ type Mutable<T> = { -readonly [K in keyof T]: T[K] };
  * Merges a partial configuration document over the defaults, one section at a time. A section is merged rather
  * than replaced so that setting one policy value does not silently reset the rest.
  */
+const SECTIONS = [
+  'analysis',
+  'runtime',
+  'report',
+  'policy',
+  'semanticAnalysis',
+  'redaction',
+] as const;
+
+/**
+ * A key that is present but wrong is refused rather than ignored.
+ *
+ * A misspelled setting that is silently dropped is how a user comes to believe they granted or denied something they did
+ * not, which is the failure this check exists to prevent. Absence is fine: an absent key takes the default.
+ */
+const assertShape = (partial: Record<string, unknown>, file: string): void => {
+  const problems: string[] = [];
+  const known = new Set<string>([...SECTIONS, 'schemaVersion', 'projectName']);
+  for (const key of Object.keys(partial)) {
+    if (!known.has(key)) problems.push(`${key} is not a setting Orchescope understands`);
+  }
+  for (const section of SECTIONS) {
+    const value = partial[section];
+    if (value === undefined) continue;
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      problems.push(`${section} must be an object`);
+    }
+  }
+  if (partial['schemaVersion'] !== undefined && typeof partial['schemaVersion'] !== 'number') {
+    problems.push('schemaVersion must be a number');
+  }
+  if (partial['projectName'] !== undefined && typeof partial['projectName'] !== 'string') {
+    problems.push('projectName must be a string');
+  }
+  if (problems.length > 0) {
+    throw new OrchescopeError(
+      'CONFIG_INVALID',
+      `The configuration is not valid: ${problems.join('; ')}`,
+      {
+        detail: { file },
+        remediation:
+          'Correct the reported fields, or delete the file to fall back to the defaults.',
+      },
+    );
+  }
+};
+
 const mergeConfig = (partial: Record<string, unknown>): OrchescopeConfig => {
   const merged: Mutable<OrchescopeConfig> = {
     ...DEFAULT_CONFIG,
@@ -107,15 +154,7 @@ const mergeConfig = (partial: Record<string, unknown>): OrchescopeConfig => {
     semanticAnalysis: { ...DEFAULT_CONFIG.semanticAnalysis },
     redaction: { ...DEFAULT_CONFIG.redaction },
   };
-  const sections = [
-    'analysis',
-    'runtime',
-    'report',
-    'policy',
-    'semanticAnalysis',
-    'redaction',
-  ] as const;
-  for (const section of sections) {
+  for (const section of SECTIONS) {
     const value = partial[section];
     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
       merged[section] = { ...merged[section], ...(value as object) } as never;
@@ -160,6 +199,7 @@ export const loadConfig = (paths: WorkspacePaths): ConfigLoad => {
       },
     );
   }
+  assertShape(parsed as Record<string, unknown>, paths.configFile);
   const merged = mergeConfig(parsed as Record<string, unknown>);
   const validated = validateDocument(
     OrchescopeConfigSchema,

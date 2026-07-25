@@ -30,14 +30,23 @@ const CODES = {
   underline: '[4m',
 } as const;
 
+/**
+ * Colour precedence, strongest first.
+ *
+ *  1. JSON mode is never coloured. An escape sequence inside the document would break every consumer of it.
+ *  2. An explicit `--color` wins over the environment, because a flag on this invocation is a stronger signal than a
+ *     setting that applies to every program.
+ *  3. `NO_COLOR`, a `--no-color` flag, or output that is not a terminal all disable colour.
+ */
 export const detectStyleMode = (input: {
   readonly isTty: boolean;
   readonly noColor: boolean;
   readonly forceColor: boolean;
   readonly jsonMode: boolean;
 }): StyleMode => {
+  if (input.jsonMode) return 'plain';
   if (input.forceColor) return 'color';
-  if (input.noColor || input.jsonMode || !input.isTty) return 'plain';
+  if (input.noColor || !input.isTty) return 'plain';
   return 'color';
 };
 

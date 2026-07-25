@@ -1,4 +1,4 @@
-import { type OrchescopeError, isOrchescopeError } from '@orchescope/domain';
+import { isOrchescopeError, type OrchescopeError } from '@orchescope/domain';
 import type { Style } from './terminal/style.ts';
 
 /**

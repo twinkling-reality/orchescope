@@ -273,7 +273,7 @@ function GoalCard(props: { readonly goal: Goal; readonly highlighted: boolean })
 export function GoalsSection() {
   const app = useApp();
   const { goals } = app.bundle;
-  const highlighted = app.state.route.params.goal ?? null;
+  const highlighted = app.state.route.params['goal'] ?? null;
 
   if (goals.length === 0) {
     const eligible = app.bundle.findings.find((finding) => finding.goalReadiness.eligible) ?? null;

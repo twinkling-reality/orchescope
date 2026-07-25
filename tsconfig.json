@@ -28,8 +28,8 @@
     "packages/*/test/**/*.ts",
     "apps/*/src/**/*.ts",
     "apps/*/test/**/*.ts",
-    "tests/**/*.ts",
-    "scripts/**/*.mjs"
+    "scripts/**/*.mjs",
+    "tests/e2e/**/*.ts"
   ],
-  "exclude": ["**/node_modules", "**/dist", "apps/web/src/**/*.tsx"]
+  "exclude": ["**/dist", "**/node_modules", "apps/web/src/**/*.tsx", "tests/ui/**"]
 }

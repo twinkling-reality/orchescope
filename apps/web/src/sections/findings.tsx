@@ -56,8 +56,8 @@ function FindingList(props: {
 export function FindingsSection() {
   const app = useApp();
   const { bundle } = app;
-  const routeSeverity = app.state.route.params.severity ?? null;
-  const openId = app.state.route.params.finding ?? null;
+  const routeSeverity = app.state.route.params['severity'] ?? null;
+  const openId = app.state.route.params['finding'] ?? null;
 
   const [filter, setFilter] = useState<FindingFilter>(() =>
     routeSeverity === null

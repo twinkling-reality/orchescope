@@ -20,7 +20,7 @@
     "format:check": "biome format .",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p apps/web/tsconfig.json --noEmit && tsc -p tests/ui/tsconfig.json --noEmit",
     "deps": "depcruise packages apps scripts --config .dependency-cruiser.cjs",
     "deps:graph": "depcruise packages apps --config .dependency-cruiser.cjs --output-type dot",
     "unused": "knip",

@@ -1,5 +1,5 @@
 import { parseDimensionValues } from '@orchescope/benchmark';
-import { stableJson } from '@orchescope/domain';
+import { OrchescopeError, stableJson } from '@orchescope/domain';
 import type { BenchmarkReport, ChaosReport } from '@orchescope/schema';
 import {
   compareUseCase,
@@ -26,10 +26,10 @@ export const traceCommand = async (
   options: { readonly label?: string; readonly timeout?: string },
 ): Promise<number> => {
   if (command.length === 0) {
-    context.stderr(
-      `${context.style.bad('error')} nothing to run. Pass the command after a double dash, for example: orchescope trace -- npm run agent\n`,
-    );
-    return EXIT_CODES.user;
+    throw new OrchescopeError('INVALID_ARGUMENT', 'There is nothing to run.', {
+      remediation:
+        'Pass the command after a double dash, for example: orchescope trace -- npm run agent',
+    });
   }
   const result = await runTrace({
     workspace: context.workspace,
@@ -137,8 +137,9 @@ export const benchmarkCommand = async (
   },
 ): Promise<number> => {
   if (options.scenario === undefined) {
-    context.stderr(`${context.style.bad('error')} pass --scenario <id or path>\n`);
-    return EXIT_CODES.user;
+    throw new OrchescopeError('INVALID_ARGUMENT', 'This command needs a scenario.', {
+      remediation: 'Pass --scenario <id or path>, or list what exists with: orchescope test --list',
+    });
   }
   const dimensions = [
     options.agents === undefined ? undefined : ('agent_count' as const),
@@ -148,10 +149,11 @@ export const benchmarkCommand = async (
     (value): value is 'agent_count' | 'worker_count' | 'traffic_concurrency' => value !== undefined,
   );
   if (dimensions.length !== 1) {
-    context.stderr(
-      `${context.style.bad('error')} pass exactly one of --agents, --workers or --concurrency. Varying two dimensions at once produces a number that cannot be attributed to either.\n`,
+    throw new OrchescopeError(
+      'INVALID_ARGUMENT',
+      'A benchmark varies exactly one dimension, because varying two at once produces a number that cannot be attributed to either.',
+      { remediation: 'Pass one of --agents, --workers or --concurrency.' },
     );
-    return EXIT_CODES.user;
   }
   const dimension = dimensions[0] as 'agent_count' | 'worker_count' | 'traffic_concurrency';
   const raw = options.agents ?? options.workers ?? options.concurrency ?? '';
@@ -246,8 +248,9 @@ export const chaosCommand = async (
   },
 ): Promise<number> => {
   if (options.scenario === undefined) {
-    context.stderr(`${context.style.bad('error')} pass --scenario <id or path>\n`);
-    return EXIT_CODES.user;
+    throw new OrchescopeError('INVALID_ARGUMENT', 'This command needs a scenario.', {
+      remediation: 'Pass --scenario <id or path>, or list what exists with: orchescope test --list',
+    });
   }
   const scenario = loadScenario({ workspace: context.workspace, reference: options.scenario });
   if (scenario.faults.length === 0) {

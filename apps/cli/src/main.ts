@@ -83,7 +83,19 @@ program
   .option('--color', 'force colour even when the output is not a terminal')
   .option('--no-color', 'disable colour')
   .showHelpAfterError()
-  .configureHelp({ sortSubcommands: true });
+  .configureHelp({ sortSubcommands: true })
+  // An unknown command or a malformed flag is a caller mistake, which this interface reports as exit code 2. The
+  // argument parser exits 1 by default, and 1 means "the command ran and found something you asked to fail on".
+  .exitOverride((error) => {
+    if (
+      error.exitCode === 0 ||
+      error.code === 'commander.version' ||
+      error.code === 'commander.help'
+    ) {
+      process.exit(0);
+    }
+    process.exit(EXIT_CODES.user);
+  });
 
 const globals = (): GlobalOptions => program.opts<GlobalOptions>();
 

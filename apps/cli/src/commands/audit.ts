@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { compareSeverity, stableJson } from '@orchescope/domain';
+import { compareSeverity, OrchescopeError, stableJson } from '@orchescope/domain';
 import { renderStandaloneHtml, toMermaid, toSarif } from '@orchescope/report';
 import { openInBrowser, startReportServer } from '@orchescope/report-server';
 import type { Finding, ReportBundle } from '@orchescope/schema';
@@ -32,7 +32,11 @@ export type AuditOptions = {
 const SEVERITY_ORDER = ['info', 'low', 'medium', 'high', 'critical'] as const;
 
 const exceedsThreshold = (findings: readonly Finding[], threshold: string): readonly Finding[] => {
-  if (!SEVERITY_ORDER.includes(threshold as (typeof SEVERITY_ORDER)[number])) return [];
+  if (!SEVERITY_ORDER.includes(threshold as (typeof SEVERITY_ORDER)[number])) {
+    throw new OrchescopeError('INVALID_ARGUMENT', `${threshold} is not a severity.`, {
+      remediation: `Pass one of: ${SEVERITY_ORDER.join(', ')}.`,
+    });
+  }
   return findings.filter(
     (finding) =>
       finding.polarity === 'risk' &&

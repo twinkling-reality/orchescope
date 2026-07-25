@@ -47,7 +47,7 @@ export type AppAction =
 export function reduce(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'route': {
-      const selected = action.route.params.component ?? state.selected;
+      const selected = action.route.params['component'] ?? state.selected;
       return { ...state, route: action.route, selected };
     }
     case 'select':

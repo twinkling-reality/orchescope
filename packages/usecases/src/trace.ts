@@ -1,6 +1,6 @@
 import { createDeadline, type Deadline, runId as makeRunId } from '@orchescope/domain';
 import { assertAllowed, commandDecision } from '@orchescope/policy';
-import { type TraceSessionResult, runTracedSession } from '@orchescope/runtime';
+import { runTracedSession, type TraceSessionResult } from '@orchescope/runtime';
 import type { RunEnvironment, RunRecord, Timestamp } from '@orchescope/schema';
 import { deriveTopology } from '@orchescope/traces';
 import type { Workspace } from '@orchescope/workspace';
@@ -109,12 +109,10 @@ export const runTrace = async (request: TraceRequest): Promise<TraceResult> => {
     'Tracing',
   );
 
-  const explicit = request.command[0];
-  const allowedCommands = [
-    ...policy.allowedCommands,
-    ...(explicit === undefined ? [] : [explicit, explicit.split('/').pop() ?? explicit]),
-  ];
-  assertAllowed(commandDecision({ ...policy, allowedCommands }, request.command), 'Tracing');
+  // The allow list is what bounds what Orchescope will execute, so the requested command is checked against it rather
+  // than added to it.
+  const allowedCommands = policy.allowedCommands;
+  assertAllowed(commandDecision(policy, request.command), 'Tracing');
 
   const handle =
     request.deadline === undefined
