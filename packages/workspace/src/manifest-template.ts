@@ -20,13 +20,14 @@ import type { WorkspacePaths } from './paths.ts';
  * repository look like a detected agent system.
  */
 
+/** Wrapped so a continued line still ends in a comma, which is what makes a wrapped list readable. */
 const wrap = (values: readonly string[], width: number): readonly string[] => {
   const lines: string[] = [];
   let current = '';
   for (const value of values) {
     const candidate = current.length === 0 ? value : `${current}, ${value}`;
     if (candidate.length > width) {
-      lines.push(current);
+      lines.push(`${current},`);
       current = value;
       continue;
     }
