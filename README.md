@@ -170,10 +170,11 @@ in a language Orchescope cannot parse is reported as not inspected rather than i
 ## Try it on the demonstration system
 
 The repository contains a small multi agent system that runs offline with no credentials and no paid model. It has
-deliberate weaknesses, including a retry around a refund whose idempotency is not established. From a clone of this
-repository:
+deliberate weaknesses, including a retry around a refund whose idempotency is not established.
 
 ```
+git clone https://github.com/athledev-labs/orchescope
+cd orchescope
 pnpm install
 pnpm orchescope --cwd apps/demo test --scenario support-desk
 pnpm orchescope --cwd apps/demo audit --open

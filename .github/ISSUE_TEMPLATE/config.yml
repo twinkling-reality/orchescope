@@ -1,4 +1,8 @@
 blank_issues_enabled: true
-
-# No contact links: GitHub requires absolute URLs here, and the repository's own security advisory page and documentation
-# are already named in SECURITY.md and in each template.
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/athledev-labs/orchescope/security/advisories/new
+    about: Report privately. Do not open a public issue for a security problem.
+  - name: Documentation
+    url: https://github.com/athledev-labs/orchescope/tree/main/docs
+    about: Guides, architecture, protocols and the threat model.
