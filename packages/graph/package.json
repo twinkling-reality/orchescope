@@ -1,0 +1,15 @@
+{
+  "name": "@orchescope/graph",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Construction, merging, reconciliation, analysis and diffing of the unified agent system graph.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@orchescope/domain": "workspace:*",
+    "@orchescope/schema": "workspace:*"
+  }
+}

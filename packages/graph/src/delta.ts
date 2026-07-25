@@ -1,0 +1,353 @@
+import { derivedEvidence, spanEvidence } from '@orchescope/domain';
+import type {
+  Component,
+  ComponentId,
+  Contradiction,
+  DuplicateSideEffect,
+  Edge,
+  Evidence,
+  EvidenceId,
+  ReconciliationDelta,
+  SideEffectRecord,
+  SystemGraph,
+} from '@orchescope/schema';
+import { isObservableKind } from './analysis.ts';
+
+/**
+ * The declared versus exercised delta.
+ *
+ * Four questions are answered here, and each one is unanswerable from either half of the evidence
+ * alone: what was declared and never ran, what ran without being declared, where an observation
+ * contradicts a declaration, and which side effects happened more than once for the same operation.
+ */
+
+const PRODUCER = 'delta';
+
+export type RunSideEffects = {
+  readonly runId: string;
+  readonly sideEffects: readonly SideEffectRecord[];
+};
+
+const observableComponents = (graph: SystemGraph): readonly Component[] =>
+  graph.components.filter((component) => isObservableKind(component.kind));
+
+const declaredNotExercised = (graph: SystemGraph): readonly Component[] =>
+  observableComponents(graph).filter(
+    (component) => component.presence.static && !component.presence.runtime,
+  );
+
+const exercisedNotDeclared = (graph: SystemGraph): readonly Component[] =>
+  graph.components.filter((component) => component.presence.runtime && !component.presence.static);
+
+const exercisedEdges = (graph: SystemGraph): readonly Edge[] =>
+  graph.edges.filter(
+    (edge) => edge.observation !== undefined && edge.observation.executionCount > 0,
+  );
+
+const declaredNotExercisedEdges = (graph: SystemGraph): readonly Edge[] =>
+  graph.edges.filter(
+    (edge) =>
+      !edge.runtimeOnly &&
+      edge.kind !== 'contains' &&
+      (edge.observation === undefined || edge.observation.executionCount === 0),
+  );
+
+const boolMetadata = (component: Component, key: string): boolean | undefined => {
+  const value = component.metadata[key];
+  return typeof value === 'boolean' ? value : undefined;
+};
+
+const annotationContradictions = (
+  graph: SystemGraph,
+  duplicates: readonly DuplicateSideEffect[],
+  collect: (record: Evidence) => EvidenceId,
+): readonly Contradiction[] => {
+  const results: Contradiction[] = [];
+  const duplicatesByComponent = new Map<string, DuplicateSideEffect>();
+  for (const duplicate of duplicates) {
+    if (duplicate.componentId !== undefined)
+      duplicatesByComponent.set(duplicate.componentId, duplicate);
+  }
+
+  for (const component of graph.components) {
+    if (component.details?.for !== 'tool') continue;
+    const performedSideEffect = boolMetadata(component, 'observedSideEffect') === true;
+
+    if (component.details.readOnlyHint === true && performedSideEffect) {
+      const record = derivedEvidence({
+        producer: PRODUCER,
+        rule: 'contradiction:read_only_hint',
+        inputs: component.evidence as EvidenceId[],
+        note: `${component.id} declares readOnlyHint true and was observed performing a side effect`,
+      });
+      results.push({
+        componentId: component.id,
+        kind: 'read_only_hint',
+        declared: 'readOnlyHint: true',
+        observed: 'performed a declared side effect',
+        evidence: [collect(record)],
+      });
+    }
+
+    const duplicate = duplicatesByComponent.get(component.id);
+    if (component.details.idempotentHint === true && duplicate !== undefined) {
+      const record = derivedEvidence({
+        producer: PRODUCER,
+        rule: 'contradiction:idempotent_hint',
+        inputs: duplicate.evidence as EvidenceId[],
+        note: `${component.id} declares idempotentHint true and produced ${duplicate.occurrences} occurrences of ${duplicate.key}`,
+      });
+      results.push({
+        componentId: component.id,
+        kind: 'idempotent_hint',
+        declared: 'idempotentHint: true',
+        observed: `${duplicate.occurrences} occurrences of the same side effect key`,
+        evidence: [collect(record)],
+      });
+    }
+
+    if (
+      component.details.readOnlyHint === true &&
+      component.sideEffect === 'non_idempotent_write'
+    ) {
+      const record = derivedEvidence({
+        producer: PRODUCER,
+        rule: 'contradiction:destructive_hint',
+        inputs: component.evidence as EvidenceId[],
+        note: `${component.id} declares readOnlyHint true but its discovered effect class is non_idempotent_write`,
+      });
+      results.push({
+        componentId: component.id,
+        kind: 'destructive_hint',
+        declared: 'readOnlyHint: true',
+        observed: 'discovered effect class non_idempotent_write',
+        evidence: [collect(record)],
+      });
+    }
+  }
+  return results;
+};
+
+const policyContradictions = (
+  graph: SystemGraph,
+  collect: (record: Evidence) => EvidenceId,
+): readonly Contradiction[] => {
+  const results: Contradiction[] = [];
+  for (const edge of graph.edges) {
+    const observation = edge.observation;
+    const policy = edge.policy;
+    if (observation === undefined || policy === undefined) continue;
+
+    const timeoutMs = policy.timeoutMs;
+    if (timeoutMs !== undefined && (observation.maxDurationMs ?? 0) > timeoutMs) {
+      const record = derivedEvidence({
+        producer: PRODUCER,
+        rule: 'contradiction:timeout',
+        inputs: edge.evidence as EvidenceId[],
+        note: `${edge.id} declares a ${timeoutMs} ms timeout and was observed running for ${Math.round(observation.maxDurationMs ?? 0)} ms`,
+      });
+      results.push({
+        componentId: edge.to,
+        kind: 'timeout',
+        declared: `timeout ${timeoutMs} ms`,
+        observed: `longest observed call ${Math.round(observation.maxDurationMs ?? 0)} ms`,
+        evidence: [collect(record)],
+      });
+    }
+
+    const maxAttempts = policy.retry?.maxAttempts;
+    if (maxAttempts !== undefined && observation.executionCount > 0) {
+      const allowedRetries = observation.executionCount * Math.max(0, maxAttempts - 1);
+      if (observation.retryCount > allowedRetries) {
+        const record = derivedEvidence({
+          producer: PRODUCER,
+          rule: 'contradiction:retry_bound',
+          inputs: edge.evidence as EvidenceId[],
+          note: `${edge.id} declares at most ${maxAttempts} attempts, which allows ${allowedRetries} retries across ${observation.executionCount} executions, and ${observation.retryCount} retries were observed`,
+        });
+        results.push({
+          componentId: edge.to,
+          kind: 'retry_bound',
+          declared: `maxAttempts ${maxAttempts}`,
+          observed: `${observation.retryCount} retries across ${observation.executionCount} executions`,
+          evidence: [collect(record)],
+        });
+      }
+    }
+
+    if (policy.requiresApproval === true) {
+      const approvalObserved = graph.edges.some(
+        (candidate) =>
+          candidate.kind === 'guarded_by' &&
+          candidate.from === edge.to &&
+          candidate.observation !== undefined,
+      );
+      if (!approvalObserved) {
+        const record = derivedEvidence({
+          producer: PRODUCER,
+          rule: 'contradiction:approval',
+          inputs: edge.evidence as EvidenceId[],
+          note: `${edge.id} declares that approval is required and no approval was observed on any run`,
+        });
+        results.push({
+          componentId: edge.to,
+          kind: 'approval',
+          declared: 'requiresApproval: true',
+          observed: 'no approval observed while the operation executed',
+          evidence: [collect(record)],
+        });
+      }
+    }
+  }
+  return results;
+};
+
+const effectKey = (record: SideEffectRecord): string =>
+  record.idempotencyKey === undefined
+    ? `${record.kind}|${record.target}`
+    : `${record.kind}|${record.target}|${record.idempotencyKey}`;
+
+const duplicateSideEffects = (
+  runs: readonly RunSideEffects[],
+  spanToComponent: ReadonlyMap<string, ComponentId>,
+  collect: (record: Evidence) => EvidenceId,
+): readonly DuplicateSideEffect[] => {
+  type Bucket = {
+    occurrences: number;
+    maxPerRun: number;
+    runIds: Set<string>;
+    componentIds: Set<ComponentId>;
+    idempotencyKeyPresent: boolean;
+    attempts: Set<number>;
+    evidence: EvidenceId[];
+  };
+  const buckets = new Map<string, Bucket>();
+
+  for (const run of runs) {
+    const perRun = new Map<string, number>();
+    for (const record of run.sideEffects) {
+      const key = effectKey(record);
+      perRun.set(key, (perRun.get(key) ?? 0) + 1);
+      const bucket = buckets.get(key) ?? {
+        occurrences: 0,
+        maxPerRun: 0,
+        runIds: new Set<string>(),
+        componentIds: new Set<ComponentId>(),
+        idempotencyKeyPresent: record.idempotencyKey !== undefined,
+        attempts: new Set<number>(),
+        evidence: [],
+      };
+      bucket.occurrences += 1;
+      bucket.runIds.add(run.runId);
+      if (record.retryAttempt !== undefined) bucket.attempts.add(record.retryAttempt);
+      const componentId = spanToComponent.get(record.spanId);
+      if (componentId !== undefined) bucket.componentIds.add(componentId);
+      bucket.evidence.push(
+        collect(
+          spanEvidence({
+            producer: PRODUCER,
+            runId: run.runId,
+            traceId: record.traceId,
+            spanId: record.spanId,
+            spanName: record.spanName,
+            attribute: 'orchescope.side_effect',
+            attributeValue: `${record.kind} on ${record.target}${record.idempotencyKey === undefined ? ' without an idempotency key' : ''}`,
+          }),
+        ),
+      );
+      buckets.set(key, bucket);
+    }
+    for (const [key, count] of perRun) {
+      const bucket = buckets.get(key);
+      if (bucket !== undefined) bucket.maxPerRun = Math.max(bucket.maxPerRun, count);
+    }
+  }
+
+  const duplicates: DuplicateSideEffect[] = [];
+  for (const [key, bucket] of buckets) {
+    // Repeating an effect in separate runs is expected. Repetition inside a single run is a duplicate.
+    if (bucket.maxPerRun <= 1) continue;
+    const summary = derivedEvidence({
+      producer: PRODUCER,
+      rule: 'duplicate_side_effect',
+      inputs: bucket.evidence,
+      note: `${key} occurred ${bucket.maxPerRun} times within a single run`,
+    });
+    const componentId = [...bucket.componentIds][0];
+    duplicates.push({
+      key,
+      ...(componentId === undefined ? {} : { componentId }),
+      occurrences: bucket.occurrences,
+      retryAttempts: [...bucket.attempts].sort((left, right) => left - right),
+      idempotencyKeyPresent: bucket.idempotencyKeyPresent,
+      runIds: [...bucket.runIds],
+      evidence: [collect(summary), ...bucket.evidence],
+    });
+  }
+  return duplicates;
+};
+
+export type DeltaInput = {
+  readonly graph: SystemGraph;
+  readonly runs: readonly RunSideEffects[];
+  /** Span identifier to component identifier, produced by trace attribution. */
+  readonly spanToComponent: ReadonlyMap<string, ComponentId>;
+};
+
+export type DeltaResult = {
+  readonly delta: ReconciliationDelta;
+  readonly evidence: readonly Evidence[];
+};
+
+export const computeDelta = (input: DeltaInput): DeltaResult => {
+  const evidence: Evidence[] = [];
+  const collect = (record: Evidence): EvidenceId => {
+    evidence.push(record);
+    return record.id;
+  };
+
+  const duplicates = duplicateSideEffects(input.runs, input.spanToComponent, collect);
+  const contradictions = [
+    ...annotationContradictions(input.graph, duplicates, collect),
+    ...policyContradictions(input.graph, collect),
+  ];
+
+  const declaredComponents = observableComponents(input.graph).length;
+  const exercisedComponents = observableComponents(input.graph).filter(
+    (component) => component.presence.runtime,
+  ).length;
+  const declaredEdges = input.graph.edges.filter(
+    (edge) => !edge.runtimeOnly && edge.kind !== 'contains',
+  ).length;
+  const exercised = exercisedEdges(input.graph).length;
+  const runIds = input.graph.provenance.runIds;
+
+  const delta: ReconciliationDelta = {
+    declaredNotExercised: {
+      components: declaredNotExercised(input.graph).map((component) => component.id),
+      edges: declaredNotExercisedEdges(input.graph).map((edge) => edge.id),
+      runIds: [...runIds],
+    },
+    exercisedNotDeclared: {
+      components: exercisedNotDeclared(input.graph).map((component) => component.id),
+      edges: input.graph.edges.filter((edge) => edge.runtimeOnly).map((edge) => edge.id),
+    },
+    contradictions: [...contradictions],
+    duplicateSideEffects: [...duplicates],
+    coverage: {
+      declaredComponents,
+      exercisedComponents,
+      declaredEdges,
+      exercisedEdges: exercised,
+      ...(runIds.length === 0 || declaredComponents === 0
+        ? {}
+        : { componentExerciseRate: exercisedComponents / declaredComponents }),
+      ...(runIds.length === 0 || declaredEdges === 0
+        ? {}
+        : { edgeExerciseRate: Math.min(1, exercised / declaredEdges) }),
+    },
+    ...(input.graph.provenance.git === undefined ? {} : { revision: input.graph.provenance.git }),
+  };
+
+  return { delta, evidence };
+};
