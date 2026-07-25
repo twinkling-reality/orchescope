@@ -1,0 +1,144 @@
+# The corpus.
+#
+# Every adapter in this repository was validated against a fixture written by whoever wrote the adapter, which is
+# circular: the fixture encodes what the author already believed. This file pins real repositories instead, so that
+# what a scan produces is measured rather than assumed, and so that a framework moving in the field shows up as a
+# diff rather than as silence.
+#
+# Third party source is never vendored here. Each entry names a commit, and `scripts/corpus.mjs` clones that commit
+# into `corpus/.cache`, which is ignored by git. Licence compliance is the reason: this repository is Apache-2.0 and
+# the corpus is not, so the corpus stays outside it.
+#
+# An entry needs:
+#   name    the file name under corpus/expected, and the directory name in the cache
+#   source  git for a third party repository, local for a directory of this repository
+#   kind    agent_system or not_agent_system, which is the claim the expectation has to bear out
+#   why     what this entry is here to catch, in enough detail that removing it is a decision
+#
+# Both polarities count. A repository that is not an agent system is a precision test: the number it holds is a
+# ceiling, and the guard against a reader being loosened until it matches ordinary English.
+
+schemaVersion: 1
+
+repositories:
+  - name: demonstration-system
+    source: local
+    path: apps/demo
+    kind: agent_system
+    why: >-
+      The bundled demonstration, which is the only entry that exercises the manifest adapter and the only one that
+      runs with no network at all. It is the offline subset, so a change to the traversal, the effect reader or the
+      prompt reader is caught by the required gate rather than by a dispatch a maintainer has to remember to start.
+
+  - name: orchescope-discovery
+    source: local
+    path: packages/discovery
+    kind: not_agent_system
+    why: >-
+      Every framework name Orchescope knows appears in this directory as a string literal, and so does most of the
+      vocabulary of the domain. A reader that matches on names rather than on facts lights it up. The ceiling is
+      zero components: this package reads agent systems and is not one.
+
+  - name: openai-agents-python
+    source: git
+    url: https://github.com/openai/openai-agents-python.git
+    commit: c1b423749e2bf8ca5f89cad13e2a144c9683a6ee
+    kind: agent_system
+    why: >-
+      The first real repository this tool was pointed at, and the one that crashed it: an adapter named an endpoint
+      it never created and one unbuildable relation ended a scan of 843 files. It is also the repository that shows
+      what findings do at scale, which is what milestone 2 has to fix.
+
+  - name: openai-agents-js
+    source: git
+    url: https://github.com/openai/openai-agents-js.git
+    commit: 52b2702fc034fb47f79ec50fad173f0e9b068ca6
+    kind: agent_system
+    why: >-
+      The same framework in the other ecosystem. The adapter claims to read one fact model in two languages, and
+      only a repository in each language holds that claim up.
+
+  - name: langgraph
+    source: git
+    url: https://github.com/langchain-ai/langgraph.git
+    commit: 30c4d58db86455128e42ddec96b1ba53c553ba22
+    kind: agent_system
+    why: >-
+      The library whose functional API produced "no agent system was detected" when the truth was that the reader
+      was behind. Its own tests and examples are written in every form the library documents, which is exactly the
+      surface a per framework reader drifts away from.
+
+  - name: langgraphjs
+    source: git
+    url: https://github.com/langchain-ai/langgraphjs.git
+    commit: 07ba620415532c3d9935ff8946bda3685412444a
+    kind: agent_system
+    why: >-
+      LangGraph in JavaScript, and the entry that currently reports two blind spots: the repository imports the
+      Vercel AI SDK and an OpenAI client that the adapters claiming them read nothing from. Those two lines are the
+      measurement, and they stay in the expectation until an adapter earns their removal.
+
+  - name: crewai
+    source: git
+    url: https://github.com/crewAIInc/crewAI.git
+    commit: b3aaaab023a53a08db4d36c9430b3463f1efcc7d
+    kind: agent_system
+    why: >-
+      The only corpus entry for the CrewAI adapter, and the largest tree in it: 2027 files discovered against 1272
+      parsed, which is the parse rate a Python repository of that shape actually produces.
+
+  - name: pydantic-ai
+    source: git
+    url: https://github.com/pydantic/pydantic-ai.git
+    commit: ed0f40c0e5061722f7d9f579ed7efff1b74e3ea5
+    kind: agent_system
+    why: >-
+      The newest adapter, so the one with the least field evidence behind it. It also has the lowest parse rate in
+      the corpus, and that number is worth watching on its own.
+
+  - name: vercel-ai-chatbot
+    source: git
+    url: https://github.com/vercel/ai-chatbot.git
+    commit: c2f8235e1f3ea903ad8b7f61447c4f74164b5c58
+    kind: agent_system
+    why: >-
+      The Vercel AI SDK read from an application that uses it rather than from the library that defines it. A
+      framework repository and a consumer of that framework are different shapes, and an adapter can read one
+      without reading the other.
+
+  - name: anthropic-quickstarts
+    source: git
+    url: https://github.com/anthropics/anthropic-quickstarts.git
+    commit: 370e18d4a20ff5fd4bc1a6bf11d5105b2383977c
+    kind: agent_system
+    why: >-
+      Model SDK calls without a framework around them, which is the case the model SDK adapter exists for. It also
+      imports the MCP SDK in source while the MCP adapter reads configuration files, and that gap is reported as a
+      blind spot rather than hidden.
+
+  - name: flask
+    source: git
+    url: https://github.com/pallets/flask.git
+    commit: 36e4a824f340fdee7ed50937ba8e7f6bc7d17f81
+    kind: not_agent_system
+    why: >-
+      A widely read Python web framework with no agent in it. The ceiling is eleven components, all of them side
+      effects, and no agent system detected.
+
+  - name: express
+    source: git
+    url: https://github.com/expressjs/express.git
+    commit: ae6dd37680e3a00618d6c8a3e522f0ee4eeba1a4
+    kind: not_agent_system
+    why: >-
+      The same test in JavaScript. The ceiling is five components and no agent system detected.
+
+  - name: axios
+    source: git
+    url: https://github.com/axios/axios.git
+    commit: 311fcc5c8d989b7248f05d390bb83bfbfb009977
+    kind: not_agent_system
+    why: >-
+      An HTTP client, so a repository dense in the exact facts the effect reader looks for: requests, retries and
+      timeouts. It is the entry that says what the effect reader costs on code that has nothing to do with agents,
+      and the ceiling that stops the retry and timeout rules from being widened into noise.

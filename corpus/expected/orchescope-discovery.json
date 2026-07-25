@@ -1,0 +1,89 @@
+{
+  "adapters": {
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": false,
+  "blindSpots": [],
+  "components": {
+    "byKind": {},
+    "total": 0
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 23,
+    "parsed": 22,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {},
+    "bySeverity": {},
+    "strengths": 0,
+    "total": 0
+  },
+  "kind": "not_agent_system",
+  "languagesNotAnalysed": [],
+  "name": "orchescope-discovery",
+  "relations": {
+    "byKind": {},
+    "total": 0
+  }
+}

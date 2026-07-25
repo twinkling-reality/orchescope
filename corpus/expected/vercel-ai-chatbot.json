@@ -1,0 +1,112 @@
+{
+  "adapters": {
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 40,
+      "edgesFound": 23,
+      "filesInspected": 11,
+      "status": "completed"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 8,
+      "edgesFound": 2,
+      "filesInspected": 3,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 28,
+      "edgesFound": 14,
+      "filesInspected": 10,
+      "status": "completed"
+    }
+  },
+  "agentSystemDetected": true,
+  "blindSpots": [],
+  "components": {
+    "byKind": {
+      "agent": 6,
+      "database": 2,
+      "entrypoint": 17,
+      "external_service": 2,
+      "model": 2,
+      "prompt": 7,
+      "tool": 10
+    },
+    "total": 46
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 167,
+    "parsed": 155,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "configured-tool-has-no-caller": 5,
+      "model-call-without-timeout": 2,
+      "observability-coverage": 1,
+      "prompt-injection-boundary": 1,
+      "topology-shape": 5
+    },
+    "bySeverity": {
+      "low": 10,
+      "medium": 4
+    },
+    "strengths": 0,
+    "total": 14
+  },
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "vercel-ai-chatbot",
+  "relations": {
+    "byKind": {
+      "calls_service": 16,
+      "calls_tool": 5,
+      "invokes_model": 6,
+      "queries_database": 2,
+      "uses_prompt": 1
+    },
+    "total": 30
+  }
+}

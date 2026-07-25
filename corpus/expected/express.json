@@ -1,0 +1,98 @@
+{
+  "adapters": {
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 6,
+      "edgesFound": 3,
+      "filesInspected": 2,
+      "status": "completed"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": false,
+  "blindSpots": [],
+  "components": {
+    "byKind": {
+      "database": 2,
+      "entrypoint": 3
+    },
+    "total": 5
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 148,
+    "parsed": 141,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "observability-coverage": 1
+    },
+    "bySeverity": {
+      "medium": 1
+    },
+    "strengths": 0,
+    "total": 1
+  },
+  "kind": "not_agent_system",
+  "languagesNotAnalysed": [],
+  "name": "express",
+  "relations": {
+    "byKind": {
+      "queries_database": 3
+    },
+    "total": 3
+  }
+}

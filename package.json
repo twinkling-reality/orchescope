@@ -14,6 +14,8 @@
     "build": "node scripts/build.mjs",
     "build:web": "node scripts/build-web.mjs",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm deps && pnpm unused && pnpm schemas:verify",
+    "corpus": "node scripts/corpus.mjs --check",
+    "corpus:offline": "node scripts/corpus.mjs --check --offline",
     "demo": "node apps/demo/src/main.ts",
     "deps": "depcruise packages apps scripts --config .dependency-cruiser.cjs",
     "deps:graph": "depcruise packages apps --config .dependency-cruiser.cjs --output-type dot",
@@ -42,6 +44,7 @@
     "dependency-cruiser": "18.1.0",
     "esbuild": "0.28.1",
     "knip": "6.29.0",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "yaml": "2.9.0"
   }
 }

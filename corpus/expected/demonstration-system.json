@@ -1,0 +1,128 @@
+{
+  "adapters": {
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 9,
+      "edgesFound": 5,
+      "filesInspected": 3,
+      "status": "completed"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:manifest": {
+      "componentsFound": 18,
+      "edgesFound": 20,
+      "filesInspected": 1,
+      "status": "completed"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 13,
+      "edgesFound": 0,
+      "filesInspected": 4,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": true,
+  "blindSpots": [],
+  "components": {
+    "byKind": {
+      "agent": 5,
+      "approval_boundary": 1,
+      "database": 1,
+      "entrypoint": 4,
+      "external_service": 1,
+      "memory": 1,
+      "model": 2,
+      "prompt": 7,
+      "queue": 2,
+      "retrieval": 1,
+      "side_effect": 1,
+      "tool": 6
+    },
+    "total": 32
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 27,
+    "parsed": 23,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "bounded-retry-with-declared-idempotency": 2,
+      "model-call-without-timeout": 1,
+      "observability-coverage": 1,
+      "retry-around-non-idempotent-operation": 1,
+      "side-effect-approval-boundary": 3,
+      "topology-shape": 1
+    },
+    "bySeverity": {
+      "high": 1,
+      "info": 3,
+      "low": 1,
+      "medium": 4
+    },
+    "strengths": 3,
+    "total": 9
+  },
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "demonstration-system",
+  "relations": {
+    "byKind": {
+      "calls_service": 1,
+      "calls_tool": 6,
+      "consumes_from_queue": 1,
+      "falls_back_to": 1,
+      "guarded_by": 1,
+      "hands_off_to": 4,
+      "invokes_model": 3,
+      "performs_side_effect": 1,
+      "publishes_to_queue": 2,
+      "queries_database": 2,
+      "queries_retrieval": 1,
+      "reads_memory": 1,
+      "writes_memory": 1
+    },
+    "total": 25
+  }
+}

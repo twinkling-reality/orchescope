@@ -13,7 +13,9 @@
       "!**/coverage",
       "!**/fixtures/**/*.py",
       "!**/*.wasm",
-      "!schemas/**/*.json"
+      "!schemas/**/*.json",
+      "!corpus/.cache",
+      "!corpus/expected/**/*.json"
     ]
   },
   "formatter": {

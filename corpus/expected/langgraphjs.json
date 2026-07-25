@@ -1,0 +1,114 @@
+{
+  "adapters": {
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 334,
+      "edgesFound": 221,
+      "filesInspected": 95,
+      "status": "completed"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 1240,
+      "edgesFound": 1014,
+      "filesInspected": 400,
+      "status": "completed"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 144,
+      "edgesFound": 2,
+      "filesInspected": 81,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    }
+  },
+  "agentSystemDetected": true,
+  "blindSpots": [
+    "ai used in source, read by adapter:vercel-ai-sdk",
+    "openai used in source, read by adapter:model-sdk"
+  ],
+  "components": {
+    "byKind": {
+      "agent": 414,
+      "agent_group": 91,
+      "database": 4,
+      "entrypoint": 113,
+      "external_service": 1,
+      "prompt": 126,
+      "queue": 1
+    },
+    "total": 750
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 1381,
+    "parsed": 1165,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "observability-coverage": 1,
+      "topology-shape": 5
+    },
+    "bySeverity": {
+      "low": 5,
+      "medium": 1
+    },
+    "strengths": 0,
+    "total": 6
+  },
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "langgraphjs",
+  "relations": {
+    "byKind": {
+      "calls_service": 29,
+      "consumes_from_queue": 1,
+      "contains": 415,
+      "hands_off_to": 165,
+      "publishes_to_queue": 1,
+      "queries_database": 95,
+      "uses_prompt": 2
+    },
+    "total": 708
+  }
+}

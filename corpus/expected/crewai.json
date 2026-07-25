@@ -1,0 +1,116 @@
+{
+  "adapters": {
+    "adapter:crewai": {
+      "componentsFound": 574,
+      "edgesFound": 162,
+      "filesInspected": 54,
+      "status": "completed"
+    },
+    "adapter:effects": {
+      "componentsFound": 345,
+      "edgesFound": 194,
+      "filesInspected": 92,
+      "status": "completed"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 79,
+      "edgesFound": 64,
+      "filesInspected": 11,
+      "status": "completed"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 568,
+      "edgesFound": 9,
+      "filesInspected": 237,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": true,
+  "blindSpots": ["mcp used in source, read by adapter:mcp"],
+  "components": {
+    "byKind": {
+      "agent": 159,
+      "agent_group": 47,
+      "database": 4,
+      "entrypoint": 153,
+      "external_service": 2,
+      "model": 6,
+      "prompt": 521,
+      "provider": 3,
+      "queue": 1
+    },
+    "total": 896
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 2027,
+    "parsed": 1272,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "model-call-without-timeout": 6,
+      "observability-coverage": 1,
+      "retry-around-non-idempotent-operation": 2,
+      "topology-shape": 1,
+      "unbounded-retry": 2
+    },
+    "bySeverity": {
+      "info": 1,
+      "medium": 11
+    },
+    "strengths": 1,
+    "total": 12
+  },
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "crewai",
+  "relations": {
+    "byKind": {
+      "calls_service": 86,
+      "contains": 46,
+      "invokes_model": 25,
+      "publishes_to_queue": 2,
+      "queries_database": 72,
+      "served_by_provider": 6,
+      "uses_prompt": 9
+    },
+    "total": 246
+  }
+}

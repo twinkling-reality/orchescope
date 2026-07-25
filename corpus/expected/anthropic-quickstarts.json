@@ -1,0 +1,107 @@
+{
+  "adapters": {
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 17,
+      "edgesFound": 10,
+      "filesInspected": 4,
+      "status": "completed"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 28,
+      "edgesFound": 14,
+      "filesInspected": 11,
+      "status": "completed"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 38,
+      "edgesFound": 0,
+      "filesInspected": 21,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": true,
+  "blindSpots": ["mcp used in source, read by adapter:mcp"],
+  "components": {
+    "byKind": {
+      "agent": 6,
+      "entrypoint": 7,
+      "external_service": 1,
+      "model": 2,
+      "prompt": 36,
+      "provider": 1
+    },
+    "total": 53
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 196,
+    "parsed": 167,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "model-call-without-timeout": 2,
+      "observability-coverage": 1,
+      "topology-shape": 1
+    },
+    "bySeverity": {
+      "info": 1,
+      "medium": 3
+    },
+    "strengths": 1,
+    "total": 4
+  },
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "anthropic-quickstarts",
+  "relations": {
+    "byKind": {
+      "calls_service": 7,
+      "invokes_model": 6,
+      "served_by_provider": 2
+    },
+    "total": 15
+  }
+}

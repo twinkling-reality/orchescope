@@ -1,0 +1,113 @@
+{
+  "adapters": {
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 1275,
+      "edgesFound": 861,
+      "filesInspected": 74,
+      "status": "completed"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 1216,
+      "edgesFound": 994,
+      "filesInspected": 70,
+      "status": "completed"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 304,
+      "edgesFound": 16,
+      "filesInspected": 105,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": true,
+  "blindSpots": [],
+  "components": {
+    "byKind": {
+      "agent": 425,
+      "agent_group": 52,
+      "database": 2,
+      "entrypoint": 414,
+      "external_service": 1,
+      "prompt": 295,
+      "queue": 1,
+      "tool": 3
+    },
+    "total": 1193
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 537,
+    "parsed": 458,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "observability-coverage": 1,
+      "prompt-injection-boundary": 18,
+      "topology-shape": 5
+    },
+    "bySeverity": {
+      "low": 5,
+      "medium": 19
+    },
+    "strengths": 0,
+    "total": 24
+  },
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "langgraph",
+  "relations": {
+    "byKind": {
+      "calls_service": 353,
+      "calls_tool": 3,
+      "contains": 415,
+      "hands_off_to": 157,
+      "publishes_to_queue": 11,
+      "queries_database": 168,
+      "uses_prompt": 16
+    },
+    "total": 1123
+  }
+}

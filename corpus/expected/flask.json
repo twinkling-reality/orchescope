@@ -1,0 +1,100 @@
+{
+  "adapters": {
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 20,
+      "edgesFound": 11,
+      "filesInspected": 3,
+      "status": "completed"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": false,
+  "blindSpots": [],
+  "components": {
+    "byKind": {
+      "database": 1,
+      "entrypoint": 9,
+      "queue": 1
+    },
+    "total": 11
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 98,
+    "parsed": 83,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "observability-coverage": 1
+    },
+    "bySeverity": {
+      "medium": 1
+    },
+    "strengths": 0,
+    "total": 1
+  },
+  "kind": "not_agent_system",
+  "languagesNotAnalysed": [],
+  "name": "flask",
+  "relations": {
+    "byKind": {
+      "publishes_to_queue": 1,
+      "queries_database": 8
+    },
+    "total": 9
+  }
+}

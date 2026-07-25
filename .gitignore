@@ -17,3 +17,6 @@ blob-report/
 # Local packaging output
 *.tgz
 release/
+
+# Third party corpus repositories, cloned at their pinned commit and never vendored
+corpus/.cache/
