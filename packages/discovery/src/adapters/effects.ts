@@ -443,6 +443,8 @@ export const effectsAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
   ecosystem: 'javascript',
+  // A side effect is a convention, not a package.
+  packages: [],
   appliesTo: (context) => context.modules.length > 0,
   discover: (context, builder): AdapterFindings => {
     const found: Found = { components: 0, edges: 0, files: new Set() };

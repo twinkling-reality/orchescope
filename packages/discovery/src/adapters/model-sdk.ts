@@ -218,6 +218,7 @@ export const modelSdkAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
   ecosystem: 'javascript',
+  packages: ALL_PACKAGES,
   appliesTo: (context) => projectUses(context, ALL_PACKAGES),
   discover: (context, builder): AdapterFindings => {
     const found: Discovered = { components: 0, edges: 0, files: new Set() };

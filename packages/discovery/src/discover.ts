@@ -22,6 +22,7 @@ import {
   collectFiles,
   type FactCache,
   type Language,
+  type ModuleFacts,
   readManifests,
   type TraversalOptions,
 } from '@orchescope/source-analysis';
@@ -85,6 +86,52 @@ const unsupportedAreas = (
       reason: 'Orchescope analyses JavaScript, TypeScript and Python source in this release.',
       remediation:
         'Declare the components in .orchescope/manifest.yaml so they appear in the graph.',
+    });
+  }
+  return areas;
+};
+
+/** The top level distribution a specifier belongs to: `langgraph.func` and `langgraph/prebuilt` are both `langgraph`. */
+const distributionOf = (specifier: string): string => {
+  const [scopedOrPlain = '', scopedRest] = specifier.split('/', 2);
+  const base = specifier.startsWith('@') ? `${scopedOrPlain}/${scopedRest ?? ''}` : scopedOrPlain;
+  return (base.split('.')[0] ?? base).toLowerCase();
+};
+
+/**
+ * Where an adapter claims a framework this repository uses and reads nothing from it.
+ *
+ * This is the failure mode a per framework reader has: the framework moves, or the repository uses a form the
+ * reader was never taught, and the result looks exactly like a repository with no agent system in it. Reporting
+ * it names the ceiling instead of hiding it, which is the difference between a reader that is behind and a
+ * repository that is empty. The signal is deliberately narrow: the adapter has to have claimed a distribution
+ * that a parsed file actually imports, and to have finished without contributing anything.
+ */
+const adapterBlindSpots = (
+  adapters: readonly AgentSystemAdapter[],
+  runs: readonly AdapterRun[],
+  modules: readonly ModuleFacts[],
+): readonly UnsupportedArea[] => {
+  const imported = new Set<string>();
+  for (const module of modules) {
+    for (const entry of module.imports) imported.add(distributionOf(entry.module));
+  }
+
+  const areas: UnsupportedArea[] = [];
+  for (const adapter of adapters) {
+    const run = runs.find((entry) => entry.adapterId === adapter.id);
+    if (run === undefined || run.status !== 'completed') continue;
+    if (run.componentsFound > 0 || run.edgesFound > 0) continue;
+    const used = [...new Set(adapter.packages.map(distributionOf))].filter((name) =>
+      imported.has(name),
+    );
+    if (used.length === 0) continue;
+    areas.push({
+      area: `${used.join(', ')} used in source, read by ${adapter.id}`,
+      reason:
+        'The adapter that claims this framework ran and found no component, so this build does not read the form this repository uses.',
+      remediation:
+        'Declare the components in .orchescope/manifest.yaml so they appear in the graph, and report the form so an adapter can read it.',
     });
   }
   return areas;
@@ -204,7 +251,10 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
     skipped: [...analysis.skipped],
     languages: [...analysis.languages],
     adapters: adapterRuns,
-    unsupported: [...unsupportedAreas(fileSet.extensionCounts)],
+    unsupported: [
+      ...unsupportedAreas(fileSet.extensionCounts),
+      ...adapterBlindSpots(adapters, adapterRuns, analysis.facts),
+    ],
     durationMs: request.clock.monotonicMs() - startedAtMs,
     truncated: fileSet.truncated,
   };

@@ -99,6 +99,8 @@ export const promptsAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
   ecosystem: 'javascript',
+  // A prompt literal belongs to no package.
+  packages: [],
   appliesTo: (context) => context.modules.some((module) => module.texts.length > 0),
   discover: (context, builder): AdapterFindings => {
     let components = 0;

@@ -876,6 +876,87 @@ describe('the manifest', () => {
   });
 });
 
+/**
+ * The ceiling of a per framework reader, made visible.
+ *
+ * A reader taught one form of a framework goes quiet when a repository uses another, and the result is
+ * indistinguishable from a repository with no agent system in it. That is the failure this reports: not a
+ * missing framework, but a framework this build claims and did not read.
+ */
+describe('an adapter that claims a framework and reads nothing from it', () => {
+  const blindSpots = (result: Awaited<ReturnType<typeof scan>>) =>
+    result.result.graph.coverage.unsupported.filter((area) =>
+      area.area.includes('read by adapter:'),
+    );
+
+  it('reports the framework and the adapter rather than saying nothing was found', async () => {
+    // LangGraph's functional API. The adapter reads graphs and prebuilt agents, not `@task` and `@entrypoint`.
+    const result = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'functional', dependencies: ['langgraph>=0.2'] });
+      workspace.write(
+        'src/flow.py',
+        `from langgraph.func import entrypoint, task
+
+
+@task
+def plan(question: str) -> str:
+    return question
+
+
+@entrypoint()
+def workflow(question: str) -> str:
+    return plan(question).result()
+`,
+      );
+    });
+    assert.equal(result.result.agentSystemDetected, false);
+    const areas = blindSpots(result);
+    assert.equal(areas.length, 1, `expected one blind spot, saw ${areas.length}`);
+    assert.match(areas[0]?.area ?? '', /langgraph/);
+    assert.match(areas[0]?.area ?? '', /adapter:langgraph/);
+    assert.match(areas[0]?.reason ?? '', /found no component/);
+    assert.match(areas[0]?.remediation ?? '', /manifest\.yaml/);
+  });
+
+  it('stays quiet when the adapter read the framework successfully', async () => {
+    const result = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'read-fine', dependencies: ['langgraph>=0.2'] });
+      workspace.write(
+        'src/graph.py',
+        `from langgraph.graph import StateGraph
+
+
+def plan(state: dict) -> dict:
+    return state
+
+
+builder = StateGraph(dict)
+builder.add_node(plan)
+graph = builder.compile()
+`,
+      );
+    });
+    assert.deepEqual(blindSpots(result), []);
+  });
+
+  it('stays quiet about a framework the repository does not import at all', async () => {
+    const result = await scan((workspace) => {
+      // The dependency is declared and never imported, which is a stale manifest rather than a blind spot.
+      writePythonProject(workspace, { name: 'declared-only', dependencies: ['langgraph>=0.2'] });
+      workspace.write('src/plain.py', 'def add(a: int, b: int) -> int:\n    return a + b\n');
+    });
+    assert.deepEqual(blindSpots(result), []);
+  });
+
+  it('never reports an adapter that reads a convention rather than a package', async () => {
+    const result = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'conventions', dependencies: ['requests'] });
+      workspace.write('src/plain.py', 'import requests\n\n\ndef ping() -> None:\n    pass\n');
+    });
+    assert.deepEqual(blindSpots(result), []);
+  });
+});
+
 describe('a repository with none of them', () => {
   it('reports no agent system rather than inventing one', async () => {
     const { result, ids } = await scan((workspace) => {

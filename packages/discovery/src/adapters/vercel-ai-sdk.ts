@@ -256,6 +256,7 @@ export const vercelAiSdkAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
   ecosystem: 'javascript',
+  packages: PACKAGES,
   appliesTo: (context) => projectUses(context, PACKAGES),
   discover: (context, builder): AdapterFindings => {
     const files = new Set<string>();

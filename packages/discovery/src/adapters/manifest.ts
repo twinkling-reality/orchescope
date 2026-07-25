@@ -123,6 +123,8 @@ export const manifestAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
   ecosystem: 'manifest',
+  // The manifest is a file this repository writes, not a package it depends on.
+  packages: [],
   appliesTo: (context) =>
     context.configs.some((document) => MANIFEST_PATHS.includes(document.path)),
   discover: (context, builder): AdapterFindings => {

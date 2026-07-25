@@ -47,6 +47,15 @@ export type AgentSystemAdapter = {
   readonly id: string;
   readonly version: string;
   readonly ecosystem: AdapterRun['ecosystem'];
+  /**
+   * The packages this adapter claims to read, which is a coverage claim rather than a matcher.
+   *
+   * Discovery compares it against what the repository actually imports, so that an adapter which claims a
+   * framework the repository uses and then finds nothing in it is reported as a gap in Orchescope rather than
+   * left to read as "no agent system here". An adapter that reads a convention rather than a package, such as
+   * side effects or prompt literals, claims nothing.
+   */
+  readonly packages: readonly string[];
   /** Cheap applicability check. A false answer records `not_applicable` rather than a failure. */
   readonly appliesTo: (context: DiscoveryContext) => boolean;
   readonly discover: (context: DiscoveryContext, builder: SystemGraphBuilder) => AdapterFindings;

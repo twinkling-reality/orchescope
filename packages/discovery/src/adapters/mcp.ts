@@ -301,6 +301,7 @@ export const mcpAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
   ecosystem: 'configuration',
+  packages: SDK_PACKAGES,
   appliesTo: (context) =>
     projectUses(context, SDK_PACKAGES) ||
     context.configs.some((document) => {

@@ -31,7 +31,7 @@ tool.
 | 15. Documentation and open source setup | done | `README.md`, `docs/`, `SECURITY.md`, `CONTRIBUTING.md`, CI workflows |
 | 16. Installable product | in progress | see below |
 
-567 unit and integration tests, 78 end to end tests, 10 browser tests. `pnpm verify` is green.
+571 unit and integration tests, 78 end to end tests, 10 browser tests. `pnpm verify` is green.
 
 ## Phase 16: what a stranger meets
 
@@ -80,6 +80,11 @@ and it is listed item by item because only some of it is done.
   when none is declared because that is what the library infers at run time, and records a tool's `retries` as a
   bounded retry with unknown backoff and unknown idempotency. Evidence: seven tests, and an audit of a Pydantic AI
   repository where the existing retry safety rule fires on the declared ceiling without any rule being changed.
+- **The ceiling of a per framework reader is now visible.** An adapter that claims a framework, runs, and
+  contributes nothing while a parsed file imports that framework is reported as a coverage gap naming both the
+  framework and the adapter. Before this, a repository using LangGraph's functional API was told "no agent system
+  was detected", which reads as a fact about the repository and was a fact about Orchescope. Evidence: four tests,
+  one that fires it and three that prove it stays quiet, plus five real repositories that report no gap.
 - **The LangGraph prebuilt agent is read.** `create_react_agent(model, tools=[...])` is the form the library's own
   example uses, and it declared nothing at all before: no graph, no nodes, nothing. One call now yields the agent, the
   model, the provider, the tools at their own definitions, and the relations between them. A model written as
