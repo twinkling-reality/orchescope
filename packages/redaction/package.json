@@ -1,0 +1,14 @@
+{
+  "name": "@orchescope/redaction",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Secret detection and redaction applied to every string that leaves the process.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@orchescope/domain": "workspace:*"
+  }
+}

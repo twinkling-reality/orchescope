@@ -1,0 +1,15 @@
+{
+  "name": "@orchescope/observability",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Progress events and structured, redacted logging for Orchescope itself.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@orchescope/domain": "workspace:*",
+    "@orchescope/redaction": "workspace:*"
+  }
+}

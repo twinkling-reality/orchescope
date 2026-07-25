@@ -1,0 +1,15 @@
+{
+  "name": "@orchescope/policy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Permission, budget and approval decisions, expressed as pure functions over configuration.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@orchescope/domain": "workspace:*",
+    "@orchescope/schema": "workspace:*"
+  }
+}
