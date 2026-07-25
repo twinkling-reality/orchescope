@@ -44,7 +44,7 @@ jobs:
 
       - name: enable the path this check exists to exercise
         run: |
-          pnpm orchescope -- --cwd apps/demo init
+          pnpm orchescope --cwd apps/demo init
           node --input-type=module -e "
             import { readFileSync, writeFileSync } from 'node:fs';
             const path = 'apps/demo/.orchescope/config.json';
@@ -67,7 +67,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          pnpm orchescope -- --cwd apps/demo audit --json > audit.json
+          pnpm orchescope --cwd apps/demo audit --json > audit.json
           node --input-type=module -e "
             import { readFileSync } from 'node:fs';
             const { data } = JSON.parse(readFileSync('audit.json', 'utf8'));
@@ -99,7 +99,7 @@ jobs:
       # the quantiles it cannot compute rather than reporting them from too few samples.
       - name: benchmark the demonstration system
         run: |
-          pnpm orchescope -- --cwd apps/demo benchmark \
+          pnpm orchescope --cwd apps/demo benchmark \
             --scenario support-desk --agents 1,2,4 --repetitions 20 --warmup 2 --json > benchmark.json
           node --input-type=module -e "
             import { readFileSync } from 'node:fs';

@@ -16,12 +16,12 @@ tool.
 | --- | --- | --- |
 | 1. Research and stack selection | done | `docs/research/`, `docs/architecture/adr/0001-stack-selection.md` |
 | 2. Contracts and domain core | done | `packages/schema`, `packages/domain`, twelve documents under `schemas/` |
-| 3. Source analysis and discovery | done | `pnpm orchescope -- --cwd apps/demo audit`, ten adapter fixtures |
+| 3. Source analysis and discovery | done | `pnpm orchescope --cwd apps/demo audit`, ten adapter fixtures |
 | 4. Graph, identity, invariants | done | `packages/graph/test/graph.test.ts`, 23 tests |
 | 5. Runtime observation and reconciliation | done | `packages/traces/test/traces.test.ts`, the delta in the demo audit |
 | 6. Findings and severity policy | done | 22 rules evaluated against the demo, severity capping tested |
 | 7. Storage and versioned schemas | done | `packages/persistence/test/store.test.ts`, migration and refusal tests |
-| 8. Scenarios, benchmarks, chaos | done | `pnpm orchescope -- --cwd apps/demo chaos --scenario support-desk-faults` |
+| 8. Scenarios, benchmarks, chaos | done | `pnpm orchescope --cwd apps/demo chaos --scenario support-desk-faults` |
 | 9. Comparison and the goal loop | done | `tests/e2e/improvement-loop.test.ts` |
 | 10. Command line surface | done | `tests/e2e/cli-contract.test.ts`, 25 tests |
 | 11. Report bundle and browser workspace | done | `tests/ui/workspace.spec.ts`, 10 tests in Chromium |
@@ -30,7 +30,7 @@ tool.
 | 14. Packaging and distribution | done | `pnpm package`: install and audit a project with the tarball |
 | 15. Documentation and open source setup | done | `README.md`, `docs/`, `SECURITY.md`, `CONTRIBUTING.md`, CI workflows |
 
-485 unit and integration tests, 26 end to end tests, 10 browser tests. `pnpm verify` is green.
+523 unit and integration tests, 26 end to end tests, 10 browser tests. `pnpm verify` is green.
 
 ## What each phase had to establish
 

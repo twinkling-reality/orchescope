@@ -175,8 +175,8 @@ repository:
 
 ```
 pnpm install
-pnpm orchescope -- --cwd apps/demo test --scenario support-desk
-pnpm orchescope -- --cwd apps/demo audit --open
+pnpm orchescope --cwd apps/demo test --scenario support-desk
+pnpm orchescope --cwd apps/demo audit --open
 ```
 
 The audit reports the duplicated refund with the span that produced it, offers to turn it into a goal, and after the fix

@@ -25,7 +25,7 @@ pnpm test:e2e
 For a change to discovery, paste the coverage block:
 
 ```
-pnpm orchescope -- --cwd apps/demo audit --json | node -e "..."
+pnpm orchescope --cwd apps/demo audit --json | node -e "..."
 ```
 
 For a change to the report, say that you built the workspace and looked at the page.

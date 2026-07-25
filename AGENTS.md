@@ -27,7 +27,7 @@ pnpm test:ui                 # Playwright browser tests
 pnpm build                   # bundle the publishable artifact into apps/cli/dist
 pnpm build:web               # build the browser workspace into apps/web/dist
 pnpm package                 # pack a tarball, checksum it, install it and run it
-pnpm orchescope -- <args>    # run the CLI from source
+pnpm orchescope <args>    # run the CLI from source
 pnpm demo                    # run the bundled demonstration agent system
 ```
 
@@ -111,8 +111,8 @@ Rules the tooling enforces:
 ## Validation before you claim a change works
 
 1. `pnpm verify` from a clean checkout.
-2. For anything touching discovery: run `pnpm orchescope -- audit --json` against `apps/demo` and read the coverage
+2. For anything touching discovery: run `pnpm orchescope audit --json` against `apps/demo` and read the coverage
    block, not just the exit code.
-3. For anything touching runtime: `pnpm orchescope -- trace -- node apps/demo/src/main.ts` and confirm spans arrived.
-4. For anything touching the report: `pnpm build:web` then `pnpm orchescope -- audit --serve` and look at the page.
+3. For anything touching runtime: `pnpm orchescope trace -- node apps/demo/src/main.ts` and confirm spans arrived.
+4. For anything touching the report: `pnpm build:web` then `pnpm orchescope audit --serve` and look at the page.
 5. State what you ran and what it printed. Do not report a check as passing unless it ran.

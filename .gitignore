@@ -4,9 +4,9 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 
-# Orchescope local state written into the audited repository
-.orchescope/state/
-.orchescope/cache/
+# Orchescope local state written into the audited repository, at any depth
+**/.orchescope/state/
+**/.orchescope/cache/
 
 # Playwright
 test-results/

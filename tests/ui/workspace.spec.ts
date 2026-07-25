@@ -105,7 +105,12 @@ test('a finding shows its basis, its evidence and where it came from', async ({ 
   const first = page.locator('article.finding').first();
   await expect(first).toBeVisible();
   await expect(first).toHaveAttribute('id', /^finding-OSC-/);
-  await expect(first.getByText(/observed|discovered|inferred|simulated|estimated/i)).toBeVisible();
+  // The basis is a badge rather than prose, because a reader scanning a list needs it without reading a paragraph.
+  await expect(
+    first
+      .locator('.badge-label')
+      .filter({ hasText: /observed|discovered|inferred|simulated|estimated/i }),
+  ).toBeVisible();
   await expect(first.getByText(/evidence/i).first()).toBeVisible();
 });
 

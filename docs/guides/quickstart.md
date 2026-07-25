@@ -108,8 +108,8 @@ that runs offline with no credentials. From a clone of this repository:
 
 ```
 pnpm install
-pnpm orchescope -- --cwd apps/demo test --scenario support-desk
-pnpm orchescope -- --cwd apps/demo audit --open
+pnpm orchescope --cwd apps/demo test --scenario support-desk
+pnpm orchescope --cwd apps/demo audit --open
 ```
 
 It has deliberate weaknesses, including a retry around a refund whose idempotency is not established, so the report has

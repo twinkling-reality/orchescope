@@ -103,11 +103,11 @@ jobs:
         run: pnpm demo
 
       - name: a scenario runs and is evaluated
-        run: pnpm orchescope -- --cwd apps/demo test --scenario support-desk --json > scenario.json
+        run: pnpm orchescope --cwd apps/demo test --scenario support-desk --json > scenario.json
 
       - name: the audit detects the system and reports findings with evidence
         run: |
-          pnpm orchescope -- --cwd apps/demo audit --json > audit.json
+          pnpm orchescope --cwd apps/demo audit --json > audit.json
           node --input-type=module -e "
             import { readFileSync } from 'node:fs';
             const { data } = JSON.parse(readFileSync('audit.json', 'utf8'));
@@ -126,7 +126,7 @@ jobs:
       - name: every export format is produced
         run: |
           for format in json mermaid sarif; do
-            pnpm orchescope -- --cwd apps/demo export --format "$format" --out "report.$format"
+            pnpm orchescope --cwd apps/demo export --format "$format" --out "report.$format"
             test -s "report.$format"
           done
 
@@ -207,13 +207,13 @@ jobs:
       - name: every documented command exists and answers
         run: |
           set -eux
-          pnpm orchescope -- --version
-          pnpm orchescope -- --help
-          pnpm orchescope -- doctor --json > doctor.json
+          pnpm orchescope --version
+          pnpm orchescope --help
+          pnpm orchescope doctor --json > doctor.json
           for command in audit trace test benchmark chaos compare goal goals export open init doctor mcp; do
-            pnpm orchescope -- "$command" --help > /dev/null
+            pnpm orchescope "$command" --help > /dev/null
           done
-          pnpm orchescope -- mcp install --list > /dev/null
+          pnpm orchescope mcp install --list > /dev/null
 
       - name: every internal documentation link resolves
         run: |

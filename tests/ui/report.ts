@@ -47,18 +47,25 @@ const waitForUrl = (child: ChildProcess): Promise<string> =>
     });
   });
 
-export const serveDemoReport = async (): Promise<ServedReport> => {
-  const workspace = mkdtempSync(join(tmpdir(), 'orchescope-ui-'));
-  cpSync(join(repositoryRoot, 'apps/demo'), workspace, {
-    recursive: true,
-    filter: (source) => !source.includes('/node_modules'),
-  });
-
-  await execFileAsync(process.execPath, [cliEntry, '--cwd', workspace, 'audit', '--json'], {
+const run = (args: readonly string[], workspace: string): Promise<unknown> =>
+  execFileAsync(process.execPath, [cliEntry, '--cwd', workspace, ...args], {
     cwd: repositoryRoot,
     maxBuffer: 64 * 1024 * 1024,
     timeout: 240_000,
   });
+
+export const serveDemoReport = async (): Promise<ServedReport> => {
+  const workspace = mkdtempSync(join(tmpdir(), 'orchescope-ui-'));
+  cpSync(join(repositoryRoot, 'apps/demo'), workspace, {
+    recursive: true,
+    filter: (source) => !source.includes('/node_modules') && !source.includes('/.orchescope/state'),
+  });
+
+  // The scenario runs first so the report has both sides of the reconciliation. Copying stored state instead would test a
+  // report built from someone else's runs.
+  await run(['test', '--scenario', 'support-desk', '--json'], workspace);
+  await run(['chaos', '--scenario', 'support-desk-faults', '--json'], workspace);
+  await run(['audit', '--json'], workspace);
 
   const child = spawn(process.execPath, [cliEntry, '--cwd', workspace, 'open'], {
     cwd: repositoryRoot,
