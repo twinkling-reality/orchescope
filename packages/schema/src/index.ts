@@ -175,6 +175,7 @@ export {
   ScenarioVariant,
 } from './scenario.ts';
 export { Reliability, RepetitionResult, ScenarioResult } from './scenario-result.ts';
+export { TARGET_ENV, TargetResult } from './target-result.ts';
 export {
   AgentOperation,
   NormalizedSpan,

@@ -42,6 +42,8 @@ export const AgentOperation = literals([
   'embeddings',
   'execute_tool',
   'create_agent',
+  'invoke_workflow',
+  'plan',
   'handoff',
   'retrieval',
   'memory_read',
