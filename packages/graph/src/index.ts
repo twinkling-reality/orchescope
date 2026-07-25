@@ -22,7 +22,12 @@ export {
 } from './delta.ts';
 export { diffGraphs } from './diff.ts';
 export type { ComponentDraft, EdgeDraft } from './drafts.ts';
-export { type BuiltGraph, componentIdIndex, SystemGraphBuilder } from './graph-builder.ts';
+export {
+  type BuiltGraph,
+  componentIdIndex,
+  type DiscardedEdge,
+  SystemGraphBuilder,
+} from './graph-builder.ts';
 export { type IndexedGraph, indexGraph } from './indexed-graph.ts';
 export {
   type AmbiguousMatch,

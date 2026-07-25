@@ -31,7 +31,7 @@ tool.
 | 15. Documentation and open source setup | done | `README.md`, `docs/`, `SECURITY.md`, `CONTRIBUTING.md`, CI workflows |
 | 16. Installable product | in progress | see below |
 
-576 unit and integration tests, 78 end to end tests, 10 browser tests. `pnpm verify` is green.
+579 unit and integration tests, 78 end to end tests, 10 browser tests. `pnpm verify` is green.
 
 ## Phase 16: what a stranger meets
 
@@ -98,6 +98,14 @@ and it is listed item by item because only some of it is done.
   and a scan that mapped components of other kinds says so instead of reading as an empty scan. The same repository
   now reports 28 components and no strength. Evidence: five tests, and the demonstration unchanged at 33 components
   with three strengths.
+
+- **A real repository crashed it, and no longer does.** The first open source project it was pointed at,
+  `openai/openai-agents-python`, ended in an internal error: the effects adapter synthesised an entry point
+  identity for the scope around a retry loop without ever adding that component, and one unbuildable relation
+  ended the audit of 843 files. The adapter now creates the component it names, and the builder discards a
+  relation it cannot build, keeps the graph valid, and reports the discard against the adapter that caused it
+  rather than abandoning the scan. Evidence: three builder tests, and that repository now completing with 1473
+  components and 351 relations in 2.3 seconds.
 
 **Not done:**
 

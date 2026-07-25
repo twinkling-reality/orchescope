@@ -10,6 +10,7 @@ import {
   sideEffectRecord,
 } from '@orchescope/testkit';
 import { controlFlowCycles, entryPoints, unreachableComponents } from '../src/analysis.ts';
+import { SystemGraphBuilder } from '../src/graph-builder.ts';
 import { computeDelta } from '../src/delta.ts';
 import { diffGraphs } from '../src/diff.ts';
 import { indexGraph } from '../src/indexed-graph.ts';
@@ -373,5 +374,71 @@ describe('diffGraphs', () => {
     assert.deepEqual(delta.removedComponents, []);
     assert.deepEqual(delta.addedEdges, []);
     assert.deepEqual(delta.removedEdges, []);
+  });
+});
+
+/**
+ * A relation an adapter could not justify.
+ *
+ * The graph must never contain an edge to a component that does not exist, and for a while it enforced that by
+ * refusing to build at all. One defective relation then ended the audit of an eight hundred file repository,
+ * which is how a real open source project produced an internal error instead of a report.
+ */
+describe('a relation whose endpoint was never added', () => {
+  const provenance = {
+    orchescopeVersion: '0.1.0',
+    scanId: 'scan_0000000000000001',
+    projectId: 'prj_0000000000000001',
+    projectName: 'fixture',
+    generatedAt: '2026-07-25T00:00:00.000Z',
+    projectPathHash: 'a'.repeat(64) as never,
+  };
+  const coverage = {
+    filesDiscovered: 1,
+    filesParsed: 1,
+    bytesParsed: 10,
+    skipped: [],
+    languages: [],
+    adapters: [],
+    unsupported: [],
+    durationMs: 1,
+    truncated: false,
+  };
+
+  const built = () => {
+    const builder = new SystemGraphBuilder();
+    const present = componentDraft({ kind: 'agent', name: 'triage', file: 'src/main.ts' });
+    const absent = componentDraft({ kind: 'tool', name: 'ghost', file: 'src/main.ts' });
+    builder.addComponent(present);
+    builder.addEdge(edgeDraft('calls_tool', present, absent));
+    return builder.build({ provenance, coverage });
+  };
+
+  it('is discarded rather than ending the scan', () => {
+    const result = built();
+    assert.equal(result.graph.components.length, 1);
+    assert.equal(result.graph.edges.length, 0, 'an unbuildable relation must not reach the graph');
+  });
+
+  it('is reported with the adapter that produced it, so the defect is not silent', () => {
+    const result = built();
+    assert.equal(result.discardedEdges.length, 1);
+    assert.equal(result.discardedEdges[0]?.kind, 'calls_tool');
+    assert.ok(
+      (result.discardedEdges[0]?.discoveredBy ?? []).length > 0,
+      'a discarded relation has to name who reported it',
+    );
+  });
+
+  it('reports nothing when every endpoint exists', () => {
+    const builder = new SystemGraphBuilder();
+    const agent = componentDraft({ kind: 'agent', name: 'triage', file: 'src/main.ts' });
+    const tool = componentDraft({ kind: 'tool', name: 'refund', file: 'src/main.ts' });
+    builder.addComponent(agent);
+    builder.addComponent(tool);
+    builder.addEdge(edgeDraft('calls_tool', agent, tool));
+    const result = builder.build({ provenance, coverage });
+    assert.deepEqual(result.discardedEdges, []);
+    assert.equal(result.graph.edges.length, 1);
   });
 });

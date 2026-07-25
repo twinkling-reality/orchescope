@@ -1,6 +1,11 @@
 import { CONFIDENCE_BANDS } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
-import type { ComponentIdentity, EdgePolicy, SideEffectClass } from '@orchescope/schema';
+import type {
+  ComponentIdentity,
+  EdgePolicy,
+  SideEffectClass,
+  SourceLocation,
+} from '@orchescope/schema';
 import type { CallFact, ControlFlowFact, ModuleFacts } from '@orchescope/source-analysis';
 import {
   calleeName,
@@ -136,21 +141,26 @@ const serviceIdentity = (host: string): ComponentIdentity =>
   globalIdentity('external_service', GLOBAL_NAMESPACES.service, host);
 
 /**
- * Resolves the component an effect belongs to.
+ * The component an effect is attributed to, created if this is the first time it was needed.
  *
- * When the enclosing scope already produced a component, for example an agent discovered by a framework
- * adapter, the effect attaches to it. Otherwise the enclosing function becomes an entry point component,
- * because an effect with no caller cannot be reasoned about and inventing an agent would overstate the
- * architecture.
+ * When the enclosing scope already produced a component, for example an agent a framework adapter found, the
+ * effect attaches to it. Otherwise the enclosing function becomes an entry point, because an effect with no
+ * caller cannot be reasoned about and inventing an agent would overstate the architecture.
+ *
+ * An identity that is returned without the component being added is an edge to nothing, which the graph refuses
+ * to build. Every path that needs a caller goes through here so that the component and the identity are produced
+ * together rather than one of them being assumed.
  */
-const ensureCaller = (
-  module: ModuleFacts,
-  call: CallFact,
-  context: DiscoveryContext,
-  builder: SystemGraphBuilder,
-  found: Found,
-): ComponentIdentity => {
-  const name = call.enclosing ?? 'module-scope';
+const ensureScope = (input: {
+  readonly module: ModuleFacts;
+  readonly context: DiscoveryContext;
+  readonly builder: SystemGraphBuilder;
+  readonly found: Found;
+  readonly name: string;
+  readonly location: SourceLocation;
+  readonly inferredFrom: string;
+}): ComponentIdentity => {
+  const { module, context, builder, found, name } = input;
   const existing = context.bindings.lookup(module.file, name);
   if (existing !== undefined) return existing;
   const identity = sourceIdentity('entrypoint', module.file, name);
@@ -159,10 +169,10 @@ const ensureCaller = (
       kind: 'entrypoint',
       file: module.file,
       name,
-      location: call.location,
+      location: input.location,
       symbol: name,
       confidence: CONFIDENCE_BANDS.structural,
-      metadata: { inferredFrom: 'enclosing scope of an external effect' },
+      metadata: { inferredFrom: input.inferredFrom },
       tags: ['entrypoint'],
     }),
   );
@@ -170,6 +180,23 @@ const ensureCaller = (
   context.bindings.register(module.file, name, identity);
   return identity;
 };
+
+const ensureCaller = (
+  module: ModuleFacts,
+  call: CallFact,
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+  found: Found,
+): ComponentIdentity =>
+  ensureScope({
+    module,
+    context,
+    builder,
+    found,
+    name: call.enclosing ?? 'module-scope',
+    location: call.location,
+    inferredFrom: 'enclosing scope of an external effect',
+  });
 
 const httpMethodOf = (call: CallFact): string | undefined => {
   const last = calleeName(call);
@@ -423,9 +450,15 @@ const discoverRetryLoops = (
       builder.addEdge(
         drafts.edge({
           kind: target.kind === 'tool' ? 'calls_tool' : 'calls_service',
-          from:
-            context.bindings.lookup(module.file, scope) ??
-            sourceIdentity('entrypoint', module.file, scope),
+          from: ensureScope({
+            module,
+            context,
+            builder,
+            found,
+            name: scope,
+            location: construct.location,
+            inferredFrom: 'scope containing a retry loop',
+          }),
           to: target,
           location: construct.location,
           symbol: `retry loop around ${name}`,

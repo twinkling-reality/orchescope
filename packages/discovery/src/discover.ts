@@ -8,7 +8,7 @@ import {
   sha256Hex,
   sha256OfJson,
 } from '@orchescope/domain';
-import { SystemGraphBuilder } from '@orchescope/graph';
+import { type DiscardedEdge, SystemGraphBuilder } from '@orchescope/graph';
 import type {
   AdapterRun,
   Evidence,
@@ -137,6 +137,27 @@ const adapterBlindSpots = (
   return areas;
 };
 
+/**
+ * Relations the graph could not keep, grouped by the adapter that reported them.
+ *
+ * This is reported as a defect in Orchescope rather than as a limit of the repository, because that is what it
+ * is: an adapter named an endpoint it never created.
+ */
+const discardedRelations = (discarded: readonly DiscardedEdge[]): readonly UnsupportedArea[] => {
+  const byAdapter = new Map<string, number>();
+  for (const edge of discarded) {
+    const producer = edge.discoveredBy.join(', ');
+    byAdapter.set(producer, (byAdapter.get(producer) ?? 0) + 1);
+  }
+  return [...byAdapter.entries()].map(([producer, count]) => ({
+    area: `${count} relation(s) discarded from ${producer}`,
+    reason:
+      'The adapter reported a relation whose endpoint it never added, so the relation was dropped to keep the graph valid.',
+    remediation:
+      'This is a defect in Orchescope rather than in this repository. Report it with the repository that produced it.',
+  }));
+};
+
 const runAdapter = (
   adapter: AgentSystemAdapter,
   context: DiscoveryContext,
@@ -259,18 +280,34 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
     truncated: fileSet.truncated,
   };
 
-  const built = builder.build({
-    provenance: {
-      orchescopeVersion: request.orchescopeVersion,
-      scanId: scan,
-      projectId: projectIdentifier,
-      projectName,
-      generatedAt: startedAt,
-      projectPathHash: pathHash,
-      ...(request.git === undefined ? {} : { git: request.git }),
-    },
-    coverage,
-  });
+  const provenance = {
+    orchescopeVersion: request.orchescopeVersion,
+    scanId: scan,
+    projectId: projectIdentifier,
+    projectName,
+    generatedAt: startedAt,
+    projectPathHash: pathHash,
+    ...(request.git === undefined ? {} : { git: request.git }),
+  };
+
+  /**
+   * Built twice when a relation had to be discarded, and only then.
+   *
+   * A discarded relation is a defect in the adapter that reported it, and the reader has to be told. Coverage is
+   * an input to the build, so recording it means building again with the fuller coverage. That costs one pass over
+   * drafts already in memory, on the rare path where something was wrong.
+   */
+  const firstPass = builder.build({ provenance, coverage });
+  const built =
+    firstPass.discardedEdges.length === 0
+      ? firstPass
+      : builder.build({
+          provenance,
+          coverage: {
+            ...coverage,
+            unsupported: [...coverage.unsupported, ...discardedRelations(firstPass.discardedEdges)],
+          },
+        });
 
   const detectedEcosystems = analysis.languages.map((entry) => entry.language as Language);
   const agentSystemDetected = built.graph.components.some((component) =>
