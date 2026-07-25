@@ -14,7 +14,7 @@ const OPENAI = 'sk-abcdefghijklmnopqrstuvwxyz0123';
 const ANTHROPIC = 'sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAA';
 const AWS = 'AKIAIOSFODNN7EXAMPLE';
 const GITHUB = 'ghp_0123456789abcdefghijABCDEFGHIJKLMN';
-const JWT = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r';
+const JWT = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r'; // gitleaks:allow the shape is the point of the test, and the value signs nothing
 
 describe('createRedactor', () => {
   it('removes the value and keeps the kind and the length', () => {

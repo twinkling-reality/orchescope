@@ -1,0 +1,10 @@
+# Findings in the history that are not secrets.
+#
+# The current tree carries a `gitleaks:allow` note on the line itself, which is what keeps future commits clean. A
+# fingerprint is needed only for a commit made before that note existed, because history cannot be edited.
+#
+# Each entry has to name why the finding is not a credential. An entry that only silences a scanner does not belong here.
+
+# The redaction tests need inputs shaped like real credentials, or they would assert nothing. This one is a token from
+# the JWT specification's own example, signed with a published key, and it grants nothing.
+81afa5a92acf42dc99167e3f085b8a2d329c2d63:packages/redaction/test/redact.test.ts:jwt:17
