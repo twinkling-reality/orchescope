@@ -1,0 +1,47 @@
+{
+  "name": "orchescope",
+  "version": "0.1.0",
+  "description": "Map, test, and improve agent systems. A local first CLI and browser workspace that discovers, audits, benchmarks and resilience tests agentic systems.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "keywords": [
+    "agents",
+    "observability",
+    "opentelemetry",
+    "mcp",
+    "static-analysis",
+    "chaos-engineering",
+    "benchmark"
+  ],
+  "bin": {
+    "orchescope": "./dist/orchescope.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "dependencies": {
+    "@orchescope/benchmark": "workspace:*",
+    "@orchescope/domain": "workspace:*",
+    "@orchescope/goals": "workspace:*",
+    "@orchescope/mcp": "workspace:*",
+    "@orchescope/observability": "workspace:*",
+    "@orchescope/report": "workspace:*",
+    "@orchescope/report-server": "workspace:*",
+    "@orchescope/schema": "workspace:*",
+    "@orchescope/usecases": "workspace:*",
+    "@orchescope/workspace": "workspace:*",
+    "commander": "15.0.0",
+    "oxc-parser": "0.141.0",
+    "tree-sitter-python": "0.25.0",
+    "web-tree-sitter": "0.26.11"
+  }
+}
