@@ -1,0 +1,14 @@
+{
+  "name": "@orchescope/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Identities, invariants, canonical serialisation and pure policy for the Orchescope domain model.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@orchescope/schema": "workspace:*"
+  }
+}
