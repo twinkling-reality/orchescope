@@ -84,14 +84,26 @@ export const renderError = (style: Style, error: unknown, verbose: boolean): str
   return `${lines.join('\n')}\n`;
 };
 
-export const jsonError = (error: unknown): Record<string, unknown> =>
-  isOrchescopeError(error)
-    ? { ok: false, error: error.toJSON() }
+/**
+ * The failure document.
+ *
+ * It carries `command` and `version` for the same reason the success document does: a caller reads those two
+ * fields the same way whatever happened, and a document that changes shape on failure is a document a script has
+ * to special case. `data` is null rather than absent, so the key is always there to read.
+ */
+export const jsonError = (
+  error: unknown,
+  input: { readonly command: string; readonly version: string },
+): Record<string, unknown> => ({
+  ok: false,
+  command: input.command,
+  version: input.version,
+  data: null,
+  error: isOrchescopeError(error)
+    ? error.toJSON()
     : {
-        ok: false,
-        error: {
-          code: 'INTERNAL',
-          category: 'internal',
-          message: error instanceof Error ? error.message : 'an unexpected value was thrown',
-        },
-      };
+        code: 'INTERNAL',
+        category: 'internal',
+        message: error instanceof Error ? error.message : 'an unexpected value was thrown',
+      },
+});

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { OrchescopeError, stableJson } from '@orchescope/domain';
 import { renderStandaloneHtml, toMermaid, toSarif } from '@orchescope/report';
 import { openInBrowser, startReportServer } from '@orchescope/report-server';
+import type { ReportBundle } from '@orchescope/schema';
 import { runDoctor } from '@orchescope/usecases';
 import { initWorkspace } from '@orchescope/workspace';
 import { findAssetDirectory } from '../assets.ts';
@@ -121,6 +122,39 @@ export const openCommand = async (
   return EXIT_CODES.success;
 };
 
+const EXPORT_FORMATS = ['json', 'mermaid', 'sarif', 'html'] as const;
+
+const renderExport = (
+  context: CommandContext,
+  bundle: ReportBundle,
+  format: string,
+): string | undefined => {
+  switch (format) {
+    case 'json':
+      return `${stableJson(bundle)}\n`;
+    case 'mermaid':
+      return toMermaid(bundle.graph);
+    case 'sarif':
+      return `${stableJson(toSarif(bundle.findings, { toolVersion: context.version }))}\n`;
+    case 'html': {
+      const assets = findAssetDirectory();
+      return renderStandaloneHtml(bundle, {
+        javascript: readFileSync(join(assets, 'app.js'), 'utf8'),
+        css: readFileSync(join(assets, 'app.css'), 'utf8'),
+        title: `Orchescope report for ${bundle.projectName}`,
+      });
+    }
+    default:
+      return undefined;
+  }
+};
+
+/**
+ * Exporting is the one command whose output is an artifact rather than a report about one, so the two modes are
+ * kept apart. Without `--json` the artifact goes to the file or to standard output, which is what a shell
+ * pipeline wants. With `--json` the caller gets the same document shape as every other command, describing what
+ * was written and carrying the artifact only when there was no file to put it in.
+ */
 export const exportCommand = (
   context: CommandContext,
   options: { readonly format?: string; readonly out?: string },
@@ -132,38 +166,41 @@ export const exportCommand = (
     });
   }
   const format = options.format ?? 'json';
-  let contents: string;
-  switch (format) {
-    case 'json':
-      contents = `${stableJson(bundle)}\n`;
-      break;
-    case 'mermaid':
-      contents = toMermaid(bundle.graph);
-      break;
-    case 'sarif':
-      contents = `${stableJson(toSarif(bundle.findings, { toolVersion: context.version }))}\n`;
-      break;
-    case 'html': {
-      const assets = findAssetDirectory();
-      contents = renderStandaloneHtml(bundle, {
-        javascript: readFileSync(join(assets, 'app.js'), 'utf8'),
-        css: readFileSync(join(assets, 'app.css'), 'utf8'),
-        title: `Orchescope report for ${bundle.projectName}`,
-      });
-      break;
-    }
-    default:
-      context.stderr(
-        `${context.style.bad('error')} unknown format ${format}. Use json, mermaid, sarif or html.\n`,
-      );
-      return EXIT_CODES.user;
+  const contents = renderExport(context, bundle, format);
+  if (contents === undefined) {
+    throw new OrchescopeError('INVALID_ARGUMENT', `${format} is not a format this build writes.`, {
+      remediation: `Pass one of: ${EXPORT_FORMATS.join(', ')}.`,
+    });
+  }
+
+  if (options.out !== undefined) {
+    writeFileSync(options.out, contents, { mode: 0o600 });
+  }
+
+  if (context.json) {
+    context.stdout(
+      `${stableJson({
+        ok: true,
+        command: 'export',
+        version: context.version,
+        data: {
+          format,
+          bytes: Buffer.byteLength(contents, 'utf8'),
+          out: options.out ?? null,
+          reportId: bundle.reportId,
+          // The artifact travels in the document only when no file was named, so that `--out` keeps a large
+          // document out of the caller's buffer.
+          content: options.out === undefined ? contents : null,
+        },
+      })}\n`,
+    );
+    return EXIT_CODES.success;
   }
 
   if (options.out === undefined) {
     context.stdout(contents.endsWith('\n') ? contents : `${contents}\n`);
     return EXIT_CODES.success;
   }
-  writeFileSync(options.out, contents, { mode: 0o600 });
-  if (!context.json) context.stdout(`${context.style.good('+')} wrote ${options.out}\n`);
+  context.stdout(`${context.style.good('+')} wrote ${options.out}\n`);
   return EXIT_CODES.success;
 };

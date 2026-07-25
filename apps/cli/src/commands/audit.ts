@@ -82,10 +82,15 @@ const writeExports = (
   return written;
 };
 
+/**
+ * One document, even when the report is being served. Printing a second document for the server URL would break
+ * the promise that a command writes exactly one, so the URL is a field of this one.
+ */
 const writeAuditJson = (
   context: CommandContext,
   result: AuditResult,
   written: readonly string[],
+  reportUrl: string | undefined,
 ): void => {
   context.stdout(
     `${stableJson({
@@ -102,6 +107,7 @@ const writeAuditJson = (
         findings: result.bundle.findings,
         rulesEvaluated: result.findingSet.rulesEvaluated,
         exports: written,
+        reportUrl: reportUrl ?? null,
       },
     })}\n`,
   );
@@ -132,12 +138,12 @@ const writeAuditText = (
   }
 };
 
-/** Serves the report until the process is interrupted, which is what makes `--open` a foreground command. */
-const serveUntilInterrupted = async (
+type ServedReport = { readonly url: string; readonly close: () => Promise<void> };
+
+const startServing = async (
   context: CommandContext,
   result: AuditResult,
-  options: AuditOptions,
-): Promise<void> => {
+): Promise<ServedReport> => {
   const server = await startReportServer({
     host: context.workspace.config.report.host,
     port: context.workspace.config.report.port,
@@ -146,9 +152,16 @@ const serveUntilInterrupted = async (
       context.workspace.store.latestReport(context.workspace.projectId) ?? result.bundle,
     actions: serverActionsFor(context),
   });
-  if (context.json) {
-    context.stdout(`${stableJson({ ok: true, command: 'open', data: { url: server.url } })}\n`);
-  } else {
+  return { url: server.url, close: () => server.close() };
+};
+
+/** Holds the report open until the process is interrupted, which is what makes `--open` a foreground command. */
+const serveUntilInterrupted = async (
+  context: CommandContext,
+  server: ServedReport,
+  options: AuditOptions,
+): Promise<void> => {
+  if (!context.json) {
     context.stdout(`\n${context.style.bold('Report')} ${context.style.link(server.url)}\n`);
     context.stdout(
       context.style.dim('  bound to loopback, protected by a one time token in that URL\n'),
@@ -190,14 +203,17 @@ export const auditCommand = async (
   const failing = options.failOn === undefined ? [] : exceedsThreshold(risks, options.failOn);
   const written = writeExports(context, result.bundle, options);
 
+  // The server starts before anything is written, so the one document can carry the URL.
+  const server = serve ? await startServing(context, result) : undefined;
+
   if (context.json) {
-    writeAuditJson(context, result, written);
+    writeAuditJson(context, result, written, server?.url);
   } else {
     writeAuditText(context, result, { risks, strengths, written });
   }
 
-  if (serve) {
-    await serveUntilInterrupted(context, result, options);
+  if (server !== undefined) {
+    await serveUntilInterrupted(context, server, options);
   } else if (!context.json) {
     context.stdout(`\n${context.style.dim('next:')} ${nextCommand(result)}\n`);
   }

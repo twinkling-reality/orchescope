@@ -100,9 +100,16 @@ orchescope audit
 | `orchescope init --manifest` | Also write a manifest template for a system no adapter can read from source |
 | `orchescope doctor` | Check that this machine can run every command this build offers |
 
-Every command accepts `--json` and then writes exactly one JSON document to standard output, including on failure. Exit
-codes are part of the interface: `0` success, `1` findings at or above a `--fail-on` threshold, `2` a caller mistake, `3`
-refused by policy, `4` the audited system failed, `5` the environment is missing something, `130` interrupted.
+Every command accepts `--json` and then writes exactly one JSON document to standard output, including on failure. The
+document has the same four keys whatever happened, so a caller never special cases an outcome:
+
+```json
+{ "ok": true, "command": "audit", "version": "0.1.0", "data": { "…": "…" } }
+{ "ok": false, "command": "audit", "version": "0.1.0", "data": null, "error": { "code": "…", "category": "…", "message": "…" } }
+```
+
+Exit codes are part of the interface: `0` success, `1` findings at or above a `--fail-on` threshold, `2` a caller mistake,
+`3` refused by policy, `4` the audited system failed, `5` the environment is missing something, `130` interrupted.
 
 ## Architecture
 

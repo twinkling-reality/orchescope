@@ -108,8 +108,23 @@ orchescope goal show "$(python3 -c "import json;print(json.load(open('goal.json'
 Exit codes are part of the interface: `0` success, `1` findings at or above a `--fail-on` threshold, `2` a caller mistake,
 `3` refused by policy, `4` the audited system failed, `5` the environment is missing something, `130` interrupted.
 
+The document has the same four keys whatever happened, and `error` is present exactly when `ok` is false:
+
+| Key | On success | On failure |
+| --- | --- | --- |
+| `ok` | `true` | `false` |
+| `command` | the command that ran, for example `audit` or `goal create` | the same |
+| `version` | the Orchescope version | the same |
+| `data` | the result | `null` |
+| `error` | absent | `code`, `category`, `message`, and `detail` |
+
 A refusal carries `error.detail.setting` when policy denied it, so a script can name the setting to change without parsing
 prose.
+
+`export` is the one command whose output is an artifact rather than a report about one. Without `--json` it writes the
+artifact to standard output or to `--out`. With `--json` it writes the usual document, naming the format, the byte count
+and the file, and carrying the artifact in `data.content` only when no file was given. An agent should pass `--out` so a
+large document never fills the conversation.
 
 ## What the agent should not do
 
