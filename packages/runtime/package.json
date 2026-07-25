@@ -1,0 +1,16 @@
+{
+  "name": "@orchescope/runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Loopback OTLP receiver, supervised process execution and fault proxy for runtime evidence collection.",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@orchescope/domain": "workspace:*",
+    "@orchescope/schema": "workspace:*",
+    "@orchescope/traces": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
