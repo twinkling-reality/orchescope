@@ -62,7 +62,9 @@
     }
   },
   "agentSystemDetected": true,
-  "blindSpots": ["mcp used in source, read by adapter:mcp"],
+  "blindSpots": [
+    "mcp used in source, read by adapter:mcp"
+  ],
   "components": {
     "byKind": {
       "agent": 6,
@@ -82,16 +84,16 @@
   },
   "findings": {
     "byRule": {
-      "model-call-without-timeout": 2,
+      "model-call-without-timeout": 1,
       "observability-coverage": 1,
       "topology-shape": 1
     },
     "bySeverity": {
       "info": 1,
-      "medium": 3
+      "medium": 2
     },
     "strengths": 1,
-    "total": 4
+    "total": 3
   },
   "kind": "agent_system",
   "languagesNotAnalysed": [],

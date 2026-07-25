@@ -15,6 +15,7 @@ import type {
   FindingSet,
   Timestamp,
 } from '@orchescope/schema';
+import { groupDrafts } from './grouping.ts';
 import type { FindingDraft, Rule, RuleContext, RuleStatus } from './rule.ts';
 import { EXPERIMENT_RULES } from './rules/experiments.ts';
 import { RECONCILIATION_RULES } from './rules/reconciliation.ts';
@@ -44,6 +45,9 @@ export type EngineResult = {
   readonly findingSet: FindingSet;
   readonly evidence: readonly Evidence[];
 };
+
+/** A grouped finding names many components, and a location list has to stay something a person can read. */
+const MAX_SOURCE_LOCATIONS = 10;
 
 const draftOrder = (left: FindingDraft, right: FindingDraft): number => {
   if (left.ruleId !== right.ruleId) return left.ruleId < right.ruleId ? -1 : 1;
@@ -126,7 +130,8 @@ const toFinding = (
     edges: [...(draft.edges ?? [])],
     sourceLocations: draft.components
       .map((id) => input.graph.component(id))
-      .flatMap((component) => component?.sourceLocations.slice(0, 2) ?? []),
+      .flatMap((component) => component?.sourceLocations.slice(0, 2) ?? [])
+      .slice(0, MAX_SOURCE_LOCATIONS),
     evidence: [...evidenceIds],
     metrics: [...(draft.metrics ?? [])],
     ...(draft.recommendation === undefined ? {} : { recommendation: draft.recommendation }),
@@ -147,11 +152,36 @@ const toFinding = (
   };
 };
 
+/** How many components a finding touches, which is the closest thing to blast radius the graph carries. */
+const blastRadius = (finding: Finding): number => {
+  const occurrences = finding.metrics.find((metric) => metric.name === 'occurrences')?.value ?? 1;
+  const withheld =
+    finding.metrics.find((metric) => metric.name === 'componentsWithheld')?.value ?? 0;
+  return Math.max(occurrences, finding.components.length + withheld);
+};
+
+/**
+ * The order a person should read them in: worst first, then what can actually be acted on, then how much of the
+ * system it touches. A low finding that repeats two hundred times must not sit above a high one, and between two
+ * findings of the same severity the one that can become a bounded goal is the one worth reading first.
+ */
+const byWhatToReadFirst = (left: Finding, right: Finding): number => {
+  const bySeverity = compareSeverity(left.severity, right.severity);
+  if (bySeverity !== 0) return bySeverity;
+  if (left.polarity !== right.polarity) return left.polarity === 'risk' ? -1 : 1;
+  if (left.goalReadiness.eligible !== right.goalReadiness.eligible) {
+    return left.goalReadiness.eligible ? -1 : 1;
+  }
+  const byRadius = blastRadius(right) - blastRadius(left);
+  if (byRadius !== 0) return byRadius;
+  return left.id < right.id ? -1 : 1;
+};
+
 export const evaluateRules = (input: EvaluateInput): EngineResult => {
   const context: RuleContext = { ...input.context, graph: input.graph };
   const collected = collectDrafts(input.rules ?? DEFAULT_RULES, context);
   const evaluated = collected.evaluated;
-  const drafts = [...collected.drafts].sort(draftOrder);
+  const drafts = groupDrafts([...collected.drafts].sort(draftOrder));
 
   const sequences = new Map<FindingCategory, number>();
   const componentIds = new Set(input.graph.graph.components.map((component) => component.id));
@@ -178,12 +208,7 @@ export const evaluateRules = (input: EvaluateInput): EngineResult => {
     findings.push(toFinding(draft, input, sequence, componentIds, evidenceIds));
   }
 
-  findings.sort((left, right) => {
-    const bySeverity = compareSeverity(left.severity, right.severity);
-    if (bySeverity !== 0) return bySeverity;
-    if (left.polarity !== right.polarity) return left.polarity === 'risk' ? -1 : 1;
-    return left.id < right.id ? -1 : 1;
-  });
+  findings.sort(byWhatToReadFirst);
 
   assertNoViolations(
     findings.flatMap((finding) => findingViolations(finding, componentIds)),

@@ -54,6 +54,10 @@ export const unsafeRetryRule: Rule = {
       });
       drafts.push({
         ruleId: 'retry-around-non-idempotent-operation',
+        occurrence: {
+          key: 'unsafe-retry',
+          groupedTitle: '{count} retries can repeat an effect that is not known to be idempotent',
+        },
         category: 'reliability',
         polarity: 'risk',
         severity: effect === 'unknown' ? 'medium' : 'high',
@@ -111,6 +115,10 @@ export const unboundedRetryRule: Rule = {
       const source = context.graph.component(edge.from);
       drafts.push({
         ruleId: 'unbounded-retry',
+        occurrence: {
+          key: 'unbounded-retry',
+          groupedTitle: '{count} retries have no attempt ceiling',
+        },
         category: 'reliability',
         polarity: 'risk',
         severity: 'medium',
@@ -192,6 +200,10 @@ export const missingTimeoutRule: Rule = {
       const callers = [...new Set(edges.map((edge) => edge.from))];
       return {
         ruleId: 'model-call-without-timeout',
+        occurrence: {
+          key: 'no-timeout',
+          groupedTitle: '{count} models are called with no timeout declared',
+        },
         category: 'reliability' as const,
         polarity: 'risk' as const,
         severity: 'medium' as const,
@@ -250,6 +262,10 @@ export const approvalBoundaryRule: Rule = {
           ruleId: 'side-effect-approval-boundary',
           category: 'security',
           polarity: 'strength',
+          occurrence: {
+            key: 'approved',
+            groupedTitle: '{count} consequential operations are behind an approval boundary',
+          },
           severity: 'info',
           confidence: CONFIDENCE_BANDS.strongStructural,
           basis: 'discovered',
@@ -276,6 +292,10 @@ export const approvalBoundaryRule: Rule = {
         ruleId: 'side-effect-approval-boundary',
         category: 'security',
         polarity: 'risk',
+        occurrence: {
+          key: 'unapproved',
+          groupedTitle: '{count} consequential operations have no approval boundary',
+        },
         severity: component.sideEffect === 'financial' ? 'high' : 'medium',
         confidence: CONFIDENCE_BANDS.structural,
         basis: 'discovered',
@@ -336,6 +356,10 @@ export const promptInjectionBoundaryRule: Rule = {
 
     const drafts: FindingDraft[] = prompts.map((prompt) => ({
       ruleId: 'prompt-injection-boundary',
+      occurrence: {
+        key: 'interpolated-prompt',
+        groupedTitle: '{count} prompts interpolate run time content',
+      },
       category: 'security' as const,
       polarity: 'risk' as const,
       severity: 'medium' as const,
@@ -389,6 +413,10 @@ export const architectureShapeRule: Rule = {
       drafts.push({
         ruleId: 'topology-shape',
         category: 'agent_complexity',
+        occurrence: {
+          key: 'wide-fan-out',
+          groupedTitle: '{count} agents each coordinate eight or more downstream operations',
+        },
         polarity: 'risk',
         severity: 'low',
         confidence: CONFIDENCE_BANDS.deterministic,
@@ -418,6 +446,9 @@ export const architectureShapeRule: Rule = {
       'database',
       'external_service',
     ]);
+    const reachabilityCandidates = context.graph.graph.components.filter(
+      (component) => component.presence.static && reachabilityKinds.has(component.kind),
+    );
     const unreachable = unreachableComponents(context.graph).filter(
       (component) => component.presence.static && reachabilityKinds.has(component.kind),
     );
@@ -428,11 +459,25 @@ export const architectureShapeRule: Rule = {
         polarity: 'risk',
         severity: 'low',
         confidence: CONFIDENCE_BANDS.structural,
+        occurrence: {
+          key: 'unreachable',
+          groupedTitle: '{count} components cannot be reached from any declared entry point',
+        },
         basis: 'discovered',
         title: `${component.displayName} cannot be reached from any entry point`,
-        explanation: `No declared entry point reaches ${component.id} through control flow relations. Either the wiring is missing, or the component is left over.`,
-        impact: 'Dead configuration is misleading to every future reader.',
+        explanation: `No entry point declared in this repository reaches ${component.id} through control flow relations. That has three causes and this rule cannot tell them apart: the wiring is missing, the component is left over, or the entry point is outside this repository, which is what a library looks like. ${unreachable.length} of the ${reachabilityCandidates.length} components that participate in control flow are in this state.`,
+        impact:
+          'A component the declared graph cannot reach is one a reader cannot follow, and it is where dead configuration hides.',
         components: [component.id],
+        metrics: [
+          {
+            name: 'unreachableComponents',
+            value: unreachable.length,
+            unit: 'component',
+            sampleSize: reachabilityCandidates.length,
+            basis: 'discovered' as const,
+          },
+        ],
         evidence: component.evidence.slice(0, 2) as EvidenceId[],
         goalEligible: false,
         goalReason: 'Deleting or wiring a component is a decision for the owner.',
@@ -448,6 +493,10 @@ export const architectureShapeRule: Rule = {
         polarity: 'risk',
         severity: 'low',
         confidence: CONFIDENCE_BANDS.deterministic,
+        occurrence: {
+          key: 'cycle',
+          groupedTitle: '{count} cycles were found in the declared control flow',
+        },
         basis: 'discovered',
         title: `Control flow cycle: ${cycle.join(' to ')}`,
         explanation:
@@ -529,6 +578,10 @@ export const broadPermissionRule: Rule = {
       });
       drafts.push({
         ruleId: 'permissions-broader-than-observed-use',
+        occurrence: {
+          key: 'unused-write',
+          groupedTitle: '{count} components hold write access they were not observed using',
+        },
         category: 'permissions',
         polarity: 'risk',
         severity: 'low',
@@ -583,15 +636,28 @@ export const unusedConfiguredToolRule: Rule = {
 
     const drafts: FindingDraft[] = orphans.map((tool) => ({
       ruleId: 'configured-tool-has-no-caller',
+      occurrence: {
+        key: 'no-caller',
+        groupedTitle: '{count} tools are defined and nothing in this repository calls them',
+      },
       category: 'maintainability' as const,
       polarity: 'risk' as const,
       severity: 'low' as const,
       confidence: CONFIDENCE_BANDS.structural,
       basis: 'discovered' as const,
       title: `${tool.displayName} is defined and nothing calls it`,
-      explanation: `${tool.displayName} was discovered as a tool and no agent, group or server relation points at it. Either the wiring is missing, or the tool is left over from a change.`,
+      explanation: `${tool.displayName} was discovered as a tool and no agent, group or server relation in this repository points at it. That has three causes and this rule cannot tell them apart: the wiring is missing, the tool is left over from a change, or the caller is somewhere Orchescope did not read, which is what a tool list assembled at run time and a library exporting tools for an application elsewhere both look like. ${orphans.length} of the ${tools.length} discovered tools are in this state.`,
       impact: 'A tool nobody calls still has to be maintained, and it may still hold credentials.',
       components: [tool.id],
+      metrics: [
+        {
+          name: 'toolsWithoutCaller',
+          value: orphans.length,
+          unit: 'tool',
+          sampleSize: tools.length,
+          basis: 'discovered' as const,
+        },
+      ],
       evidence: tool.evidence.slice(0, 2) as EvidenceId[],
       goalEligible: false,
       goalReason: 'Wiring or deleting a tool is a decision for the owner.',
@@ -630,6 +696,10 @@ export const safeRetryRule: Rule = {
         const retry = edge.policy?.retry;
         return {
           ruleId: 'bounded-retry-with-declared-idempotency',
+          occurrence: {
+            key: 'safe-retry',
+            groupedTitle: '{count} retries are bounded and declare an idempotency key',
+          },
           category: 'reliability' as const,
           polarity: 'strength' as const,
           severity: 'info' as const,

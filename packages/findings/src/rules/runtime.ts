@@ -121,6 +121,10 @@ export const sequentialIndependentCallsRule: Rule = {
 
       drafts.push({
         ruleId: 'independent-calls-run-sequentially',
+        occurrence: {
+          key: 'sequential',
+          groupedTitle: '{count} components call independent tools one after another',
+        },
         category: 'performance',
         polarity: 'risk',
         severity: savingMs > 500 ? 'medium' : 'low',
@@ -209,6 +213,10 @@ export const latencyConcentrationRule: Rule = {
       });
       drafts.push({
         ruleId: 'latency-concentrated-in-one-component',
+        occurrence: {
+          key: 'latency-share',
+          groupedTitle: '{count} components each hold a large share of the observed self time',
+        },
         category: 'performance',
         polarity: 'risk',
         severity: share > 0.6 ? 'medium' : 'low',
@@ -273,6 +281,10 @@ export const tokenConcentrationRule: Rule = {
       if (component === undefined) continue;
       drafts.push({
         ruleId: 'tokens-concentrated-in-one-component',
+        occurrence: {
+          key: 'token-share',
+          groupedTitle: '{count} components each hold a large share of the observed tokens',
+        },
         category: 'cost',
         polarity: 'risk',
         severity: 'low',
@@ -422,6 +434,10 @@ export const unreliableRelationRule: Rule = {
       const source = context.graph.component(edge.from);
       drafts.push({
         ruleId: 'relation-fails-often',
+        occurrence: {
+          key: 'failing-relation',
+          groupedTitle: '{count} relations failed often enough to be worth reporting',
+        },
         category: 'reliability',
         polarity: 'risk',
         severity: rate > 0.5 ? 'high' : 'medium',

@@ -85,18 +85,18 @@
   },
   "findings": {
     "byRule": {
-      "configured-tool-has-no-caller": 53,
-      "model-call-without-timeout": 9,
+      "configured-tool-has-no-caller": 1,
+      "model-call-without-timeout": 1,
       "observability-coverage": 1,
-      "prompt-injection-boundary": 17,
-      "topology-shape": 69
+      "prompt-injection-boundary": 1,
+      "topology-shape": 1
     },
     "bySeverity": {
-      "low": 122,
-      "medium": 27
+      "low": 2,
+      "medium": 3
     },
     "strengths": 0,
-    "total": 149
+    "total": 5
   },
   "kind": "agent_system",
   "languagesNotAnalysed": [],

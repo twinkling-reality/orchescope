@@ -87,14 +87,14 @@
   "findings": {
     "byRule": {
       "observability-coverage": 1,
-      "topology-shape": 5
+      "topology-shape": 1
     },
     "bySeverity": {
-      "low": 5,
+      "low": 1,
       "medium": 1
     },
     "strengths": 0,
-    "total": 6
+    "total": 2
   },
   "kind": "agent_system",
   "languagesNotAnalysed": [],

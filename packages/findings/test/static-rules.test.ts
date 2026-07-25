@@ -10,6 +10,7 @@ import {
   architectureShapeRule,
   safeRetryRule,
   unsafeRetryRule,
+  unusedConfiguredToolRule,
 } from '../src/rules/static-policy.ts';
 
 /**
@@ -253,5 +254,119 @@ describe('the two retry rules together', () => {
           rule.ruleId === 'bounded-retry-with-declared-idempotency' && rule.status === 'clear',
       ),
     );
+  });
+});
+
+/**
+ * Grouping, measured against what a real repository produces.
+ *
+ * `openai/openai-agents-python` produced 439 findings, 211 from one rule and 193 from another, which is not a
+ * report anybody reads. Two hundred instances of one pattern is one problem with two hundred sites, and the
+ * count has to survive the collapse or the scale is lost instead of the noise.
+ */
+describe('findings that repeat', () => {
+  const toolsWithNoCaller = (count: number): SystemGraph =>
+    buildGraph(
+      [
+        orchestrator,
+        ...Array.from({ length: count }, (_unused, index) =>
+          componentDraft({ kind: 'tool', name: `tool_${index}`, file: `src/tools/${index}.ts` }),
+        ),
+      ],
+      [],
+    );
+
+  const evaluate = (graph: SystemGraph) =>
+    evaluateRules({
+      scanId: 'scan_0000000000000000',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      graph: indexGraph(graph),
+      context: {
+        delta: undefined,
+        runs: [],
+        benchmarks: [],
+        chaosReports: [],
+        scenarios: [],
+        evidenceById: new Map(),
+      },
+      rules: [unusedConfiguredToolRule],
+    }).findingSet.findings;
+
+  it('becomes one finding carrying the occurrence count', () => {
+    const findings = evaluate(toolsWithNoCaller(40));
+    assert.equal(findings.length, 1, 'forty instances of one pattern are one finding');
+    const finding = findings[0];
+    assert.match(finding?.title ?? '', /^40 tools are defined/);
+    assert.equal(
+      finding?.metrics.find((metric) => metric.name === 'occurrences')?.value,
+      40,
+      'the count has to survive the collapse',
+    );
+  });
+
+  it('states how many components it withheld rather than stopping silently', () => {
+    const finding = evaluate(toolsWithNoCaller(40))[0];
+    const withheld = finding?.metrics.find((metric) => metric.name === 'componentsWithheld');
+    assert.equal(withheld?.value, 15, 'forty components, twenty five listed');
+    assert.equal(withheld?.sampleSize, 40);
+    assert.equal(finding?.components.length, 25);
+    assert.match(
+      finding?.explanation ?? '',
+      /15 of the 40 affected components are not listed here/,
+    );
+  });
+
+  it('says nothing about occurrences when the pattern happened once', () => {
+    const finding = evaluate(toolsWithNoCaller(1))[0];
+    assert.equal(finding?.title, 'tool_0 is defined and nothing calls it');
+    assert.deepEqual(
+      finding?.metrics.filter((metric) => metric.name === 'occurrences'),
+      [],
+    );
+  });
+
+  it('names the proportion of tools it is talking about, with the sample size', () => {
+    const finding = evaluate(toolsWithNoCaller(3))[0];
+    const metric = finding?.metrics.find((metric) => metric.name === 'toolsWithoutCaller');
+    assert.equal(metric?.value, 3);
+    assert.equal(metric?.sampleSize, 3);
+    assert.match(finding?.explanation ?? '', /the caller is somewhere Orchescope did not read/);
+  });
+});
+
+describe('the order findings are reported in', () => {
+  it('never lets a repeated low finding sit above a high one', () => {
+    const noisy = Array.from({ length: 40 }, (_unused, index) =>
+      componentDraft({ kind: 'tool', name: `tool_${index}`, file: `src/tools/${index}.ts` }),
+    );
+    const graph = buildGraph(
+      [orchestrator, refund, ...noisy],
+      [
+        edgeDraft('calls_tool', orchestrator, refund, {
+          policy: {
+            retry: { maxAttempts: 3, bounded: true, backoff: 'exponential', idempotency: 'absent' },
+          },
+        } as Partial<EdgeDraft>),
+      ],
+    );
+    const findings = evaluateRules({
+      scanId: 'scan_0000000000000000',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      graph: indexGraph(graph),
+      context: {
+        delta: undefined,
+        runs: [],
+        benchmarks: [],
+        chaosReports: [],
+        scenarios: [],
+        evidenceById: new Map(),
+      },
+      rules: [unsafeRetryRule, unusedConfiguredToolRule],
+    }).findingSet.findings;
+
+    assert.equal(findings.length, 2);
+    assert.equal(findings[0]?.severity, 'high');
+    assert.equal(findings[1]?.severity, 'low');
+    assert.match(findings[1]?.title ?? '', /^40 tools/);
   });
 });

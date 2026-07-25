@@ -85,15 +85,15 @@
   "findings": {
     "byRule": {
       "observability-coverage": 1,
-      "prompt-injection-boundary": 18,
-      "topology-shape": 5
+      "prompt-injection-boundary": 1,
+      "topology-shape": 1
     },
     "bySeverity": {
-      "low": 5,
-      "medium": 19
+      "low": 1,
+      "medium": 2
     },
     "strengths": 0,
-    "total": 24
+    "total": 3
   },
   "kind": "agent_system",
   "languagesNotAnalysed": [],

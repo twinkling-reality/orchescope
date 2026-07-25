@@ -37,6 +37,10 @@ export const declaredNotExercisedRule: Rule = {
       const isTool = component.kind === 'tool';
       drafts.push({
         ruleId: 'declared-not-exercised',
+        occurrence: {
+          key: 'declared-not-exercised',
+          groupedTitle: '{count} declared components were never exercised by an ingested run',
+        },
         category: isTool ? 'maintainability' : 'scenario_coverage',
         polarity: 'risk',
         severity: isTool ? 'medium' : 'low',
@@ -76,6 +80,10 @@ export const exercisedNotDeclaredRule: Rule = {
       if (component === undefined) continue;
       drafts.push({
         ruleId: 'exercised-not-declared',
+        occurrence: {
+          key: 'exercised-not-declared',
+          groupedTitle: '{count} components ran without being declared anywhere in the repository',
+        },
         category: 'architecture',
         polarity: 'risk',
         severity:
@@ -124,6 +132,10 @@ export const contradictedDeclarationRule: Rule = {
         contradiction.kind === 'destructive_hint';
       return {
         ruleId: 'declaration-contradicted-by-observation',
+        occurrence: {
+          key: 'contradiction',
+          groupedTitle: '{count} declarations are contradicted by what was observed',
+        },
         category: isAnnotation ? 'security' : 'reliability',
         polarity: 'risk' as const,
         severity: isAnnotation ? ('high' as const) : ('medium' as const),
@@ -181,6 +193,10 @@ export const duplicateSideEffectRule: Rule = {
       });
       return {
         ruleId: 'duplicate-side-effect',
+        occurrence: {
+          key: 'duplicate',
+          groupedTitle: '{count} side effects happened more than once inside one run',
+        },
         category: 'reliability' as const,
         polarity: 'risk' as const,
         severity: duplicate.idempotencyKeyPresent ? ('medium' as const) : ('high' as const),

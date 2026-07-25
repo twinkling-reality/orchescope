@@ -88,21 +88,21 @@
   },
   "findings": {
     "byRule": {
-      "bounded-retry-with-declared-idempotency": 2,
+      "bounded-retry-with-declared-idempotency": 1,
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
       "retry-around-non-idempotent-operation": 1,
-      "side-effect-approval-boundary": 3,
+      "side-effect-approval-boundary": 2,
       "topology-shape": 1
     },
     "bySeverity": {
       "high": 1,
-      "info": 3,
+      "info": 2,
       "low": 1,
-      "medium": 4
+      "medium": 3
     },
-    "strengths": 3,
-    "total": 9
+    "strengths": 2,
+    "total": 7
   },
   "kind": "agent_system",
   "languagesNotAnalysed": [],

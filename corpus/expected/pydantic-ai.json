@@ -86,19 +86,19 @@
   },
   "findings": {
     "byRule": {
-      "model-call-without-timeout": 16,
+      "model-call-without-timeout": 1,
       "observability-coverage": 1,
-      "prompt-injection-boundary": 5,
-      "retry-around-non-idempotent-operation": 18,
-      "topology-shape": 15,
-      "unbounded-retry": 3
+      "prompt-injection-boundary": 1,
+      "retry-around-non-idempotent-operation": 1,
+      "topology-shape": 2,
+      "unbounded-retry": 1
     },
     "bySeverity": {
-      "low": 15,
-      "medium": 43
+      "low": 2,
+      "medium": 5
     },
     "strengths": 0,
-    "total": 58
+    "total": 7
   },
   "kind": "agent_system",
   "languagesNotAnalysed": [],

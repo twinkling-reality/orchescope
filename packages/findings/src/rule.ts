@@ -45,6 +45,17 @@ export type FindingDraft = {
   readonly impact: string;
   readonly components: readonly ComponentId[];
   readonly edges?: readonly EdgeId[];
+  /**
+   * Names the pattern this draft is one instance of.
+   *
+   * Two hundred instances of one pattern is one problem, not two hundred, so drafts from the same rule that
+   * carry the same key become one finding with an occurrence count and the affected components. A rule that
+   * reports one thing about the whole system leaves this unset and stays a finding of its own.
+   *
+   * `groupedTitle` is the title that finding carries, with `{count}` substituted. The rule owns the wording
+   * because only the rule knows what its instances are: components, relations or cycles.
+   */
+  readonly occurrence?: { readonly key: string; readonly groupedTitle: string };
   /** Evidence records created by this rule. The engine stores them and rewrites the references. */
   readonly newEvidence?: readonly Evidence[];
   readonly evidence: readonly EvidenceId[];
