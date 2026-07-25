@@ -30,9 +30,9 @@ tool.
 | 14. Packaging and distribution | done | `pnpm package`: stage `release/stage`, install the tarball and audit a project with it |
 | 15. Documentation and open source setup | done | `README.md`, `docs/`, `SECURITY.md`, `CONTRIBUTING.md`, CI workflows |
 | 16. Installable product | in progress | see below |
-| 17. Measured against real repositories | in progress | milestones 1 and 2 done: `pnpm corpus` across thirteen pinned repositories |
+| 17. Measured against real repositories | in progress | milestones 1 to 3 done: `pnpm corpus` across fourteen pinned repositories |
 
-589 unit and integration tests, 85 end to end tests, 10 browser tests. `pnpm verify` is green.
+594 unit and integration tests, 85 end to end tests, 10 browser tests. `pnpm verify` is green.
 
 ## Phase 16: what a stranger meets
 
@@ -118,7 +118,7 @@ and it is listed item by item because only some of it is done.
 
 ## Phase 17: measured against real repositories
 
-Milestones 1 and 2 are done, two remain. The reason for the phase is in the numbers above: every defect in phase 16 that
+Milestones 1 to 3 are done, one remains. The reason for the phase is in the numbers above: every defect in phase 16 that
 mattered was found by pointing the tool at a real repository, and none of them could have been found by the fixtures.
 Every adapter is validated against a fixture written by whoever wrote the adapter, which is circular: the fixture
 encodes what the author already believed.
@@ -130,7 +130,7 @@ where the grind pays.
 
 ### Milestone 1: the corpus harness. Done.
 
-`corpus/corpus.yaml` pins thirteen repositories: name, source, commit, `kind: agent_system | not_agent_system`, and why
+`corpus/corpus.yaml` pins fourteen repositories: name, source, commit, `kind: agent_system | not_agent_system`, and why
 each one is in the corpus. Third party source is never vendored; a git entry is cloned at its pinned commit into
 `corpus/.cache`, which git ignores, because licence compliance is a constraint rather than a footnote. A local entry
 names a directory of this repository and is copied from its tracked files, so it measures the working tree.
@@ -147,7 +147,7 @@ defect in an adapter.
 
 **Acceptance evidence.**
 
-- **`pnpm corpus` passes over thirteen repositories**, nine agent systems and four that are not. Every framework adapter
+- **`pnpm corpus` passes over fourteen repositories**, ten agent systems and four that are not. Every framework adapter
   contributes to at least one: OpenAI Agents SDK in both languages, LangGraph in both, CrewAI, Pydantic AI, the Vercel
   AI SDK read from an application rather than from the library that defines it, and the model SDK adapter from
   `anthropic-quickstarts`. `tests/e2e/corpus.test.ts` holds that coverage claim rather than trusting it, and fails if a
@@ -167,7 +167,7 @@ defect in an adapter.
 
 **What the corpus already says**, before a single new adapter is written:
 
-- **No relation was discarded anywhere.** The phase 16 fix holds across 13 repositories and 7284 components rather than
+- **No relation was discarded anywhere.** The phase 16 fix holds across 14 repositories and 9198 components rather than
   across the one repository that produced the crash.
 - **`pydantic-ai` parses 596 of 1808 discovered files.** Two thirds of that repository is invisible to the readers, and
   the expectation says so on every run instead of leaving it to be discovered again.
@@ -222,18 +222,40 @@ finding can become a bounded goal, then how much of the system it touches.
   discriminate rather than fire everywhere: `pydantic-ai` has 471 tools and no orphan among them, and the
   demonstration has none either.
 
-### Milestone 3: the runtime join on something other than the demonstration
+### Milestone 3: the runtime join on something other than the demonstration. Done.
 
-The declared against exercised delta is the defensible centre and it has only ever been shown on `apps/demo`.
+The delta had only ever been shown on `apps/demo`, which Orchescope also wrote, and a join that only works on its
+author's code is not evidence of anything.
 
-Get one corpus repository to produce spans and reconcile. The variables and the empty run message are in place; the
-open question is whether the join matches names on third party code. Expect mismatches: a LangGraph graph reports a
-generic name, and a Pydantic AI agent reports the name the library inferred. A name that cannot match is a finding
-about observability, not a silent gap. `trace --import` reads a file; importing from a running collector is the
-missing path, and it needs a design before an implementation.
+**Acceptance evidence.**
 
-**Acceptance evidence.** A corpus entry with a stored run whose delta is asserted, and a written account of every
-name that failed to match and why.
+- **A corpus entry with a stored run whose delta is asserted.** `pydantic-ai-exercised` pins the same commit as the
+  static entry and carries an `exercise` block: `pnpm corpus:exercise` builds a virtual environment under the ignored
+  cache, installs the checkout's own packages, and runs the repository's `bank_support` example through
+  `orchescope trace` with the library's own offline model. No provider is called, no credential is used, and the
+  driver turns model requests off so an attempted one raises instead of being sent. Four spans arrive, and
+  `corpus/expected/pydantic-ai-exercised.json` holds the delta by identity rather than by count: joined
+  `model:test` and `tool:customer_balance`, exercised and never declared `agent:agent`, three of 917 components
+  exercised. It is a second entry rather than a flag on the first because a stored run adds components and relations
+  to the graph, and one expectation cannot describe a repository both with and without its own run. Without
+  `--exercise` it is skipped and the skip is printed.
+- **A written account of every name that failed to match and why**, in
+  [`docs/research/runtime-join-on-third-party-code.md`](docs/research/runtime-join-on-third-party-code.md). In short:
+  a decorated tool joined with nothing configured, which is the result that matters; an agent the example never named
+  arrived as `agent` and could not join, so the same agent was counted in both directions; a model named `test` joined
+  to a declaration in a different file, which is a real match for the wrong reason and a consequence of identity being
+  scoped to a repository rather than to a module; and the provider was never attempted, because provider identity is
+  read from a declaration and not from a span.
+- **A name that cannot match is now a finding about observability rather than a silent gap.**
+  `exercised-not-declared` used to say the component "runs without being declared anywhere in the repository", which
+  was false: it was declared, under a name the run did not report. `observed-name-carries-no-identity` reports that
+  case instead, with the bounded fix and a rerun as its check. The comparison is on the shape of the name rather than
+  on a list of the fallback names each library uses, because such a list is wrong the moment one of them changes.
+  Evidence: five tests in `packages/findings/test/reconciliation-rules.test.ts`.
+
+**Still open.** `trace --import` reads a file; importing from a running collector is the missing path and still needs
+a design. Scoping component identity to a module rather than to a repository is the fix for the accidental match, and
+it is a design question rather than a patch.
 
 ### Milestone 4: the breadth ceiling, decided from evidence
 

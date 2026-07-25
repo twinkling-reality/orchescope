@@ -52,6 +52,7 @@ Every persisted document is versioned and emitted as JSON Schema under `schemas/
 
 The evidence behind the product and stack decisions, recorded with sources and measurements.
 
+- [The runtime join on code this repository did not write](research/runtime-join-on-third-party-code.md)
 - [Ecosystem analysis](research/ecosystem-analysis.md)
 - [Competitive boundary](research/competitive-boundary.md)
 - [Stack evaluation](research/stack-evaluation.md)
