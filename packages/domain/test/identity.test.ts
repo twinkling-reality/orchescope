@@ -68,8 +68,16 @@ describe('local name normalisation', () => {
 
 describe('identity stability', () => {
   it('is unchanged when the line number moves', () => {
-    const first = buildIdentity('agent', moduleNamespace('src/agents/orchestrator.ts'), 'orchestrator');
-    const second = buildIdentity('agent', moduleNamespace('src/agents/orchestrator.ts'), 'orchestrator');
+    const first = buildIdentity(
+      'agent',
+      moduleNamespace('src/agents/orchestrator.ts'),
+      'orchestrator',
+    );
+    const second = buildIdentity(
+      'agent',
+      moduleNamespace('src/agents/orchestrator.ts'),
+      'orchestrator',
+    );
     assert.equal(identityKey(first), identityKey(second));
     assert.equal(identityFingerprint(first), identityFingerprint(second));
     assert.equal(componentId(first), 'agent:orchestrator');

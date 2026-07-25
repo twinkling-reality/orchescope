@@ -1,0 +1,1033 @@
+{
+  "$id": "urn:orchescope:schema:benchmark:1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "dimension": {
+      "anyOf": [
+        {
+          "const": "agent_count",
+          "type": "string"
+        },
+        {
+          "const": "worker_count",
+          "type": "string"
+        },
+        {
+          "const": "traffic_concurrency",
+          "type": "string"
+        },
+        {
+          "const": "topology",
+          "type": "string"
+        },
+        {
+          "const": "model_config",
+          "type": "string"
+        },
+        {
+          "const": "prompt_version",
+          "type": "string"
+        },
+        {
+          "const": "tool_config",
+          "type": "string"
+        },
+        {
+          "const": "git_ref",
+          "type": "string"
+        }
+      ]
+    },
+    "environment": {
+      "additionalProperties": false,
+      "properties": {
+        "arch": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "cpuCount": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cpuModel": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "loadAverage1m": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "orchescopeVersion": {
+          "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+          "type": "string"
+        },
+        "platform": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "runtimeName": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "runtimeVersion": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "totalMemoryBytes": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "orchescopeVersion",
+        "platform",
+        "arch",
+        "cpuCount",
+        "totalMemoryBytes",
+        "runtimeName",
+        "runtimeVersion"
+      ],
+      "type": "object"
+    },
+    "finishedAt": {
+      "description": "UTC timestamp, RFC 3339 with millisecond precision.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+      "type": "string"
+    },
+    "id": {
+      "pattern": "^bench_[0-9a-f]{16}$",
+      "type": "string"
+    },
+    "limitations": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "metadata": {
+      "description": "Shallow, JSON scalar metadata. Never used to carry secrets.",
+      "patternProperties": {
+        "^(.*)$": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              },
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "scenarioId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "scenarioVersion": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "startedAt": {
+      "description": "UTC timestamp, RFC 3339 with millisecond precision.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+      "type": "string"
+    },
+    "variants": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "aggregateMetrics": {
+            "additionalProperties": false,
+            "properties": {
+              "agentSteps": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "costUsd": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "duplicateSideEffects": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "durationMs": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "errors": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "handoffs": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "inputTokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "loopIterations": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxObservedConcurrency": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "memoryOperations": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "modelCalls": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "outputTokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "policyViolations": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "prohibitedSideEffects": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "queueWaitMs": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "recoveredErrors": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "retries": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "retrievalCalls": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sideEffects": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "taskSuccess": {
+                "type": "boolean"
+              },
+              "timeToFirstOutputMs": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "toolCalls": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "userInterventions": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "durationMs",
+              "modelCalls",
+              "toolCalls",
+              "agentSteps",
+              "handoffs",
+              "retrievalCalls",
+              "memoryOperations",
+              "inputTokens",
+              "outputTokens",
+              "errors",
+              "retries",
+              "recoveredErrors",
+              "duplicateSideEffects",
+              "prohibitedSideEffects",
+              "sideEffects",
+              "userInterventions",
+              "policyViolations",
+              "maxObservedConcurrency",
+              "loopIterations"
+            ],
+            "type": "object"
+          },
+          "completedRuns": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "costUsd": {
+            "additionalProperties": false,
+            "properties": {
+              "max": {
+                "type": "number"
+              },
+              "mean": {
+                "type": "number"
+              },
+              "min": {
+                "type": "number"
+              },
+              "p50": {
+                "type": "number"
+              },
+              "p90": {
+                "type": "number"
+              },
+              "p95": {
+                "type": "number"
+              },
+              "p99": {
+                "type": "number"
+              },
+              "sampleSize": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "stdDev": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "values": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "withheld": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "quantile": {
+                      "anyOf": [
+                        {
+                          "const": "p50",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p90",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p95",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p99",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "requiredSamples": {
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "quantile",
+                    "requiredSamples"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "sampleSize",
+              "withheld",
+              "values"
+            ],
+            "type": "object"
+          },
+          "durationMs": {
+            "additionalProperties": false,
+            "properties": {
+              "max": {
+                "type": "number"
+              },
+              "mean": {
+                "type": "number"
+              },
+              "min": {
+                "type": "number"
+              },
+              "p50": {
+                "type": "number"
+              },
+              "p90": {
+                "type": "number"
+              },
+              "p95": {
+                "type": "number"
+              },
+              "p99": {
+                "type": "number"
+              },
+              "sampleSize": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "stdDev": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "values": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "withheld": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "quantile": {
+                      "anyOf": [
+                        {
+                          "const": "p50",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p90",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p95",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p99",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "requiredSamples": {
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "quantile",
+                    "requiredSamples"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "sampleSize",
+              "withheld",
+              "values"
+            ],
+            "type": "object"
+          },
+          "evaluators": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "detail": {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                "kind": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "passed": {
+                  "type": "boolean"
+                },
+                "skipReason": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "skipped": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "kind",
+                "passed",
+                "detail"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "failedRuns": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "modelCalls": {
+            "additionalProperties": false,
+            "properties": {
+              "max": {
+                "type": "number"
+              },
+              "mean": {
+                "type": "number"
+              },
+              "min": {
+                "type": "number"
+              },
+              "p50": {
+                "type": "number"
+              },
+              "p90": {
+                "type": "number"
+              },
+              "p95": {
+                "type": "number"
+              },
+              "p99": {
+                "type": "number"
+              },
+              "sampleSize": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "stdDev": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "values": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "withheld": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "quantile": {
+                      "anyOf": [
+                        {
+                          "const": "p50",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p90",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p95",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p99",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "requiredSamples": {
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "quantile",
+                    "requiredSamples"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "sampleSize",
+              "withheld",
+              "values"
+            ],
+            "type": "object"
+          },
+          "repetitions": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "retries": {
+            "additionalProperties": false,
+            "properties": {
+              "max": {
+                "type": "number"
+              },
+              "mean": {
+                "type": "number"
+              },
+              "min": {
+                "type": "number"
+              },
+              "p50": {
+                "type": "number"
+              },
+              "p90": {
+                "type": "number"
+              },
+              "p95": {
+                "type": "number"
+              },
+              "p99": {
+                "type": "number"
+              },
+              "sampleSize": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "stdDev": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "values": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "withheld": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "quantile": {
+                      "anyOf": [
+                        {
+                          "const": "p50",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p90",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p95",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p99",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "requiredSamples": {
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "quantile",
+                    "requiredSamples"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "sampleSize",
+              "withheld",
+              "values"
+            ],
+            "type": "object"
+          },
+          "runIds": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "successRate": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "timeToFirstOutputMs": {
+            "additionalProperties": false,
+            "properties": {
+              "max": {
+                "type": "number"
+              },
+              "mean": {
+                "type": "number"
+              },
+              "min": {
+                "type": "number"
+              },
+              "p50": {
+                "type": "number"
+              },
+              "p90": {
+                "type": "number"
+              },
+              "p95": {
+                "type": "number"
+              },
+              "p99": {
+                "type": "number"
+              },
+              "sampleSize": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "stdDev": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "values": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "withheld": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "quantile": {
+                      "anyOf": [
+                        {
+                          "const": "p50",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p90",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p95",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p99",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "requiredSamples": {
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "quantile",
+                    "requiredSamples"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "sampleSize",
+              "withheld",
+              "values"
+            ],
+            "type": "object"
+          },
+          "toolCalls": {
+            "additionalProperties": false,
+            "properties": {
+              "max": {
+                "type": "number"
+              },
+              "mean": {
+                "type": "number"
+              },
+              "min": {
+                "type": "number"
+              },
+              "p50": {
+                "type": "number"
+              },
+              "p90": {
+                "type": "number"
+              },
+              "p95": {
+                "type": "number"
+              },
+              "p99": {
+                "type": "number"
+              },
+              "sampleSize": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "stdDev": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "values": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "withheld": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "quantile": {
+                      "anyOf": [
+                        {
+                          "const": "p50",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p90",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p95",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p99",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "requiredSamples": {
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "quantile",
+                    "requiredSamples"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "sampleSize",
+              "withheld",
+              "values"
+            ],
+            "type": "object"
+          },
+          "totalTokens": {
+            "additionalProperties": false,
+            "properties": {
+              "max": {
+                "type": "number"
+              },
+              "mean": {
+                "type": "number"
+              },
+              "min": {
+                "type": "number"
+              },
+              "p50": {
+                "type": "number"
+              },
+              "p90": {
+                "type": "number"
+              },
+              "p95": {
+                "type": "number"
+              },
+              "p99": {
+                "type": "number"
+              },
+              "sampleSize": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "stdDev": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "values": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "withheld": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "quantile": {
+                      "anyOf": [
+                        {
+                          "const": "p50",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p90",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p95",
+                          "type": "string"
+                        },
+                        {
+                          "const": "p99",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "requiredSamples": {
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "quantile",
+                    "requiredSamples"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "sampleSize",
+              "withheld",
+              "values"
+            ],
+            "type": "object"
+          },
+          "variant": {
+            "additionalProperties": false,
+            "properties": {
+              "agents": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "concurrency": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "env": {
+                "patternProperties": {
+                  "^[A-Za-z_][A-Za-z0-9_]*$": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "model": {
+                "additionalProperties": false,
+                "properties": {
+                  "model": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "provider": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "temperature": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "provider",
+                  "model"
+                ],
+                "type": "object"
+              },
+              "promptVersion": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "toolConfig": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "topology": {
+                "description": "Named topology understood by the target.",
+                "minLength": 1,
+                "type": "string"
+              },
+              "workers": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "variantId": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "variantId",
+          "variant",
+          "runIds",
+          "repetitions",
+          "completedRuns",
+          "failedRuns",
+          "durationMs",
+          "totalTokens",
+          "modelCalls",
+          "toolCalls",
+          "retries",
+          "aggregateMetrics",
+          "evaluators"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "warmupRuns": {
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "scenarioId",
+    "scenarioVersion",
+    "dimension",
+    "startedAt",
+    "finishedAt",
+    "environment",
+    "warmupRuns",
+    "variants",
+    "limitations",
+    "metadata"
+  ],
+  "type": "object"
+}

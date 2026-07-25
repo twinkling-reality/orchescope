@@ -1,6 +1,7 @@
 import { type Static, Type } from '@sinclair/typebox';
 import { VariantResult } from './benchmark.ts';
 import { FaultKind } from './chaos.ts';
+import { EvaluatorResult } from './evaluator.ts';
 import {
   Document,
   literals,
@@ -10,7 +11,6 @@ import {
   Timestamp,
 } from './primitives.ts';
 import { RunEnvironment, RunMetrics } from './run.ts';
-import { EvaluatorResult } from './evaluator.ts';
 import { SideEffectRecord } from './trace.ts';
 import { SCHEMA_VERSIONS, schemaId } from './version.ts';
 

@@ -1,5 +1,5 @@
 import { type Static, Type } from '@sinclair/typebox';
-import { NonEmptyString, NonNegativeInt, PositiveInt, literals } from './primitives.ts';
+import { literals, NonEmptyString, NonNegativeInt, PositiveInt } from './primitives.ts';
 
 /**
  * Evaluators decide whether a scenario run satisfied its expectations.

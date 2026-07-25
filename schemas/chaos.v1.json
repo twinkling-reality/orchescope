@@ -1,0 +1,385 @@
+{
+  "$id": "urn:orchescope:schema:chaos:1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "baselineRunId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "environment": {
+      "anyOf": [
+        {
+          "const": "local_deterministic",
+          "type": "string"
+        },
+        {
+          "const": "declared_test",
+          "type": "string"
+        },
+        {
+          "const": "live",
+          "type": "string"
+        }
+      ]
+    },
+    "finishedAt": {
+      "description": "UTC timestamp, RFC 3339 with millisecond precision.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+      "type": "string"
+    },
+    "id": {
+      "pattern": "^chaos_[0-9a-f]{16}$",
+      "type": "string"
+    },
+    "metadata": {
+      "description": "Shallow, JSON scalar metadata. Never used to carry secrets.",
+      "patternProperties": {
+        "^(.*)$": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              },
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "notApplied": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "faultKind": {
+            "anyOf": [
+              {
+                "const": "model_timeout",
+                "type": "string"
+              },
+              {
+                "const": "model_rate_limited",
+                "type": "string"
+              },
+              {
+                "const": "model_server_error",
+                "type": "string"
+              },
+              {
+                "const": "model_malformed_structured_output",
+                "type": "string"
+              },
+              {
+                "const": "model_stream_interrupted",
+                "type": "string"
+              },
+              {
+                "const": "tool_timeout",
+                "type": "string"
+              },
+              {
+                "const": "tool_exception",
+                "type": "string"
+              },
+              {
+                "const": "tool_malformed_result",
+                "type": "string"
+              },
+              {
+                "const": "tool_stale_result",
+                "type": "string"
+              },
+              {
+                "const": "retrieval_empty",
+                "type": "string"
+              },
+              {
+                "const": "retrieval_slow",
+                "type": "string"
+              },
+              {
+                "const": "worker_unavailable",
+                "type": "string"
+              },
+              {
+                "const": "queue_delay",
+                "type": "string"
+              },
+              {
+                "const": "auth_expired",
+                "type": "string"
+              },
+              {
+                "const": "side_effect_partial_success",
+                "type": "string"
+              },
+              {
+                "const": "duplicate_response",
+                "type": "string"
+              },
+              {
+                "const": "context_corruption",
+                "type": "string"
+              },
+              {
+                "const": "prompt_injection_in_content",
+                "type": "string"
+              }
+            ],
+            "description": "Fault classes Orchescope can inject into an agent system."
+          },
+          "reason": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "target": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "faultKind",
+          "target",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "outcomes": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "appliedCount": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "costAmplification": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "degradedGracefully": {
+            "type": "boolean"
+          },
+          "duplicateSideEffects": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "evaluators": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "detail": {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                "kind": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "passed": {
+                  "type": "boolean"
+                },
+                "skipReason": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "skipped": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "kind",
+                "passed",
+                "detail"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "faultKind": {
+            "anyOf": [
+              {
+                "const": "model_timeout",
+                "type": "string"
+              },
+              {
+                "const": "model_rate_limited",
+                "type": "string"
+              },
+              {
+                "const": "model_server_error",
+                "type": "string"
+              },
+              {
+                "const": "model_malformed_structured_output",
+                "type": "string"
+              },
+              {
+                "const": "model_stream_interrupted",
+                "type": "string"
+              },
+              {
+                "const": "tool_timeout",
+                "type": "string"
+              },
+              {
+                "const": "tool_exception",
+                "type": "string"
+              },
+              {
+                "const": "tool_malformed_result",
+                "type": "string"
+              },
+              {
+                "const": "tool_stale_result",
+                "type": "string"
+              },
+              {
+                "const": "retrieval_empty",
+                "type": "string"
+              },
+              {
+                "const": "retrieval_slow",
+                "type": "string"
+              },
+              {
+                "const": "worker_unavailable",
+                "type": "string"
+              },
+              {
+                "const": "queue_delay",
+                "type": "string"
+              },
+              {
+                "const": "auth_expired",
+                "type": "string"
+              },
+              {
+                "const": "side_effect_partial_success",
+                "type": "string"
+              },
+              {
+                "const": "duplicate_response",
+                "type": "string"
+              },
+              {
+                "const": "context_corruption",
+                "type": "string"
+              },
+              {
+                "const": "prompt_injection_in_content",
+                "type": "string"
+              }
+            ],
+            "description": "Fault classes Orchescope can inject into an agent system."
+          },
+          "loopIterations": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "policyViolations": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "prohibitedSideEffects": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "recovered": {
+            "type": "boolean"
+          },
+          "recoveryTimeMs": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "retryAmplification": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "runId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "target": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "taskCompleted": {
+            "type": "boolean"
+          },
+          "userInterventions": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "faultKind",
+          "target",
+          "appliedCount",
+          "runId",
+          "taskCompleted",
+          "recovered",
+          "duplicateSideEffects",
+          "prohibitedSideEffects",
+          "userInterventions",
+          "loopIterations",
+          "degradedGracefully",
+          "policyViolations",
+          "evaluators"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "scenarioId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "startedAt": {
+      "description": "UTC timestamp, RFC 3339 with millisecond precision.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "scenarioId",
+    "environment",
+    "startedAt",
+    "finishedAt",
+    "baselineRunId",
+    "outcomes",
+    "notApplied",
+    "metadata"
+  ],
+  "type": "object"
+}

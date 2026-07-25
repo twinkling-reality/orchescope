@@ -2,6 +2,7 @@ import { type Static, Type } from '@sinclair/typebox';
 import { BenchmarkReport } from './benchmark.ts';
 import { ChaosReport } from './chaos.ts';
 import { Comparison } from './comparison.ts';
+import { EvaluatorResult } from './evaluator.ts';
 import { Evidence } from './evidence.ts';
 import { Finding } from './finding.ts';
 import { Goal } from './goal.ts';
@@ -17,7 +18,6 @@ import {
 } from './primitives.ts';
 import { ReconciliationDelta } from './reconciliation.ts';
 import { ComponentRunMetrics, RunRecord } from './run.ts';
-import { EvaluatorResult } from './evaluator.ts';
 import { Scenario } from './scenario.ts';
 import { SCHEMA_VERSIONS, schemaId } from './version.ts';
 

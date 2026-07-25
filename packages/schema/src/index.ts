@@ -66,6 +66,12 @@ export {
   EdgePolicy,
 } from './edge.ts';
 export {
+  EffectExpectation,
+  Evaluator,
+  type EvaluatorKind,
+  EvaluatorResult,
+} from './evaluator.ts';
+export {
   AbsenceEvidence,
   Claim,
   ClaimBasis,
@@ -160,12 +166,6 @@ export {
   ObservedEdge,
   RuntimeTopology,
 } from './runtime-topology.ts';
-export {
-  EffectExpectation,
-  Evaluator,
-  type EvaluatorKind,
-  EvaluatorResult,
-} from './evaluator.ts';
 export {
   ResultSource,
   Scenario,

@@ -67,7 +67,10 @@ export const DuplicateSideEffect = Type.Object(
       description: 'kind + target + idempotency key, or kind + target when no key exists.',
     }),
     componentId: Type.Optional(ComponentId),
+    /** Occurrences inside the single run that repeated it most. This is the number that means duplication. */
     occurrences: NonNegativeInt,
+    /** Occurrences across every run considered, which is a history rather than a duplication count. */
+    totalOccurrences: NonNegativeInt,
     retryAttempts: Type.Array(NonNegativeInt),
     idempotencyKeyPresent: Type.Boolean(),
     runIds: Type.Array(NonEmptyString(), { minItems: 1 }),

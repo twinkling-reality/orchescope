@@ -1,0 +1,317 @@
+{
+  "$id": "urn:orchescope:schema:config:1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "analysis": {
+      "additionalProperties": false,
+      "properties": {
+        "concurrency": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "exclude": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "followSymlinks": {
+          "type": "boolean"
+        },
+        "include": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "maxFileBytes": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maxFiles": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "timeoutMs": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "include",
+        "exclude",
+        "maxFileBytes",
+        "maxFiles",
+        "concurrency",
+        "followSymlinks",
+        "timeoutMs"
+      ],
+      "type": "object"
+    },
+    "policy": {
+      "additionalProperties": false,
+      "properties": {
+        "allowFilesystemWrites": {
+          "type": "boolean"
+        },
+        "allowOutboundNetwork": {
+          "type": "boolean"
+        },
+        "allowPaidModels": {
+          "type": "boolean"
+        },
+        "allowProcessSpawn": {
+          "type": "boolean"
+        },
+        "allowedChaosEnvironments": {
+          "items": {
+            "anyOf": [
+              {
+                "const": "local_deterministic",
+                "type": "string"
+              },
+              {
+                "const": "declared_test",
+                "type": "string"
+              },
+              {
+                "const": "live",
+                "type": "string"
+              }
+            ]
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "allowedCommands": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "maxConcurrentRuns": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maxCostUsd": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "maxRunDurationMs": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maxTotalRuns": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "allowProcessSpawn",
+        "allowOutboundNetwork",
+        "allowPaidModels",
+        "allowFilesystemWrites",
+        "maxCostUsd",
+        "maxRunDurationMs",
+        "maxConcurrentRuns",
+        "maxTotalRuns",
+        "allowedChaosEnvironments",
+        "allowedCommands"
+      ],
+      "type": "object"
+    },
+    "projectName": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "redaction": {
+      "additionalProperties": false,
+      "properties": {
+        "extraPatterns": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sensitiveEnvFragments": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "extraPatterns",
+        "sensitiveEnvFragments"
+      ],
+      "type": "object"
+    },
+    "report": {
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "anyOf": [
+            {
+              "const": "127.0.0.1",
+              "type": "string"
+            },
+            {
+              "const": "::1",
+              "type": "string"
+            }
+          ]
+        },
+        "openByDefault": {
+          "type": "boolean"
+        },
+        "port": {
+          "description": "Zero asks the operating system for an unused port.",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "retainReports": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "host",
+        "port",
+        "openByDefault",
+        "retainReports"
+      ],
+      "type": "object"
+    },
+    "runtime": {
+      "additionalProperties": false,
+      "properties": {
+        "exportDrainMs": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maxRequestBytes": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maxSpanAttributeBytes": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maxSpansPerRun": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "receiverHost": {
+          "anyOf": [
+            {
+              "const": "127.0.0.1",
+              "type": "string"
+            },
+            {
+              "const": "::1",
+              "type": "string"
+            }
+          ]
+        },
+        "receiverPort": {
+          "description": "Zero asks the operating system for an unused port.",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "receiverHost",
+        "receiverPort",
+        "maxSpansPerRun",
+        "maxSpanAttributeBytes",
+        "maxRequestBytes",
+        "exportDrainMs"
+      ],
+      "type": "object"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "semanticAnalysis": {
+      "additionalProperties": false,
+      "properties": {
+        "apiKeyEnv": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "baseUrlEnv": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "maxCostUsd": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "maxTasks": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxTokensPerTask": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "model": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "provider": {
+          "anyOf": [
+            {
+              "const": "none",
+              "type": "string"
+            },
+            {
+              "const": "openai_compatible",
+              "type": "string"
+            },
+            {
+              "const": "anthropic",
+              "type": "string"
+            }
+          ]
+        },
+        "requestTimeoutMs": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "enabled",
+        "provider",
+        "model",
+        "maxTasks",
+        "maxTokensPerTask",
+        "maxCostUsd",
+        "requestTimeoutMs"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "analysis",
+    "runtime",
+    "report",
+    "policy",
+    "semanticAnalysis",
+    "redaction"
+  ],
+  "type": "object"
+}

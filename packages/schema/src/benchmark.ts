@@ -1,4 +1,5 @@
 import { type Static, Type } from '@sinclair/typebox';
+import { EvaluatorResult } from './evaluator.ts';
 import {
   Document,
   literals,
@@ -10,7 +11,6 @@ import {
   Timestamp,
 } from './primitives.ts';
 import { RunEnvironment, RunMetrics } from './run.ts';
-import { EvaluatorResult } from './evaluator.ts';
 import { ScenarioVariant } from './scenario.ts';
 import { SCHEMA_VERSIONS, schemaId } from './version.ts';
 

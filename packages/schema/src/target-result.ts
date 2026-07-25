@@ -1,5 +1,5 @@
 import { type Static, Type } from '@sinclair/typebox';
-import { Metadata, NonEmptyString, NonNegativeInt, literals } from './primitives.ts';
+import { literals, Metadata, NonEmptyString, NonNegativeInt } from './primitives.ts';
 
 /**
  * The target result protocol.
@@ -22,7 +22,9 @@ export const TargetResult = Type.Object(
             kind: NonEmptyString(),
             target: NonEmptyString(),
             idempotencyKey: Type.Optional(NonEmptyString()),
-            outcome: Type.Optional(literals(['succeeded', 'failed', 'partial', 'unknown'] as const)),
+            outcome: Type.Optional(
+              literals(['succeeded', 'failed', 'partial', 'unknown'] as const),
+            ),
           },
           { additionalProperties: false },
         ),

@@ -1,0 +1,605 @@
+{
+  "$id": "urn:orchescope:schema:finding:1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "findings": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "basis": {
+            "anyOf": [
+              {
+                "const": "observed",
+                "type": "string"
+              },
+              {
+                "const": "discovered",
+                "type": "string"
+              },
+              {
+                "const": "inferred",
+                "type": "string"
+              },
+              {
+                "const": "estimated",
+                "type": "string"
+              },
+              {
+                "const": "simulated",
+                "type": "string"
+              },
+              {
+                "const": "model_interpreted",
+                "type": "string"
+              }
+            ],
+            "description": "observed: seen in a runtime trace. discovered: read from source or configuration. inferred: derived from other evidence by a deterministic rule. estimated: computed from a model of the system rather than measured. simulated: produced under injected faults. model_interpreted: proposed by a language model and reviewed against supplied evidence."
+          },
+          "category": {
+            "anyOf": [
+              {
+                "const": "architecture",
+                "type": "string"
+              },
+              {
+                "const": "performance",
+                "type": "string"
+              },
+              {
+                "const": "cost",
+                "type": "string"
+              },
+              {
+                "const": "reliability",
+                "type": "string"
+              },
+              {
+                "const": "resilience",
+                "type": "string"
+              },
+              {
+                "const": "security",
+                "type": "string"
+              },
+              {
+                "const": "permissions",
+                "type": "string"
+              },
+              {
+                "const": "agent_complexity",
+                "type": "string"
+              },
+              {
+                "const": "maintainability",
+                "type": "string"
+              },
+              {
+                "const": "scenario_coverage",
+                "type": "string"
+              },
+              {
+                "const": "observability",
+                "type": "string"
+              }
+            ]
+          },
+          "components": {
+            "items": {
+              "description": "Stable component identifier, for example \"agent:orchestrator\" or \"tool:refund~1a2b3c\".",
+              "pattern": "^[a-z_]+:[a-z0-9@][a-z0-9_.@/-]*(?:~[0-9a-f]{6})?$",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "confidence": {
+            "description": "Confidence in the claim, from 0 to 1.",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "conflictsWith": {
+            "items": {
+              "pattern": "^OSC-[A-Z]{3,5}-\\d{4}$",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "createdAt": {
+            "description": "UTC timestamp, RFC 3339 with millisecond precision.",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+            "type": "string"
+          },
+          "edges": {
+            "items": {
+              "description": "Stable edge identifier derived from edge kind plus endpoint identities.",
+              "pattern": "^[a-z_]+:[0-9a-f]{16}$",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "evidence": {
+            "items": {
+              "pattern": "^ev_[0-9a-f]{16}$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "explanation": {
+            "description": "Two to five sentences explaining the mechanism.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "goalReadiness": {
+            "additionalProperties": false,
+            "properties": {
+              "eligible": {
+                "type": "boolean"
+              },
+              "reason": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "requiresHumanReview": {
+                "type": "boolean"
+              },
+              "requiresRuntimeEvidence": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "eligible",
+              "reason",
+              "requiresRuntimeEvidence",
+              "requiresHumanReview"
+            ],
+            "type": "object"
+          },
+          "id": {
+            "pattern": "^OSC-[A-Z]{3,5}-\\d{4}$",
+            "type": "string"
+          },
+          "impact": {
+            "description": "What this costs or risks, phrased in observable terms.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "metadata": {
+            "description": "Shallow, JSON scalar metadata. Never used to carry secrets.",
+            "patternProperties": {
+              "^(.*)$": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "metrics": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "basis": {
+                  "anyOf": [
+                    {
+                      "const": "observed",
+                      "type": "string"
+                    },
+                    {
+                      "const": "discovered",
+                      "type": "string"
+                    },
+                    {
+                      "const": "inferred",
+                      "type": "string"
+                    },
+                    {
+                      "const": "estimated",
+                      "type": "string"
+                    },
+                    {
+                      "const": "simulated",
+                      "type": "string"
+                    },
+                    {
+                      "const": "model_interpreted",
+                      "type": "string"
+                    }
+                  ],
+                  "description": "observed: seen in a runtime trace. discovered: read from source or configuration. inferred: derived from other evidence by a deterministic rule. estimated: computed from a model of the system rather than measured. simulated: produced under injected faults. model_interpreted: proposed by a language model and reviewed against supplied evidence."
+                },
+                "comparisonValue": {
+                  "type": "number"
+                },
+                "name": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "sampleSize": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "unit": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "value": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "name",
+                "value",
+                "unit",
+                "sampleSize",
+                "basis"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "polarity": {
+            "anyOf": [
+              {
+                "const": "risk",
+                "type": "string"
+              },
+              {
+                "const": "strength",
+                "type": "string"
+              }
+            ]
+          },
+          "recommendation": {
+            "additionalProperties": false,
+            "properties": {
+              "effort": {
+                "anyOf": [
+                  {
+                    "const": "small",
+                    "type": "string"
+                  },
+                  {
+                    "const": "medium",
+                    "type": "string"
+                  },
+                  {
+                    "const": "large",
+                    "type": "string"
+                  },
+                  {
+                    "const": "unknown",
+                    "type": "string"
+                  }
+                ]
+              },
+              "risk": {
+                "anyOf": [
+                  {
+                    "const": "low",
+                    "type": "string"
+                  },
+                  {
+                    "const": "medium",
+                    "type": "string"
+                  },
+                  {
+                    "const": "high",
+                    "type": "string"
+                  },
+                  {
+                    "const": "unknown",
+                    "type": "string"
+                  }
+                ]
+              },
+              "steps": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "summary": {
+                "description": "What to change, in one sentence.",
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "summary",
+              "steps",
+              "effort",
+              "risk"
+            ],
+            "type": "object"
+          },
+          "ruleId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "const": "critical",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "type": "string"
+              },
+              {
+                "const": "medium",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "type": "string"
+              },
+              {
+                "const": "info",
+                "type": "string"
+              }
+            ]
+          },
+          "sourceLocations": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "endColumn": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "endLine": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "file": {
+                  "description": "Repository relative POSIX path.",
+                  "minLength": 1,
+                  "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                  "type": "string"
+                },
+                "fileHash": {
+                  "description": "Lowercase hexadecimal SHA-256 digest.",
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "startColumn": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "startLine": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "file",
+                "startLine"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "suggestedExperiment": {
+            "additionalProperties": false,
+            "properties": {
+              "command": {
+                "description": "Argv of the command to run.",
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "description": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "expectedSignal": {
+                "description": "The measurement that would confirm or refute this.",
+                "minLength": 1,
+                "type": "string"
+              },
+              "scenarioId": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "description",
+              "command",
+              "expectedSignal"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "taxonomy": {
+            "items": {
+              "pattern": "^(owasp-llm|owasp-asi|atlas|cwe|mast):[A-Za-z0-9.\\-]+$",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "description": "One line, specific, no advice verbs.",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ruleId",
+          "category",
+          "polarity",
+          "severity",
+          "confidence",
+          "basis",
+          "title",
+          "explanation",
+          "impact",
+          "components",
+          "edges",
+          "sourceLocations",
+          "evidence",
+          "metrics",
+          "goalReadiness",
+          "taxonomy",
+          "conflictsWith",
+          "tags",
+          "createdAt",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "generatedAt": {
+      "description": "UTC timestamp, RFC 3339 with millisecond precision.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+      "type": "string"
+    },
+    "rulesEvaluated": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "const": "architecture",
+                "type": "string"
+              },
+              {
+                "const": "performance",
+                "type": "string"
+              },
+              {
+                "const": "cost",
+                "type": "string"
+              },
+              {
+                "const": "reliability",
+                "type": "string"
+              },
+              {
+                "const": "resilience",
+                "type": "string"
+              },
+              {
+                "const": "security",
+                "type": "string"
+              },
+              {
+                "const": "permissions",
+                "type": "string"
+              },
+              {
+                "const": "agent_complexity",
+                "type": "string"
+              },
+              {
+                "const": "maintainability",
+                "type": "string"
+              },
+              {
+                "const": "scenario_coverage",
+                "type": "string"
+              },
+              {
+                "const": "observability",
+                "type": "string"
+              }
+            ]
+          },
+          "detail": {
+            "maxLength": 500,
+            "type": "string"
+          },
+          "ruleId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "const": "fired",
+                "type": "string"
+              },
+              {
+                "const": "clear",
+                "type": "string"
+              },
+              {
+                "const": "insufficient_evidence",
+                "type": "string"
+              },
+              {
+                "const": "not_applicable",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ruleId",
+          "category",
+          "status"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "scanId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "scanId",
+    "generatedAt",
+    "findings",
+    "rulesEvaluated"
+  ],
+  "type": "object"
+}

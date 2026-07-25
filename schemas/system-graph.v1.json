@@ -1,0 +1,1683 @@
+{
+  "$id": "urn:orchescope:schema:system-graph:1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "components": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "aliases": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "disambiguator": {
+                  "description": "Truncated lowercase hexadecimal digest used for human readable disambiguation.",
+                  "pattern": "^[0-9a-f]{6,16}$",
+                  "type": "string"
+                },
+                "identity": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "description": "ComponentKind of the identified component.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "localName": {
+                      "description": "Semantic name of the component inside its namespace.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "namespace": {
+                      "description": "Stable container: module path, configuration path, \"runtime\" or \"manifest\".",
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "namespace",
+                    "localName"
+                  ],
+                  "type": "object"
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "const": "renamed",
+                      "type": "string"
+                    },
+                    {
+                      "const": "runtime_merge",
+                      "type": "string"
+                    },
+                    {
+                      "const": "manifest_merge",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "identity",
+                "reason"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "const": "observed",
+                "type": "string"
+              },
+              {
+                "const": "discovered",
+                "type": "string"
+              },
+              {
+                "const": "inferred",
+                "type": "string"
+              },
+              {
+                "const": "estimated",
+                "type": "string"
+              },
+              {
+                "const": "simulated",
+                "type": "string"
+              },
+              {
+                "const": "model_interpreted",
+                "type": "string"
+              }
+            ],
+            "description": "observed: seen in a runtime trace. discovered: read from source or configuration. inferred: derived from other evidence by a deterministic rule. estimated: computed from a model of the system rather than measured. simulated: produced under injected faults. model_interpreted: proposed by a language model and reviewed against supplied evidence."
+          },
+          "confidence": {
+            "description": "Confidence in the claim, from 0 to 1.",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "configLocations": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "file": {
+                  "description": "Repository relative POSIX path.",
+                  "minLength": 1,
+                  "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                  "type": "string"
+                },
+                "fileHash": {
+                  "description": "Lowercase hexadecimal SHA-256 digest.",
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "pointer": {
+                  "pattern": "^(?:/(?:[^/~]|~[01])*)*$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "pointer"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "description": {
+            "maxLength": 1000,
+            "type": "string"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "for": {
+                    "const": "agent",
+                    "type": "string"
+                  },
+                  "framework": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "instructionsRef": {
+                    "description": "Prompt component id or artifact digest.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxTurns": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "role": {
+                    "anyOf": [
+                      {
+                        "const": "orchestrator",
+                        "type": "string"
+                      },
+                      {
+                        "const": "worker",
+                        "type": "string"
+                      },
+                      {
+                        "const": "router",
+                        "type": "string"
+                      },
+                      {
+                        "const": "evaluator",
+                        "type": "string"
+                      },
+                      {
+                        "const": "unspecified",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "toolCount": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "for"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "for": {
+                    "const": "model",
+                    "type": "string"
+                  },
+                  "maxOutputTokens": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "modelId": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "provider": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "streaming": {
+                    "type": "boolean"
+                  },
+                  "structuredOutput": {
+                    "type": "boolean"
+                  },
+                  "temperature": {
+                    "type": "number"
+                  },
+                  "timeoutMs": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "for"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "approvalRequired": {
+                    "type": "boolean"
+                  },
+                  "destructiveHint": {
+                    "type": "boolean"
+                  },
+                  "for": {
+                    "const": "tool",
+                    "type": "string"
+                  },
+                  "idempotentHint": {
+                    "type": "boolean"
+                  },
+                  "openWorldHint": {
+                    "type": "boolean"
+                  },
+                  "parameterCount": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "readOnlyHint": {
+                    "type": "boolean"
+                  },
+                  "timeoutMs": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "for"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "argsCount": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "command": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "envKeys": {
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "for": {
+                    "const": "mcp_server",
+                    "type": "string"
+                  },
+                  "transport": {
+                    "anyOf": [
+                      {
+                        "const": "stdio",
+                        "type": "string"
+                      },
+                      {
+                        "const": "http",
+                        "type": "string"
+                      },
+                      {
+                        "const": "sse",
+                        "type": "string"
+                      },
+                      {
+                        "const": "unknown",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "url": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "for"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "approximateTokens": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "for": {
+                    "const": "prompt",
+                    "type": "string"
+                  },
+                  "interpolatesUntrustedInput": {
+                    "type": "boolean"
+                  },
+                  "textHash": {
+                    "description": "Lowercase hexadecimal SHA-256 digest.",
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "variableCount": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "for"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "contentIsUntrusted": {
+                    "type": "boolean"
+                  },
+                  "embeddingModel": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "for": {
+                    "const": "retrieval",
+                    "type": "string"
+                  },
+                  "store": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "topK": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "for"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "bounded": {
+                    "type": "boolean"
+                  },
+                  "capacity": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "for": {
+                    "const": "queue",
+                    "type": "string"
+                  },
+                  "workerCount": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "for"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "authKind": {
+                    "anyOf": [
+                      {
+                        "const": "none",
+                        "type": "string"
+                      },
+                      {
+                        "const": "api_key",
+                        "type": "string"
+                      },
+                      {
+                        "const": "oauth",
+                        "type": "string"
+                      },
+                      {
+                        "const": "unknown",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "for": {
+                    "const": "external_service",
+                    "type": "string"
+                  },
+                  "host": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "protocol": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "for"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "for": {
+                    "const": "approval_boundary",
+                    "type": "string"
+                  },
+                  "guardsSideEffect": {
+                    "type": "boolean"
+                  },
+                  "mechanism": {
+                    "anyOf": [
+                      {
+                        "const": "interactive",
+                        "type": "string"
+                      },
+                      {
+                        "const": "policy",
+                        "type": "string"
+                      },
+                      {
+                        "const": "human_review",
+                        "type": "string"
+                      },
+                      {
+                        "const": "unknown",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "for"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "discoveredBy": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "displayName": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "pattern": "^ev_[0-9a-f]{16}$",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "fingerprint": {
+            "description": "Lowercase hexadecimal SHA-256 digest.",
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "id": {
+            "description": "Stable component identifier, for example \"agent:orchestrator\" or \"tool:refund~1a2b3c\".",
+            "pattern": "^[a-z_]+:[a-z0-9@][a-z0-9_.@/-]*(?:~[0-9a-f]{6})?$",
+            "type": "string"
+          },
+          "identity": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "description": "ComponentKind of the identified component.",
+                "minLength": 1,
+                "type": "string"
+              },
+              "localName": {
+                "description": "Semantic name of the component inside its namespace.",
+                "minLength": 1,
+                "type": "string"
+              },
+              "namespace": {
+                "description": "Stable container: module path, configuration path, \"runtime\" or \"manifest\".",
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "namespace",
+              "localName"
+            ],
+            "type": "object"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "const": "project",
+                "type": "string"
+              },
+              {
+                "const": "entrypoint",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "type": "string"
+              },
+              {
+                "const": "agent_group",
+                "type": "string"
+              },
+              {
+                "const": "model",
+                "type": "string"
+              },
+              {
+                "const": "provider",
+                "type": "string"
+              },
+              {
+                "const": "prompt",
+                "type": "string"
+              },
+              {
+                "const": "tool",
+                "type": "string"
+              },
+              {
+                "const": "mcp_server",
+                "type": "string"
+              },
+              {
+                "const": "memory",
+                "type": "string"
+              },
+              {
+                "const": "retrieval",
+                "type": "string"
+              },
+              {
+                "const": "queue",
+                "type": "string"
+              },
+              {
+                "const": "worker",
+                "type": "string"
+              },
+              {
+                "const": "database",
+                "type": "string"
+              },
+              {
+                "const": "external_service",
+                "type": "string"
+              },
+              {
+                "const": "approval_boundary",
+                "type": "string"
+              },
+              {
+                "const": "side_effect",
+                "type": "string"
+              },
+              {
+                "const": "guardrail",
+                "type": "string"
+              },
+              {
+                "const": "evaluator",
+                "type": "string"
+              }
+            ],
+            "description": "Kind of component in the unified agent system model."
+          },
+          "metadata": {
+            "description": "Shallow, JSON scalar metadata. Never used to carry secrets.",
+            "patternProperties": {
+              "^(.*)$": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "permissions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "declaredIn": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "endColumn": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "endLine": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "file": {
+                          "description": "Repository relative POSIX path.",
+                          "minLength": 1,
+                          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                          "type": "string"
+                        },
+                        "fileHash": {
+                          "description": "Lowercase hexadecimal SHA-256 digest.",
+                          "pattern": "^[0-9a-f]{64}$",
+                          "type": "string"
+                        },
+                        "startColumn": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "startLine": {
+                          "minimum": 1,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "file",
+                        "startLine"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "file": {
+                          "description": "Repository relative POSIX path.",
+                          "minLength": 1,
+                          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                          "type": "string"
+                        },
+                        "fileHash": {
+                          "description": "Lowercase hexadecimal SHA-256 digest.",
+                          "pattern": "^[0-9a-f]{64}$",
+                          "type": "string"
+                        },
+                        "pointer": {
+                          "pattern": "^(?:/(?:[^/~]|~[01])*)*$",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "file",
+                        "pointer"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                },
+                "kind": {
+                  "anyOf": [
+                    {
+                      "const": "filesystem",
+                      "type": "string"
+                    },
+                    {
+                      "const": "network",
+                      "type": "string"
+                    },
+                    {
+                      "const": "process",
+                      "type": "string"
+                    },
+                    {
+                      "const": "model",
+                      "type": "string"
+                    },
+                    {
+                      "const": "secret",
+                      "type": "string"
+                    },
+                    {
+                      "const": "database",
+                      "type": "string"
+                    },
+                    {
+                      "const": "queue",
+                      "type": "string"
+                    },
+                    {
+                      "const": "mcp",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "mode": {
+                  "anyOf": [
+                    {
+                      "const": "read",
+                      "type": "string"
+                    },
+                    {
+                      "const": "write",
+                      "type": "string"
+                    },
+                    {
+                      "const": "execute",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "scope": {
+                  "description": "Resource the permission applies to, for example a host or path.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "scope",
+                "mode"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "presence": {
+            "additionalProperties": false,
+            "properties": {
+              "manifest": {
+                "description": "Declared in a .orchescope manifest.",
+                "type": "boolean"
+              },
+              "runtime": {
+                "description": "Observed in at least one ingested trace.",
+                "type": "boolean"
+              },
+              "static": {
+                "description": "Discovered by source or configuration analysis.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "static",
+              "runtime",
+              "manifest"
+            ],
+            "type": "object"
+          },
+          "sideEffect": {
+            "anyOf": [
+              {
+                "const": "read_only",
+                "type": "string"
+              },
+              {
+                "const": "idempotent_write",
+                "type": "string"
+              },
+              {
+                "const": "non_idempotent_write",
+                "type": "string"
+              },
+              {
+                "const": "external_notification",
+                "type": "string"
+              },
+              {
+                "const": "financial",
+                "type": "string"
+              },
+              {
+                "const": "destructive",
+                "type": "string"
+              },
+              {
+                "const": "unknown",
+                "type": "string"
+              }
+            ]
+          },
+          "sourceLocations": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "endColumn": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "endLine": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "file": {
+                  "description": "Repository relative POSIX path.",
+                  "minLength": 1,
+                  "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                  "type": "string"
+                },
+                "fileHash": {
+                  "description": "Lowercase hexadecimal SHA-256 digest.",
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "startColumn": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "startLine": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "file",
+                "startLine"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "identity",
+          "fingerprint",
+          "kind",
+          "displayName",
+          "presence",
+          "basis",
+          "confidence",
+          "discoveredBy",
+          "sourceLocations",
+          "configLocations",
+          "evidence",
+          "permissions",
+          "aliases",
+          "tags",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "coverage": {
+      "additionalProperties": false,
+      "properties": {
+        "adapters": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "adapterId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "adapterVersion": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "componentsFound": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "detail": {
+                "maxLength": 500,
+                "type": "string"
+              },
+              "durationMs": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "ecosystem": {
+                "anyOf": [
+                  {
+                    "const": "javascript",
+                    "type": "string"
+                  },
+                  {
+                    "const": "python",
+                    "type": "string"
+                  },
+                  {
+                    "const": "configuration",
+                    "type": "string"
+                  },
+                  {
+                    "const": "manifest",
+                    "type": "string"
+                  },
+                  {
+                    "const": "runtime",
+                    "type": "string"
+                  }
+                ]
+              },
+              "edgesFound": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "filesInspected": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "const": "completed",
+                    "type": "string"
+                  },
+                  {
+                    "const": "not_applicable",
+                    "type": "string"
+                  },
+                  {
+                    "const": "failed",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "adapterId",
+              "adapterVersion",
+              "ecosystem",
+              "componentsFound",
+              "edgesFound",
+              "filesInspected",
+              "durationMs",
+              "status"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "bytesParsed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "durationMs": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "filesDiscovered": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "filesParsed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "languages": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "fileCount": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "language": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "language",
+              "fileCount"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "skipped": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "detail": {
+                "maxLength": 500,
+                "type": "string"
+              },
+              "file": {
+                "description": "Repository relative POSIX path.",
+                "minLength": 1,
+                "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                "type": "string"
+              },
+              "reason": {
+                "anyOf": [
+                  {
+                    "const": "too_large",
+                    "type": "string"
+                  },
+                  {
+                    "const": "binary",
+                    "type": "string"
+                  },
+                  {
+                    "const": "parse_error",
+                    "type": "string"
+                  },
+                  {
+                    "const": "unsupported_language",
+                    "type": "string"
+                  },
+                  {
+                    "const": "ignored",
+                    "type": "string"
+                  },
+                  {
+                    "const": "symlink",
+                    "type": "string"
+                  },
+                  {
+                    "const": "unreadable",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "file",
+              "reason"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "unsupported": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "area": {
+                "description": "What Orchescope could not model, for example \"Go source files\".",
+                "minLength": 1,
+                "type": "string"
+              },
+              "reason": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "remediation": {
+                "description": "How the user can supply the missing facts.",
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "area",
+              "reason"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "filesDiscovered",
+        "filesParsed",
+        "bytesParsed",
+        "skipped",
+        "languages",
+        "adapters",
+        "unsupported",
+        "durationMs",
+        "truncated"
+      ],
+      "type": "object"
+    },
+    "edges": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "basis": {
+            "anyOf": [
+              {
+                "const": "observed",
+                "type": "string"
+              },
+              {
+                "const": "discovered",
+                "type": "string"
+              },
+              {
+                "const": "inferred",
+                "type": "string"
+              },
+              {
+                "const": "estimated",
+                "type": "string"
+              },
+              {
+                "const": "simulated",
+                "type": "string"
+              },
+              {
+                "const": "model_interpreted",
+                "type": "string"
+              }
+            ],
+            "description": "observed: seen in a runtime trace. discovered: read from source or configuration. inferred: derived from other evidence by a deterministic rule. estimated: computed from a model of the system rather than measured. simulated: produced under injected faults. model_interpreted: proposed by a language model and reviewed against supplied evidence."
+          },
+          "confidence": {
+            "description": "Confidence in the claim, from 0 to 1.",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "configLocations": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "file": {
+                  "description": "Repository relative POSIX path.",
+                  "minLength": 1,
+                  "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                  "type": "string"
+                },
+                "fileHash": {
+                  "description": "Lowercase hexadecimal SHA-256 digest.",
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "pointer": {
+                  "pattern": "^(?:/(?:[^/~]|~[01])*)*$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file",
+                "pointer"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "discoveredBy": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "evidence": {
+            "items": {
+              "pattern": "^ev_[0-9a-f]{16}$",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "from": {
+            "description": "Stable component identifier, for example \"agent:orchestrator\" or \"tool:refund~1a2b3c\".",
+            "pattern": "^[a-z_]+:[a-z0-9@][a-z0-9_.@/-]*(?:~[0-9a-f]{6})?$",
+            "type": "string"
+          },
+          "id": {
+            "description": "Stable edge identifier derived from edge kind plus endpoint identities.",
+            "pattern": "^[a-z_]+:[0-9a-f]{16}$",
+            "type": "string"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "const": "contains",
+                "type": "string"
+              },
+              {
+                "const": "invokes_model",
+                "type": "string"
+              },
+              {
+                "const": "calls_tool",
+                "type": "string"
+              },
+              {
+                "const": "hands_off_to",
+                "type": "string"
+              },
+              {
+                "const": "uses_prompt",
+                "type": "string"
+              },
+              {
+                "const": "reads_memory",
+                "type": "string"
+              },
+              {
+                "const": "writes_memory",
+                "type": "string"
+              },
+              {
+                "const": "queries_retrieval",
+                "type": "string"
+              },
+              {
+                "const": "publishes_to_queue",
+                "type": "string"
+              },
+              {
+                "const": "consumes_from_queue",
+                "type": "string"
+              },
+              {
+                "const": "calls_service",
+                "type": "string"
+              },
+              {
+                "const": "queries_database",
+                "type": "string"
+              },
+              {
+                "const": "provides_tool",
+                "type": "string"
+              },
+              {
+                "const": "served_by_provider",
+                "type": "string"
+              },
+              {
+                "const": "falls_back_to",
+                "type": "string"
+              },
+              {
+                "const": "guarded_by",
+                "type": "string"
+              },
+              {
+                "const": "performs_side_effect",
+                "type": "string"
+              },
+              {
+                "const": "validated_by",
+                "type": "string"
+              },
+              {
+                "const": "observed_after",
+                "type": "string"
+              }
+            ],
+            "description": "Kind of relation between two components."
+          },
+          "metadata": {
+            "description": "Shallow, JSON scalar metadata. Never used to carry secrets.",
+            "patternProperties": {
+              "^(.*)$": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "observation": {
+            "additionalProperties": false,
+            "properties": {
+              "costUsd": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "errorCount": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "executionCount": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "inputTokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxDurationMs": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "outputTokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "p50DurationMs": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "p95DurationMs": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "parallelCount": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "retryCount": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "runIds": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "totalDurationMs": {
+                "minimum": 0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "executionCount",
+              "errorCount",
+              "retryCount",
+              "parallelCount",
+              "totalDurationMs",
+              "inputTokens",
+              "outputTokens",
+              "runIds"
+            ],
+            "type": "object"
+          },
+          "policy": {
+            "additionalProperties": false,
+            "properties": {
+              "concurrency": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "requiresApproval": {
+                "type": "boolean"
+              },
+              "retry": {
+                "additionalProperties": false,
+                "properties": {
+                  "backoff": {
+                    "anyOf": [
+                      {
+                        "const": "none",
+                        "type": "string"
+                      },
+                      {
+                        "const": "fixed",
+                        "type": "string"
+                      },
+                      {
+                        "const": "exponential",
+                        "type": "string"
+                      },
+                      {
+                        "const": "unknown",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "bounded": {
+                    "description": "False when no attempt ceiling could be established.",
+                    "type": "boolean"
+                  },
+                  "idempotency": {
+                    "anyOf": [
+                      {
+                        "const": "declared",
+                        "type": "string"
+                      },
+                      {
+                        "const": "absent",
+                        "type": "string"
+                      },
+                      {
+                        "const": "unknown",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "maxAttempts": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "bounded",
+                  "backoff",
+                  "idempotency"
+                ],
+                "type": "object"
+              },
+              "timeoutMs": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "runtimeOnly": {
+            "type": "boolean"
+          },
+          "sourceLocations": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "endColumn": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "endLine": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "file": {
+                  "description": "Repository relative POSIX path.",
+                  "minLength": 1,
+                  "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                  "type": "string"
+                },
+                "fileHash": {
+                  "description": "Lowercase hexadecimal SHA-256 digest.",
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "startColumn": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "startLine": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "file",
+                "startLine"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "to": {
+            "description": "Stable component identifier, for example \"agent:orchestrator\" or \"tool:refund~1a2b3c\".",
+            "pattern": "^[a-z_]+:[a-z0-9@][a-z0-9_.@/-]*(?:~[0-9a-f]{6})?$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "from",
+          "to",
+          "basis",
+          "confidence",
+          "discoveredBy",
+          "sourceLocations",
+          "configLocations",
+          "evidence",
+          "runtimeOnly",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "graphId": {
+      "pattern": "^graph_[0-9a-f]{16}$",
+      "type": "string"
+    },
+    "metadata": {
+      "description": "Shallow, JSON scalar metadata. Never used to carry secrets.",
+      "patternProperties": {
+        "^(.*)$": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              },
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "generatedAt": {
+          "description": "UTC timestamp, RFC 3339 with millisecond precision.",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+          "type": "string"
+        },
+        "git": {
+          "additionalProperties": false,
+          "properties": {
+            "commit": {
+              "pattern": "^[0-9a-f]{7,40}$",
+              "type": "string"
+            },
+            "dirty": {
+              "type": "boolean"
+            },
+            "ref": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "dirty"
+          ],
+          "type": "object"
+        },
+        "orchescopeVersion": {
+          "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+          "type": "string"
+        },
+        "projectId": {
+          "pattern": "^prj_[0-9a-f]{16}$",
+          "type": "string"
+        },
+        "projectName": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "projectPathHash": {
+          "description": "Lowercase hexadecimal SHA-256 digest.",
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "runIds": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "scanId": {
+          "pattern": "^scan_[0-9a-f]{16}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "orchescopeVersion",
+        "scanId",
+        "projectId",
+        "projectName",
+        "generatedAt",
+        "projectPathHash",
+        "runIds"
+      ],
+      "type": "object"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "graphId",
+    "provenance",
+    "coverage",
+    "components",
+    "edges",
+    "metadata"
+  ],
+  "type": "object"
+}

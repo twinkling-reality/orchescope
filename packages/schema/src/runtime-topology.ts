@@ -1,12 +1,12 @@
 import { type Static, Type } from '@sinclair/typebox';
 import { EvidenceId } from './evidence.ts';
 import {
+  literals,
   Metadata,
   NonEmptyString,
   NonNegativeInt,
   OneBasedLine,
   RelativePath,
-  literals,
 } from './primitives.ts';
 import { AgentOperation, SideEffectRecord } from './trace.ts';
 

@@ -27,6 +27,7 @@ export const ERROR_CODES = [
   'MODEL_OUTPUT_REJECTED',
   'INVALID_ARGUMENT',
   'INVALID_STATE',
+  'LIMIT_EXCEEDED',
   'INTERNAL',
 ] as const;
 
@@ -65,6 +66,7 @@ const CATEGORY_BY_CODE: Readonly<Record<ErrorCode, ErrorCategory>> = {
   MODEL_UNAVAILABLE: 'environment',
   MODEL_OUTPUT_REJECTED: 'internal',
   INVALID_ARGUMENT: 'user',
+  LIMIT_EXCEEDED: 'user',
   INVALID_STATE: 'internal',
   INTERNAL: 'internal',
 };

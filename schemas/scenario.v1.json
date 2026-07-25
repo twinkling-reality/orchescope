@@ -1,0 +1,778 @@
+{
+  "$id": "urn:orchescope:schema:scenario:1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "budgets": {
+      "additionalProperties": false,
+      "properties": {
+        "maxCostUsd": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "maxDurationMs": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "maxModelCalls": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxRetries": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxTokens": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "cleanup": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    "description": {
+      "maxLength": 2000,
+      "type": "string"
+    },
+    "evaluators": {
+      "items": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "caseSensitive": {
+                "type": "boolean"
+              },
+              "kind": {
+                "const": "output_contains_all",
+                "type": "string"
+              },
+              "values": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "kind",
+              "values"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "caseSensitive": {
+                "type": "boolean"
+              },
+              "kind": {
+                "const": "output_contains_none",
+                "type": "string"
+              },
+              "values": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "kind",
+              "values"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "json_pointer_equals",
+                "type": "string"
+              },
+              "pointer": {
+                "pattern": "^(?:/(?:[^/~]|~[01])*)*$",
+                "type": "string"
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "pointer",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "effect": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxCount": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "minCount": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "target": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "const": "effect_recorded",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "effect"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "no_duplicate_effects",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "componentName": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "kind": {
+                "const": "span_observed",
+                "type": "string"
+              },
+              "minCount": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "operation": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "operation"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "comparator": {
+                "anyOf": [
+                  {
+                    "const": "lt",
+                    "type": "string"
+                  },
+                  {
+                    "const": "lte",
+                    "type": "string"
+                  },
+                  {
+                    "const": "gt",
+                    "type": "string"
+                  },
+                  {
+                    "const": "gte",
+                    "type": "string"
+                  },
+                  {
+                    "const": "eq",
+                    "type": "string"
+                  }
+                ]
+              },
+              "kind": {
+                "const": "metric_threshold",
+                "type": "string"
+              },
+              "metric": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "value": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "kind",
+              "metric",
+              "comparator",
+              "value"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "equals": {
+                "type": "integer"
+              },
+              "kind": {
+                "const": "exit_code",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "equals"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "model_judge",
+                "type": "string"
+              },
+              "passWhen": {
+                "anyOf": [
+                  {
+                    "const": "yes",
+                    "type": "string"
+                  },
+                  {
+                    "const": "no",
+                    "type": "string"
+                  }
+                ]
+              },
+              "question": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "requiresModelAccess": {
+                "const": true,
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "kind",
+              "question",
+              "passWhen",
+              "requiresModelAccess"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "type": "array"
+    },
+    "expect": {
+      "additionalProperties": false,
+      "properties": {
+        "prohibitedEffects": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxCount": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "minCount": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "target": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "requiredEffects": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxCount": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "minCount": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "target": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "taskSuccess": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "faults": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "attempts": {
+            "items": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "delayMs": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "const": "cooperative",
+                "type": "string"
+              },
+              {
+                "const": "proxy",
+                "type": "string"
+              }
+            ]
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "const": "model_timeout",
+                "type": "string"
+              },
+              {
+                "const": "model_rate_limited",
+                "type": "string"
+              },
+              {
+                "const": "model_server_error",
+                "type": "string"
+              },
+              {
+                "const": "model_malformed_structured_output",
+                "type": "string"
+              },
+              {
+                "const": "model_stream_interrupted",
+                "type": "string"
+              },
+              {
+                "const": "tool_timeout",
+                "type": "string"
+              },
+              {
+                "const": "tool_exception",
+                "type": "string"
+              },
+              {
+                "const": "tool_malformed_result",
+                "type": "string"
+              },
+              {
+                "const": "tool_stale_result",
+                "type": "string"
+              },
+              {
+                "const": "retrieval_empty",
+                "type": "string"
+              },
+              {
+                "const": "retrieval_slow",
+                "type": "string"
+              },
+              {
+                "const": "worker_unavailable",
+                "type": "string"
+              },
+              {
+                "const": "queue_delay",
+                "type": "string"
+              },
+              {
+                "const": "auth_expired",
+                "type": "string"
+              },
+              {
+                "const": "side_effect_partial_success",
+                "type": "string"
+              },
+              {
+                "const": "duplicate_response",
+                "type": "string"
+              },
+              {
+                "const": "context_corruption",
+                "type": "string"
+              },
+              {
+                "const": "prompt_injection_in_content",
+                "type": "string"
+              }
+            ],
+            "description": "Fault classes Orchescope can inject into an agent system."
+          },
+          "maxApplications": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "payload": {
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "probability": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "target": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target",
+          "delivery",
+          "probability"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "id": {
+      "pattern": "^[a-z0-9][a-z0-9-]{1,63}$",
+      "type": "string"
+    },
+    "initialState": {
+      "patternProperties": {
+        "^(.*)$": {}
+      },
+      "type": "object"
+    },
+    "input": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "patternProperties": {
+            "^(.*)$": {}
+          },
+          "type": "object"
+        },
+        "prompt": {
+          "maxLength": 8000,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "metadata": {
+      "description": "Shallow, JSON scalar metadata. Never used to carry secrets.",
+      "patternProperties": {
+        "^(.*)$": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              },
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "repetitions": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "requiredPermissions": {
+      "items": {
+        "anyOf": [
+          {
+            "const": "process:spawn",
+            "type": "string"
+          },
+          {
+            "const": "network:loopback",
+            "type": "string"
+          },
+          {
+            "const": "network:outbound",
+            "type": "string"
+          },
+          {
+            "const": "model:paid",
+            "type": "string"
+          },
+          {
+            "const": "filesystem:write",
+            "type": "string"
+          }
+        ]
+      },
+      "type": "array"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "seed": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "tags": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "target": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "description": "Argv of the target. Executed without a shell, so no shell metacharacters apply.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "cwd": {
+          "description": "Repository relative POSIX path.",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+          "type": "string"
+        },
+        "env": {
+          "patternProperties": {
+            "^[A-Za-z_][A-Za-z0-9_]*$": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "resultSource": {
+          "anyOf": [
+            {
+              "const": "result_file",
+              "type": "string"
+            },
+            {
+              "const": "root_span",
+              "type": "string"
+            },
+            {
+              "const": "exit_code",
+              "type": "string"
+            }
+          ]
+        },
+        "stopSignal": {
+          "anyOf": [
+            {
+              "const": "SIGINT",
+              "type": "string"
+            },
+            {
+              "const": "SIGTERM",
+              "type": "string"
+            }
+          ]
+        },
+        "timeoutMs": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command",
+        "resultSource",
+        "timeoutMs"
+      ],
+      "type": "object"
+    },
+    "variant": {
+      "additionalProperties": false,
+      "properties": {
+        "agents": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "concurrency": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "env": {
+          "patternProperties": {
+            "^[A-Za-z_][A-Za-z0-9_]*$": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "model": {
+          "additionalProperties": false,
+          "properties": {
+            "model": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "provider": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "temperature": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "provider",
+            "model"
+          ],
+          "type": "object"
+        },
+        "promptVersion": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "toolConfig": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "topology": {
+          "description": "Named topology understood by the target.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "workers": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "name",
+    "target",
+    "evaluators",
+    "budgets",
+    "faults",
+    "requiredPermissions",
+    "tags",
+    "metadata"
+  ],
+  "type": "object"
+}
