@@ -20,6 +20,10 @@ on:
         description: Run the benchmark with enough repetitions to report quantiles
         type: boolean
         default: false
+      corpus:
+        description: Run the corpus check over every pinned repository, cloning each one
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -115,4 +119,31 @@ jobs:
         with:
           name: long-benchmark
           path: benchmark.json
+          retention-days: 30
+
+  corpus:
+    name: discovery measured against every pinned repository
+    if: inputs.corpus
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Third party source is never vendored, so each entry is cloned at its pinned commit into a directory git
+      # ignores. That is the network access the required gate refuses to depend on, and the reason this job is
+      # here rather than in ci.yml.
+      - name: every pinned repository still produces what is recorded
+        run: pnpm corpus
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: corpus-summary
+          path: corpus/.cache/corpus-summary.json
           retention-days: 30

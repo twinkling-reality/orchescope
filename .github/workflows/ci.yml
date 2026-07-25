@@ -133,6 +133,24 @@ jobs:
       - name: the schema documents validate the documents they describe
         run: pnpm schemas:verify
 
+  corpus:
+    name: discovery measured against the offline corpus
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # The offline subset only. The rest of the corpus clones third party repositories at pinned commits, which
+      # needs network access this required gate deliberately does not depend on, so it runs from optional-live.yml.
+      # A difference here is a reviewed diff rather than an automatic update: the numbers move when a reader
+      # changes, and which direction that is has to be decided by a person.
+      - run: pnpm corpus:offline
+
   package:
     name: build, pack, install and audit with the tarball
     runs-on: ubuntu-latest
