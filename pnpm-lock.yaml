@@ -30,6 +30,20 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
+  apps/demo: {}
+
+  packages/comparison:
+    dependencies:
+      '@orchescope/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@orchescope/graph':
+        specifier: workspace:*
+        version: link:../graph
+      '@orchescope/schema':
+        specifier: workspace:*
+        version: link:../schema
+
   packages/discovery:
     dependencies:
       '@orchescope/domain':
@@ -58,6 +72,27 @@ importers:
         specifier: workspace:*
         version: link:../schema
 
+  packages/findings:
+    dependencies:
+      '@orchescope/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@orchescope/graph':
+        specifier: workspace:*
+        version: link:../graph
+      '@orchescope/schema':
+        specifier: workspace:*
+        version: link:../schema
+
+  packages/goals:
+    dependencies:
+      '@orchescope/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@orchescope/schema':
+        specifier: workspace:*
+        version: link:../schema
+
   packages/graph:
     dependencies:
       '@orchescope/domain':
@@ -66,6 +101,51 @@ importers:
       '@orchescope/schema':
         specifier: workspace:*
         version: link:../schema
+
+  packages/observability:
+    dependencies:
+      '@orchescope/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@orchescope/redaction':
+        specifier: workspace:*
+        version: link:../redaction
+
+  packages/persistence:
+    dependencies:
+      '@orchescope/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@orchescope/schema':
+        specifier: workspace:*
+        version: link:../schema
+
+  packages/policy:
+    dependencies:
+      '@orchescope/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@orchescope/schema':
+        specifier: workspace:*
+        version: link:../schema
+
+  packages/redaction:
+    dependencies:
+      '@orchescope/domain':
+        specifier: workspace:*
+        version: link:../domain
+
+  packages/runtime:
+    dependencies:
+      '@orchescope/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@orchescope/schema':
+        specifier: workspace:*
+        version: link:../schema
+      '@orchescope/traces':
+        specifier: workspace:*
+        version: link:../traces
 
   packages/schema:
     dependencies:
@@ -102,6 +182,15 @@ importers:
       '@orchescope/graph':
         specifier: workspace:*
         version: link:../graph
+      '@orchescope/schema':
+        specifier: workspace:*
+        version: link:../schema
+
+  packages/traces:
+    dependencies:
+      '@orchescope/domain':
+        specifier: workspace:*
+        version: link:../domain
       '@orchescope/schema':
         specifier: workspace:*
         version: link:../schema

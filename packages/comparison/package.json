@@ -1,0 +1,16 @@
+{
+  "name": "@orchescope/comparison",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Baseline against candidate comparison of runs, benchmarks, graphs and findings.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@orchescope/domain": "workspace:*",
+    "@orchescope/graph": "workspace:*",
+    "@orchescope/schema": "workspace:*"
+  }
+}
