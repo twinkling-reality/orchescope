@@ -31,7 +31,7 @@ tool.
 | 15. Documentation and open source setup | done | `README.md`, `docs/`, `SECURITY.md`, `CONTRIBUTING.md`, CI workflows |
 | 16. Installable product | in progress | see below |
 
-548 unit and integration tests, 59 end to end tests, 10 browser tests. `pnpm verify` is green.
+548 unit and integration tests, 78 end to end tests, 10 browser tests. `pnpm verify` is green.
 
 ## Phase 16: what a stranger meets
 
@@ -61,6 +61,13 @@ and it is listed item by item because only some of it is done.
   `tests/e2e/report-commands.test.ts`, which found seven invocations that did not exist.
 - **The agent interface is exercised over a real transport**: `tests/e2e/mcp-stdio.test.ts` speaks newline delimited
   JSON-RPC to `orchescope mcp serve`, and holds that standard output carries protocol traffic and nothing else.
+- **The JSON contract holds on failure as well as on success.** A failure document now carries `command`, `version` and a
+  null `data` beside its `error`, `export --json` answers with the same document shape as everything else, and
+  `audit --serve --json` writes one document carrying the URL instead of two. Evidence:
+  `tests/e2e/json-contract.test.ts`, which found four commands that deviated.
+- **A green gate needs no credential.** The secret scan runs the gitleaks command line at a pinned version, verified
+  against the checksum its release publishes, over the history rather than the working tree. The action it replaces
+  requires a licence key for an organisation, which is a gate this repository could never have passed.
 
 **Not done:**
 
