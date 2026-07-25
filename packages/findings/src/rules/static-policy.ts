@@ -462,7 +462,18 @@ export const architectureShapeRule: Rule = {
       });
     }
 
-    if (drafts.length === 0 && context.graph.componentCount > 0) {
+    /**
+     * A strength has to be about something.
+     *
+     * "Reachable, acyclic and narrow" is true of a graph with no relations in it, and of a repository where the
+     * only components are the databases and services some code happens to touch. Reporting it there reads as an
+     * endorsement of an agent system that was never found, so the claim requires an agent and a relation between
+     * components before it is made.
+     */
+    const hasAgent = context.graph.graph.components.some(
+      (component) => component.kind === 'agent' || component.kind === 'agent_group',
+    );
+    if (drafts.length === 0 && hasAgent && context.graph.graph.edges.length > 0) {
       return fired([
         {
           ruleId: 'topology-shape',

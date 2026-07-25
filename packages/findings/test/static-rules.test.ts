@@ -6,7 +6,11 @@ import type { EdgePolicy, SystemGraph } from '@orchescope/schema';
 import { buildGraph, componentDraft, edgeDraft } from '@orchescope/testkit';
 import { evaluateRules } from '../src/engine.ts';
 import type { RuleContext } from '../src/rule.ts';
-import { safeRetryRule, unsafeRetryRule } from '../src/rules/static-policy.ts';
+import {
+  architectureShapeRule,
+  safeRetryRule,
+  unsafeRetryRule,
+} from '../src/rules/static-policy.ts';
 
 /**
  * Rule tests.
@@ -52,6 +56,39 @@ const contextFor = (graph: SystemGraph): RuleContext => ({
   chaosReports: [],
   scenarios: [],
   evidenceById: new Map(),
+});
+
+describe('topology-shape', () => {
+  const model = componentDraft({ kind: 'model', name: 'gpt-4.1-mini', file: 'src/main.ts' });
+  const database = componentDraft({ kind: 'database', name: 'sqlite', file: 'src/store.ts' });
+
+  const strengths = (graph: SystemGraph) => {
+    const outcome = architectureShapeRule.evaluate(contextFor(graph));
+    return outcome.status === 'fired'
+      ? outcome.drafts.filter((draft) => draft.polarity === 'strength')
+      : [];
+  };
+
+  it('reports a good shape when there is an agent and a relation to judge', () => {
+    const found = strengths(
+      buildGraph([orchestrator, model], [edgeDraft('invokes_model', orchestrator, model)]),
+    );
+    assert.equal(found.length, 1);
+    assert.match(found[0]?.title ?? '', /reachable, acyclic and narrow/);
+  });
+
+  /**
+   * The claim is vacuously true of a graph with no agent in it, and on a repository that is not an agent system
+   * it read as an endorsement of one. A real 924 file codebase produced exactly this shape: databases and
+   * entry points, no agent, and a strength saying the topology was fine.
+   */
+  it('stays quiet when nothing agentic was found, however well shaped the rest is', () => {
+    assert.deepEqual(strengths(buildGraph([database], [])), []);
+  });
+
+  it('stays quiet when there is an agent but no relation at all', () => {
+    assert.deepEqual(strengths(buildGraph([orchestrator], [])), []);
+  });
 });
 
 describe('retry-around-non-idempotent-operation', () => {

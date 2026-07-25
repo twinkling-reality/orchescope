@@ -52,12 +52,23 @@ const inputProblemLines = (
  */
 const notDetectedLines = (
   style: Style,
+  result: AuditResult,
   coverage: AuditResult['graph']['coverage'],
 ): readonly string[] => {
   const applicable = coverage.adapters.filter((adapter) => adapter.status !== 'not_applicable');
   const inapplicable = coverage.adapters.filter((adapter) => adapter.status === 'not_applicable');
+  const summary = result.bundle.summary;
   return [
     `${style.warn(SYMBOLS.warning)} No agent system was detected. Nothing here declared an agent, a model call, a tool or an MCP server.`,
+    // A scan that found databases and services still found something, and saying otherwise reads as an empty
+    // scan when it was a scan of something that is not an agent system.
+    ...(summary.componentCount === 0
+      ? []
+      : [
+          style.dim(
+            `  ${formatCount(summary.componentCount, 'component')} of other kinds were mapped, such as the services and stores this code reaches.`,
+          ),
+        ]),
     style.dim(
       coverage.filesDiscovered === 0
         ? '  No file in a language this build parses was found.'
@@ -180,7 +191,7 @@ export const auditSummary = (style: Style, result: AuditResult): string => {
   if (!result.agentSystemDetected) {
     return [
       ...heading,
-      ...notDetectedLines(style, graph.coverage),
+      ...notDetectedLines(style, result, graph.coverage),
       ...inputProblemLines(style, graph.coverage),
       ...notInspectedLines(style, graph.coverage),
     ].join('\n');

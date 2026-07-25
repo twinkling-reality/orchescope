@@ -31,7 +31,7 @@ tool.
 | 15. Documentation and open source setup | done | `README.md`, `docs/`, `SECURITY.md`, `CONTRIBUTING.md`, CI workflows |
 | 16. Installable product | in progress | see below |
 
-571 unit and integration tests, 78 end to end tests, 10 browser tests. `pnpm verify` is green.
+576 unit and integration tests, 78 end to end tests, 10 browser tests. `pnpm verify` is green.
 
 ## Phase 16: what a stranger meets
 
@@ -89,6 +89,15 @@ and it is listed item by item because only some of it is done.
   example uses, and it declared nothing at all before: no graph, no nodes, nothing. One call now yields the agent, the
   model, the provider, the tools at their own definitions, and the relations between them. A model written as
   `provider:model` is a shared concept between two frameworks, so it lives in `model-reference.ts` rather than twice.
+
+- **Three precision defects found by auditing a repository that is not an agent system.** A 924 file TypeScript
+  monorepo reported 286 components: 258 of them were string literals the prompt adapter had matched on ordinary
+  English, and it also reported a strength saying the topology was reachable, acyclic and narrow when no agent had
+  been found at all. A prompt now requires a model or an agent in the graph for it to reach, which is what the
+  adapter always documented and never enforced; the topology strength requires an agent and a relation to judge;
+  and a scan that mapped components of other kinds says so instead of reading as an empty scan. The same repository
+  now reports 28 components and no strength. Evidence: five tests, and the demonstration unchanged at 33 components
+  with three strengths.
 
 **Not done:**
 

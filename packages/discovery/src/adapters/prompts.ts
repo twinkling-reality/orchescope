@@ -7,11 +7,16 @@ import { createDrafts, sourceIdentity } from '../drafts.ts';
 /**
  * Prompt discovery.
  *
- * A prompt is a long string literal or template that reaches a model. The adapter records the digest and
- * the size rather than the text, so a graph can be shared without shipping the repository's prompts, and
- * it marks a template with substitutions as a place where untrusted input can enter the prompt. That
- * marking is a boundary, not a verdict: whether the substituted value is untrusted cannot be established
- * from syntax, and the finding rules say so.
+ * A prompt is a long string literal or template **that reaches a model**, and both halves of that sentence are
+ * enforced. The length and the phrasing are what a literal looks like; a model or an agent somewhere in the graph
+ * is what makes it a prompt rather than a paragraph. Without that second half, phrases as ordinary as "system",
+ * "answer" and "never" turn every long string in a repository into a component: on one real 924 file codebase
+ * with no model call in it, that was 285 of them.
+ *
+ * The adapter records the digest and the size rather than the text, so a graph can be shared without shipping the
+ * repository's prompts, and it marks a template with substitutions as a place where untrusted input can enter the
+ * prompt. That marking is a boundary, not a verdict: whether the substituted value is untrusted cannot be
+ * established from syntax, and the finding rules say so.
  */
 
 const ADAPTER_ID = 'adapter:prompts';
@@ -103,6 +108,17 @@ export const promptsAdapter: AgentSystemAdapter = {
   packages: [],
   appliesTo: (context) => context.modules.some((module) => module.texts.length > 0),
   discover: (context, builder): AdapterFindings => {
+    // Adapters that find models and agents run first, so this is the question of whether a prompt has anywhere
+    // to go. A repository with none of them has no prompts in it, however instructive its strings read.
+    if (!builder.hasAnyOfKind(['model', 'agent', 'agent_group'])) {
+      return {
+        componentsFound: 0,
+        edgesFound: 0,
+        filesInspected: 0,
+        note: 'no model or agent was discovered, so no string literal was treated as a prompt',
+      };
+    }
+
     let components = 0;
     let edges = 0;
     const files = new Set<string>();

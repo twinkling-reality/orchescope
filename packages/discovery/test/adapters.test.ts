@@ -883,6 +883,53 @@ describe('the manifest', () => {
  * indistinguishable from a repository with no agent system in it. That is the failure this reports: not a
  * missing framework, but a framework this build claims and did not read.
  */
+/**
+ * A prompt needs a model to reach.
+ *
+ * The phrasing test alone matches ordinary English: "system", "answer", "never". On a repository that talks to no
+ * model, every long string became a component, and one real codebase produced 285 of them.
+ */
+describe('prompt candidates', () => {
+  const literal = `"You are a support assistant. Always answer briefly and never invent an order number."`;
+
+  it('are recorded when the repository has a model for them to reach', async () => {
+    const { ids, adapters } = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'with-model', dependencies: ['pydantic-ai>=1.0'] });
+      workspace.write(
+        'src/desk.py',
+        `from pydantic_ai import Agent
+
+desk = Agent('openai:gpt-4.1-mini', instructions=${literal})
+`,
+      );
+    });
+    assert.ok(
+      (adapters.find((entry) => entry.adapterId === 'adapter:prompts')?.componentsFound ?? 0) > 0,
+      `expected a prompt in ${ids.join(', ')}`,
+    );
+  });
+
+  it('are not recorded at all when nothing in the repository talks to a model', async () => {
+    const { ids, adapters } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'no-model' });
+      workspace.write(
+        'src/copy.ts',
+        `export const EMPTY_STATE = ${literal};
+export const HELP = "Answer the question in the box. You are never charged for a preview.";
+`,
+      );
+    });
+    const prompts = adapters.find((entry) => entry.adapterId === 'adapter:prompts');
+    assert.equal(prompts?.componentsFound, 0);
+    assert.match(prompts?.detail ?? '', /no model or agent was discovered/);
+    assert.equal(
+      ids.some((id) => id.startsWith('prompt:')),
+      false,
+      `no prompt should exist, saw ${ids.join(', ')}`,
+    );
+  });
+});
+
 describe('an adapter that claims a framework and reads nothing from it', () => {
   const blindSpots = (result: Awaited<ReturnType<typeof scan>>) =>
     result.result.graph.coverage.unsupported.filter((area) =>
