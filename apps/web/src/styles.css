@@ -1310,6 +1310,99 @@ dl {
   font-size: var(--t-sm);
 }
 
+/* ---------- overview: identity, risks, next steps ---------- */
+
+.report-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  font-size: var(--t-sm);
+}
+
+.risk-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.risk {
+  border-left: 3px solid var(--border-strong);
+  padding-left: var(--s3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.risk-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+.risk-title {
+  font-size: var(--t-md);
+  font-weight: 600;
+  text-align: left;
+}
+
+.risk-impact {
+  font-size: var(--t-sm);
+}
+
+.next-actions {
+  list-style: decimal;
+  padding-left: var(--s5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.next-action {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.next-action-title {
+  font-weight: 600;
+}
+
+/* ---------- disclosure ---------- */
+
+.disclosure {
+  border-top: var(--border-width) solid var(--border);
+  padding-top: var(--s2);
+}
+
+/* The native marker is kept: it is the affordance a reader already recognises, and `details` announces its
+   own expanded state, so a decorative glyph would only add noise for a screen reader. */
+.disclosure-summary {
+  cursor: pointer;
+  font-size: var(--t-sm);
+  color: var(--fg-muted);
+}
+
+.disclosure-summary .heading-count {
+  margin-left: var(--s2);
+}
+
+.disclosure-summary:hover {
+  color: var(--fg);
+}
+
+.disclosure-summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.disclosure-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding-top: var(--s2);
+}
+
 /* ---------- evidence ---------- */
 
 .evidence-list {

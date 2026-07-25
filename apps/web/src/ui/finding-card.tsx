@@ -251,20 +251,12 @@ export function FindingCard(props: {
   const [expanded, setExpanded] = useState(props.open);
   return (
     <article class={`finding finding-${finding.polarity}`} id={`finding-${finding.id}`}>
+      {/* Title, then what it means, then the classification. A reader deciding whether to care needs the
+          first two; the identifier, the basis and the confidence are what they check once they do. */}
       <header class="finding-head">
         <div class="finding-title">
           <SeverityBadge severity={finding.severity} />
           <h3>{finding.title}</h3>
-        </div>
-        <div class="finding-meta">
-          <span class="mono">{finding.id}</span>
-          <Chip label={humanise(finding.category)} title={`Category: ${finding.category}`} />
-          <Chip
-            label={finding.polarity === 'strength' ? 'strength' : 'risk'}
-            tone={finding.polarity === 'strength' ? 'good' : 'bad'}
-          />
-          <BasisBadge basis={finding.basis} />
-          <Confidence value={finding.confidence} />
         </div>
       </header>
 
@@ -273,6 +265,17 @@ export function FindingCard(props: {
         <strong>Impact. </strong>
         {finding.impact}
       </p>
+
+      <div class="finding-meta">
+        <span class="mono">{finding.id}</span>
+        <Chip label={humanise(finding.category)} title={`Category: ${finding.category}`} />
+        <Chip
+          label={finding.polarity === 'strength' ? 'strength' : 'risk'}
+          tone={finding.polarity === 'strength' ? 'good' : 'bad'}
+        />
+        <BasisBadge basis={finding.basis} />
+        <Confidence value={finding.confidence} />
+      </div>
 
       <button
         type="button"

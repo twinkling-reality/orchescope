@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useReducer, useState } from 'preact/ho
 import { REPORT_ELEMENT_ID, REPORT_ENDPOINT } from './bundle.ts';
 import { indexCapabilities } from './capabilities.ts';
 import { loadReport, type ReportSource } from './client.tsx';
-import { reportCommand, scanCommand } from './commands.ts';
+import { auditCommand } from './commands.ts';
 import { buildGraphIndex } from './graph-index.ts';
 import {
   formatHash,
@@ -113,8 +113,7 @@ function FailurePage(props: { readonly problems: readonly string[] }) {
           ))}
         </ul>
         <p>Generate a report and open it again:</p>
-        <CommandBlock argv={scanCommand()} />
-        <CommandBlock argv={reportCommand()} />
+        <CommandBlock argv={auditCommand()} />
       </EmptyState>
     </div>
   );

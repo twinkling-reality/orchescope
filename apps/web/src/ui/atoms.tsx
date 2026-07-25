@@ -103,6 +103,34 @@ export function SectionHeading(props: {
   );
 }
 
+/**
+ * Secondary detail, closed by default.
+ *
+ * Built on `details` rather than on a button and a state hook, so the disclosure works before the script
+ * runs, is in the tab order without a `tabindex`, and is found by the browser's own in page search when
+ * closed. Nothing that a reader needs in order to act belongs in here.
+ */
+export function Disclosure(props: {
+  readonly summary: string;
+  readonly note?: string;
+  readonly count?: number;
+  readonly open?: boolean;
+  readonly children: ComponentChildren;
+}) {
+  return (
+    <details class="disclosure" open={props.open ?? false}>
+      <summary class="disclosure-summary">
+        {props.summary}
+        {props.count === undefined ? null : <span class="heading-count">{props.count}</span>}
+      </summary>
+      <div class="disclosure-body">
+        {props.note === undefined ? null : <p class="muted heading-note">{props.note}</p>}
+        {props.children}
+      </div>
+    </details>
+  );
+}
+
 export type Tone = 'info' | 'warn' | 'bad' | 'good';
 
 export function Callout(props: {
