@@ -1,0 +1,19 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.DS_Store
+
+# Orchescope local state written into the audited repository
+.orchescope/state/
+.orchescope/cache/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# Local packaging output
+*.tgz
+release/

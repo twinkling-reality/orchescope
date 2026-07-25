@@ -1,0 +1,10 @@
+packages:
+  - packages/*
+  - apps/*
+
+linkWorkspacePackages: true
+preferWorkspacePackages: true
+savePrefix: ''
+onlyBuiltDependencies:
+  - esbuild
+  - '@biomejs/biome'

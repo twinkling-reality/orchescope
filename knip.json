@@ -1,0 +1,41 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.mjs", "playwright.config.ts"],
+      "project": ["scripts/**/*.mjs"]
+    },
+    "packages/*": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "apps/cli": {
+      "entry": ["src/main.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "apps/demo": {
+      "entry": ["src/main.ts", "src/scenario-driver.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "apps/web": {
+      "entry": ["src/main.tsx"],
+      "project": ["src/**/*.{ts,tsx}"]
+    }
+  },
+  "ignore": ["**/fixtures/**", "**/dist/**", "tests/e2e/**"],
+  "ignoreDependencies": ["@playwright/test"],
+  "ignoreExportsUsedInFile": true,
+  "includeEntryExports": false,
+  "rules": {
+    "classMembers": "off",
+    "enumMembers": "off",
+    "duplicates": "error",
+    "unlisted": "error",
+    "unresolved": "error",
+    "exports": "error",
+    "types": "error",
+    "files": "error",
+    "dependencies": "error",
+    "devDependencies": "error"
+  }
+}
