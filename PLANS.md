@@ -68,6 +68,13 @@ and it is listed item by item because only some of it is done.
 - **A green gate needs no credential.** The secret scan runs the gitleaks command line at a pinned version, verified
   against the checksum its release publishes, over the history rather than the working tree. The action it replaces
   requires a licence key for an organisation, which is a gate this repository could never have passed.
+- **Two frameworks are claimed in Python that were only claimed in JavaScript.** The adapters already read both
+  dialects, but nothing held it, so nothing was claimed. Fixtures written from each library's own documented examples
+  found three gaps and they are fixed: `add_node(fn)`, which LangGraph documents as taking the function's name, was
+  dropped; an MCP server whose command is nested inside `params`, which is the Python shape, was recorded with an unknown
+  transport; and `needs_approval` on a `@function_tool` decorator was not read, so an approval boundary went unrecorded.
+  Evidence: nine tests in `packages/discovery/test/adapters.test.ts`, and an audit of a two framework Python repository
+  reporting six components across five relations.
 
 **Not done:**
 
@@ -128,7 +135,8 @@ extend it without reading every file.
 - **Two language ecosystems.** JavaScript with TypeScript, and Python. Anything else is declared in the manifest and reported
   as not inspected.
 - **Five framework adapters**, each with a fixture: OpenAI Agents SDK, LangGraph, CrewAI, Vercel AI SDK, and model SDKs, plus
-  MCP configuration and the manifest.
+  MCP configuration and the manifest. The OpenAI Agents SDK and LangGraph now carry a Python fixture as well as a
+  JavaScript one; CrewAI is Python only because the framework is; the Vercel AI SDK is JavaScript only for the same reason.
 - **One repository at a time.** Cross repository identity is not designed.
 - **No answer quality measurement.** Behaviour, cost, reliability and structure only.
 - **Cost is derived from token counts and a configured price table.** No price table ships, so cost is absent until one is

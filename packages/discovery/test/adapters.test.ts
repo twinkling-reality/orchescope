@@ -307,6 +307,235 @@ export async function answer(prompt: string) {
   });
 });
 
+/**
+ * LangGraph in Python.
+ *
+ * The fixture is written the way the library's own documentation writes it: `add_node(fn)` takes the function's
+ * name as the node name, `add_node("name", fn)` names it explicitly, `add_edge` takes two node names, and
+ * `add_conditional_edges` takes a source, a router and a mapping of branch to destination.
+ */
+describe('LangGraph in Python', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writePythonProject(workspace, { name: 'graph-py', dependencies: ['langgraph>=0.2'] });
+    workspace.write(
+      'src/graph.py',
+      `from typing_extensions import TypedDict
+from langgraph.graph import END, START, StateGraph
+
+
+class State(TypedDict):
+    question: str
+
+
+def plan(state: State) -> State:
+    return state
+
+
+def research(state: State) -> State:
+    return state
+
+
+def write_answer(state: State) -> State:
+    return state
+
+
+def route(state: State) -> str:
+    return "enough" if state["question"] else "more"
+
+
+builder = StateGraph(State)
+builder.add_node(plan)
+builder.add_node("researcher", research)
+builder.add_node("writer", write_answer)
+
+builder.add_edge(START, "plan")
+builder.add_edge("plan", "researcher")
+builder.add_conditional_edges("researcher", route, {"enough": "writer", "more": "plan"})
+builder.add_edge("writer", END)
+
+graph = builder.compile()
+`,
+    );
+  };
+
+  it('discovers the graph as a group and every registered node as an agent', async () => {
+    const { ids, adapters } = await scan(build);
+    assert.ok(
+      adapters.some(
+        (entry) => entry.adapterId === 'adapter:langgraph' && entry.status === 'completed',
+      ),
+      `the langgraph adapter did not apply: ${adapters.map((entry) => `${entry.adapterId}=${entry.status}`).join(', ')}`,
+    );
+    assert.ok(
+      ids.includes('agent:researcher'),
+      `expected the explicitly named node in ${ids.join(', ')}`,
+    );
+    assert.ok(ids.includes('agent:writer'));
+    assert.ok(
+      ids.some((id) => id.startsWith('agent_group:')),
+      'expected the graph itself as a group',
+    );
+  });
+
+  it('takes the function name when the node is added without one', async () => {
+    const { ids } = await scan(build);
+    assert.ok(
+      ids.includes('agent:plan'),
+      `add_node(plan) should register a node called plan, saw ${ids.join(', ')}`,
+    );
+  });
+
+  it('records a declared edge as a handoff and keeps a conditional branch', async () => {
+    const { edges } = await scan(build);
+    assert.ok(
+      edges.includes('hands_off_to:agent:plan->agent:researcher'),
+      `expected the plan to researcher edge in ${edges.join(', ')}`,
+    );
+    assert.ok(
+      edges.includes('hands_off_to:agent:researcher->agent:writer'),
+      'expected the conditional branch to the writer',
+    );
+    assert.ok(
+      edges.includes('hands_off_to:agent:researcher->agent:plan'),
+      'expected the other conditional branch',
+    );
+  });
+
+  it('models the sentinels as neither nodes nor relations', async () => {
+    const { ids, edges } = await scan(build);
+    assert.equal(ids.includes('agent:START'), false);
+    assert.equal(ids.includes('agent:END'), false);
+    assert.equal(
+      edges.some((edge) => edge.includes('START') || edge.includes('END')),
+      false,
+      `a sentinel became a relation in ${edges.join(', ')}`,
+    );
+  });
+});
+
+/**
+ * The OpenAI Agents SDK in Python.
+ *
+ * Keyword arguments, the `@function_tool` decorator with and without an override, an MCP server whose command
+ * is nested inside `params`, and a handoff that names the variable rather than the declared agent name. Every
+ * shape here is taken from the SDK's own examples and dataclass fields.
+ */
+describe('the OpenAI Agents SDK in Python', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writePythonProject(workspace, { name: 'desk-py', dependencies: ['openai-agents>=0.4'] });
+    workspace.write(
+      'src/desk.py',
+      `from agents import Agent, function_tool
+from agents.mcp import MCPServerStdio
+
+
+@function_tool
+def lookup_order(order_id: str) -> str:
+    """Read the order record for a customer."""
+    return order_id
+
+
+@function_tool(name_override="issue_refund", needs_approval=True)
+def refund(order_id: str) -> str:
+    """Refund a charge."""
+    return order_id
+
+
+filesystem = MCPServerStdio(
+    name="filesystem",
+    params={"command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]},
+)
+
+refunds_agent = Agent(
+    name="refunds",
+    instructions="Issue a refund when the order qualifies, and never twice for one request.",
+    model="gpt-4.1-mini",
+    tools=[lookup_order, refund],
+)
+
+triage_agent = Agent(
+    name="triage",
+    instructions="Route the request to the right worker and answer briefly.",
+    model="gpt-4.1-mini",
+    handoffs=[refunds_agent],
+    mcp_servers=[filesystem],
+)
+`,
+    );
+  };
+
+  it('discovers the agents, the model they name, and the tools', async () => {
+    const { ids, adapters } = await scan(build);
+    assert.ok(
+      adapters.some(
+        (entry) => entry.adapterId === 'adapter:openai-agents' && entry.status === 'completed',
+      ),
+      `the openai agents adapter did not apply: ${adapters.map((entry) => `${entry.adapterId}=${entry.status}`).join(', ')}`,
+    );
+    assert.ok(ids.includes('agent:triage'), `expected agent:triage in ${ids.join(', ')}`);
+    assert.ok(ids.includes('agent:refunds'));
+    // The model is named as a bare string here, so no provider is claimed: `model:gpt-4.1-mini`, not
+    // `model:openai/gpt-4.1-mini`, which is what a call through a provider factory would produce.
+    assert.ok(ids.includes('model:gpt-4.1-mini'), `expected the named model in ${ids.join(', ')}`);
+    assert.equal(
+      ids.some((id) => id.startsWith('provider:')),
+      false,
+      'nothing here named a provider, so none should be claimed',
+    );
+    assert.ok(ids.includes('tool:lookup_order'), 'expected the bare decorated tool');
+    assert.ok(ids.includes('tool:issue_refund'), 'expected the overridden tool name');
+  });
+
+  it('resolves a handoff that names the variable rather than the declared name', async () => {
+    const { edges } = await scan(build);
+    assert.ok(
+      edges.includes('hands_off_to:agent:triage->agent:refunds'),
+      `expected the handoff in ${edges.join(', ')}`,
+    );
+  });
+
+  it('links each agent to the model and each tool to the agent that holds it', async () => {
+    const { edges } = await scan(build);
+    assert.ok(edges.includes('invokes_model:agent:triage->model:gpt-4.1-mini'));
+    assert.ok(edges.includes('calls_tool:agent:refunds->tool:lookup_order'));
+    assert.ok(edges.includes('calls_tool:agent:refunds->tool:issue_refund'));
+  });
+
+  it('reads the MCP server command out of the params mapping', async () => {
+    const { result, edges } = await scan(build);
+    const server = result.graph.components.find(
+      (component) => component.id === 'mcp_server:filesystem',
+    );
+    assert.ok(server !== undefined, 'the MCP server was not discovered');
+    assert.equal(server.details?.for, 'mcp_server');
+    assert.equal(
+      (server.details as { transport?: string }).transport,
+      'stdio',
+      'a server configured with a command is a stdio server',
+    );
+    // The command and its arguments are one invocation, which is what the permission scope has to name.
+    const invocation = 'npx -y @modelcontextprotocol/server-filesystem .';
+    assert.equal((server.details as { command?: string }).command, invocation);
+    assert.deepEqual(server.permissions, [{ kind: 'process', scope: invocation, mode: 'execute' }]);
+    assert.ok(
+      edges.includes('provides_tool:mcp_server:filesystem->agent:triage'),
+      `expected the server to provide tools to the agent, saw ${edges.join(', ')}`,
+    );
+  });
+
+  it('records that the refund tool needs approval', async () => {
+    const { result } = await scan(build);
+    const refund = result.graph.components.find(
+      (component) => component.id === 'tool:issue_refund',
+    );
+    assert.equal(
+      (refund?.details as { approvalRequired?: boolean } | undefined)?.approvalRequired,
+      true,
+      'needs_approval on the decorator was not read',
+    );
+  });
+});
+
 describe('the manifest', () => {
   const manifest = [
     'schemaVersion: 1',

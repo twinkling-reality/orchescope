@@ -35,6 +35,11 @@ const toolNameFrom = (entries: readonly ObjectEntryFact[], fallback: string): st
   stringValue(findEntry(entries, 'name_override')?.value) ??
   fallback;
 
+/** Both spellings, because the two SDKs differ only in the case convention of the option. */
+const approvalFrom = (entries: readonly ObjectEntryFact[]): boolean | undefined =>
+  booleanValue(findEntry(entries, 'needsApproval')?.value) ??
+  booleanValue(findEntry(entries, 'needs_approval')?.value);
+
 const registerTools = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
@@ -46,7 +51,7 @@ const registerTools = (
     const definition = definitionForCall(match.module, match.call);
     const declaredName = toolNameFrom(entries, definition?.name ?? 'tool');
     const identity = sourceIdentity('tool', match.module.file, declaredName);
-    const needsApproval = booleanValue(findEntry(entries, 'needsApproval')?.value);
+    const needsApproval = approvalFrom(entries);
     builder.addComponent(
       drafts.sourceComponent({
         kind: 'tool',
@@ -80,6 +85,7 @@ const registerTools = (
     const entries = decorator?.args[0]?.kind === 'object' ? decorator.args[0].entries : [];
     const declaredName = toolNameFrom(entries, decorated.definition.name);
     const identity = sourceIdentity('tool', decorated.module.file, declaredName);
+    const needsApproval = approvalFrom(entries);
     builder.addComponent(
       drafts.sourceComponent({
         kind: 'tool',
@@ -90,7 +96,10 @@ const registerTools = (
         confidence: decorated.resolved
           ? CONFIDENCE_BANDS.deterministic
           : CONFIDENCE_BANDS.heuristic,
-        details: { for: 'tool' },
+        details: {
+          for: 'tool',
+          ...(needsApproval === undefined ? {} : { approvalRequired: needsApproval }),
+        },
         metadata: { framework: 'openai-agents', declaredName },
         tags: ['openai-agents'],
       }),
@@ -101,6 +110,30 @@ const registerTools = (
   }
 
   return { components };
+};
+
+/**
+ * How a server is reached, from either spelling.
+ *
+ * TypeScript passes `fullCommand` or `url` at the top level. Python nests the same facts inside `params`, as
+ * `{"command": "npx", "args": [...]}`, so the invocation has to be reassembled from two entries. Both end up as
+ * one invocation string, because that is what the permission scope has to name.
+ */
+const serverTransport = (
+  entries: readonly ObjectEntryFact[],
+): { readonly command: string | undefined; readonly url: string | undefined } => {
+  const params = findEntry(entries, 'params')?.value;
+  const nested = params !== undefined && params.kind === 'object' ? params.entries : [];
+  const command =
+    stringValue(findEntry(entries, 'fullCommand')?.value) ??
+    stringValue(findEntry(entries, 'command')?.value) ??
+    stringValue(findEntry(nested, 'command')?.value);
+  const args = identifierItems(findEntry(nested, 'args')?.value);
+  return {
+    command: command === undefined ? undefined : [command, ...args].join(' '),
+    url:
+      stringValue(findEntry(entries, 'url')?.value) ?? stringValue(findEntry(nested, 'url')?.value),
+  };
 };
 
 const registerMcpServers = (
@@ -114,10 +147,7 @@ const registerMcpServers = (
     const definition = definitionForCall(match.module, match.call);
     const declared =
       stringValue(findEntry(entries, 'name')?.value) ?? definition?.name ?? 'mcp-server';
-    const url = stringValue(findEntry(entries, 'url')?.value);
-    const command =
-      stringValue(findEntry(entries, 'fullCommand')?.value) ??
-      stringValue(findEntry(entries, 'command')?.value);
+    const { command, url } = serverTransport(entries);
     const transport = url !== undefined ? 'http' : command !== undefined ? 'stdio' : 'unknown';
     const identity = sourceIdentity('mcp_server', match.module.file, declared);
     builder.addComponent(

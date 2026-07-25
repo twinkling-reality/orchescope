@@ -166,13 +166,17 @@ Only what is tested is claimed. Each of these has an adapter exercised by tests 
 
 | Ecosystem | Discovered from |
 | --- | --- |
-| OpenAI Agents SDK (JavaScript and TypeScript) | `new Agent({...})`, handoffs, tools, MCP servers, `maxTurns` |
-| LangGraph (JavaScript and TypeScript) | `StateGraph`, node and edge registration, conditional edges |
+| OpenAI Agents SDK (JavaScript, TypeScript and Python) | `new Agent({...})` and `Agent(name=...)`, handoffs, tools, `@function_tool` with `name_override` and `needs_approval`, MCP servers including a command nested in `params`, `maxTurns` |
+| LangGraph (JavaScript, TypeScript and Python) | `StateGraph`, `addNode("name", fn)` and `add_node(fn)`, edges, conditional edges |
 | CrewAI (Python) | `Agent(...)`, `Crew(...)`, `agents.yaml`, `crew.jsonc` |
-| Vercel AI SDK | `generateText`, `streamText`, `generateObject`, `tool(...)`, `maxSteps` |
+| Vercel AI SDK (JavaScript and TypeScript) | `generateText`, `streamText`, `generateObject`, `tool(...)`, `maxSteps` |
 | Model SDKs | OpenAI, Anthropic and compatible clients, including base URL overrides |
 | Model Context Protocol | `mcp.json`, `.mcp.json`, `.vscode/mcp.json`, `McpServer`, `FastMCP`, tool registration |
 | OpenTelemetry | OTLP over HTTP, protobuf and JSON, `gen_ai.*` and OpenInference attributes |
+
+Each row names an ecosystem with a fixture repository under `packages/discovery/test`, written the way that framework's own
+documentation writes it, and a test asserting the components, the relations and the evidence. A framework with no fixture is
+one Orchescope does not claim to understand.
 
 Anything else can be declared in `.orchescope/manifest.yaml`, which is a first class input rather than a fallback. A file
 in a language Orchescope cannot parse is reported as not inspected rather than ignored.

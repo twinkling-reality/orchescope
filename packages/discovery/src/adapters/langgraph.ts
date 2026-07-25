@@ -13,6 +13,10 @@ import { importsAny, projectUses } from '../matching.ts';
  * those names. The adapter reads the declared names rather than the runtime graph object, which is what
  * makes the discovery work without importing the user's code. Conditional edges are recorded with their
  * router, and the sentinel names START and END are modelled as entry points rather than as agents.
+ *
+ * The two ecosystems name a node differently. `addNode("planner", planner)` states the name, and Python also
+ * accepts `add_node(planner)`, where the library takes the function's own name. Both are read; nothing else is
+ * treated as a name.
  */
 
 const PACKAGES = [
@@ -45,6 +49,34 @@ const literalName = (value: unknown): string | undefined => {
     const path = (argument as { path: readonly string[] }).path;
     const last = path[path.length - 1];
     return last !== undefined && SENTINELS.has(last) ? last : undefined;
+  }
+  return undefined;
+};
+
+/**
+ * The name a node registration declares.
+ *
+ * Python accepts `add_node(fn)` and documents that the node takes the name of the function or runnable, so an
+ * identifier in that position is a node name rather than an unknown. That form is Python's: the JavaScript API
+ * names a node explicitly, and reading an identifier as a name there would be a guess, so this only applies to
+ * the snake case method in a Python module.
+ */
+const nodeNameFrom = (
+  module: ModuleFacts,
+  call: ModuleFacts['calls'][number],
+  method: string,
+): string | undefined => {
+  const declared = literalName(call.args[0]);
+  if (declared !== undefined) return declared;
+  if (module.language !== 'python' || method !== 'add_node') return undefined;
+  const argument = call.args[0];
+  if (argument === undefined) return undefined;
+  if (argument.kind === 'identifier') {
+    return SENTINELS.has(argument.name) ? undefined : argument.name;
+  }
+  if (argument.kind === 'member') {
+    const last = argument.path[argument.path.length - 1];
+    return last === undefined || SENTINELS.has(last) ? undefined : last;
   }
   return undefined;
 };
@@ -96,7 +128,7 @@ const discoverNodes = (
   for (const call of module.calls) {
     const method = calleeName(call);
     if (!NODE_METHODS.has(method)) continue;
-    const name = literalName(call.args[0]);
+    const name = nodeNameFrom(module, call, method);
     if (name === undefined) continue;
     declaredNodes.add(name);
     const identity = nodeIdentity(module.file, name);
