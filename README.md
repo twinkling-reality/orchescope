@@ -60,6 +60,8 @@ npm install -g orchescope
 npx orchescope audit --open
 ```
 
+Maintainers: the unit that gets published is `release/stage`, not `apps/cli`. See [docs/guides/release.md](docs/guides/release.md).
+
 ## Quickstart
 
 From the root of a repository that contains an agent system:

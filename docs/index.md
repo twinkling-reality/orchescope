@@ -14,6 +14,7 @@ with the quickstart; read the architecture when you want to change something.
 | [Chaos testing](guides/chaos-testing.md) | You want to know what one failure does to the whole task |
 | [Coding agent integration](guides/coding-agent-integration.md) | You work with Claude Code, Codex or another agent |
 | [Adapter development](guides/adapter-development.md) | Your framework is not recognised yet |
+| [Release](guides/release.md) | You maintain this repository and are publishing a version |
 
 ## Product
 

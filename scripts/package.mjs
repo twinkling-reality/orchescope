@@ -1,8 +1,14 @@
 /**
- * Builds a release candidate locally: pack the tarball, record its checksum, and verify it installs and runs.
+ * Builds a release candidate locally: stage the publishable unit, pack it, record its checksum, and verify it
+ * installs and runs.
  *
- * Nothing here publishes anything. Publication is a deliberate human action, so this script stops at producing the
- * artifact and the evidence that the artifact works.
+ * The publishable unit is `release/stage`, not `apps/cli`. The workspace manifest depends on ten
+ * `workspace:*` packages that are compiled into the bundle and never published, so publishing `apps/cli`
+ * directly would put dependency names on the registry that nobody can install. The stage is left in place
+ * after this script finishes, because it is the directory a maintainer publishes from.
+ *
+ * Nothing here publishes anything. Publication is a deliberate human action, so this script stops at producing
+ * the artifact and the evidence that the artifact works.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -18,7 +24,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -35,6 +41,15 @@ const run = (command, args, options = {}) =>
 
 rmSync(releaseDirectory, { recursive: true, force: true });
 mkdirSync(releaseDirectory, { recursive: true });
+
+// The browser workspace is built first, because the bundle copies it in and a release candidate without it
+// cannot serve or export a report. Building it here rather than warning about it keeps this one command
+// sufficient to produce a complete artifact.
+console.log('building the browser workspace');
+run('node', [join(root, 'scripts/build-web.mjs')], {
+  cwd: root,
+  stdio: ['ignore', 'inherit', 'inherit'],
+});
 
 console.log('building the publishable artifact');
 run('node', [join(root, 'scripts/build.mjs')], {
@@ -70,6 +85,42 @@ cpSync(join(cliDirectory, 'dist'), join(stage, 'dist'), { recursive: true });
 cpSync(join(root, 'LICENSE'), join(stage, 'LICENSE'));
 if (existsSync(join(root, 'README.md'))) cpSync(join(root, 'README.md'), join(stage, 'README.md'));
 
+/**
+ * The staged manifest is checked rather than trusted.
+ *
+ * A workspace range that survived staging is the failure this whole approach exists to prevent: it installs
+ * from this repository and fails from the registry, which is the worst place to discover it.
+ */
+const stagedManifest = JSON.parse(readFileSync(join(stage, 'package.json'), 'utf8'));
+const stagingProblems = [];
+for (const [name, range] of Object.entries(stagedManifest.dependencies ?? {})) {
+  if (typeof range !== 'string' || range.startsWith('workspace:')) {
+    stagingProblems.push(`${name} is declared as ${String(range)}, which no registry can resolve`);
+  }
+}
+for (const field of ['devDependencies', 'scripts', 'peerDependencies', 'optionalDependencies']) {
+  if (stagedManifest[field] !== undefined) {
+    stagingProblems.push(`${field} should not reach the published manifest`);
+  }
+}
+const binTarget = stagedManifest.bin?.orchescope;
+if (typeof binTarget !== 'string') {
+  stagingProblems.push('the published manifest declares no orchescope binary');
+} else if (!existsSync(join(stage, binTarget))) {
+  stagingProblems.push(`the declared binary ${binTarget} is not in the staged tree`);
+}
+for (const entry of stagedManifest.files ?? []) {
+  if (!existsSync(join(stage, entry)))
+    stagingProblems.push(`files lists ${entry}, which is absent`);
+}
+if (stagedManifest.engines?.node === undefined) {
+  stagingProblems.push('the published manifest states no supported Node version');
+}
+if (stagingProblems.length > 0) {
+  for (const problem of stagingProblems) console.error(`staging problem: ${problem}`);
+  throw new Error('the staged manifest is not publishable');
+}
+
 console.log('packing the tarball');
 const packOutput = run('npm', ['pack', '--pack-destination', releaseDirectory], { cwd: stage });
 const tarballName = readdirSync(releaseDirectory).find((entry) => entry.endsWith('.tgz'));
@@ -87,7 +138,16 @@ const listing = run('tar', ['-tzf', tarballPath])
   .split('\n')
   .filter((line) => line.length > 0)
   .map((line) => line.replace(/^package\//, ''));
-const required = ['package.json', 'dist/orchescope.mjs', 'LICENSE'];
+// `dist/ui/index.html` is required, not optional: without it `audit --open`, `open` and the html export are
+// controls that fail when pressed.
+const required = [
+  'package.json',
+  'dist/orchescope.mjs',
+  'LICENSE',
+  'dist/ui/index.html',
+  'dist/ui/app.js',
+  'dist/ui/app.css',
+];
 const missing = required.filter((entry) => !listing.includes(entry));
 const hasUi = listing.some((entry) => entry.startsWith('dist/ui/'));
 
@@ -141,7 +201,7 @@ try {
 
   smoke = {
     ok:
-      version.length > 0 &&
+      version === published.version &&
       audit.ok === true &&
       audit.data.agentSystemDetected === true &&
       audit.data.summary.componentCount > 0 &&
@@ -149,9 +209,11 @@ try {
       languages.includes('python') &&
       failedChecks.length === 0,
     detail:
-      failedChecks.length > 0
-        ? `doctor reported a failed check: ${failedChecks.map((check) => check.name).join(', ')}`
-        : `version ${version}, ${audit.data.summary.componentCount} component(s) discovered across ${languages.join(' and ')}`,
+      version !== published.version
+        ? `the installed binary reports ${version}, and the manifest says ${published.version}`
+        : failedChecks.length > 0
+          ? `doctor reported a failed check: ${failedChecks.map((check) => check.name).join(', ')}`
+          : `version ${version}, ${audit.data.summary.componentCount} component(s) discovered across ${languages.join(' and ')}`,
   };
 } catch (error) {
   smoke = {
@@ -162,11 +224,19 @@ try {
   rmSync(sandbox, { recursive: true, force: true });
 }
 
-rmSync(stage, { recursive: true, force: true });
+const publishableUnit = relative(root, stage);
 
 const summary = {
   tarball: tarballName,
+  // The directory a maintainer publishes from. Publishing apps/cli would publish workspace ranges instead.
+  publishableUnit,
+  publishCommand: ['npm', 'publish'],
+  publishedName: stagedManifest.name,
+  publishedVersion: stagedManifest.version,
   publishedDependencies: Object.keys(runtimeDependencies),
+  workspaceDependencies: Object.entries(stagedManifest.dependencies ?? {})
+    .filter(([, range]) => String(range).startsWith('workspace:'))
+    .map(([name]) => name),
   bytes: bytes.length,
   sha256: digest,
   fileCount: listing.length,
@@ -181,17 +251,19 @@ writeFileSync(
 );
 
 console.log('');
-console.log(`tarball          ${tarballName}`);
-console.log(`size             ${(bytes.length / 1024).toFixed(0)} KiB`);
-console.log(`sha256           ${digest}`);
-console.log(`files            ${listing.length}`);
-console.log(`browser workspace ${hasUi ? 'included' : 'MISSING, run pnpm build:web first'}`);
-console.log(`dependencies     ${Object.keys(runtimeDependencies).join(', ')}`);
-console.log(`install smoke    ${smoke.ok ? 'passed' : `FAILED: ${smoke.detail}`}`);
-if (missing.length > 0) console.log(`missing files    ${missing.join(', ')}`);
+console.log(`tarball           ${tarballName}`);
+console.log(`size              ${(bytes.length / 1024).toFixed(0)} KiB`);
+console.log(`sha256            ${digest}`);
+console.log(`files             ${listing.length}`);
+console.log(`browser workspace ${hasUi ? 'included' : 'MISSING'}`);
+console.log(`dependencies      ${Object.keys(runtimeDependencies).join(', ')}`);
+console.log(`install smoke     ${smoke.ok ? 'passed' : `FAILED: ${smoke.detail}`}`);
+console.log(`publishable unit  ${publishableUnit}`);
+if (missing.length > 0) console.log(`missing files     ${missing.join(', ')}`);
 console.log('');
 console.log(
-  'nothing was published. To publish, a maintainer runs npm publish from apps/cli deliberately.',
+  `nothing was published. To publish, a maintainer runs npm publish from ${publishableUnit}, never from apps/cli.`,
 );
+console.log('The checklist is in docs/guides/release.md.');
 
 if (missing.length > 0 || !smoke.ok) process.exitCode = 1;
