@@ -30,6 +30,7 @@ tool.
 | 14. Packaging and distribution | done | `pnpm package`: stage `release/stage`, install the tarball and audit a project with it |
 | 15. Documentation and open source setup | done | `README.md`, `docs/`, `SECURITY.md`, `CONTRIBUTING.md`, CI workflows |
 | 16. Installable product | in progress | see below |
+| 17. Measured against real repositories | not started | the plan is below, the evidence for needing it is in phase 16 |
 
 579 unit and integration tests, 78 end to end tests, 10 browser tests. `pnpm verify` is green.
 
@@ -114,6 +115,98 @@ and it is listed item by item because only some of it is done.
 - **No release workflow.** Adding one would mean claiming a secret exists.
 - **Ecosystem support is unchanged**: the same two languages and the same five framework adapters. Nothing here widened
   what is claimed.
+
+## Phase 17: measured against real repositories
+
+Not started. This is the plan of record for the next effort, and the reason for it is in the numbers above: every
+defect in phase 16 that mattered was found by pointing the tool at a real repository, and none of them could have
+been found by the fixtures. Every adapter is validated against a fixture written by whoever wrote the adapter, which
+is circular: the fixture encodes what the author already believed.
+
+**The thesis. Measurement before more features.** A harness that runs discovery across many pinned real repositories
+and holds the numbers is worth more than three more adapters, because it says which adapters matter, it catches
+framework drift in the field, and it turns "does it work" into a gate. Adapter count is linear grind; the corpus says
+where the grind pays.
+
+### Milestone 1: the corpus harness
+
+`corpus/corpus.yaml` pins one entry per repository: name, url, commit, `kind: agent_system | not_agent_system`, and
+why it is in the corpus. Third party source is never vendored into this repository; it is cloned at the pinned commit
+into a gitignored cache, because licence compliance is a constraint rather than a footnote.
+
+`corpus/expected/<name>.json` is committed and holds what a scan must produce: component count by kind, which
+adapters contributed and how much, blind spots, discarded relations, findings by rule, files parsed over files
+discovered, and whether an agent system was detected. `scripts/corpus.mjs` runs the audit and diffs against the
+expectation. A change is a reviewed diff, never an automatic update, and that diff is the drift alarm: when a
+framework moves and an adapter goes quiet, this is what says so.
+
+Both polarities count. A repository that is not an agent system is a precision test: `seorak` at 28 components is
+the guard that catches the prompt adapter being loosened again. At least three such entries, each with a ceiling.
+
+The required gate runs an offline subset. The network corpus runs from `optional-live.yml` on dispatch.
+
+**Acceptance evidence.** `node scripts/corpus.mjs --check` passes over at least eight repositories covering all six
+framework adapters and three non agent repositories; breaking one adapter deliberately makes it fail and name that
+adapter; the summary reports parse rate, adapter contribution and blind spots per repository.
+
+### Milestone 2: findings that survive a real repository
+
+`openai/openai-agents-python` produces 439 findings, 211 from one rule and 193 from another. Two hundred instances of
+one pattern is one problem, not two hundred, and a `low` finding repeated 193 times must not bury a `high` one.
+
+Group by rule into one finding with a representative instance, an occurrence count and the component list. Cap per
+rule output with the withheld count stated rather than silently. Rank by severity, then goal eligibility, then blast
+radius. Re examine `configured-tool-has-no-caller` and `topology-shape` against the corpus: a rule that fires on two
+hundred sites in a healthy repository is probably measuring the wrong thing.
+
+**Acceptance evidence.** The same repository yields a report a person can read, with the finding count and rule
+distribution before and after, plus rule tests for grouping including one that proves a withheld count is stated.
+
+### Milestone 3: the runtime join on something other than the demonstration
+
+The declared against exercised delta is the defensible centre and it has only ever been shown on `apps/demo`.
+
+Get one corpus repository to produce spans and reconcile. The variables and the empty run message are in place; the
+open question is whether the join matches names on third party code. Expect mismatches: a LangGraph graph reports a
+generic name, and a Pydantic AI agent reports the name the library inferred. A name that cannot match is a finding
+about observability, not a silent gap. `trace --import` reads a file; importing from a running collector is the
+missing path, and it needs a design before an implementation.
+
+**Acceptance evidence.** A corpus entry with a stored run whose delta is asserted, and a written account of every
+name that failed to match and why.
+
+### Milestone 4: the breadth ceiling, decided from evidence
+
+**The model based path is scaffolding with nothing behind it.** The configuration, the policy gate, the doctor check,
+the report capability, the `model_interpreted` basis and the severity cap all exist, and nothing in the product ever
+calls a model: `modelInterpretationEvidence` has no caller outside tests. So the gate opens onto nothing, the README
+implies a feature that is absent, and the optional workflow asserts over an empty array and passes vacuously. Either
+implement it as proposals and never as facts, meaning a bounded, opt in, content hash cached pass that reads the
+facts of a file no adapter could read and proposes components as a manifest draft for a person or an agent to accept,
+or remove the dead interface and state that analysis is deterministic. Record the decision as an ADR.
+
+**Language breadth follows demand.** Go, Rust, Java and C# are reported as not inspected, and each needs a parser and
+a fact extractor, which is the most expensive work available here. Take one on only when the corpus shows agent
+systems in it. The manifest remains the honest escape hatch until then.
+
+### The failure modes this repository actually produces
+
+Four shapes, every one of them found here rather than imagined. Look for them in anything you touch.
+
+1. **Documentation describing behaviour the code does not have.** Two documented manifest examples the validator
+   rejected. A model analysis feature with no implementation. A prompt adapter whose comment stated the right rule
+   while the code implemented a weaker one.
+2. **Fixtures that agree with their author.** Fixtures written from a framework's own published source found three
+   defects in adapters assumed to work. A fixture written from memory finds nothing.
+3. **Vacuous claims.** A strength about a topology with no agent in it. A workflow asserting over an empty array. A
+   precision gate that fires on ordinary English.
+4. **Silence where a limit belongs.** "No agent system was detected" when the truth was that the reader was behind.
+   A crash where a dropped relation and a reported defect were the right answer.
+
+### Out of scope for this phase
+
+All interface work. The report leads with signal well enough to work with, and what limits the product today is the
+depth and breadth of what it has to report. Interface work comes after these four milestones.
 
 ## What each phase had to establish
 
