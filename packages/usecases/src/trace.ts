@@ -1,10 +1,20 @@
 import { readFileSync } from 'node:fs';
-import { createDeadline, type Deadline, OrchescopeError, runId as makeRunId } from '@orchescope/domain';
+import {
+  createDeadline,
+  type Deadline,
+  runId as makeRunId,
+  OrchescopeError,
+} from '@orchescope/domain';
 import { assertAllowed, commandDecision } from '@orchescope/policy';
 import { runTracedSession, type TraceSessionResult } from '@orchescope/runtime';
 import type { RunEnvironment, RunRecord, Timestamp } from '@orchescope/schema';
-import { type DecodedTraceRequest, decodeTraceJson, deriveTopology, normalizeTraces } from '@orchescope/traces';
-import { type Workspace, resolveInsideRoot } from '@orchescope/workspace';
+import {
+  type DecodedTraceRequest,
+  decodeTraceJson,
+  deriveTopology,
+  normalizeTraces,
+} from '@orchescope/traces';
+import { resolveInsideRoot, type Workspace } from '@orchescope/workspace';
 import { currentEnvironment } from './environment.ts';
 
 /**
@@ -244,10 +254,15 @@ export const importTrace = (request: ImportTraceRequest): TraceResult => {
     maxAttributeBytes: workspace.config.runtime.maxSpanAttributeBytes,
   });
   if (normalized.bundle.spans.length === 0) {
-    throw new OrchescopeError('INVALID_ARGUMENT', `${request.file} contained no span this build can read.`, {
-      detail: { rejected: normalized.bundle.rejected.map((entry) => entry.reason).join('; ') },
-      remediation: 'Check that the file is OTLP JSON or newline delimited spans, and that identifiers are hex or base64.',
-    });
+    throw new OrchescopeError(
+      'INVALID_ARGUMENT',
+      `${request.file} contained no span this build can read.`,
+      {
+        detail: { rejected: normalized.bundle.rejected.map((entry) => entry.reason).join('; ') },
+        remediation:
+          'Check that the file is OTLP JSON or newline delimited spans, and that identifiers are hex or base64.',
+      },
+    );
   }
 
   const derived = deriveTopology(normalized.bundle);
@@ -312,7 +327,8 @@ const decodeNdjson = (text: string, file: string): DecodedTraceRequest => {
       malformed += 1;
       continue;
     }
-    const record = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+    const record =
+      typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
     const wrapped =
       record['resourceSpans'] === undefined
         ? { resourceSpans: [{ scopeSpans: [{ spans: [record] }] }] }
@@ -322,6 +338,7 @@ const decodeNdjson = (text: string, file: string): DecodedTraceRequest => {
     rejected.push(...decoded.rejected);
   }
 
-  if (malformed > 0) rejected.push({ reason: `${file} had lines that were not JSON`, count: malformed });
+  if (malformed > 0)
+    rejected.push({ reason: `${file} had lines that were not JSON`, count: malformed });
   return { resourceSpans, rejected };
 };

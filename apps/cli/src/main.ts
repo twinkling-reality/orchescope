@@ -137,7 +137,10 @@ program
   .description('run a command, collect its OpenTelemetry spans, and store them as a run')
   .option('--label <label>', 'name for this run')
   .option('--timeout <ms>', 'deadline for the command')
-  .option('--import <file>', 'store spans from an OTLP JSON or newline delimited file instead of running anything')
+  .option(
+    '--import <file>',
+    'store spans from an OTLP JSON or newline delimited file instead of running anything',
+  )
   .argument('[command...]', 'the command to run, after a double dash')
   .action(
     async (command: string[], options: { label?: string; timeout?: string; import?: string }) => {

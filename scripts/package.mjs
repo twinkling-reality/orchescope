@@ -61,9 +61,10 @@ for (const name of EXTERNAL_AT_RUNTIME) {
   }
   runtimeDependencies[name] = version;
 }
-const published = { ...manifest, dependencies: runtimeDependencies };
-delete published.devDependencies;
-delete published.scripts;
+// Development dependencies and scripts describe how the artifact is built, not how it is used, so they are omitted
+// rather than published.
+const { devDependencies: _devDependencies, scripts: _scripts, ...rest } = manifest;
+const published = { ...rest, dependencies: runtimeDependencies };
 writeFileSync(join(stage, 'package.json'), `${JSON.stringify(published, null, 2)}\n`);
 cpSync(join(cliDirectory, 'dist'), join(stage, 'dist'), { recursive: true });
 cpSync(join(root, 'LICENSE'), join(stage, 'LICENSE'));

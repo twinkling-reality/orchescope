@@ -42,13 +42,21 @@ orchescope audit --open
 
 Node.js 24 or newer is required. There is no compiler step and no native build on install.
 
+**This is not published to npm yet.** Until it is, install the artifact this repository builds:
+
+```
+pnpm install
+pnpm package                       # builds, packs and verifies the tarball
+npm install -g release/orchescope-0.1.0.tgz
+```
+
+`pnpm package` also installs the tarball into a temporary prefix and audits a project with it, so a failure there means the
+artifact is broken rather than your machine.
+
+Once published, the intended distribution is the usual one, and every command in this document works the same way:
+
 ```
 npm install -g orchescope
-```
-
-Or run it without installing:
-
-```
 npx orchescope audit --open
 ```
 
@@ -162,14 +170,13 @@ in a language Orchescope cannot parse is reported as not inspected rather than i
 ## Try it on the demonstration system
 
 The repository contains a small multi agent system that runs offline with no credentials and no paid model. It has
-deliberate weaknesses, including a retry around a refund whose idempotency is not established.
+deliberate weaknesses, including a retry around a refund whose idempotency is not established. From a clone of this
+repository:
 
 ```
-git clone https://github.com/orchescope/orchescope
-cd orchescope
 pnpm install
-pnpm orchescope --cwd apps/demo test --scenario support-desk
-pnpm orchescope --cwd apps/demo audit --open
+pnpm orchescope -- --cwd apps/demo test --scenario support-desk
+pnpm orchescope -- --cwd apps/demo audit --open
 ```
 
 The audit reports the duplicated refund with the span that produced it, offers to turn it into a goal, and after the fix

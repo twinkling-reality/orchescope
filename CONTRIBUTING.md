@@ -6,8 +6,6 @@ human or agent, editing the repository.
 ## Set up
 
 ```
-git clone https://github.com/orchescope/orchescope
-cd orchescope
 pnpm install
 ```
 

@@ -30,8 +30,8 @@ export {
 } from './scenario.ts';
 export { scenarioPolicyFrom } from './scenario-policy.ts';
 export {
-  importTrace,
   type ImportTraceRequest,
+  importTrace,
   runTrace,
   type TraceRequest,
   type TraceResult,

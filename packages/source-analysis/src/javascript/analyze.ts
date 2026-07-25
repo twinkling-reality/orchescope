@@ -228,7 +228,9 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
       return {
         kind: 'call',
         path,
-        args: nodeArray(field(node, 'arguments')).map((argument) => argumentFact(argument, context)),
+        args: nodeArray(field(node, 'arguments')).map((argument) =>
+          argumentFact(argument, context),
+        ),
       };
     }
     case 'ArrowFunctionExpression':

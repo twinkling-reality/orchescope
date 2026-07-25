@@ -4,10 +4,10 @@ Five minutes, one repository, no configuration.
 
 ## Install
 
-Node.js 24 or newer. No compiler, no native build.
+Node.js 24 or newer. No compiler, no native build. Until this is published to npm, install the tarball this repository
+builds with `pnpm package`; see the README.
 
 ```
-npm install -g orchescope
 orchescope doctor
 ```
 
@@ -104,14 +104,12 @@ success declined. The validation reports each criterion as satisfied, refused or
 ## Try it on the demonstration system
 
 If you want to see the whole loop before pointing it at your own code, the repository contains a small multi agent system
-that runs offline with no credentials:
+that runs offline with no credentials. From a clone of this repository:
 
 ```
-git clone https://github.com/orchescope/orchescope
-cd orchescope
 pnpm install
-pnpm orchescope --cwd apps/demo test --scenario support-desk
-pnpm orchescope --cwd apps/demo audit --open
+pnpm orchescope -- --cwd apps/demo test --scenario support-desk
+pnpm orchescope -- --cwd apps/demo audit --open
 ```
 
 It has deliberate weaknesses, including a retry around a refund whose idempotency is not established, so the report has

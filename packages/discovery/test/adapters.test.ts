@@ -1,8 +1,8 @@
+import assert from 'node:assert/strict';
+import { after, describe, it } from 'node:test';
 import { createDeadline, fixedClock } from '@orchescope/domain';
 import { DEFAULT_EXCLUDED_DIRECTORIES } from '@orchescope/source-analysis';
 import { createTempWorkspace, writeNodeProject, writePythonProject } from '@orchescope/testkit';
-import assert from 'node:assert/strict';
-import { after, describe, it } from 'node:test';
 import { discover } from '../src/discover.ts';
 
 /**
@@ -83,7 +83,9 @@ export const app = graph.compile();
   it('discovers the graph as a group and every registered node as an agent', async () => {
     const { ids, adapters } = await scan(build);
     assert.ok(
-      adapters.some((entry) => entry.adapterId === 'adapter:langgraph' && entry.status === 'completed'),
+      adapters.some(
+        (entry) => entry.adapterId === 'adapter:langgraph' && entry.status === 'completed',
+      ),
       `the langgraph adapter did not apply: ${adapters.map((entry) => `${entry.adapterId}=${entry.status}`).join(', ')}`,
     );
     assert.ok(ids.includes('agent:planner'), `expected agent:planner in ${ids.join(', ')}`);
@@ -151,7 +153,9 @@ reviewer:
   it('discovers agents from source and from the configuration file', async () => {
     const { ids, adapters } = await scan(build);
     assert.ok(
-      adapters.some((entry) => entry.adapterId === 'adapter:crewai' && entry.status === 'completed'),
+      adapters.some(
+        (entry) => entry.adapterId === 'adapter:crewai' && entry.status === 'completed',
+      ),
       'the crewai adapter did not apply',
     );
     assert.ok(ids.includes('agent:researcher'), `expected agent:researcher in ${ids.join(', ')}`);
@@ -244,11 +248,73 @@ export async function answer(question: string) {
   });
 });
 
+describe('model SDKs', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writeNodeProject(workspace, {
+      name: 'sdk-app',
+      dependencies: { openai: '^6.0.0', '@anthropic-ai/sdk': '^0.70.0' },
+    });
+    workspace.write(
+      'src/clients.ts',
+      `import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
+
+// A gateway in front of the provider is the case a permission scope has to record accurately.
+export const routed = new OpenAI({ baseURL: 'https://gateway.internal/v1', timeout: 20000 });
+
+export const direct = new Anthropic();
+
+export async function answer(prompt: string) {
+  return routed.chat.completions.create({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }] });
+}
+`,
+    );
+  };
+
+  it('discovers a provider per client, and the model each call names', async () => {
+    const { ids, adapters } = await scan(build);
+    assert.ok(
+      adapters.some(
+        (entry) => entry.adapterId === 'adapter:model-sdk' && entry.status === 'completed',
+      ),
+      'the model sdk adapter did not apply',
+    );
+    assert.ok(ids.includes('provider:openai'), `expected provider:openai in ${ids.join(', ')}`);
+    assert.ok(ids.includes('provider:anthropic'));
+    assert.ok(
+      ids.includes('model:openai/gpt-4o-mini'),
+      `expected the model named in the call, in ${ids.join(', ')}`,
+    );
+  });
+
+  it('records a base URL override as the network scope, not the provider name', async () => {
+    const { result } = await scan(build);
+    const openai = result.graph.components.find((component) => component.id === 'provider:openai');
+    assert.ok(openai !== undefined);
+    assert.equal(openai.metadata['baseUrl'], 'https://gateway.internal/v1');
+    assert.equal(openai.metadata['timeoutMs'], 20000);
+    assert.deepEqual(openai.permissions, [
+      { kind: 'network', scope: 'https://gateway.internal/v1', mode: 'write' },
+    ]);
+  });
+
+  it('records a client with no override against the provider itself', async () => {
+    const { result } = await scan(build);
+    const anthropic = result.graph.components.find(
+      (component) => component.id === 'provider:anthropic',
+    );
+    assert.equal(anthropic?.permissions[0]?.scope, 'anthropic');
+  });
+});
+
 describe('a repository with none of them', () => {
   it('reports no agent system rather than inventing one', async () => {
     const { result, ids } = await scan((workspace) => {
       writeNodeProject(workspace, { name: 'plain-app' });
-      workspace.write('src/math.ts', 'export const add = (a: number, b: number): number => a + b;\n');
+      workspace.write(
+        'src/math.ts',
+        'export const add = (a: number, b: number): number => a + b;\n',
+      );
     });
     assert.equal(result.agentSystemDetected, false);
     assert.equal(
