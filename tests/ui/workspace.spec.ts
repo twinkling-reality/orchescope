@@ -73,17 +73,15 @@ test('the map carries a keyboard navigable table with the same components', asyn
   expect(await grid.getByRole('row').count()).toBeGreaterThan(5);
 
   // Exactly one row is in the tab order at a time, and the arrow keys move it: the composite widget pattern.
+  // Every step is a retrying assertion, because reading the active element once races the focus that precedes it.
   const focusable = grid.locator('tr[tabindex="0"]');
   await expect(focusable).toHaveCount(1);
+  const first = (await focusable.getAttribute('aria-rowindex')) ?? '';
   await focusable.focus();
-  const first = await grid.evaluate(
-    () => document.activeElement?.getAttribute('aria-rowindex') ?? '',
-  );
+  await expect(focusable).toBeFocused();
   await page.keyboard.press('ArrowDown');
-  const second = await grid.evaluate(
-    () => document.activeElement?.getAttribute('aria-rowindex') ?? '',
-  );
-  expect(second).not.toEqual(first);
+  await expect(focusable).not.toHaveAttribute('aria-rowindex', first);
+  await expect(focusable).toBeFocused();
 });
 
 test('the map filters narrow both the canvas and the table', async ({ page }) => {
