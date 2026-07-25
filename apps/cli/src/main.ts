@@ -84,6 +84,23 @@ program
   .option('--no-color', 'disable colour')
   .showHelpAfterError()
   .configureHelp({ sortSubcommands: true })
+  /**
+   * Running the binary with no arguments prints this list, so the list has to say where to start. Fourteen
+   * commands in alphabetical order tell a first time reader nothing about which one to run first.
+   */
+  .addHelpText(
+    'afterAll',
+    [
+      '',
+      'Start here, from the root of a repository that contains an agent system:',
+      '  orchescope audit --open              map it, reconcile it against any stored runs, open the report',
+      '  orchescope trace -- <your command>   run it once so the report has runtime evidence, then audit again',
+      '  orchescope init --manifest           declare a system this build cannot read from source',
+      '  orchescope doctor                    check this machine can run every command',
+      '',
+      'Every command accepts --json and then writes exactly one JSON document, including on failure.',
+    ].join('\n'),
+  )
   // An unknown command or a malformed flag is a caller mistake, which this interface reports as exit code 2. The
   // argument parser exits 1 by default, and 1 means "the command ran and found something you asked to fail on".
   .exitOverride((error) => {

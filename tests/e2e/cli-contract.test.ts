@@ -111,6 +111,25 @@ describe('startup and discovery', () => {
     }
   });
 
+  /**
+   * The bare invocation prints the help, so the help is the first thing a stranger reads. It has to say where to
+   * start, and every invocation it suggests has to be one this binary accepts.
+   */
+  it('says where to start, and every command it suggests exists', async () => {
+    const result = await run(['--help']);
+    assert.match(result.stdout, /Start here/);
+    const suggested = [...result.stdout.matchAll(/^ {2}orchescope ([a-z]+(?: [a-z]+)?)/gm)].map(
+      (match) => match[1] as string,
+    );
+    assert.ok(suggested.length >= 3, `the help suggests too little: ${suggested.join(', ')}`);
+    for (const suggestion of suggested) {
+      const verb = suggestion.split(' ');
+      const help = await run([...verb, '--help']);
+      assert.equal(help.code, EXIT.success, `orchescope ${suggestion} is not a command`);
+      assert.match(help.stdout, new RegExp(`Usage: orchescope ${suggestion}`));
+    }
+  });
+
   it('refuses an unknown command with the caller error code', async () => {
     const result = await run(['not-a-command']);
     assert.equal(result.code, EXIT.user);

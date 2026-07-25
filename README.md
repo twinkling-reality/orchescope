@@ -46,7 +46,7 @@ Node.js 24 or newer is required. There is no compiler step and no native build o
 
 ```
 pnpm install
-pnpm package                       # builds, packs and verifies the tarball
+pnpm package                       # builds the bundle and the browser workspace, packs, installs and audits with it
 npm install -g release/orchescope-0.1.0.tgz
 ```
 
@@ -97,6 +97,7 @@ orchescope audit
 | `orchescope export --format <json\|mermaid\|sarif\|html>` | Export the report |
 | `orchescope mcp serve` | Speak the Model Context Protocol on stdio |
 | `orchescope init` | Create `.orchescope` with a configuration file listing every default |
+| `orchescope init --manifest` | Also write a manifest template for a system no adapter can read from source |
 | `orchescope doctor` | Check that this machine can run every command this build offers |
 
 Every command accepts `--json` and then writes exactly one JSON document to standard output, including on failure. Exit

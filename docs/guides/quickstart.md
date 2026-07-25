@@ -48,8 +48,15 @@ Findings
 Read the last line before the findings. Nine rules ran and found nothing, three could not decide because they lacked
 evidence, and that is different from nine clear results.
 
-If nothing was detected, the output says so and points at `.orchescope/manifest.yaml`, which is how you declare a system no
-adapter recognises. See [adapter-development.md](adapter-development.md).
+If nothing was detected, the output says what it looked for, what it could not inspect, and the next step:
+
+```
+orchescope init --manifest
+```
+
+That writes `.orchescope/manifest.yaml` with the component kinds, relation kinds and side effect classes the validator
+accepts, and declares nothing until you fill it in. A manifest the validator rejects is reported as a failed adapter with
+the field that failed, never ignored. See [adapter-development.md](adapter-development.md).
 
 ## Open the report
 

@@ -27,10 +27,48 @@ tool.
 | 11. Report bundle and browser workspace | done | `tests/ui/workspace.spec.ts`, 10 tests in Chromium |
 | 12. Agent interface | done | `packages/mcp/test/contract.test.ts`, 15 tests |
 | 13. Security controls | done | `packages/report-server/test/server.test.ts`, `packages/redaction/test/redact.test.ts` |
-| 14. Packaging and distribution | done | `pnpm package`: install and audit a project with the tarball |
+| 14. Packaging and distribution | done | `pnpm package`: stage `release/stage`, install the tarball and audit a project with it |
 | 15. Documentation and open source setup | done | `README.md`, `docs/`, `SECURITY.md`, `CONTRIBUTING.md`, CI workflows |
+| 16. Installable product | in progress | see below |
 
-534 unit and integration tests, 26 end to end tests, 10 browser tests. `pnpm verify` is green.
+548 unit and integration tests, 59 end to end tests, 10 browser tests. `pnpm verify` is green.
+
+## Phase 16: what a stranger meets
+
+Phases 1 to 15 built the loop. This phase is about the path a person who has never seen this repository takes through it,
+and it is listed item by item because only some of it is done.
+
+**Done, with evidence:**
+
+- **The publishable unit is real.** `release/stage` is staged, checked for a surviving `workspace:` range, for a declared
+  binary that exists, for a `files` entry that does not, and for the browser workspace, then packed and installed.
+  `pnpm package` prints the directory to publish from, and `docs/guides/release.md` is the maintainer checklist.
+  Evidence: `release/release-summary.json` records `publishableUnit`, `workspaceDependencies: []` and a passing install
+  smoke test that audits a TypeScript and Python project with the installed binary.
+- **The manifest escape hatch works.** Both documented examples were rejected by the validator; both are corrected and
+  `tests/e2e/documented-manifests.test.ts` audits every documented manifest example through the real reader. A manifest
+  the validator rejects is now a failed adapter run whose detail names the field, printed on the terminal and shown in the
+  report rather than swallowed. `orchescope init --manifest` writes a template that validates and declares nothing.
+- **A repository with nothing detected gets a report rather than a shrug**: what was looked for, what could not be
+  inspected, and `orchescope init --manifest` as the next step instead of a trace that cannot help.
+- **An empty traced run names its causes**: the receiver address, the OpenTelemetry variables that were set, the three
+  things that actually cause an empty run, and the two ways forward that need no instrumentation.
+  Evidence: `tests/e2e/runtime-onboarding.test.ts`, which also proves that honouring the endpoint variable is the whole
+  contract by exporting one span by hand.
+- **The report leads with signal**: the reconciliation delta or an explicit static only statement, the three worst
+  findings by severity, and the next step derived from the report. Identifiers, adapter runs, the evidence legend and the
+  capability table are collapsed. Every command the report prints is checked against the real command line surface by
+  `tests/e2e/report-commands.test.ts`, which found seven invocations that did not exist.
+- **The agent interface is exercised over a real transport**: `tests/e2e/mcp-stdio.test.ts` speaks newline delimited
+  JSON-RPC to `orchescope mcp serve`, and holds that standard output carries protocol traffic and nothing else.
+
+**Not done:**
+
+- **Not published to npm.** `npm install -g orchescope` does not work yet. Publishing needs a registry credential this
+  repository deliberately does not hold, so it stays a maintainer action with a checklist.
+- **No release workflow.** Adding one would mean claiming a secret exists.
+- **Ecosystem support is unchanged**: the same two languages and the same five framework adapters. Nothing here widened
+  what is claimed.
 
 ## What each phase had to establish
 
