@@ -30,7 +30,7 @@ tool.
 | 14. Packaging and distribution | done | `pnpm package`: stage `release/stage`, install the tarball and audit a project with it |
 | 15. Documentation and open source setup | done | `README.md`, `docs/`, `SECURITY.md`, `CONTRIBUTING.md`, CI workflows |
 | 16. Installable product | in progress | see below |
-| 17. Measured against real repositories | in progress | milestones 1 to 3 done: `pnpm corpus` across fourteen pinned repositories |
+| 17. Measured against real repositories | done | `pnpm corpus` across fourteen pinned repositories, `docs/architecture/adr/0002-deterministic-analysis.md` |
 
 594 unit and integration tests, 85 end to end tests, 10 browser tests. `pnpm verify` is green.
 
@@ -118,7 +118,7 @@ and it is listed item by item because only some of it is done.
 
 ## Phase 17: measured against real repositories
 
-Milestones 1 to 3 are done, one remains. The reason for the phase is in the numbers above: every defect in phase 16 that
+All four milestones are done. The reason for the phase is in the numbers above: every defect in phase 16 that
 mattered was found by pointing the tool at a real repository, and none of them could have been found by the fixtures.
 Every adapter is validated against a fixture written by whoever wrote the adapter, which is circular: the fixture
 encodes what the author already believed.
@@ -264,27 +264,41 @@ author's code is not evidence of anything.
 a design. Scoping component identity to a module rather than to a repository is the fix for the accidental match, and
 it is a design question rather than a patch.
 
-### Milestone 4: the breadth ceiling, decided from evidence
+### Milestone 4: the breadth ceiling, decided from evidence. Done.
 
-**The model based path is scaffolding with nothing behind it.** The configuration, the policy gate, the doctor check,
-the report capability, the `model_interpreted` basis and the severity cap all exist, and nothing in the product ever
-calls a model: `modelInterpretationEvidence` has no caller outside tests. So the gate opens onto nothing, the README
-implies a feature that is absent, and the optional workflow asserts over an empty array and passes vacuously. Either
-implement it as proposals and never as facts, meaning a bounded, opt in, content hash cached pass that reads the
-facts of a file no adapter could read and proposes components as a manifest draft for a person or an agent to accept,
-or remove the dead interface and state that analysis is deterministic. Record the decision as an ADR.
+**The model based path was scaffolding with nothing behind it, and it is gone.** The configuration block, the policy
+gate, the doctor check, the evidence builder and the scenario judge hook were all present and nothing called a model.
+[ADR 0002](docs/architecture/adr/0002-deterministic-analysis.md) records the decision, and the corpus is what made it
+answerable rather than a preference: no pinned repository contains a language no parser here reads, so the case the
+model path existed for does not occur in the corpus, and every gap the corpus does report is an adapter form in a
+language already parsed. Teaching an adapter a form is deterministic, cheaper and already scoped by the blind spot
+report, which names the framework and the adapter for each one.
 
-**Language breadth follows demand.** Go, Rust, Java and C# are reported as not inspected, and each needs a parser and
-a fact extractor, which is the most expensive work available here. Take one on only when the corpus shows agent
-systems in it. The manifest remains the honest escape hatch until then.
+What went: `semanticAnalysis` and with it the `config` document at version 2, `semanticAnalysisDecision`, the doctor
+check, `modelInterpretationEvidence`, the `judge` hook no caller supplied, the workflow job that asserted over an
+empty array, and every documentation sentence claiming the product interprets a repository with a model. What stayed:
+`model_interpreted` in the basis vocabulary with its cap, the report capability answered permanently unavailable with
+its reason, and the `model_judge` evaluator kind, because those are terms in versioned contracts rather than controls
+that do nothing. A configuration file that still carries the retired block is read and the omission is reported, not
+refused, because configuration is committed and an upgrade should not fail an audit on a key that used to work.
+Evidence: four tests in `packages/workspace/test/config.test.ts`, including one that reads a version 1 file with the
+block in it.
+
+**Language breadth is not taken on, and the corpus is why.** Go, Rust, Java and C# are still reported as not
+inspected. `languagesNotAnalysed` is empty in all fourteen expectations: not one pinned repository, agent system or
+not, contains a file in a language this build does not read. A parser and a fact extractor are the most expensive work
+available here, and nothing measured asks for one yet. The manifest remains the escape hatch, and the corpus is where
+the evidence to reverse this will appear: an entry whose expectation records a language gap next to an agent system in
+it.
 
 ### The failure modes this repository actually produces
 
 Four shapes, every one of them found here rather than imagined. Look for them in anything you touch.
 
 1. **Documentation describing behaviour the code does not have.** Two documented manifest examples the validator
-   rejected. A model analysis feature with no implementation. A prompt adapter whose comment stated the right rule
-   while the code implemented a weaker one.
+   rejected. A model analysis feature with no implementation, described across eight documents. A prompt adapter whose
+   comment stated the right rule while the code implemented a weaker one. A parse rate that divided by the wrong
+   denominator and called the result coverage.
 2. **Fixtures that agree with their author.** Fixtures written from a framework's own published source found three
    defects in adapters assumed to work. A fixture written from memory finds nothing.
 3. **Vacuous claims.** A strength about a topology with no agent in it. A workflow asserting over an empty array. A
@@ -296,6 +310,19 @@ Four shapes, every one of them found here rather than imagined. Look for them in
 
 All interface work. The report leads with signal well enough to work with, and what limits the product today is the
 depth and breadth of what it has to report. Interface work comes after these four milestones.
+
+### What phase 17 leaves open
+
+- **Import from a running collector.** `trace --import` reads a file. Importing from a collector is the missing path
+  and needs a design before an implementation.
+- **Component identity scoped to a module rather than a repository.** The first third party join matched a model named
+  `test` to a declaration in an unrelated test file. It is a real match by name and the wrong one, and the fix is a
+  design question.
+- **Four blind spots with names on them.** `langgraphjs` imports the Vercel AI SDK and an OpenAI client that the
+  adapters claiming them read nothing from; `crewai` and `anthropic-quickstarts` import the MCP SDK in source while the
+  MCP adapter reads configuration. Each is an adapter form to learn, and each has a pinned repository to prove it on.
+- **A second exercised entry, in JavaScript.** The join has been shown on one repository, one library and one run of
+  four spans. Nothing establishes it for JavaScript instrumentation.
 
 ## What each phase had to establish
 
