@@ -18,13 +18,17 @@ const componentChanges = (baseline: Component, candidate: Component): readonly s
     changes.push('details changed');
   }
   if (baseline.sideEffect !== candidate.sideEffect) {
-    changes.push(`side effect class ${baseline.sideEffect ?? 'unset'} to ${candidate.sideEffect ?? 'unset'}`);
+    changes.push(
+      `side effect class ${baseline.sideEffect ?? 'unset'} to ${candidate.sideEffect ?? 'unset'}`,
+    );
   }
   if (canonicalJson(baseline.permissions) !== canonicalJson(candidate.permissions)) {
     changes.push('permissions changed');
   }
   if (baseline.presence.runtime !== candidate.presence.runtime) {
-    changes.push(candidate.presence.runtime ? 'now exercised at runtime' : 'no longer exercised at runtime');
+    changes.push(
+      candidate.presence.runtime ? 'now exercised at runtime' : 'no longer exercised at runtime',
+    );
   }
   const baselineFiles = baseline.sourceLocations.map((location) => location.file).sort();
   const candidateFiles = candidate.sourceLocations.map((location) => location.file).sort();
@@ -62,7 +66,10 @@ export const diffGraphs = (baseline: SystemGraph, candidate: SystemGraph): Graph
     const match = addedKeys.find((addedKey) => {
       if (consumedAdds.has(addedKey)) return false;
       const addedComponent = candidateComponents.get(addedKey);
-      return addedComponent !== undefined && isRenameOf(addedComponent.identity, removedComponent.identity);
+      return (
+        addedComponent !== undefined &&
+        isRenameOf(addedComponent.identity, removedComponent.identity)
+      );
     });
     if (match === undefined) continue;
     const addedComponent = candidateComponents.get(match);
@@ -77,13 +84,16 @@ export const diffGraphs = (baseline: SystemGraph, candidate: SystemGraph): Graph
     const baselineComponent = baselineComponents.get(key);
     if (baselineComponent === undefined) continue;
     const changes = componentChanges(baselineComponent, candidateComponent);
-    if (changes.length > 0) changed.push({ componentId: candidateComponent.id, changes: [...changes] });
+    if (changes.length > 0)
+      changed.push({ componentId: candidateComponent.id, changes: [...changes] });
   }
 
   const baselineById = new Map(baseline.components.map((component) => [component.id, component]));
   const candidateById = new Map(candidate.components.map((component) => [component.id, component]));
   const baselineEdges = new Map(baseline.edges.map((edge) => [edgeKey(edge, baselineById), edge]));
-  const candidateEdges = new Map(candidate.edges.map((edge) => [edgeKey(edge, candidateById), edge]));
+  const candidateEdges = new Map(
+    candidate.edges.map((edge) => [edgeKey(edge, candidateById), edge]),
+  );
 
   return {
     addedComponents: addedKeys

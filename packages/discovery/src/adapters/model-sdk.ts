@@ -10,7 +10,7 @@ import {
   stringValue,
 } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
-import { GLOBAL_NAMESPACES, createDrafts, globalIdentity, sourceIdentity } from '../drafts.ts';
+import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
 import { importsAny, moduleMatches, projectUses } from '../matching.ts';
 
 /**
@@ -99,7 +99,9 @@ const registerProviderClients = (
           location: call.location,
           symbol: dotted(call.calleePath),
           confidence: resolved ? CONFIDENCE_BANDS.deterministic : CONFIDENCE_BANDS.structural,
-          permissions: [{ kind: 'network', scope: baseUrlFromConfig ?? provider.provider, mode: 'write' }],
+          permissions: [
+            { kind: 'network', scope: baseUrlFromConfig ?? provider.provider, mode: 'write' },
+          ],
           metadata: {
             client: dotted(call.calleePath),
             ...(baseUrlFromConfig === undefined ? {} : { baseUrl: baseUrlFromConfig }),

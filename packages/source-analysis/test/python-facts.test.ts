@@ -74,7 +74,10 @@ def plain(x: int) -> int:
     const entries = decorated?.decorators[0]?.args[0];
     assert.equal(entries?.kind, 'object');
     if (entries?.kind === 'object') {
-      assert.equal(stringValue(findEntry(entries.entries, 'name_override')?.value), 'lookup_account');
+      assert.equal(
+        stringValue(findEntry(entries.entries, 'name_override')?.value),
+        'lookup_account',
+      );
     }
     const plain = facts.definitions.find((definition) => definition.name === 'plain');
     assert.equal(dotted(plain?.decorators[0]?.path ?? []), 'function_tool');
@@ -113,10 +116,11 @@ def config():
     c = os.getenv("REGION")
     return a, b, c
 `);
-    assert.deepEqual(
-      facts.environmentRefs.map((entry) => entry.name).sort(),
-      ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'REGION'],
-    );
+    assert.deepEqual(facts.environmentRefs.map((entry) => entry.name).sort(), [
+      'ANTHROPIC_API_KEY',
+      'OPENAI_API_KEY',
+      'REGION',
+    ]);
     assert.equal(facts.environmentRefs[0]?.enclosing, 'config');
   });
 

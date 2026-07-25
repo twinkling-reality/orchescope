@@ -5,8 +5,8 @@
  */
 
 export {
-  type DegreeStats,
   controlFlowCycles,
+  type DegreeStats,
   degrees,
   entryPoints,
   isControlFlowKind,
@@ -15,14 +15,14 @@ export {
   unreachableComponents,
 } from './analysis.ts';
 export {
+  computeDelta,
   type DeltaInput,
   type DeltaResult,
   type RunSideEffects,
-  computeDelta,
 } from './delta.ts';
 export { diffGraphs } from './diff.ts';
 export type { ComponentDraft, EdgeDraft } from './drafts.ts';
-export { type BuiltGraph, SystemGraphBuilder, componentIdIndex } from './graph-builder.ts';
+export { type BuiltGraph, componentIdIndex, SystemGraphBuilder } from './graph-builder.ts';
 export { type IndexedGraph, indexGraph } from './indexed-graph.ts';
 export {
   type AmbiguousMatch,

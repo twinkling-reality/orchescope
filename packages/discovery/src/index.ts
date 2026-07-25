@@ -11,39 +11,39 @@ export type {
 export { classifyEffect } from './adapters/effects.ts';
 export { type BindingRegistry, createBindingRegistry } from './bindings.ts';
 export {
-  type ConfigDocument,
-  type ConfigFormat,
-  type ConfigProblem,
-  KNOWN_CONFIG_PATHS,
   asRecord,
   asString,
   asStringArray,
+  type ConfigDocument,
+  type ConfigFormat,
+  type ConfigProblem,
   jsonPointer,
+  KNOWN_CONFIG_PATHS,
   readConfigDocuments,
   stripJsonComments,
 } from './config-files.ts';
-export { type ScanRequest, type ScanResult, discover } from './discover.ts';
+export { discover, type ScanRequest, type ScanResult } from './discover.ts';
 export {
-  GLOBAL_NAMESPACES,
   configIdentity,
   createDrafts,
+  GLOBAL_NAMESPACES,
   globalIdentity,
   sourceIdentity,
 } from './drafts.ts';
 export {
   type CallQuery,
-  type MatchedCall,
   decoratedDefinitions,
   definitionForCall,
   importsAny,
+  type MatchedCall,
   matchCalls,
   moduleMatches,
   projectUses,
 } from './matching.ts';
-export { DEFAULT_ADAPTERS, adapterById } from './registry.ts';
+export { adapterById, DEFAULT_ADAPTERS } from './registry.ts';
 export {
+  buildSymbolIndex,
   type ExternalRef,
   type SymbolIndex,
   type SymbolRef,
-  buildSymbolIndex,
 } from './symbol-index.ts';

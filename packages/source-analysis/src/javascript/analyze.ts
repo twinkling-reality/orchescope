@@ -1,9 +1,9 @@
-import type { SourceLocation } from '@orchescope/schema';
 import { parseSync } from 'oxc-parser';
 import {
   type ArgumentFact,
-  type CallFact,
+  approximateTokens,
   type CalleeOrigin,
+  type CallFact,
   type ControlFlowFact,
   type DecoratorFact,
   type DefinitionFact,
@@ -13,10 +13,9 @@ import {
   type ObjectEntryFact,
   TEXT_FACT_MIN_LENGTH,
   type TextFact,
-  approximateTokens,
 } from '../facts.ts';
 import type { Language } from '../file-set.ts';
-import { type LineIndex, buildLineIndex } from '../line-index.ts';
+import { buildLineIndex, type LineIndex } from '../line-index.ts';
 
 /**
  * JavaScript and TypeScript fact extraction, built on `oxc-parser`.
@@ -144,6 +143,7 @@ const templateValue = (node: Node): { value: string; hasSubstitutions: boolean }
       }
     }
   }
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: this is the marker recorded in place of a substitution
   return { value: parts.join('${...}'), hasSubstitutions: expressions.length > 0 };
 };
 
@@ -192,7 +192,11 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
       return { kind: 'null' };
     case 'TemplateLiteral': {
       const template = templateValue(node);
-      return { kind: 'template', value: template.value, hasSubstitutions: template.hasSubstitutions };
+      return {
+        kind: 'template',
+        value: template.value,
+        hasSubstitutions: template.hasSubstitutions,
+      };
     }
     case 'Identifier': {
       const name = identifierName(node);
@@ -213,7 +217,9 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
     case 'StaticMemberExpression':
     case 'ComputedMemberExpression': {
       const path = memberPath(node);
-      return path.length === 0 ? { kind: 'unknown', nodeType: node.type } : { kind: 'member', path };
+      return path.length === 0
+        ? { kind: 'unknown', nodeType: node.type }
+        : { kind: 'member', path };
     }
     case 'CallExpression':
     case 'NewExpression': {
@@ -229,7 +235,9 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
     case 'TSSatisfiesExpression':
     case 'TSNonNullExpression': {
       const inner = asNode(field(node, 'expression')) ?? asNode(field(node, 'argument'));
-      return inner === undefined ? { kind: 'unknown', nodeType: node.type } : argumentFact(inner, context);
+      return inner === undefined
+        ? { kind: 'unknown', nodeType: node.type }
+        : argumentFact(inner, context);
     }
     default:
       return { kind: 'unknown', nodeType: node.type };
@@ -323,8 +331,16 @@ const decoratorFacts = (node: Node, context: Context): readonly DecoratorFact[] 
   return facts;
 };
 
+/**
+ * Two names travel down the traversal because two questions have different answers.
+ *
+ * `name` is the nearest enclosing function, which is what a call belongs to. `declaredName` is the nearest enclosing
+ * declaration, which is what a piece of text belongs to: the strings inside `const POLICY_DOCUMENTS = [...]` are that
+ * constant, however deeply they are nested, while a call in the same function belongs to the function.
+ */
 type Frame = {
   readonly name: string | undefined;
+  readonly declaredName: string | undefined;
   readonly exported: boolean;
 };
 
@@ -470,7 +486,9 @@ const recordCall = (
 ): void => {
   const callee = asNode(field(node, 'callee'));
   const path = callee === undefined ? [] : calleePath(callee);
-  const args = nodeArray(field(node, 'arguments')).map((argument) => argumentFact(argument, context));
+  const args = nodeArray(field(node, 'arguments')).map((argument) =>
+    argumentFact(argument, context),
+  );
   const fact: CallFact = {
     kind: node.type === 'NewExpression' ? 'new' : 'call',
     calleePath: path,
@@ -512,7 +530,13 @@ const recordFunction = (
   context.definitions.push(definition);
   const body = asNode(field(node, 'body'));
   if (body !== undefined) {
-    traverse(body, context, { name: name ?? frame.name, exported: false }, false, collecting);
+    traverse(
+      body,
+      context,
+      { name: name ?? frame.name, declaredName: undefined, exported: false },
+      false,
+      collecting,
+    );
   }
 };
 
@@ -553,16 +577,38 @@ const recordClass = (
         traverse(
           value,
           context,
-          { name: `${name ?? ''}.${methodName ?? ''}`, exported: false },
+          { name: `${name ?? ''}.${methodName ?? ''}`, declaredName: undefined, exported: false },
           false,
           collecting,
         );
       }
       continue;
     }
-    traverse(member, context, { name: name ?? frame.name, exported: false }, false, collecting);
+    traverse(
+      member,
+      context,
+      { name: name ?? frame.name, declaredName: undefined, exported: false },
+      false,
+      collecting,
+    );
   }
 };
+
+/**
+ * Initializer types whose declared variable names what is inside it.
+ *
+ * A function held by a variable is named by that variable, and so is a piece of text: `const SYSTEM_PROMPT = '...'`
+ * gives the prompt its name. A call or a constructor does not, which is the distinction that matters here.
+ */
+const NAMING_INITIALIZERS = new Set([
+  'ArrowFunctionExpression',
+  'FunctionExpression',
+  'ClassExpression',
+  'Literal',
+  'StringLiteral',
+  'TemplateLiteral',
+  'TaggedTemplateExpression',
+]);
 
 const recordVariables = (
   node: Node,
@@ -591,7 +637,18 @@ const recordVariables = (
       });
     }
     if (init !== undefined) {
-      traverse(init, context, { name: name ?? frame.name, exported: frame.exported }, false, collecting);
+      // `const opened = new DatabaseSync()` must not rename the scope: doing so attributes every later call in the
+      // function to whatever variable happened to be declared last, which is how a database handle became an entry
+      // point named `opened`.
+      const scopeName =
+        name !== undefined && NAMING_INITIALIZERS.has(init.type) ? name : frame.name;
+      traverse(
+        init,
+        context,
+        { name: scopeName, declaredName: name ?? frame.declaredName, exported: frame.exported },
+        false,
+        collecting,
+      );
     }
   }
 };
@@ -609,7 +666,7 @@ const recordText = (
     approximateTokens: approximateTokens(value),
     hasSubstitutions,
     location: context.index.location(context.file, node.start, node.end),
-    enclosing: frame.name,
+    enclosing: frame.declaredName ?? frame.name,
   });
 };
 
@@ -636,7 +693,13 @@ export const analyzeJavaScript = (input: {
   const result = parseSync(input.file, input.text);
   const program = result.program as unknown as Node;
   recordImports(program, context, result.module);
-  traverse(program, context, { name: undefined, exported: false }, false, []);
+  traverse(
+    program,
+    context,
+    { name: undefined, declaredName: undefined, exported: false },
+    false,
+    [],
+  );
 
   const parseErrors = result.errors.map((error) => {
     const message = (error as { message?: string }).message;
@@ -657,5 +720,3 @@ export const analyzeJavaScript = (input: {
     parseErrors,
   };
 };
-
-export type { SourceLocation };

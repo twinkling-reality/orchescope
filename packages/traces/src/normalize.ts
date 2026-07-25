@@ -7,9 +7,8 @@ import type {
 } from '@orchescope/schema';
 import {
   type Attributes,
-  ORCHESCOPE,
   classifyOperation,
-  observedNameFor,
+  ORCHESCOPE,
   readNumber,
   readString,
 } from './attributes.ts';
@@ -58,9 +57,13 @@ const truncateValue = (value: MetadataValue, maxBytes: number): MetadataValue =>
     return `${value.slice(0, maxBytes)}[truncated]`;
   }
   if (Array.isArray(value)) {
-    return value.slice(0, 64).map((item) =>
-      typeof item === 'string' && item.length > maxBytes ? `${item.slice(0, maxBytes)}[truncated]` : item,
-    );
+    return value
+      .slice(0, 64)
+      .map((item) =>
+        typeof item === 'string' && item.length > maxBytes
+          ? `${item.slice(0, maxBytes)}[truncated]`
+          : item,
+      );
   }
   return value;
 };
@@ -91,12 +94,49 @@ const sideEffectsFrom = (span: RawSpan): readonly SideEffectRecord[] => {
       spanId: span.spanId,
       spanName: span.name,
       outcome:
-        outcome === 'succeeded' || outcome === 'failed' || outcome === 'partial' ? outcome : 'unknown',
+        outcome === 'succeeded' || outcome === 'failed' || outcome === 'partial'
+          ? outcome
+          : 'unknown',
       ...(attempt === undefined ? {} : { retryAttempt: attempt }),
       timeUnixNano: event.timeUnixNano,
     });
   }
   return records;
+};
+
+/** One raw span mapped into the normalized shape, with attribute sizes already bounded. */
+const normalizeSpan = (
+  raw: RawSpan,
+  context: {
+    readonly serviceName: string;
+    readonly scopeName: string | undefined;
+    readonly maxAttributeBytes: number;
+  },
+): NormalizedSpan => {
+  const attributes = boundAttributes(raw.attributes, context.maxAttributeBytes);
+  const retryAttempt = readNumber(attributes, ORCHESCOPE.retryAttempt);
+  return {
+    traceId: raw.traceId,
+    spanId: raw.spanId,
+    ...(raw.parentSpanId === undefined ? {} : { parentSpanId: raw.parentSpanId }),
+    name: raw.name.length === 0 ? 'unnamed' : raw.name,
+    kind: raw.kind,
+    operation: classifyOperation(raw.name, attributes),
+    startTimeUnixNano: raw.startTimeUnixNano,
+    endTimeUnixNano: raw.endTimeUnixNano,
+    durationMs: durationMs(raw.startTimeUnixNano, raw.endTimeUnixNano),
+    status: raw.status,
+    ...(raw.statusMessage === undefined ? {} : { statusMessage: raw.statusMessage.slice(0, 1000) }),
+    attributes,
+    events: raw.events.map((event) => ({
+      name: event.name,
+      timeUnixNano: event.timeUnixNano,
+      attributes: boundAttributes(event.attributes, context.maxAttributeBytes),
+    })),
+    serviceName: context.serviceName,
+    ...(context.scopeName === undefined ? {} : { scopeName: context.scopeName }),
+    ...(retryAttempt === undefined ? {} : { retryAttempt }),
+  };
 };
 
 export const normalizeTraces = (
@@ -121,39 +161,19 @@ export const normalizeTraces = (
           dropped += 1;
           continue;
         }
+        // An identifier of the wrong length cannot be joined to anything, so the span is reported rather than stored.
         if (raw.traceId.length !== 32 || raw.spanId.length !== 16) {
           rejected.push({ reason: 'span identifier had the wrong length', count: 1 });
           continue;
         }
-        const attributes = boundAttributes(raw.attributes, options.maxAttributeBytes);
-        const operation = classifyOperation(raw.name, attributes);
-        const retryAttempt = readNumber(attributes, ORCHESCOPE.retryAttempt);
-        const span: NormalizedSpan = {
-          traceId: raw.traceId,
-          spanId: raw.spanId,
-          ...(raw.parentSpanId === undefined ? {} : { parentSpanId: raw.parentSpanId }),
-          name: raw.name.length === 0 ? 'unnamed' : raw.name,
-          kind: raw.kind,
-          operation,
-          startTimeUnixNano: raw.startTimeUnixNano,
-          endTimeUnixNano: raw.endTimeUnixNano,
-          durationMs: durationMs(raw.startTimeUnixNano, raw.endTimeUnixNano),
-          status: raw.status,
-          ...(raw.statusMessage === undefined ? {} : { statusMessage: raw.statusMessage.slice(0, 1000) }),
-          attributes,
-          events: raw.events.map((event) => ({
-            name: event.name,
-            timeUnixNano: event.timeUnixNano,
-            attributes: boundAttributes(event.attributes, options.maxAttributeBytes),
-          })),
+        const span = normalizeSpan(raw, {
           serviceName,
-          ...(scopeSpans.scopeName === undefined ? {} : { scopeName: scopeSpans.scopeName }),
-          ...(retryAttempt === undefined ? {} : { retryAttempt }),
-        };
+          scopeName: scopeSpans.scopeName,
+          maxAttributeBytes: options.maxAttributeBytes,
+        });
         spans.push(span);
         serviceBySpanId.set(span.spanId, serviceName);
         sideEffects.push(...sideEffectsFrom(raw));
-        void observedNameFor(operation, span.name, attributes);
       }
     }
   }

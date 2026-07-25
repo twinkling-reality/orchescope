@@ -36,53 +36,56 @@ export const KNOWN_CONFIG_PATHS: readonly string[] = [
   'config/tasks.yaml',
 ];
 
-/** Strips JSONC style comments and trailing commas so a `.jsonc` file can be parsed as JSON. */
+/**
+ * Strips JSONC style comments and trailing commas so a `.jsonc` file can be parsed as JSON.
+ *
+ * Written as an explicit state machine rather than a set of regular expressions, because a comment marker inside a
+ * string is not a comment and a quote inside a comment does not open a string. Each state decides what to emit and what
+ * state follows, which keeps the two cases from interfering.
+ */
+type ScanState = 'text' | 'string' | 'string_escape' | 'line_comment' | 'block_comment';
+
+type Step = { readonly state: ScanState; readonly emit: string; readonly skipNext: boolean };
+
+const stepText = (character: string, next: string): Step => {
+  if (character === '"') return { state: 'string', emit: character, skipNext: false };
+  if (character === '/' && next === '/') return { state: 'line_comment', emit: '', skipNext: true };
+  if (character === '/' && next === '*')
+    return { state: 'block_comment', emit: '', skipNext: true };
+  return { state: 'text', emit: character, skipNext: false };
+};
+
+const step = (state: ScanState, character: string, next: string): Step => {
+  switch (state) {
+    case 'line_comment':
+      // The newline is kept so that line numbers in the stripped text still match the file.
+      return character === '\n'
+        ? { state: 'text', emit: character, skipNext: false }
+        : { state, emit: '', skipNext: false };
+    case 'block_comment':
+      return character === '*' && next === '/'
+        ? { state: 'text', emit: '', skipNext: true }
+        : { state, emit: '', skipNext: false };
+    case 'string_escape':
+      return { state: 'string', emit: character, skipNext: false };
+    case 'string':
+      if (character === '\\') return { state: 'string_escape', emit: character, skipNext: false };
+      return character === '"'
+        ? { state: 'text', emit: character, skipNext: false }
+        : { state, emit: character, skipNext: false };
+    default:
+      return stepText(character, next);
+  }
+};
+
 export const stripJsonComments = (text: string): string => {
   let result = '';
-  let inString = false;
-  let inLineComment = false;
-  let inBlockComment = false;
-  let escaped = false;
+  let state: ScanState = 'text';
   for (let index = 0; index < text.length; index += 1) {
-    const character = text[index] ?? '';
-    const next = text[index + 1] ?? '';
-    if (inLineComment) {
-      if (character === '\n') {
-        inLineComment = false;
-        result += character;
-      }
-      continue;
-    }
-    if (inBlockComment) {
-      if (character === '*' && next === '/') {
-        inBlockComment = false;
-        index += 1;
-      }
-      continue;
-    }
-    if (inString) {
-      result += character;
-      if (escaped) escaped = false;
-      else if (character === '\\') escaped = true;
-      else if (character === '"') inString = false;
-      continue;
-    }
-    if (character === '"') {
-      inString = true;
-      result += character;
-      continue;
-    }
-    if (character === '/' && next === '/') {
-      inLineComment = true;
-      index += 1;
-      continue;
-    }
-    if (character === '/' && next === '*') {
-      inBlockComment = true;
-      index += 1;
-      continue;
-    }
-    result += character;
+    const taken = step(state, text[index] ?? '', text[index + 1] ?? '');
+    state = taken.state;
+    result += taken.emit;
+    if (taken.skipNext) index += 1;
   }
   return result.replace(/,(\s*[}\]])/g, '$1');
 };
@@ -97,7 +100,10 @@ export const jsonPointer = (segments: readonly (string | number)[]): string =>
 export const readConfigDocuments = (
   root: string,
   extraPaths: readonly string[] = [],
-): { readonly documents: readonly ConfigDocument[]; readonly problems: readonly ConfigProblem[] } => {
+): {
+  readonly documents: readonly ConfigDocument[];
+  readonly problems: readonly ConfigProblem[];
+} => {
   const documents: ConfigDocument[] = [];
   const problems: ConfigProblem[] = [];
 

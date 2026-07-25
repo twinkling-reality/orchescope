@@ -45,18 +45,3 @@ export type AgentSystemAdapter = {
   readonly appliesTo: (context: DiscoveryContext) => boolean;
   readonly discover: (context: DiscoveryContext, builder: SystemGraphBuilder) => AdapterFindings;
 };
-
-/** Counts drafts added by one adapter so that coverage numbers are measured, not estimated. */
-export const countingBuilder = (
-  builder: SystemGraphBuilder,
-): { readonly builder: SystemGraphBuilder; readonly counts: () => { components: number; edges: number } } => {
-  const startComponents = builder.componentCount;
-  const startEdges = builder.edgeCount;
-  return {
-    builder,
-    counts: () => ({
-      components: builder.componentCount - startComponents,
-      edges: builder.edgeCount - startEdges,
-    }),
-  };
-};

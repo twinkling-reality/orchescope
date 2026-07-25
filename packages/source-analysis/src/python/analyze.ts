@@ -2,8 +2,9 @@ import type { SourceLocation } from '@orchescope/schema';
 import type { Node } from 'web-tree-sitter';
 import {
   type ArgumentFact,
-  type CallFact,
+  approximateTokens,
   type CalleeOrigin,
+  type CallFact,
   type ControlFlowFact,
   type DecoratorFact,
   type DefinitionFact,
@@ -13,7 +14,6 @@ import {
   type ObjectEntryFact,
   TEXT_FACT_MIN_LENGTH,
   type TextFact,
-  approximateTokens,
 } from '../facts.ts';
 import { pythonParser } from './runtime.ts';
 
@@ -54,6 +54,7 @@ const stringLiteralValue = (node: Node): string | undefined => {
   const parts: string[] = [];
   for (const child of namedChildren(node)) {
     if (child.type === 'string_content') parts.push(child.text);
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: this is the marker recorded in place of a substitution
     else if (child.type === 'interpolation') parts.push('${...}');
   }
   if (parts.length > 0) return parts.join('');
@@ -123,7 +124,9 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
       return { kind: 'identifier', name: node.text };
     case 'attribute': {
       const path = attributePath(node);
-      return path.length === 0 ? { kind: 'unknown', nodeType: node.type } : { kind: 'member', path };
+      return path.length === 0
+        ? { kind: 'unknown', nodeType: node.type }
+        : { kind: 'member', path };
     }
     case 'call': {
       const callee = childField(node, 'function');
@@ -156,7 +159,9 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
       return { kind: 'function' };
     case 'await': {
       const inner = namedChildren(node)[0];
-      return inner === undefined ? { kind: 'unknown', nodeType: node.type } : argumentFact(inner, context);
+      return inner === undefined
+        ? { kind: 'unknown', nodeType: node.type }
+        : argumentFact(inner, context);
     }
     default:
       return { kind: 'unknown', nodeType: node.type };
@@ -249,7 +254,10 @@ const recordImport = (node: Node, context: Context): void => {
 
 const ENV_CALLS = new Set(['os.getenv', 'os.environ.get', 'environ.get', 'getenv']);
 
-const environmentName = (path: readonly string[], args: readonly ArgumentFact[]): string | undefined => {
+const environmentName = (
+  path: readonly string[],
+  args: readonly ArgumentFact[],
+): string | undefined => {
   if (!ENV_CALLS.has(path.join('.'))) return undefined;
   const first = args[0];
   return first !== undefined && first.kind === 'string' ? first.value : undefined;
@@ -288,7 +296,10 @@ const decoratorFacts = (node: Node, context: Context): readonly DecoratorFact[] 
       facts.push({
         path,
         origin: path[0] === undefined ? undefined : context.bindings.get(path[0]),
-        args: keywords.length === 0 ? positional : [...positional, { kind: 'object', entries: keywords }],
+        args:
+          keywords.length === 0
+            ? positional
+            : [...positional, { kind: 'object', entries: keywords }],
       });
       continue;
     }
@@ -420,7 +431,10 @@ const recordCall = (
   const callee = childField(node, 'function');
   const path = callee === undefined ? [] : attributePath(callee);
   const { positional, keywords } = splitArguments(node, context);
-  const args = keywords.length === 0 ? positional : [...positional, { kind: 'object' as const, entries: keywords }];
+  const args =
+    keywords.length === 0
+      ? positional
+      : [...positional, { kind: 'object' as const, entries: keywords }];
 
   const envName = environmentName(path, positional);
   if (envName !== undefined) {

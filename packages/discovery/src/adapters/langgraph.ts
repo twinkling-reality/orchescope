@@ -49,25 +49,24 @@ const literalName = (value: unknown): string | undefined => {
   return undefined;
 };
 
-const discoverModule = (
-  module: ModuleFacts,
-  context: DiscoveryContext,
-  builder: SystemGraphBuilder,
-): { components: number; edges: number } => {
-  let components = 0;
-  let edges = 0;
-  const declaredNodes = new Set<string>();
+type Counts = { components: number; edges: number };
 
-  const graphConstructions = module.calls.filter((call) =>
+const graphName = (file: string): string => `${file.split('/').pop() ?? 'graph'}-graph`;
+
+/** The graph object itself, which becomes the group the nodes belong to. */
+const discoverGraphConstruction = (
+  module: ModuleFacts,
+  builder: SystemGraphBuilder,
+): { readonly components: number; readonly groupIdentity: ComponentIdentity | undefined } => {
+  const constructions = module.calls.filter((call) =>
     ['StateGraph', 'MessageGraph', 'Graph'].includes(calleeName(call)),
   );
-  for (const call of graphConstructions) {
-    const name = `${module.file.split('/').pop() ?? 'graph'}-graph`;
+  for (const call of constructions) {
     builder.addComponent(
       drafts.sourceComponent({
         kind: 'agent_group',
         file: module.file,
-        name,
+        name: graphName(module.file),
         displayName: dotted(call.calleePath),
         location: call.location,
         symbol: dotted(call.calleePath),
@@ -75,13 +74,25 @@ const discoverModule = (
         tags: ['langgraph'],
       }),
     );
-    components += 1;
   }
-  const groupIdentity =
-    graphConstructions.length > 0
-      ? sourceIdentity('agent_group', module.file, `${module.file.split('/').pop() ?? 'graph'}-graph`)
-      : undefined;
+  return {
+    components: constructions.length,
+    groupIdentity:
+      constructions.length > 0
+        ? sourceIdentity('agent_group', module.file, graphName(module.file))
+        : undefined,
+  };
+};
 
+const discoverNodes = (
+  module: ModuleFacts,
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+  groupIdentity: ComponentIdentity | undefined,
+  declaredNodes: Set<string>,
+): Counts => {
+  let components = 0;
+  let edges = 0;
   for (const call of module.calls) {
     const method = calleeName(call);
     if (!NODE_METHODS.has(method)) continue;
@@ -116,50 +127,84 @@ const discoverModule = (
       edges += 1;
     }
   }
+  return { components, edges };
+};
 
+const addDirectEdge = (
+  module: ModuleFacts,
+  builder: SystemGraphBuilder,
+  call: ModuleFacts['calls'][number],
+  method: string,
+  declaredNodes: ReadonlySet<string>,
+): number => {
+  const from = literalName(call.args[0]);
+  const to = literalName(call.args[1]);
+  if (from === undefined || to === undefined) return 0;
+  if (SENTINELS.has(from) || SENTINELS.has(to)) return 0;
+  if (!declaredNodes.has(from) || !declaredNodes.has(to)) return 0;
+  builder.addEdge(
+    drafts.edge({
+      kind: 'hands_off_to',
+      from: nodeIdentity(module.file, from),
+      to: nodeIdentity(module.file, to),
+      location: call.location,
+      symbol: `${method}("${from}", "${to}")`,
+    }),
+  );
+  return 1;
+};
+
+/** A conditional edge names its destinations in a mapping, and each one is a relation the graph can take. */
+const addConditionalEdges = (
+  module: ModuleFacts,
+  builder: SystemGraphBuilder,
+  call: ModuleFacts['calls'][number],
+  method: string,
+  declaredNodes: ReadonlySet<string>,
+): number => {
+  const from = literalName(call.args[0]);
+  if (from === undefined || !declaredNodes.has(from)) return 0;
+  const mapping = call.args[2] ?? call.args[1];
+  if (mapping === undefined || mapping.kind !== 'object') return 0;
+  let edges = 0;
+  for (const entry of mapping.entries) {
+    const target = stringValue(entry.value);
+    if (target === undefined || !declaredNodes.has(target)) continue;
+    builder.addEdge(
+      drafts.edge({
+        kind: 'hands_off_to',
+        from: nodeIdentity(module.file, from),
+        to: nodeIdentity(module.file, target),
+        location: entry.location,
+        symbol: `${method} branch "${entry.key}"`,
+        metadata: { conditional: true, branch: entry.key },
+      }),
+    );
+    edges += 1;
+  }
+  return edges;
+};
+
+const discoverModule = (
+  module: ModuleFacts,
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+): Counts => {
+  const declaredNodes = new Set<string>();
+  const construction = discoverGraphConstruction(module, builder);
+  const nodes = discoverNodes(module, context, builder, construction.groupIdentity, declaredNodes);
+
+  let edges = nodes.edges;
   for (const call of module.calls) {
     const method = calleeName(call);
     if (EDGE_METHODS.has(method)) {
-      const from = literalName(call.args[0]);
-      const to = literalName(call.args[1]);
-      if (from === undefined || to === undefined) continue;
-      if (SENTINELS.has(from) || SENTINELS.has(to)) continue;
-      if (!declaredNodes.has(from) || !declaredNodes.has(to)) continue;
-      builder.addEdge(
-        drafts.edge({
-          kind: 'hands_off_to',
-          from: nodeIdentity(module.file, from),
-          to: nodeIdentity(module.file, to),
-          location: call.location,
-          symbol: `${method}("${from}", "${to}")`,
-        }),
-      );
-      edges += 1;
-      continue;
-    }
-    if (!CONDITIONAL_METHODS.has(method)) continue;
-    const from = literalName(call.args[0]);
-    if (from === undefined || !declaredNodes.has(from)) continue;
-    const mapping = call.args[2] ?? call.args[1];
-    if (mapping === undefined || mapping.kind !== 'object') continue;
-    for (const entry of mapping.entries) {
-      const target = stringValue(entry.value);
-      if (target === undefined || !declaredNodes.has(target)) continue;
-      builder.addEdge(
-        drafts.edge({
-          kind: 'hands_off_to',
-          from: nodeIdentity(module.file, from),
-          to: nodeIdentity(module.file, target),
-          location: entry.location,
-          symbol: `${method} branch "${entry.key}"`,
-          metadata: { conditional: true, branch: entry.key },
-        }),
-      );
-      edges += 1;
+      edges += addDirectEdge(module, builder, call, method, declaredNodes);
+    } else if (CONDITIONAL_METHODS.has(method)) {
+      edges += addConditionalEdges(module, builder, call, method, declaredNodes);
     }
   }
 
-  return { components, edges };
+  return { components: construction.components + nodes.components, edges };
 };
 
 export const langGraphAdapter: AgentSystemAdapter = {

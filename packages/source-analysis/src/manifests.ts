@@ -111,6 +111,27 @@ const readPackageJson = (
   return typeof name === 'string' ? name : undefined;
 };
 
+/** Optional dependency groups are development dependencies: they are not needed to run the system. */
+const collectPythonRequirements = (
+  declared: unknown,
+  dependencies: DeclaredDependency[],
+  development: boolean,
+): void => {
+  if (!Array.isArray(declared)) return;
+  for (const entry of declared) {
+    if (typeof entry !== 'string') continue;
+    const requirement = parsePythonRequirement(entry);
+    if (requirement === undefined) continue;
+    dependencies.push({
+      name: requirement.name,
+      versionRange: requirement.versionRange,
+      ecosystem: 'pypi',
+      manifest: 'pyproject.toml',
+      development,
+    });
+  }
+};
+
 const readPyProject = (
   root: string,
   problems: Problem[],
@@ -134,37 +155,11 @@ const readPyProject = (
   const project = (parsed as Record<string, unknown>)['project'];
   if (typeof project !== 'object' || project === null) return undefined;
   const table = project as Record<string, unknown>;
-  const declared = table['dependencies'];
-  if (Array.isArray(declared)) {
-    for (const entry of declared) {
-      if (typeof entry !== 'string') continue;
-      const requirement = parsePythonRequirement(entry);
-      if (requirement === undefined) continue;
-      dependencies.push({
-        name: requirement.name,
-        versionRange: requirement.versionRange,
-        ecosystem: 'pypi',
-        manifest: 'pyproject.toml',
-        development: false,
-      });
-    }
-  }
+  collectPythonRequirements(table['dependencies'], dependencies, false);
   const optional = table['optional-dependencies'];
   if (typeof optional === 'object' && optional !== null) {
     for (const group of Object.values(optional as Record<string, unknown>)) {
-      if (!Array.isArray(group)) continue;
-      for (const entry of group) {
-        if (typeof entry !== 'string') continue;
-        const requirement = parsePythonRequirement(entry);
-        if (requirement === undefined) continue;
-        dependencies.push({
-          name: requirement.name,
-          versionRange: requirement.versionRange,
-          ecosystem: 'pypi',
-          manifest: 'pyproject.toml',
-          development: true,
-        });
-      }
+      collectPythonRequirements(group, dependencies, true);
     }
   }
   const name = table['name'];
@@ -207,10 +202,16 @@ export const readManifests = (root: string): ManifestSet => {
   readRequirements(root, problems, dependencies, manifests);
 
   const ecosystems: ('javascript' | 'python')[] = [];
-  if (dependencies.some((entry) => entry.ecosystem === 'npm') || manifests.includes('package.json')) {
+  if (
+    dependencies.some((entry) => entry.ecosystem === 'npm') ||
+    manifests.includes('package.json')
+  ) {
     ecosystems.push('javascript');
   }
-  if (dependencies.some((entry) => entry.ecosystem === 'pypi') || manifests.some((file) => file !== 'package.json')) {
+  if (
+    dependencies.some((entry) => entry.ecosystem === 'pypi') ||
+    manifests.some((file) => file !== 'package.json')
+  ) {
     ecosystems.push('python');
   }
 

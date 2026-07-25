@@ -6,31 +6,31 @@
 export {
   type Attributes,
   CODE,
+  classifyOperation,
+  componentKindFor,
   GEN_AI,
   MCP,
   OPEN_INFERENCE,
   ORCHESCOPE,
-  VCS,
-  classifyOperation,
-  componentKindFor,
   observedNameFor,
   readBoolean,
   readNumber,
   readString,
+  VCS,
 } from './attributes.ts';
 export {
-  type NormalizeOptions,
-  type NormalizedResult,
   mergeBundles,
+  type NormalizedResult,
+  type NormalizeOptions,
   normalizeTraces,
 } from './normalize.ts';
 export {
   type DecodedTraceRequest,
+  decodeTraceJson,
+  decodeTraceProtobuf,
   type RawResourceSpans,
   type RawScopeSpans,
   type RawSpan,
-  decodeTraceJson,
-  decodeTraceProtobuf,
 } from './otlp.ts';
 export { ProtobufError } from './protobuf.ts';
-export { type TopologyResult, componentKey, deriveTopology } from './topology.ts';
+export { componentKey, deriveTopology, type TopologyResult } from './topology.ts';

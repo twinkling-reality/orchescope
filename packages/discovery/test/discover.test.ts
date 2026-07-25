@@ -27,7 +27,10 @@ const buildWorkspace = () => {
     name: 'support-desk',
     dependencies: { '@openai/agents': '^0.5.0', openai: '^6.0.0' },
   });
-  writePythonProject(workspace, { name: 'support-py', dependencies: ['openai-agents>=0.2', 'openai'] });
+  writePythonProject(workspace, {
+    name: 'support-py',
+    dependencies: ['openai-agents>=0.2', 'openai'],
+  });
 
   workspace.write(
     'src/tools/account.ts',
@@ -107,6 +110,7 @@ worker = Agent(
           github: {
             command: 'npx',
             args: ['-y', '@modelcontextprotocol/server-github'],
+            // biome-ignore lint/suspicious/noTemplateCurlyInString: the fixture references an environment variable in this exact form
             env: { GITHUB_TOKEN: '${GITHUB_TOKEN}' },
           },
         },
@@ -196,7 +200,9 @@ describe('static discovery', () => {
     assert.ok(service, 'expected an external service component');
     assert.equal(service.details?.for, 'external_service');
     assert.ok(
-      ['non_idempotent_write', 'unknown', 'external_notification'].includes(service.sideEffect ?? ''),
+      ['non_idempotent_write', 'unknown', 'external_notification'].includes(
+        service.sideEffect ?? '',
+      ),
       `unexpected effect class ${service.sideEffect}`,
     );
     assert.equal(service.permissions[0]?.kind, 'network');
@@ -236,14 +242,21 @@ describe('static discovery', () => {
       coverage.unsupported.some((entry) => entry.area.includes('go')),
       `expected Go to be reported as unsupported, got ${JSON.stringify(coverage.unsupported)}`,
     );
-    assert.equal(coverage.languages.some((entry) => entry.language === 'python'), true);
+    assert.equal(
+      coverage.languages.some((entry) => entry.language === 'python'),
+      true,
+    );
   });
 
   it('notes that an MCP entry with a placeholder cannot be fully resolved', async () => {
     const { result } = await runDiscovery();
-    const mcpRun = result.graph.coverage.adapters.find((entry) => entry.adapterId === 'adapter:mcp');
+    const mcpRun = result.graph.coverage.adapters.find(
+      (entry) => entry.adapterId === 'adapter:mcp',
+    );
     assert.match(mcpRun?.detail ?? '', /placeholder/);
-    const server = result.graph.components.find((component) => component.id === 'mcp_server:github');
+    const server = result.graph.components.find(
+      (component) => component.id === 'mcp_server:github',
+    );
     assert.deepEqual(server?.metadata['unresolvedPlaceholders'], ['GITHUB_TOKEN']);
   });
 

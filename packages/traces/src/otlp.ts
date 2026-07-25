@@ -1,6 +1,5 @@
 import type { MetadataValue, SpanKind, SpanStatus } from '@orchescope/schema';
 import {
-  type FieldValue,
   asBigInt,
   asBytes,
   asNumber,
@@ -300,16 +299,31 @@ const jsonNanos = (value: unknown): string => {
   return '0';
 };
 
-const jsonIdentifier = (value: unknown): string =>
-  typeof value === 'string' ? value.toLowerCase() : '';
+/**
+ * Trace and span identifiers in OTLP/JSON.
+ *
+ * The protobuf JSON mapping encodes a bytes field as base64, and that is what a specification following exporter sends.
+ * Several senders emit lowercase hex instead, and the collector accepts both, so both are read here. Hex wins when the
+ * string is exactly the right length and every character is a hex digit, which is unambiguous for the two lengths that
+ * occur; anything else is decoded as base64 and rejected when it does not yield the expected number of bytes.
+ */
+const jsonIdentifier = (value: unknown, byteLength: number): string => {
+  if (typeof value !== 'string' || value.length === 0) return '';
+  if (value.length === byteLength * 2 && /^[0-9a-fA-F]+$/.test(value)) return value.toLowerCase();
+  const bytes = Buffer.from(value, 'base64');
+  return bytes.length === byteLength ? bytes.toString('hex') : '';
+};
+
+const TRACE_ID_BYTES = 16;
+const SPAN_ID_BYTES = 8;
 
 const jsonSpan = (value: unknown): RawSpan | undefined => {
   if (typeof value !== 'object' || value === null) return undefined;
   const record = value as Record<string, unknown>;
-  const traceId = jsonIdentifier(record['traceId']);
-  const spanId = jsonIdentifier(record['spanId']);
+  const traceId = jsonIdentifier(record['traceId'], TRACE_ID_BYTES);
+  const spanId = jsonIdentifier(record['spanId'], SPAN_ID_BYTES);
   if (traceId.length === 0 || spanId.length === 0) return undefined;
-  const parent = jsonIdentifier(record['parentSpanId']);
+  const parent = jsonIdentifier(record['parentSpanId'], SPAN_ID_BYTES);
   const statusRecord = record['status'];
   const statusCode =
     typeof statusRecord === 'object' && statusRecord !== null
@@ -348,60 +362,76 @@ const jsonSpan = (value: unknown): RawSpan | undefined => {
   };
 };
 
-export const decodeTraceJson = (payload: unknown): DecodedTraceRequest => {
-  const rejected: { reason: string; count: number }[] = [];
-  const resourceSpans: RawResourceSpans[] = [];
-  const root = typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {};
-  const list = root['resourceSpans'];
-  if (!Array.isArray(list)) {
-    return { resourceSpans: [], rejected: [{ reason: 'resourceSpans was missing or not an array', count: 1 }] };
-  }
+const asJsonRecord = (value: unknown): Record<string, unknown> | undefined =>
+  typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined;
+
+const jsonScopeSpans = (
+  scope: unknown,
+): { readonly scope: RawScopeSpans; readonly malformed: number } | undefined => {
+  const record = asJsonRecord(scope);
+  if (record === undefined) return undefined;
+  const scopeName = asJsonRecord(record['scope'])?.['name'];
+  const spans: RawSpan[] = [];
   let malformed = 0;
-  for (const entry of list) {
-    if (typeof entry !== 'object' || entry === null) {
-      malformed += 1;
-      continue;
+  if (Array.isArray(record['spans'])) {
+    for (const span of record['spans']) {
+      const decoded = jsonSpan(span);
+      if (decoded === undefined) malformed += 1;
+      else spans.push(decoded);
     }
-    const record = entry as Record<string, unknown>;
-    const resource = record['resource'];
-    const resourceAttributes =
-      typeof resource === 'object' && resource !== null
-        ? jsonAttributes((resource as Record<string, unknown>)['attributes'])
-        : {};
-    const scopeSpans: RawScopeSpans[] = [];
-    const scopes = record['scopeSpans'];
-    if (Array.isArray(scopes)) {
-      for (const scope of scopes) {
-        if (typeof scope !== 'object' || scope === null) {
-          malformed += 1;
-          continue;
-        }
-        const scopeRecord = scope as Record<string, unknown>;
-        const scopeInfo = scopeRecord['scope'];
-        const scopeName =
-          typeof scopeInfo === 'object' && scopeInfo !== null
-            ? (scopeInfo as Record<string, unknown>)['name']
-            : undefined;
-        const spans: RawSpan[] = [];
-        if (Array.isArray(scopeRecord['spans'])) {
-          for (const span of scopeRecord['spans']) {
-            const decoded = jsonSpan(span);
-            if (decoded === undefined) malformed += 1;
-            else spans.push(decoded);
-          }
-        }
-        scopeSpans.push({
-          scopeName: typeof scopeName === 'string' ? scopeName : undefined,
-          spans,
-        });
-      }
-    }
-    resourceSpans.push({ resourceAttributes, scopeSpans });
   }
-  if (malformed > 0) {
-    rejected.push({ reason: 'spans missing a trace or span identifier', count: malformed });
-  }
-  return { resourceSpans, rejected };
+  return {
+    scope: { scopeName: typeof scopeName === 'string' ? scopeName : undefined, spans },
+    malformed,
+  };
 };
 
-export type { FieldValue };
+const jsonResourceSpans = (
+  entry: unknown,
+): { readonly resource: RawResourceSpans; readonly malformed: number } | undefined => {
+  const record = asJsonRecord(entry);
+  if (record === undefined) return undefined;
+  const resourceAttributes = jsonAttributes(asJsonRecord(record['resource'])?.['attributes']);
+  const scopeSpans: RawScopeSpans[] = [];
+  let malformed = 0;
+  if (Array.isArray(record['scopeSpans'])) {
+    for (const scope of record['scopeSpans']) {
+      const decoded = jsonScopeSpans(scope);
+      if (decoded === undefined) malformed += 1;
+      else {
+        scopeSpans.push(decoded.scope);
+        malformed += decoded.malformed;
+      }
+    }
+  }
+  return { resource: { resourceAttributes, scopeSpans }, malformed };
+};
+
+export const decodeTraceJson = (payload: unknown): DecodedTraceRequest => {
+  const list = asJsonRecord(payload)?.['resourceSpans'];
+  if (!Array.isArray(list)) {
+    return {
+      resourceSpans: [],
+      rejected: [{ reason: 'resourceSpans was missing or not an array', count: 1 }],
+    };
+  }
+
+  const resourceSpans: RawResourceSpans[] = [];
+  let malformed = 0;
+  for (const entry of list) {
+    const decoded = jsonResourceSpans(entry);
+    if (decoded === undefined) malformed += 1;
+    else {
+      resourceSpans.push(decoded.resource);
+      malformed += decoded.malformed;
+    }
+  }
+
+  return {
+    resourceSpans,
+    rejected:
+      malformed > 0
+        ? [{ reason: 'spans missing a trace or span identifier', count: malformed }]
+        : [],
+  };
+};

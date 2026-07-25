@@ -49,7 +49,7 @@ export type CallFact = {
   readonly args: readonly ArgumentFact[];
   readonly location: SourceLocation;
   readonly offset: number;
-  /** Nearest named function, class, method or variable the call sits inside. */
+  /** Nearest named function, class or method the call sits inside. */
   readonly enclosing: string | undefined;
   /** True when the call is awaited, which distinguishes a scheduled call from a fired one. */
   readonly awaited: boolean;
@@ -93,6 +93,7 @@ export type TextFact = {
   readonly approximateTokens: number;
   readonly hasSubstitutions: boolean;
   readonly location: SourceLocation;
+  /** The name this text belongs to: the constant or property holding it, or the function it is written inside. */
   readonly enclosing: string | undefined;
 };
 

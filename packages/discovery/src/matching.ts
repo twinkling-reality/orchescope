@@ -78,8 +78,8 @@ export const definitionForCall = (
   return candidates.sort(
     (left, right) =>
       (left.location.endLine ?? left.location.startLine) -
-        left.location.startLine -
-        ((right.location.endLine ?? right.location.startLine) - right.location.startLine),
+      left.location.startLine -
+      ((right.location.endLine ?? right.location.startLine) - right.location.startLine),
   )[0];
 };
 
@@ -87,7 +87,11 @@ export const decoratedDefinitions = (
   modules: readonly ModuleFacts[],
   decoratorNames: readonly string[],
   packages: readonly string[],
-): readonly { readonly module: ModuleFacts; readonly definition: DefinitionFact; readonly resolved: boolean }[] => {
+): readonly {
+  readonly module: ModuleFacts;
+  readonly definition: DefinitionFact;
+  readonly resolved: boolean;
+}[] => {
   const results: { module: ModuleFacts; definition: DefinitionFact; resolved: boolean }[] = [];
   for (const module of modules) {
     const frameworkImported = importsAny(module, packages);

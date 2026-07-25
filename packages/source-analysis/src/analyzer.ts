@@ -2,7 +2,13 @@ import type { Deadline } from '@orchescope/domain';
 import { settleWithConcurrency } from '@orchescope/domain';
 import type { SkippedFile } from '@orchescope/schema';
 import type { ModuleFacts } from './facts.ts';
-import { type FileContents, type FileSet, type SourceFile, isSkipped, readSource } from './file-set.ts';
+import {
+  type FileContents,
+  type FileSet,
+  isSkipped,
+  readSource,
+  type SourceFile,
+} from './file-set.ts';
 import { analyzeJavaScript } from './javascript/analyze.ts';
 import { analyzePython } from './python/analyze.ts';
 
@@ -36,6 +42,32 @@ export const inMemoryFactCache = (): FactCache & { readonly size: () => number }
 export const cacheKey = (file: SourceFile, contentHash: string): string =>
   `${ANALYZER_VERSION}:${file.language}:${file.path}:${contentHash}`;
 
+/**
+ * Diagnostic used by the doctor command. The JavaScript parser ships as a platform specific binding, so a broken or
+ * missing binding has to be reported before an audit rather than during one.
+ */
+export const probeJavaScriptParser = (): { readonly ok: boolean; readonly detail: string } => {
+  try {
+    const facts = analyzeJavaScript({
+      file: 'probe.ts',
+      text: 'export const probe = (value: number): number => value + 1;\n',
+      contentHash: '0'.repeat(64),
+      language: 'typescript',
+    });
+    return facts.parseErrors.length === 0
+      ? { ok: true, detail: 'oxc-parser loaded and parsed a probe file' }
+      : {
+          ok: false,
+          detail: `the parser reported ${facts.parseErrors.length} error(s) on a valid file`,
+        };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: error instanceof Error ? error.message : 'the JavaScript parser could not be loaded',
+    };
+  }
+};
+
 export type AnalysisResult = {
   readonly facts: readonly ModuleFacts[];
   readonly skipped: readonly SkippedFile[];
@@ -47,7 +79,11 @@ export type AnalysisResult = {
 const analyzeOne = async (
   contents: FileContents,
   cache: FactCache | undefined,
-): Promise<{ facts: ModuleFacts | undefined; skipped: SkippedFile | undefined; cached: boolean }> => {
+): Promise<{
+  facts: ModuleFacts | undefined;
+  skipped: SkippedFile | undefined;
+  cached: boolean;
+}> => {
   const key = cacheKey(contents.file, contents.hash);
   const cached = cache?.get(key);
   if (cached !== undefined) return { facts: cached, skipped: undefined, cached: true };
@@ -101,16 +137,20 @@ export const analyzeFileSet = async (
   options: AnalyzeOptions,
 ): Promise<AnalysisResult> => {
   const parseable = fileSet.files.filter(
-    (file) => file.language === 'typescript' || file.language === 'javascript' || file.language === 'python',
+    (file) =>
+      file.language === 'typescript' ||
+      file.language === 'javascript' ||
+      file.language === 'python',
   );
 
   const settled = await settleWithConcurrency(
     parseable,
     { concurrency: options.concurrency, deadline: options.deadline, what: 'source analysis' },
-    async (file) => {
+    (file) => {
       const contents = readSource(file);
-      if (isSkipped(contents)) return { skipped: contents, facts: undefined, cached: false };
-      return analyzeOne(contents, options.cache);
+      return isSkipped(contents)
+        ? Promise.resolve({ skipped: contents, facts: undefined, cached: false })
+        : Promise.resolve(analyzeOne(contents, options.cache));
     },
   );
 

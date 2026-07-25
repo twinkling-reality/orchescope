@@ -71,8 +71,18 @@ type StaticLookups = {
   readonly byId: Map<ComponentId, Component>;
   readonly byModuleAndName: Map<string, Component[]>;
   readonly byKindAndName: Map<string, Component[]>;
+  /**
+   * Indexed by the last path segment of the name. A model is declared as `gpt-4o-mini` in one repository and reported
+   * as `openai/gpt-4o-mini` at runtime, or the reverse, and both spellings mean the same model.
+   */
+  readonly byKindAndBareName: Map<string, Component[]>;
   readonly byRuntimeName: Map<string, Component[]>;
   readonly usedIds: Set<string>;
+};
+
+const bareName = (name: string): string => {
+  const slash = name.lastIndexOf('/');
+  return slash < 0 ? name : name.slice(slash + 1);
 };
 
 const push = <K, V>(map: Map<K, V[]>, key: K, value: V): void => {
@@ -86,6 +96,7 @@ const buildLookups = (graph: SystemGraph): StaticLookups => {
     byId: new Map(),
     byModuleAndName: new Map(),
     byKindAndName: new Map(),
+    byKindAndBareName: new Map(),
     byRuntimeName: new Map(),
     usedIds: new Set(),
   };
@@ -94,6 +105,7 @@ const buildLookups = (graph: SystemGraph): StaticLookups => {
     lookups.usedIds.add(component.id);
     const name = component.identity.localName;
     push(lookups.byKindAndName, `${component.kind}|${name}`, component);
+    push(lookups.byKindAndBareName, `${component.kind}|${bareName(name)}`, component);
     push(lookups.byModuleAndName, `${component.identity.namespace}|${name}`, component);
     for (const location of component.sourceLocations) {
       push(lookups.byModuleAndName, `${moduleNamespace(location.file)}|${name}`, component);
@@ -141,6 +153,11 @@ const resolveObserved = (lookups: StaticLookups, observed: ObservedComponent): R
   const candidates = lookups.byKindAndName.get(`${observed.kind}|${name}`);
   const unique = uniqueCandidate(candidates);
   if (unique !== undefined) return { kind: 'matched', component: unique, rule: 'kind_and_name' };
+
+  // A qualified name and a bare name mean the same component when only one declaration shares the last segment.
+  const bare = uniqueCandidate(lookups.byKindAndBareName.get(`${observed.kind}|${bareName(name)}`));
+  if (bare !== undefined) return { kind: 'matched', component: bare, rule: 'kind_and_name' };
+
   if (candidates !== undefined && candidates.length > 1) {
     return { kind: 'ambiguous', candidates: candidates.map((component) => component.id) };
   }

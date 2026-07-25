@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { type Dirent, readFileSync, readdirSync, statSync } from 'node:fs';
+import { type Dirent, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { OrchescopeError } from '@orchescope/domain';
 import type { SkippedFile } from '@orchescope/schema';
@@ -116,13 +116,21 @@ const classifyEntry = (
 ): 'directory' | 'file' | 'skip' => {
   if (entry.isSymbolicLink()) {
     if (!options.followSymlinks) {
-      walker.skipped.push({ file: relativePath, reason: 'symlink', detail: 'symbolic links are not followed' });
+      walker.skipped.push({
+        file: relativePath,
+        reason: 'symlink',
+        detail: 'symbolic links are not followed',
+      });
       return 'skip';
     }
     try {
       return statSync(absolutePath).isDirectory() ? 'directory' : 'file';
     } catch {
-      walker.skipped.push({ file: relativePath, reason: 'unreadable', detail: 'broken symbolic link' });
+      walker.skipped.push({
+        file: relativePath,
+        reason: 'unreadable',
+        detail: 'broken symbolic link',
+      });
       return 'skip';
     }
   }
@@ -130,6 +138,59 @@ const classifyEntry = (
   if (entry.isFile()) return 'file';
   walker.skipped.push({ file: relativePath, reason: 'unreadable', detail: 'not a regular file' });
   return 'skip';
+};
+
+/**
+ * Records one file, or the reason it was not recorded.
+ *
+ * Every extension seen is counted whether or not the file is analysed, because the count of files in a language nothing
+ * here can parse is what the coverage report needs in order to say what was not inspected.
+ */
+const considerFile = (
+  name: string,
+  absolutePath: string,
+  relativePath: string,
+  options: TraversalOptions,
+  walker: Walker,
+): void => {
+  const dot = name.lastIndexOf('.');
+  if (dot > 0) {
+    const extension = name.slice(dot).toLowerCase();
+    walker.extensionCounts.set(extension, (walker.extensionCounts.get(extension) ?? 0) + 1);
+  }
+
+  const language = languageOf(name);
+  if (language === 'other') return;
+
+  let byteLength: number;
+  try {
+    byteLength = statSync(absolutePath).size;
+  } catch (error) {
+    walker.skipped.push({
+      file: relativePath,
+      reason: 'unreadable',
+      detail: error instanceof Error ? error.message : 'stat failed',
+    });
+    return;
+  }
+  if (byteLength > options.maxFileBytes) {
+    walker.skipped.push({
+      file: relativePath,
+      reason: 'too_large',
+      detail: `${byteLength} bytes exceeds the ${options.maxFileBytes} byte limit`,
+    });
+    return;
+  }
+
+  walker.files.push({ path: relativePath, absolutePath, language, byteLength });
+  if (walker.files.length >= options.maxFiles) {
+    walker.truncated = true;
+    walker.skipped.push({
+      file: relativePath,
+      reason: 'ignored',
+      detail: `file limit of ${options.maxFiles} reached, traversal stopped`,
+    });
+  }
 };
 
 const walk = (root: string, current: string, options: TraversalOptions, walker: Walker): void => {
@@ -161,44 +222,8 @@ const walk = (root: string, current: string, options: TraversalOptions, walker: 
       continue;
     }
 
-    const dot = entry.name.lastIndexOf('.');
-    if (dot > 0) {
-      const extension = entry.name.slice(dot).toLowerCase();
-      walker.extensionCounts.set(extension, (walker.extensionCounts.get(extension) ?? 0) + 1);
-    }
-
-    const language = languageOf(entry.name);
-    if (language === 'other') continue;
-
-    let byteLength: number;
-    try {
-      byteLength = statSync(absolutePath).size;
-    } catch (error) {
-      walker.skipped.push({
-        file: relativePath,
-        reason: 'unreadable',
-        detail: error instanceof Error ? error.message : 'stat failed',
-      });
-      continue;
-    }
-    if (byteLength > options.maxFileBytes) {
-      walker.skipped.push({
-        file: relativePath,
-        reason: 'too_large',
-        detail: `${byteLength} bytes exceeds the ${options.maxFileBytes} byte limit`,
-      });
-      continue;
-    }
-    walker.files.push({ path: relativePath, absolutePath, language, byteLength });
-    if (walker.files.length >= options.maxFiles) {
-      walker.truncated = true;
-      walker.skipped.push({
-        file: relativePath,
-        reason: 'ignored',
-        detail: `file limit of ${options.maxFiles} reached, traversal stopped`,
-      });
-      return;
-    }
+    considerFile(entry.name, absolutePath, relativePath, options, walker);
+    if (walker.truncated) return;
   }
 };
 

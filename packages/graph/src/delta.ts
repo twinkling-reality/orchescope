@@ -207,55 +207,86 @@ const effectKey = (record: SideEffectRecord): string =>
     ? `${record.kind}|${record.target}`
     : `${record.kind}|${record.target}|${record.idempotencyKey}`;
 
+/**
+ * An attempt that failed did not change anything outside the system, so it is not an occurrence of the effect. An
+ * attempt whose outcome is unknown is counted, because a timeout that may have committed is exactly the case
+ * duplication analysis exists for.
+ */
+const effectHappened = (record: SideEffectRecord): boolean => record.outcome !== 'failed';
+
+type EffectBucket = {
+  occurrences: number;
+  maxPerRun: number;
+  runIds: Set<string>;
+  componentIds: Set<ComponentId>;
+  idempotencyKeyPresent: boolean;
+  attempts: Set<number>;
+  evidence: EvidenceId[];
+};
+
+const emptyBucket = (record: SideEffectRecord): EffectBucket => ({
+  occurrences: 0,
+  maxPerRun: 0,
+  runIds: new Set<string>(),
+  componentIds: new Set<ComponentId>(),
+  idempotencyKeyPresent: record.idempotencyKey !== undefined,
+  attempts: new Set<number>(),
+  evidence: [],
+});
+
+const foldEffect = (
+  bucket: EffectBucket,
+  input: {
+    readonly record: SideEffectRecord;
+    readonly runId: string;
+    readonly spanToComponent: ReadonlyMap<string, ComponentId>;
+    readonly collect: (record: Evidence) => EvidenceId;
+  },
+): EffectBucket => {
+  const { record } = input;
+  bucket.occurrences += 1;
+  bucket.runIds.add(input.runId);
+  if (record.retryAttempt !== undefined) bucket.attempts.add(record.retryAttempt);
+  const componentId = input.spanToComponent.get(record.spanId);
+  if (componentId !== undefined) bucket.componentIds.add(componentId);
+  bucket.evidence.push(
+    input.collect(
+      spanEvidence({
+        producer: PRODUCER,
+        runId: input.runId,
+        traceId: record.traceId,
+        spanId: record.spanId,
+        spanName: record.spanName,
+        attribute: 'orchescope.side_effect',
+        attributeValue: `${record.kind} on ${record.target}${record.idempotencyKey === undefined ? ' without an idempotency key' : ''}`,
+      }),
+    ),
+  );
+  return bucket;
+};
+
 const duplicateSideEffects = (
   runs: readonly RunSideEffects[],
   spanToComponent: ReadonlyMap<string, ComponentId>,
   collect: (record: Evidence) => EvidenceId,
 ): readonly DuplicateSideEffect[] => {
-  type Bucket = {
-    occurrences: number;
-    maxPerRun: number;
-    runIds: Set<string>;
-    componentIds: Set<ComponentId>;
-    idempotencyKeyPresent: boolean;
-    attempts: Set<number>;
-    evidence: EvidenceId[];
-  };
-  const buckets = new Map<string, Bucket>();
+  const buckets = new Map<string, EffectBucket>();
 
   for (const run of runs) {
     const perRun = new Map<string, number>();
     for (const record of run.sideEffects) {
+      if (!effectHappened(record)) continue;
       const key = effectKey(record);
       perRun.set(key, (perRun.get(key) ?? 0) + 1);
-      const bucket = buckets.get(key) ?? {
-        occurrences: 0,
-        maxPerRun: 0,
-        runIds: new Set<string>(),
-        componentIds: new Set<ComponentId>(),
-        idempotencyKeyPresent: record.idempotencyKey !== undefined,
-        attempts: new Set<number>(),
-        evidence: [],
-      };
-      bucket.occurrences += 1;
-      bucket.runIds.add(run.runId);
-      if (record.retryAttempt !== undefined) bucket.attempts.add(record.retryAttempt);
-      const componentId = spanToComponent.get(record.spanId);
-      if (componentId !== undefined) bucket.componentIds.add(componentId);
-      bucket.evidence.push(
-        collect(
-          spanEvidence({
-            producer: PRODUCER,
-            runId: run.runId,
-            traceId: record.traceId,
-            spanId: record.spanId,
-            spanName: record.spanName,
-            attribute: 'orchescope.side_effect',
-            attributeValue: `${record.kind} on ${record.target}${record.idempotencyKey === undefined ? ' without an idempotency key' : ''}`,
-          }),
-        ),
+      buckets.set(
+        key,
+        foldEffect(buckets.get(key) ?? emptyBucket(record), {
+          record,
+          runId: run.runId,
+          spanToComponent,
+          collect,
+        }),
       );
-      buckets.set(key, bucket);
     }
     for (const [key, count] of perRun) {
       const bucket = buckets.get(key);
@@ -271,13 +302,14 @@ const duplicateSideEffects = (
       producer: PRODUCER,
       rule: 'duplicate_side_effect',
       inputs: bucket.evidence,
-      note: `${key} occurred ${bucket.maxPerRun} times within a single run`,
+      note: `${key} occurred ${bucket.maxPerRun} times within a single run, and ${bucket.occurrences} times across ${bucket.runIds.size} run(s)`,
     });
     const componentId = [...bucket.componentIds][0];
     duplicates.push({
       key,
       ...(componentId === undefined ? {} : { componentId }),
-      occurrences: bucket.occurrences,
+      occurrences: bucket.maxPerRun,
+      totalOccurrences: bucket.occurrences,
       retryAttempts: [...bucket.attempts].sort((left, right) => left - right),
       idempotencyKeyPresent: bucket.idempotencyKeyPresent,
       runIds: [...bucket.runIds],

@@ -12,8 +12,6 @@
  * protobuf specification requires of any reader.
  */
 
-export type WireType = 0 | 1 | 2 | 5;
-
 export type FieldValue =
   | { readonly wire: 0; readonly value: bigint }
   | { readonly wire: 1; readonly value: bigint }

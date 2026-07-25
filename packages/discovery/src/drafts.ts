@@ -1,6 +1,6 @@
 import {
-  CONFIDENCE_BANDS,
   buildIdentity,
+  CONFIDENCE_BANDS,
   configEntryEvidence,
   configNamespace,
   moduleNamespace,

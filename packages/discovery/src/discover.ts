@@ -1,10 +1,10 @@
 import {
+  asOrchescopeError,
   type Clock,
   type Deadline,
-  asOrchescopeError,
   isCancellation,
-  scanId as makeScanId,
   projectId as makeProjectId,
+  scanId as makeScanId,
   sha256Hex,
   sha256OfJson,
 } from '@orchescope/domain';
@@ -18,12 +18,12 @@ import type {
   UnsupportedArea,
 } from '@orchescope/schema';
 import {
-  type FactCache,
-  type Language,
-  type TraversalOptions,
   analyzeFileSet,
   collectFiles,
+  type FactCache,
+  type Language,
   readManifests,
+  type TraversalOptions,
 } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from './adapter.ts';
 import { createBindingRegistry } from './bindings.ts';
@@ -83,7 +83,8 @@ const unsupportedAreas = (
     areas.push({
       area: `${language} source files (${fileCount})`,
       reason: 'Orchescope analyses JavaScript, TypeScript and Python source in this release.',
-      remediation: 'Declare the components in .orchescope/manifest.yaml so they appear in the graph.',
+      remediation:
+        'Declare the components in .orchescope/manifest.yaml so they appear in the graph.',
     });
   }
   return areas;

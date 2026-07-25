@@ -87,7 +87,10 @@ export const ORCHESCOPE = {
 
 export type Attributes = Readonly<Record<string, MetadataValue>>;
 
-export const readString = (attributes: Attributes, ...keys: readonly string[]): string | undefined => {
+export const readString = (
+  attributes: Attributes,
+  ...keys: readonly string[]
+): string | undefined => {
   for (const key of keys) {
     const value = attributes[key];
     if (typeof value === 'string' && value.length > 0) return value;
@@ -95,7 +98,10 @@ export const readString = (attributes: Attributes, ...keys: readonly string[]): 
   return undefined;
 };
 
-export const readNumber = (attributes: Attributes, ...keys: readonly string[]): number | undefined => {
+export const readNumber = (
+  attributes: Attributes,
+  ...keys: readonly string[]
+): number | undefined => {
   for (const key of keys) {
     const value = attributes[key];
     if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -104,7 +110,10 @@ export const readNumber = (attributes: Attributes, ...keys: readonly string[]): 
   return undefined;
 };
 
-export const readBoolean = (attributes: Attributes, ...keys: readonly string[]): boolean | undefined => {
+export const readBoolean = (
+  attributes: Attributes,
+  ...keys: readonly string[]
+): boolean | undefined => {
   for (const key of keys) {
     const value = attributes[key];
     if (typeof value === 'boolean') return value;

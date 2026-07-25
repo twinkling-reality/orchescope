@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { analyzeJavaScript } from '../src/javascript/analyze.ts';
 import { dotted, findEntry, identifierItems, objectArgument, stringValue } from '../src/facts.ts';
+import { analyzeJavaScript } from '../src/javascript/analyze.ts';
 
 const analyze = (text: string, file = 'src/agents/triage.ts') =>
   analyzeJavaScript({ file, text, contentHash: 'a'.repeat(64), language: 'typescript' });
@@ -86,15 +86,16 @@ describe('javascript fact extraction', () => {
         return { key: process.env.OPENAI_API_KEY, region: process.env.AWS_REGION };
       }
     `);
-    assert.deepEqual(
-      facts.environmentRefs.map((entry) => entry.name).sort(),
-      ['AWS_REGION', 'OPENAI_API_KEY'],
-    );
+    assert.deepEqual(facts.environmentRefs.map((entry) => entry.name).sort(), [
+      'AWS_REGION',
+      'OPENAI_API_KEY',
+    ]);
     assert.equal(facts.environmentRefs[0]?.enclosing, 'makeClient');
   });
 
   it('records long strings and template literals as candidate prompts', () => {
     const facts = analyze(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the fixture is source text and the placeholder is the subject
       'export const instructions = `You are a support agent. Always answer in ${tone} tone and be brief.`;\nexport const short = "hi";',
     );
     assert.equal(facts.texts.length, 1);

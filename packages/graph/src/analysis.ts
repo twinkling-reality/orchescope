@@ -45,18 +45,31 @@ export const degrees = (index: IndexedGraph): readonly DegreeStats[] =>
   });
 
 /**
- * Entry points of the declared system. A component is an entry point when it is declared as one, or
- * when it is an agent that no other agent hands off to and no group invokes.
+ * Entry points of the declared system.
+ *
+ * A component is an entry point when nothing points at it: no control flow relation and no containment. Declared
+ * entry points, groups and agents are all candidates, because a repository may have an explicit entry point, an
+ * orchestrator nobody calls, or both. When every candidate has an inbound relation, which happens in a fully cyclic
+ * topology, all candidates are treated as roots rather than reporting the whole system unreachable.
  */
 export const entryPoints = (index: IndexedGraph): readonly Component[] => {
-  const declared = index.componentsOfKind('entrypoint');
-  if (declared.length > 0) return declared;
-  return index.componentsOfKind('agent').filter((agent) => {
-    const inbound = index.incoming(agent.id);
-    return !inbound.some(
-      (edge) => edge.kind === 'hands_off_to' || (edge.kind === 'contains' && edge.from !== edge.to),
-    );
-  });
+  const candidates = [
+    ...index.componentsOfKind('entrypoint'),
+    ...index.componentsOfKind('agent_group'),
+    ...index.componentsOfKind('agent'),
+  ];
+  if (candidates.length === 0) return [];
+  const roots = candidates.filter(
+    (candidate) =>
+      !index
+        .incoming(candidate.id)
+        .some(
+          (edge) =>
+            edge.from !== candidate.id &&
+            (isControlFlowKind(edge.kind) || edge.kind === 'contains'),
+        ),
+  );
+  return roots.length > 0 ? roots : candidates;
 };
 
 export const reachableFrom = (

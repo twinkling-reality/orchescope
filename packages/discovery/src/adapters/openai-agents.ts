@@ -1,6 +1,6 @@
 import { CONFIDENCE_BANDS } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
-import type { ComponentIdentity, EdgePolicy } from '@orchescope/schema';
+import type { ComponentIdentity, EdgeKind, EdgePolicy } from '@orchescope/schema';
 import type { CallFact, ModuleFacts, ObjectEntryFact } from '@orchescope/source-analysis';
 import {
   booleanValue,
@@ -11,7 +11,7 @@ import {
   stringValue,
 } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
-import { GLOBAL_NAMESPACES, createDrafts, globalIdentity, sourceIdentity } from '../drafts.ts';
+import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
 import { decoratedDefinitions, definitionForCall, matchCalls, projectUses } from '../matching.ts';
 
 /**
@@ -87,7 +87,9 @@ const registerTools = (
         name: declaredName,
         location: decorated.definition.location,
         symbol: `@function_tool ${decorated.definition.name}`,
-        confidence: decorated.resolved ? CONFIDENCE_BANDS.deterministic : CONFIDENCE_BANDS.heuristic,
+        confidence: decorated.resolved
+          ? CONFIDENCE_BANDS.deterministic
+          : CONFIDENCE_BANDS.heuristic,
         details: { for: 'tool' },
         metadata: { framework: 'openai-agents', declaredName },
         tags: ['openai-agents'],
@@ -142,40 +144,48 @@ const registerMcpServers = (
       }),
     );
     components += 1;
-    if (definition !== undefined) context.bindings.register(match.module.file, definition.name, identity);
+    if (definition !== undefined)
+      context.bindings.register(match.module.file, definition.name, identity);
   }
   return { components };
 };
 
 const retryPolicyFor = (entries: readonly ObjectEntryFact[]): EdgePolicy | undefined => {
-  const maxTurns = numberValue(findEntry(entries, 'maxTurns')?.value ?? findEntry(entries, 'max_turns')?.value);
+  const maxTurns = numberValue(
+    findEntry(entries, 'maxTurns')?.value ?? findEntry(entries, 'max_turns')?.value,
+  );
   if (maxTurns === undefined) return undefined;
-  return { concurrency: 1, retry: { maxAttempts: maxTurns, bounded: true, backoff: 'none', idempotency: 'unknown' } };
+  return {
+    concurrency: 1,
+    retry: { maxAttempts: maxTurns, bounded: true, backoff: 'none', idempotency: 'unknown' },
+  };
 };
 
-const registerAgents = (
+type PendingAgent = {
+  readonly identity: ComponentIdentity;
+  readonly module: ModuleFacts;
+  readonly call: CallFact;
+  readonly entries: readonly ObjectEntryFact[];
+};
+
+const agentConstructionCalls = (context: DiscoveryContext) => [
+  ...matchCalls(context.modules, { names: ['Agent'], packages: PACKAGES }),
+  ...matchCalls(context.modules, { names: ['create'], packages: PACKAGES, pathLength: 2 }).filter(
+    (match) => match.call.calleePath[0] === 'Agent',
+  ),
+];
+
+/**
+ * Agents and the models they name, recorded first so that a relation between two agents can resolve both ends.
+ */
+const addAgents = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
-): { components: number; edges: number } => {
+): { readonly components: number; readonly pending: readonly PendingAgent[] } => {
+  const pending: PendingAgent[] = [];
   let components = 0;
-  let edges = 0;
 
-  const agentCalls = [
-    ...matchCalls(context.modules, { names: ['Agent'], packages: PACKAGES }),
-    ...matchCalls(context.modules, { names: ['create'], packages: PACKAGES, pathLength: 2 }).filter(
-      (match) => match.call.calleePath[0] === 'Agent',
-    ),
-  ];
-
-  type Pending = {
-    readonly identity: ComponentIdentity;
-    readonly module: ModuleFacts;
-    readonly call: CallFact;
-    readonly entries: readonly ObjectEntryFact[];
-  };
-  const pending: Pending[] = [];
-
-  for (const match of agentCalls) {
+  for (const match of agentConstructionCalls(context)) {
     const entries = objectArgument(match.call);
     const definition = definitionForCall(match.module, match.call);
     const declared = stringValue(findEntry(entries, 'name')?.value) ?? definition?.name ?? 'agent';
@@ -193,9 +203,7 @@ const registerAgents = (
         location: match.call.location,
         symbol: definition?.name ?? 'Agent',
         confidence: match.confidence,
-        ...(instructions === undefined
-          ? {}
-          : { description: instructions.slice(0, 240) }),
+        ...(instructions === undefined ? {} : { description: instructions.slice(0, 240) }),
         details: {
           for: 'agent',
           framework: 'openai-agents',
@@ -208,94 +216,115 @@ const registerAgents = (
       }),
     );
     components += 1;
-    if (definition !== undefined) context.bindings.register(match.module.file, definition.name, identity);
+    if (definition !== undefined) {
+      context.bindings.register(match.module.file, definition.name, identity);
+    }
     context.bindings.register(match.module.file, declared, identity);
     pending.push({ identity, module: match.module, call: match.call, entries });
 
-    if (model !== undefined) {
-      builder.addComponent(
-        drafts.sourceComponent({
-          kind: 'model',
-          identity: modelIdentity(model),
-          file: match.module.file,
-          name: model,
-          location: match.call.location,
-          symbol: `model: ${model}`,
-          confidence: match.confidence,
-          details: { for: 'model', modelId: model },
-          metadata: { framework: 'openai-agents' },
-        }),
-      );
-      components += 1;
-    }
+    if (model === undefined) continue;
+    builder.addComponent(
+      drafts.sourceComponent({
+        kind: 'model',
+        identity: modelIdentity(model),
+        file: match.module.file,
+        name: model,
+        location: match.call.location,
+        symbol: `model: ${model}`,
+        confidence: match.confidence,
+        details: { for: 'model', modelId: model },
+        metadata: { framework: 'openai-agents' },
+      }),
+    );
+    components += 1;
+  }
+  return { components, pending };
+};
+
+/** Relations named by identifier, resolved through the bindings recorded while the agents were added. */
+const addNamedRelations = (
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+  agent: PendingAgent,
+  named: {
+    readonly key: readonly string[];
+    readonly kind: (target: ComponentIdentity) => EdgeKind;
+    readonly reversed?: boolean;
+    readonly label: string;
+  },
+): number => {
+  const value = named.key
+    .map((key) => findEntry(agent.entries, key)?.value)
+    .find((candidate) => candidate !== undefined);
+  let edges = 0;
+  for (const name of identifierItems(value)) {
+    const target = context.bindings.lookup(agent.module.file, name);
+    if (target === undefined) continue;
+    builder.addEdge(
+      drafts.edge({
+        kind: named.kind(target),
+        from: named.reversed === true ? target : agent.identity,
+        to: named.reversed === true ? agent.identity : target,
+        location: agent.call.location,
+        symbol: `${named.label}: ${name}`,
+      }),
+    );
+    edges += 1;
+  }
+  return edges;
+};
+
+const addAgentRelations = (
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+  agent: PendingAgent,
+): number => {
+  let edges = 0;
+  const policy = retryPolicyFor(agent.entries);
+  const modelName = stringValue(findEntry(agent.entries, 'model')?.value);
+  if (modelName !== undefined) {
+    builder.addEdge(
+      drafts.edge({
+        kind: 'invokes_model',
+        from: agent.identity,
+        to: modelIdentity(modelName),
+        location: agent.call.location,
+        symbol: `model: ${modelName}`,
+        ...(policy === undefined ? {} : { policy }),
+      }),
+    );
+    edges += 1;
   }
 
-  for (const entry of pending) {
-    const policy = retryPolicyFor(entry.entries);
-    const modelName = stringValue(findEntry(entry.entries, 'model')?.value);
-    if (modelName !== undefined) {
-      builder.addEdge(
-        drafts.edge({
-          kind: 'invokes_model',
-          from: entry.identity,
-          to: modelIdentity(modelName),
-          location: entry.call.location,
-          symbol: `model: ${modelName}`,
-          ...(policy === undefined ? {} : { policy }),
-        }),
-      );
-      edges += 1;
-    }
+  edges += addNamedRelations(context, builder, agent, {
+    key: ['tools'],
+    kind: (target) => (target.kind === 'mcp_server' ? 'provides_tool' : 'calls_tool'),
+    label: 'tools',
+  });
+  edges += addNamedRelations(context, builder, agent, {
+    key: ['mcpServers', 'mcp_servers'],
+    kind: () => 'provides_tool',
+    reversed: true,
+    label: 'mcpServers',
+  });
+  edges += addNamedRelations(context, builder, agent, {
+    key: ['handoffs'],
+    kind: () => 'hands_off_to',
+    label: 'handoffs',
+  });
+  return edges;
+};
 
-    for (const toolName of identifierItems(findEntry(entry.entries, 'tools')?.value)) {
-      const target = context.bindings.lookup(entry.module.file, toolName);
-      if (target === undefined) continue;
-      builder.addEdge(
-        drafts.edge({
-          kind: target.kind === 'mcp_server' ? 'provides_tool' : 'calls_tool',
-          from: entry.identity,
-          to: target,
-          location: entry.call.location,
-          symbol: `tools: ${toolName}`,
-        }),
-      );
-      edges += 1;
-    }
-
-    for (const serverName of identifierItems(
-      findEntry(entry.entries, 'mcpServers')?.value ?? findEntry(entry.entries, 'mcp_servers')?.value,
-    )) {
-      const target = context.bindings.lookup(entry.module.file, serverName);
-      if (target === undefined) continue;
-      builder.addEdge(
-        drafts.edge({
-          kind: 'provides_tool',
-          from: target,
-          to: entry.identity,
-          location: entry.call.location,
-          symbol: `mcpServers: ${serverName}`,
-        }),
-      );
-      edges += 1;
-    }
-
-    for (const handoffName of identifierItems(findEntry(entry.entries, 'handoffs')?.value)) {
-      const target = context.bindings.lookup(entry.module.file, handoffName);
-      if (target === undefined) continue;
-      builder.addEdge(
-        drafts.edge({
-          kind: 'hands_off_to',
-          from: entry.identity,
-          to: target,
-          location: entry.call.location,
-          symbol: `handoffs: ${handoffName}`,
-        }),
-      );
-      edges += 1;
-    }
+const registerAgents = (
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+): { components: number; edges: number } => {
+  const added = addAgents(context, builder);
+  let edges = 0;
+  for (const agent of added.pending) {
+    edges += addAgentRelations(context, builder, agent);
   }
-
-  return { components, edges };
+  return { components: added.components, edges };
 };
 
 export const openAiAgentsAdapter: AgentSystemAdapter = {
@@ -307,8 +336,8 @@ export const openAiAgentsAdapter: AgentSystemAdapter = {
     const tools = registerTools(context, builder);
     const servers = registerMcpServers(context, builder);
     const agents = registerAgents(context, builder);
-    const filesInspected = context.modules.filter(
-      (module) => module.imports.some((entry) => PACKAGES.includes(entry.module)),
+    const filesInspected = context.modules.filter((module) =>
+      module.imports.some((entry) => PACKAGES.includes(entry.module)),
     ).length;
     return {
       componentsFound: tools.components + servers.components + agents.components,

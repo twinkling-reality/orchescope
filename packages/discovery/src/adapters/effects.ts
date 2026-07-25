@@ -1,10 +1,17 @@
 import { CONFIDENCE_BANDS } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type { ComponentIdentity, EdgePolicy, SideEffectClass } from '@orchescope/schema';
-import type { CallFact, ModuleFacts } from '@orchescope/source-analysis';
-import { calleeName, dotted, findEntry, numberValue, objectArgument, stringValue } from '@orchescope/source-analysis';
+import type { CallFact, ControlFlowFact, ModuleFacts } from '@orchescope/source-analysis';
+import {
+  calleeName,
+  dotted,
+  findEntry,
+  numberValue,
+  objectArgument,
+  stringValue,
+} from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
-import { GLOBAL_NAMESPACES, createDrafts, globalIdentity, sourceIdentity } from '../drafts.ts';
+import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
 
 /**
  * External effects: network calls, datastores, queues, retries and the operations that change something
@@ -42,15 +49,16 @@ const HTTP_METHOD_NAMES = new Set([
   'stream',
 ]);
 
-const DATASTORE_CLIENTS: readonly { readonly names: readonly string[]; readonly store: string }[] = [
-  { names: ['PrismaClient'], store: 'prisma' },
-  { names: ['Pool', 'Client'], store: 'postgres' },
-  { names: ['createClient'], store: 'redis' },
-  { names: ['MongoClient'], store: 'mongodb' },
-  { names: ['create_engine', 'sessionmaker'], store: 'sqlalchemy' },
-  { names: ['connect'], store: 'sqlite' },
-  { names: ['DatabaseSync'], store: 'sqlite' },
-];
+const DATASTORE_CLIENTS: readonly { readonly names: readonly string[]; readonly store: string }[] =
+  [
+    { names: ['PrismaClient'], store: 'prisma' },
+    { names: ['Pool', 'Client'], store: 'postgres' },
+    { names: ['createClient'], store: 'redis' },
+    { names: ['MongoClient'], store: 'mongodb' },
+    { names: ['create_engine', 'sessionmaker'], store: 'sqlalchemy' },
+    { names: ['connect'], store: 'sqlite' },
+    { names: ['DatabaseSync'], store: 'sqlite' },
+  ];
 
 const QUEUE_CLIENTS: readonly { readonly names: readonly string[]; readonly queue: string }[] = [
   { names: ['Queue', 'Worker', 'FlowProducer'], queue: 'bullmq' },
@@ -98,7 +106,9 @@ export const classifyEffect = (name: string, httpMethod?: string): SideEffectCla
     if (method === 'put') return 'idempotent_write';
     if (method === 'delete') return 'destructive';
     if (method === 'post' || method === 'patch') {
-      return WRITE_VERBS.some((verb) => lowered.includes(verb)) ? 'non_idempotent_write' : 'unknown';
+      return WRITE_VERBS.some((verb) => lowered.includes(verb))
+        ? 'non_idempotent_write'
+        : 'unknown';
     }
   }
   if (lowered.includes('refund') || lowered.includes('charge') || lowered.includes('pay')) {
@@ -196,7 +206,8 @@ const discoverHttp = (
         name: target,
         location: call.location,
         symbol: path,
-        confidence: host === undefined ? CONFIDENCE_BANDS.heuristic : CONFIDENCE_BANDS.strongStructural,
+        confidence:
+          host === undefined ? CONFIDENCE_BANDS.heuristic : CONFIDENCE_BANDS.strongStructural,
         details: {
           for: 'external_service',
           ...(host === undefined ? {} : { host }),
@@ -204,7 +215,9 @@ const discoverHttp = (
           authKind: 'unknown',
         },
         sideEffect: effect,
-        permissions: [{ kind: 'network', scope: target, mode: effect === 'read_only' ? 'read' : 'write' }],
+        permissions: [
+          { kind: 'network', scope: target, mode: effect === 'read_only' ? 'read' : 'write' },
+        ],
         metadata: {
           client: path,
           ...(method === undefined ? {} : { httpMethod: method }),
@@ -318,13 +331,21 @@ const discoverStores = (
   }
 };
 
+/** The operation a retry helper wraps, when it can be named. */
+const wrappedOperationName = (call: CallFact): string | undefined => {
+  const wrapped = call.args[0];
+  if (wrapped === undefined) return undefined;
+  if (wrapped.kind === 'identifier') return wrapped.name;
+  if (wrapped.kind === 'call') return wrapped.path[wrapped.path.length - 1];
+  return undefined;
+};
+
 /**
- * Retry detection. Two shapes are recognised: an explicit retry helper with an attempt option, and a
- * loop containing a try that contains a call. The second shape is reported with a bounded attempt count
- * only when the loop is a counted loop, and with `bounded: false` otherwise, because an unbounded retry
- * around a side effect is one of the findings this exists to support.
+ * An explicit retry helper. The attempt count is read from the options where it is stated, and a helper with no stated
+ * count is recorded as unbounded rather than guessed at, because an unbounded retry around a side effect is one of the
+ * findings this exists to support.
  */
-const discoverRetries = (
+const discoverRetryHelpers = (
   module: ModuleFacts,
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
@@ -332,23 +353,16 @@ const discoverRetries = (
 ): void => {
   for (const call of module.calls) {
     if (!RETRY_HELPERS.has(calleeName(call))) continue;
+    const wrappedName = wrappedOperationName(call);
+    if (wrappedName === undefined) continue;
+    const target = context.bindings.lookup(module.file, wrappedName);
+    if (target === undefined) continue;
+
     const entries = objectArgument(call, 1);
     const attempts =
       numberValue(findEntry(entries, 'retries')?.value) ??
       numberValue(findEntry(entries, 'attempts')?.value) ??
       numberValue(findEntry(entries, 'stop_after_attempt')?.value);
-    const wrapped = call.args[0];
-    const wrappedName =
-      wrapped === undefined
-        ? undefined
-        : wrapped.kind === 'identifier'
-          ? wrapped.name
-          : wrapped.kind === 'call'
-            ? wrapped.path[wrapped.path.length - 1]
-            : undefined;
-    if (wrappedName === undefined) continue;
-    const target = context.bindings.lookup(module.file, wrappedName);
-    if (target === undefined) continue;
     const policy: EdgePolicy = {
       retry: {
         ...(attempts === undefined ? {} : { maxAttempts: attempts }),
@@ -372,17 +386,35 @@ const discoverRetries = (
     found.edges += 1;
     found.files.add(module.file);
   }
+};
 
+const enclosingLoopOf = (
+  module: ModuleFacts,
+  construct: ControlFlowFact,
+): ControlFlowFact | undefined =>
+  module.controlFlow.find(
+    (candidate) =>
+      candidate.kind === 'loop' &&
+      candidate.location.startLine <= construct.location.startLine &&
+      (candidate.location.endLine ?? candidate.location.startLine) >=
+        (construct.location.endLine ?? construct.location.startLine),
+  );
+
+/**
+ * A loop containing a try that contains a call. This shape is a retry without saying so, and it is recorded as
+ * unbounded because nothing in the syntax states a limit.
+ */
+const discoverRetryLoops = (
+  module: ModuleFacts,
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+  found: Found,
+): void => {
   for (const construct of module.controlFlow) {
     if (construct.kind !== 'try_catch' || construct.contains.length === 0) continue;
-    const enclosingLoop = module.controlFlow.find(
-      (candidate) =>
-        candidate.kind === 'loop' &&
-        candidate.location.startLine <= construct.location.startLine &&
-        (candidate.location.endLine ?? candidate.location.startLine) >=
-          (construct.location.endLine ?? construct.location.startLine),
-    );
-    if (enclosingLoop === undefined) continue;
+    if (enclosingLoopOf(module, construct) === undefined) continue;
+
+    const scope = construct.enclosing ?? 'module-scope';
     for (const path of construct.contains) {
       const name = path[path.length - 1];
       if (name === undefined) continue;
@@ -392,15 +424,13 @@ const discoverRetries = (
         drafts.edge({
           kind: target.kind === 'tool' ? 'calls_tool' : 'calls_service',
           from:
-            context.bindings.lookup(module.file, construct.enclosing ?? 'module-scope') ??
-            sourceIdentity('entrypoint', module.file, construct.enclosing ?? 'module-scope'),
+            context.bindings.lookup(module.file, scope) ??
+            sourceIdentity('entrypoint', module.file, scope),
           to: target,
           location: construct.location,
           symbol: `retry loop around ${name}`,
           confidence: CONFIDENCE_BANDS.heuristic,
-          policy: {
-            retry: { bounded: false, backoff: 'unknown', idempotency: 'unknown' },
-          },
+          policy: { retry: { bounded: false, backoff: 'unknown', idempotency: 'unknown' } },
           metadata: { retryShape: 'loop-with-try' },
         }),
       );
@@ -419,7 +449,8 @@ export const effectsAdapter: AgentSystemAdapter = {
     for (const module of context.modules) {
       discoverHttp(module, context, builder, found);
       discoverStores(module, context, builder, found);
-      discoverRetries(module, context, builder, found);
+      discoverRetryHelpers(module, context, builder, found);
+      discoverRetryLoops(module, context, builder, found);
     }
     return {
       componentsFound: found.components,

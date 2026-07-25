@@ -1,7 +1,13 @@
 import { CONFIDENCE_BANDS } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type { McpServerDetails } from '@orchescope/schema';
-import { booleanValue, dotted, findEntry, objectArgument, stringValue } from '@orchescope/source-analysis';
+import {
+  booleanValue,
+  dotted,
+  findEntry,
+  objectArgument,
+  stringValue,
+} from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { asRecord, asString, asStringArray, jsonPointer } from '../config-files.ts';
 import { configIdentity, createDrafts, sourceIdentity } from '../drafts.ts';
@@ -49,6 +55,76 @@ const transportOf = (entry: Record<string, unknown>): Transport => {
   return 'unknown';
 };
 
+/**
+ * A placeholder in a command, a url or an environment value means the declaration is incomplete: the server cannot be
+ * reached without something this repository does not contain. That is recorded rather than resolved.
+ */
+const unresolvedNamesIn = (
+  command: string | undefined,
+  url: string | undefined,
+  env: Record<string, unknown> | undefined,
+): readonly string[] => [
+  ...placeholders(command ?? ''),
+  ...placeholders(url ?? ''),
+  ...(env === undefined
+    ? []
+    : Object.values(env).flatMap((value) =>
+        typeof value === 'string' ? placeholders(value) : [],
+      )),
+];
+
+const addDeclaredServer = (
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+  where: { readonly configFile: string; readonly configKey: string; readonly name: string },
+  entry: Record<string, unknown>,
+): { readonly unresolved: boolean } => {
+  const command = asString(entry['command']);
+  const url = asString(entry['url']);
+  const args = asStringArray(entry['args']);
+  const env = asRecord(entry['env']);
+  const envKeys = env === undefined ? [] : Object.keys(env);
+  const unresolvedNames = unresolvedNamesIn(command, url, env);
+
+  builder.addComponent(
+    drafts.configComponent({
+      kind: 'mcp_server',
+      configFile: where.configFile,
+      pointer: jsonPointer([where.configKey, where.name]),
+      name: where.name,
+      ...(command === undefined && url === undefined ? {} : { value: command ?? url ?? '' }),
+      details: {
+        for: 'mcp_server',
+        transport: transportOf(entry),
+        ...(command === undefined ? {} : { command }),
+        ...(url === undefined ? {} : { url }),
+        argsCount: args.length,
+        ...(envKeys.length === 0 ? {} : { envKeys }),
+      },
+      permissions:
+        url === undefined
+          ? [{ kind: 'process', scope: command ?? 'unknown', mode: 'execute' }]
+          : [{ kind: 'network', scope: url, mode: 'write' }],
+      metadata: {
+        declaredIn: where.configFile,
+        configKey: where.configKey,
+        ...(unresolvedNames.length === 0
+          ? {}
+          : { unresolvedPlaceholders: [...new Set(unresolvedNames)] }),
+        ...(entry['envFile'] === undefined ? {} : { envFile: String(entry['envFile']) }),
+        runtimeName: where.name,
+      },
+      tags: ['mcp', 'declared'],
+    }),
+  );
+  context.bindings.register(
+    where.configFile,
+    where.name,
+    configIdentity('mcp_server', where.configFile, where.name),
+  );
+  return { unresolved: unresolvedNames.length > 0 || entry['envFile'] !== undefined };
+};
+
 const discoverFromConfig = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
@@ -59,90 +135,72 @@ const discoverFromConfig = (
   for (const document of context.configs) {
     const root = asRecord(document.data);
     if (root === undefined) continue;
-    for (const key of CONFIG_KEYS) {
-      const servers = asRecord(root[key]);
+    for (const configKey of CONFIG_KEYS) {
+      const servers = asRecord(root[configKey]);
       if (servers === undefined) continue;
       for (const [name, rawEntry] of Object.entries(servers)) {
         const entry = asRecord(rawEntry);
         if (entry === undefined) continue;
-        const command = asString(entry['command']);
-        const url = asString(entry['url']);
-        const args = asStringArray(entry['args']);
-        const env = asRecord(entry['env']);
-        const envKeys = env === undefined ? [] : Object.keys(env);
-        const unresolvedNames = [
-          ...placeholders(command ?? ''),
-          ...placeholders(url ?? ''),
-          ...(env === undefined
-            ? []
-            : Object.values(env).flatMap((value) =>
-                typeof value === 'string' ? placeholders(value) : [],
-              )),
-        ];
-        if (unresolvedNames.length > 0 || entry['envFile'] !== undefined) unresolved += 1;
-
-        builder.addComponent(
-          drafts.configComponent({
-            kind: 'mcp_server',
-            configFile: document.path,
-            pointer: jsonPointer([key, name]),
-            name,
-            ...(command === undefined && url === undefined ? {} : { value: command ?? url ?? '' }),
-            details: {
-              for: 'mcp_server',
-              transport: transportOf(entry),
-              ...(command === undefined ? {} : { command }),
-              ...(url === undefined ? {} : { url }),
-              argsCount: args.length,
-              ...(envKeys.length === 0 ? {} : { envKeys }),
-            },
-            permissions:
-              url === undefined
-                ? [{ kind: 'process', scope: command ?? 'unknown', mode: 'execute' }]
-                : [{ kind: 'network', scope: url, mode: 'write' }],
-            metadata: {
-              declaredIn: document.path,
-              configKey: key,
-              ...(unresolvedNames.length === 0
-                ? {}
-                : { unresolvedPlaceholders: [...new Set(unresolvedNames)] }),
-              ...(entry['envFile'] === undefined ? {} : { envFile: String(entry['envFile']) }),
-              runtimeName: name,
-            },
-            tags: ['mcp', 'declared'],
-          }),
+        const added = addDeclaredServer(
+          context,
+          builder,
+          { configFile: document.path, configKey, name },
+          entry,
         );
         components += 1;
-        context.bindings.register(
-          document.path,
-          name,
-          configIdentity('mcp_server', document.path, name),
-        );
+        if (added.unresolved) unresolved += 1;
       }
     }
   }
   return { components, unresolved };
 };
 
-const discoverFromSdk = (
+type SdkMatch = ReturnType<typeof matchCalls>[number];
+
+const serverNameOf = (match: SdkMatch): string => {
+  const entries = objectArgument(match.call);
+  const positional = match.call.args[0];
+  return (
+    stringValue(findEntry(entries, 'name')?.value) ??
+    (positional !== undefined && positional.kind === 'string' ? positional.value : undefined) ??
+    'mcp-server'
+  );
+};
+
+/**
+ * Tool annotations as the server declares them.
+ *
+ * These are the server's own claims about its tools, not facts about their behaviour, which is why the component records
+ * `annotationsAreSelfDeclared` alongside them.
+ */
+const annotationDetails = (
+  config: SdkMatch['call']['args'][number] | undefined,
+): Record<string, boolean> => {
+  const annotations =
+    config !== undefined && config.kind === 'object'
+      ? findEntry(config.entries, 'annotations')?.value
+      : undefined;
+  const entries =
+    annotations !== undefined && annotations.kind === 'object' ? annotations.entries : [];
+  const details: Record<string, boolean> = {};
+  for (const hint of ['readOnlyHint', 'destructiveHint', 'idempotentHint', 'openWorldHint']) {
+    const value = booleanValue(findEntry(entries, hint)?.value);
+    if (value !== undefined) details[hint] = value;
+  }
+  return details;
+};
+
+const discoverServers = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
-): { components: number; edges: number; files: Set<string> } => {
-  let components = 0;
-  let edges = 0;
-  const files = new Set<string>();
-
-  const serverConstructions = matchCalls(context.modules, {
+  files: Set<string>,
+): { readonly components: number; readonly matches: readonly SdkMatch[] } => {
+  const matches = matchCalls(context.modules, {
     names: ['McpServer', 'Server', 'FastMCP'],
     packages: SDK_PACKAGES,
   });
-  for (const match of serverConstructions) {
-    const entries = objectArgument(match.call);
-    const positional = match.call.args[0];
-    const name =
-      stringValue(findEntry(entries, 'name')?.value) ??
-      (positional !== undefined && positional.kind === 'string' ? positional.value : undefined) ??
-      'mcp-server';
+  for (const match of matches) {
+    const name = serverNameOf(match);
     builder.addComponent(
       drafts.sourceComponent({
         kind: 'mcp_server',
@@ -156,7 +214,6 @@ const discoverFromSdk = (
         tags: ['mcp', 'server'],
       }),
     );
-    components += 1;
     files.add(match.module.file);
     context.bindings.register(
       match.module.file,
@@ -164,21 +221,27 @@ const discoverFromSdk = (
       sourceIdentity('mcp_server', match.module.file, name),
     );
   }
+  return { components: matches.length, matches };
+};
 
-  const toolRegistrations = matchCalls(context.modules, {
+const discoverTools = (
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+  servers: readonly SdkMatch[],
+  files: Set<string>,
+): { components: number; edges: number } => {
+  let components = 0;
+  let edges = 0;
+  const registrations = matchCalls(context.modules, {
     names: ['registerTool', 'tool', 'setRequestHandler', 'add_tool'],
     packages: SDK_PACKAGES,
   });
-  for (const match of toolRegistrations) {
+
+  for (const match of registrations) {
     const first = match.call.args[0];
     if (first === undefined || first.kind !== 'string') continue;
     const toolName = first.value;
     const config = match.call.args[1];
-    const annotations =
-      config !== undefined && config.kind === 'object'
-        ? findEntry(config.entries, 'annotations')?.value
-        : undefined;
-    const annotationEntries = annotations !== undefined && annotations.kind === 'object' ? annotations.entries : [];
     const description =
       config !== undefined && config.kind === 'object'
         ? stringValue(findEntry(config.entries, 'description')?.value)
@@ -193,33 +256,7 @@ const discoverFromSdk = (
         symbol: dotted(match.call.calleePath),
         confidence: match.confidence,
         ...(description === undefined ? {} : { description }),
-        details: {
-          for: 'tool',
-          ...(booleanValue(findEntry(annotationEntries, 'readOnlyHint')?.value) === undefined
-            ? {}
-            : { readOnlyHint: booleanValue(findEntry(annotationEntries, 'readOnlyHint')?.value) as boolean }),
-          ...(booleanValue(findEntry(annotationEntries, 'destructiveHint')?.value) === undefined
-            ? {}
-            : {
-                destructiveHint: booleanValue(
-                  findEntry(annotationEntries, 'destructiveHint')?.value,
-                ) as boolean,
-              }),
-          ...(booleanValue(findEntry(annotationEntries, 'idempotentHint')?.value) === undefined
-            ? {}
-            : {
-                idempotentHint: booleanValue(
-                  findEntry(annotationEntries, 'idempotentHint')?.value,
-                ) as boolean,
-              }),
-          ...(booleanValue(findEntry(annotationEntries, 'openWorldHint')?.value) === undefined
-            ? {}
-            : {
-                openWorldHint: booleanValue(
-                  findEntry(annotationEntries, 'openWorldHint')?.value,
-                ) as boolean,
-              }),
-        },
+        details: { for: 'tool', ...annotationDetails(config) },
         metadata: {
           declaredBy: 'mcp-server',
           runtimeName: toolName,
@@ -233,31 +270,31 @@ const discoverFromSdk = (
     const toolIdentity = sourceIdentity('tool', match.module.file, toolName);
     context.bindings.register(match.module.file, toolName, toolIdentity);
 
-    const serverInSameFile = serverConstructions.find(
-      (candidate) => candidate.module.file === match.module.file,
+    const server = servers.find((candidate) => candidate.module.file === match.module.file);
+    if (server === undefined) continue;
+    builder.addEdge(
+      drafts.edge({
+        kind: 'provides_tool',
+        from: sourceIdentity('mcp_server', match.module.file, serverNameOf(server)),
+        to: toolIdentity,
+        location: match.call.location,
+        symbol: `${dotted(match.call.calleePath)}("${toolName}")`,
+        confidence: CONFIDENCE_BANDS.strongStructural,
+      }),
     );
-    if (serverInSameFile !== undefined) {
-      const serverEntries = objectArgument(serverInSameFile.call);
-      const positional = serverInSameFile.call.args[0];
-      const serverName =
-        stringValue(findEntry(serverEntries, 'name')?.value) ??
-        (positional !== undefined && positional.kind === 'string' ? positional.value : undefined) ??
-        'mcp-server';
-      builder.addEdge(
-        drafts.edge({
-          kind: 'provides_tool',
-          from: sourceIdentity('mcp_server', match.module.file, serverName),
-          to: toolIdentity,
-          location: match.call.location,
-          symbol: `${dotted(match.call.calleePath)}("${toolName}")`,
-          confidence: CONFIDENCE_BANDS.strongStructural,
-        }),
-      );
-      edges += 1;
-    }
+    edges += 1;
   }
+  return { components, edges };
+};
 
-  return { components, edges, files };
+const discoverFromSdk = (
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+): { components: number; edges: number; files: Set<string> } => {
+  const files = new Set<string>();
+  const servers = discoverServers(context, builder, files);
+  const tools = discoverTools(context, builder, servers.matches, files);
+  return { components: servers.components + tools.components, edges: tools.edges, files };
 };
 
 export const mcpAdapter: AgentSystemAdapter = {
