@@ -103,7 +103,11 @@ program
   .command('init')
   .description('create .orchescope with a configuration file that lists every default')
   .option('--name <name>', 'project name recorded in the configuration')
-  .action(async (options: { name?: string }) => {
+  .option(
+    '--manifest',
+    'also write a manifest template for components no adapter can read from source',
+  )
+  .action(async (options: { name?: string; manifest?: boolean }) => {
     await withContext(globals(), (context) => initCommand(context, options));
   });
 

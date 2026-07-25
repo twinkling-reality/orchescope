@@ -20,9 +20,12 @@ import { doctorSummary } from '../terminal/summary.ts';
 
 export const initCommand = (
   context: CommandContext,
-  options: { readonly name?: string },
+  options: { readonly name?: string; readonly manifest?: boolean },
 ): number => {
-  const result = initWorkspace(context.workspace.paths.root, options.name);
+  const result = initWorkspace(context.workspace.paths.root, {
+    ...(options.name === undefined ? {} : { projectName: options.name }),
+    ...(options.manifest === true ? { manifest: true } : {}),
+  });
   if (context.json) {
     context.stdout(
       `${stableJson({ ok: true, command: 'init', version: context.version, data: result })}\n`,
@@ -34,6 +37,18 @@ export const initCommand = (
       ? `${context.style.good('+')} wrote ${result.configFile}\n`
       : `${context.style.dim('.')} ${result.configFile} already exists, left unchanged\n`,
   );
+  if (result.manifest !== undefined) {
+    context.stdout(
+      result.manifest.created
+        ? `${context.style.good('+')} wrote ${result.manifest.manifestFile}\n`
+        : `${context.style.dim('.')} ${result.manifest.manifestFile} already exists, left unchanged\n`,
+    );
+    context.stdout(
+      context.style.dim(
+        '  It declares nothing yet. Declare the components and relations Orchescope could not read, then audit again.\n',
+      ),
+    );
+  }
   context.stdout(
     context.style.dim(
       '  .orchescope/config.json is meant to be committed. .orchescope/state and .orchescope/cache are not, and a .gitignore inside .orchescope says so.\n',

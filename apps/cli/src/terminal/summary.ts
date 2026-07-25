@@ -1,4 +1,4 @@
-import type { Comparison, Finding, Goal, ReportBundle, ScenarioResult } from '@orchescope/schema';
+import type { Comparison, Finding, Goal, ScenarioResult } from '@orchescope/schema';
 import type { AuditResult, DoctorResult } from '@orchescope/usecases';
 import {
   formatCount,
@@ -20,12 +20,68 @@ import {
 
 const WIDTH = 76;
 
-const notDetectedLines = (style: Style): readonly string[] => [
-  `${style.warn(SYMBOLS.warning)} No agent system was detected. Nothing here looked like an agent, a model call, a tool or an MCP server.`,
-  style.dim(
-    '  If this repository does contain one, declare it in .orchescope/manifest.yaml so it appears in the graph.',
-  ),
-];
+const MANIFEST_ADAPTER_ID = 'adapter:manifest';
+
+const adapterName = (adapterId: string): string => adapterId.replace(/^adapter:/, '');
+
+/**
+ * An input the project wrote on purpose and Orchescope could not use.
+ *
+ * This is printed whether or not a system was detected, and without asking for verbose output: a manifest the
+ * validator rejected is the difference between an empty graph the reader can fix and one they cannot explain.
+ */
+const inputProblemLines = (
+  style: Style,
+  coverage: AuditResult['graph']['coverage'],
+): readonly string[] => {
+  const failed = coverage.adapters.filter((adapter) => adapter.status === 'failed');
+  if (failed.length === 0) return [];
+  return [
+    '',
+    style.bold('Input problems'),
+    ...failed.map(
+      (adapter) =>
+        `  ${style.bad(SYMBOLS.failed)} ${adapterName(adapter.adapterId)}: ${adapter.detail ?? 'the adapter failed'}`,
+    ),
+  ];
+};
+
+/**
+ * What was looked for, so that "nothing detected" is a report rather than a shrug. The adapters are named
+ * from the run record rather than from a list in this file, so the claim matches what actually executed.
+ */
+const notDetectedLines = (
+  style: Style,
+  coverage: AuditResult['graph']['coverage'],
+): readonly string[] => {
+  const applicable = coverage.adapters.filter((adapter) => adapter.status !== 'not_applicable');
+  const inapplicable = coverage.adapters.filter((adapter) => adapter.status === 'not_applicable');
+  return [
+    `${style.warn(SYMBOLS.warning)} No agent system was detected. Nothing here declared an agent, a model call, a tool or an MCP server.`,
+    style.dim(
+      coverage.filesDiscovered === 0
+        ? '  No file in a language this build parses was found.'
+        : `  ${coverage.filesParsed} of ${formatCount(coverage.filesDiscovered, 'file')} in a language this build parses were read.`,
+    ),
+    ...(inapplicable.length === 0
+      ? []
+      : [
+          style.dim(
+            `  found nothing to read: ${inapplicable.map((adapter) => adapterName(adapter.adapterId)).join(', ')}`,
+          ),
+        ]),
+    ...(applicable.length === 0
+      ? []
+      : [
+          style.dim(
+            `  ran: ${applicable.map((adapter) => `${adapterName(adapter.adapterId)} (${adapter.status})`).join(', ')}`,
+          ),
+        ]),
+    style.dim(
+      '  If this repository does contain an agent system, declare it in .orchescope/manifest.yaml so it appears in the graph.',
+    ),
+  ];
+};
 
 const reconciliationLines = (
   style: Style,
@@ -122,7 +178,12 @@ export const auditSummary = (style: Style, result: AuditResult): string => {
   ];
 
   if (!result.agentSystemDetected) {
-    return [...heading, ...notDetectedLines(style)].join('\n');
+    return [
+      ...heading,
+      ...notDetectedLines(style, graph.coverage),
+      ...inputProblemLines(style, graph.coverage),
+      ...notInspectedLines(style, graph.coverage),
+    ].join('\n');
   }
 
   return [
@@ -130,6 +191,7 @@ export const auditSummary = (style: Style, result: AuditResult): string => {
     `${SYMBOLS.bullet} ${formatCount(summary.componentCount, 'component')}, ${formatCount(summary.edgeCount, 'relation')}, ${formatCount(graph.coverage.filesParsed, 'file')} parsed`,
     ...reconciliationLines(style, result.reconciliation),
     ...findingLines(style, result),
+    ...inputProblemLines(style, graph.coverage),
     ...notInspectedLines(style, graph.coverage),
   ].join('\n');
 };
@@ -157,8 +219,29 @@ export const findingList = (style: Style, findings: readonly Finding[], limit: n
   return lines.join('\n');
 };
 
-export const nextCommand = (bundle: ReportBundle, hasRuns: boolean): string => {
-  if (!hasRuns) return 'orchescope trace -- <the command that starts your system>';
+/**
+ * The single next step.
+ *
+ * Order matters: a rejected input comes before a missing one, a missing declaration comes before runtime
+ * evidence, and runtime evidence comes before anything that needs it. Telling a repository with no detected
+ * system to collect traces would send the reader to a command that cannot help them.
+ */
+export const nextCommand = (result: AuditResult): string => {
+  const manifest = result.graph.coverage.adapters.find(
+    (adapter) => adapter.adapterId === MANIFEST_ADAPTER_ID,
+  );
+  if (manifest?.status === 'failed') {
+    return 'correct .orchescope/manifest.yaml, then run orchescope audit';
+  }
+  if (!result.agentSystemDetected) {
+    return manifest?.status === 'completed'
+      ? 'declare your components in .orchescope/manifest.yaml, then run orchescope audit'
+      : 'orchescope init --manifest';
+  }
+  const bundle = result.bundle;
+  if (result.runsConsidered.length === 0) {
+    return 'orchescope trace -- <the command that starts your system>';
+  }
   const eligible = bundle.findings.find((finding) => finding.goalReadiness.eligible);
   if (eligible !== undefined) return `orchescope goal create ${eligible.id}`;
   if (bundle.scenarios.length === 0)

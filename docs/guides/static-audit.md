@@ -87,7 +87,10 @@ to put it.
 ## Make the audit better without changing your code
 
 `.orchescope/manifest.yaml` is a first class input. Anything you declare there becomes `manifest` presence in the graph, and
-a `runtimeName` is what lets reconciliation match a component whose telemetry name differs from its source name:
+a `runtimeName` is what lets reconciliation match a component whose telemetry name differs from its source name.
+
+`orchescope init --manifest` writes a template that lists every component kind, relation kind and side effect class the
+validator accepts, and declares nothing until you fill it in:
 
 ```yaml
 schemaVersion: 1
@@ -97,15 +100,13 @@ components:
     runtimeName: issue_refund
     definedIn: src/tools/refund.ts
     definedAtLine: 24
-    sideEffect:
-      class: financial
-      idempotency: absent
+    sideEffect: financial
   - kind: external_service
     name: payment-gateway
 edges:
   - kind: performs_side_effect
-    from: { kind: tool, name: issue_refund }
-    to: { kind: external_service, name: payment-gateway }
+    from: issue_refund
+    to: payment-gateway
     policy:
       retry:
         maxAttempts: 3
@@ -114,9 +115,15 @@ edges:
         idempotency: absent
 ```
 
+An edge endpoint is a component `name`, either declared in the same manifest or discovered from your source, so a manifest
+can annotate real code rather than only describing code Orchescope cannot read.
+
 Declaring `idempotency: absent` is what turns "we cannot tell" into a finding with a known basis. Declaring it `declared`
 when it is not would be lying to your own audit, and the reconciliation would catch it the first time a run duplicated an
 effect.
+
+A manifest the validator rejects is reported as a failed adapter with the field that failed, and the audit says so on the
+terminal. It is never ignored.
 
 ## Performance
 

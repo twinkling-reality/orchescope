@@ -35,6 +35,7 @@ export {
   type AgentDetails,
   type ApprovalDetails,
   Component,
+  COMPONENT_KINDS,
   ComponentDetails,
   ComponentKind,
   type McpServerDetails,
@@ -46,6 +47,7 @@ export {
   type QueueDetails,
   type RetrievalDetails,
   type ServiceDetails,
+  SIDE_EFFECT_CLASSES,
   SideEffectClass,
   type ToolDetails,
 } from './component.ts';
@@ -61,6 +63,7 @@ export {
 export {
   BackoffKind,
   Edge,
+  EDGE_KINDS,
   EdgeKind,
   EdgeObservation,
   EdgePolicy,

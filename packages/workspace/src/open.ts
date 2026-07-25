@@ -24,6 +24,7 @@ import { createRedactor, type Redactor } from '@orchescope/redaction';
 import type { OrchescopeConfig, Sha256Hex } from '@orchescope/schema';
 import { DEFAULT_CONFIG, loadConfig, STATE_GITIGNORE, writeConfig } from './config.ts';
 import { type GitFacts, readGitFacts } from './git.ts';
+import { type ManifestTemplateResult, writeManifestTemplate } from './manifest-template.ts';
 import {
   ensureStateDirectories,
   resolvePaths,
@@ -129,22 +130,35 @@ export type InitResult = {
   readonly created: boolean;
   readonly configFile: string;
   readonly alreadyExisted: boolean;
+  /** Present when a manifest template was asked for, whether or not it had to be written. */
+  readonly manifest?: ManifestTemplateResult;
+};
+
+export type InitOptions = {
+  readonly projectName?: string;
+  /** Writes `.orchescope/manifest.yaml` from the template unless a manifest already exists. */
+  readonly manifest?: boolean;
 };
 
 /**
  * Creates the workspace directory and a configuration file with the defaults written out in full, so the
  * settings are discoverable by reading the file rather than by reading the documentation.
  */
-export const initWorkspace = (root: string, projectName?: string): InitResult => {
+export const initWorkspace = (root: string, options: InitOptions = {}): InitResult => {
   const paths = resolvePaths(root);
   const existed = workspaceExists(paths);
   ensureStateDirectories(paths);
   if (!existed) {
     writeConfig(paths, {
       ...DEFAULT_CONFIG,
-      ...(projectName === undefined ? {} : { projectName }),
+      ...(options.projectName === undefined ? {} : { projectName: options.projectName }),
     });
   }
   writeFileSync(join(paths.orchescope, '.gitignore'), STATE_GITIGNORE, { mode: 0o600 });
-  return { created: !existed, configFile: paths.configFile, alreadyExisted: existed };
+  return {
+    created: !existed,
+    configFile: paths.configFile,
+    alreadyExisted: existed,
+    ...(options.manifest === true ? { manifest: writeManifestTemplate(paths) } : {}),
+  };
 };

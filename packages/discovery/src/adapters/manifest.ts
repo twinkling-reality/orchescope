@@ -141,7 +141,7 @@ export const manifestAdapter: AgentSystemAdapter = {
         componentsFound: 0,
         edgesFound: 0,
         filesInspected: 1,
-        note: `${document.path} is not a valid manifest: ${formatIssues(validated.issues)}`,
+        problem: `${document.path} is not a valid manifest: ${formatIssues(validated.issues)}`,
       };
     }
     const manifest = validated.value as Manifest;

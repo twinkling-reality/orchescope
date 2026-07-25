@@ -14,37 +14,38 @@ import {
  * The component vocabulary of an agentic system. A component is anything that can be pointed at
  * in a review conversation: an agent, the model behind it, the tool it calls, the store it reads.
  */
-export const ComponentKind = literals(
-  [
-    'project',
-    'entrypoint',
-    'agent',
-    'agent_group',
-    'model',
-    'provider',
-    'prompt',
-    'tool',
-    'mcp_server',
-    'memory',
-    'retrieval',
-    'queue',
-    'worker',
-    'database',
-    'external_service',
-    'approval_boundary',
-    'side_effect',
-    'guardrail',
-    'evaluator',
-  ] as const,
-  { description: 'Kind of component in the unified agent system model.' },
-);
+export const COMPONENT_KINDS = [
+  'project',
+  'entrypoint',
+  'agent',
+  'agent_group',
+  'model',
+  'provider',
+  'prompt',
+  'tool',
+  'mcp_server',
+  'memory',
+  'retrieval',
+  'queue',
+  'worker',
+  'database',
+  'external_service',
+  'approval_boundary',
+  'side_effect',
+  'guardrail',
+  'evaluator',
+] as const;
+
+export const ComponentKind = literals(COMPONENT_KINDS, {
+  description: 'Kind of component in the unified agent system model.',
+});
 export type ComponentKind = Static<typeof ComponentKind>;
 
 /**
  * Effect classification. Drives retry safety findings, chaos safety gates and approval analysis.
  * `unknown` is a first class answer: Orchescope must not guess that an operation is safe to retry.
  */
-export const SideEffectClass = literals([
+export const SIDE_EFFECT_CLASSES = [
   'read_only',
   'idempotent_write',
   'non_idempotent_write',
@@ -52,7 +53,9 @@ export const SideEffectClass = literals([
   'financial',
   'destructive',
   'unknown',
-] as const);
+] as const;
+
+export const SideEffectClass = literals(SIDE_EFFECT_CLASSES);
 export type SideEffectClass = Static<typeof SideEffectClass>;
 
 export const PermissionKind = literals([

@@ -35,6 +35,12 @@ export type AdapterFindings = {
   readonly edgesFound: number;
   readonly filesInspected: number;
   readonly note?: string;
+  /**
+   * Set when an input the project wrote on purpose could not be used, for example a manifest the schema
+   * rejects. It records the adapter run as failed, which is what makes the rejection visible in the report
+   * and on the terminal instead of leaving the reader with an empty graph and no explanation.
+   */
+  readonly problem?: string;
 };
 
 export type AgentSystemAdapter = {

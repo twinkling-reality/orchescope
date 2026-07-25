@@ -7,30 +7,31 @@ import { Confidence, literals, Metadata, NonEmptyString, NonNegativeInt } from '
  * Relations between components. Every edge kind answers a specific review question, which is why
  * there is no generic `depends_on`.
  */
-export const EdgeKind = literals(
-  [
-    'contains',
-    'invokes_model',
-    'calls_tool',
-    'hands_off_to',
-    'uses_prompt',
-    'reads_memory',
-    'writes_memory',
-    'queries_retrieval',
-    'publishes_to_queue',
-    'consumes_from_queue',
-    'calls_service',
-    'queries_database',
-    'provides_tool',
-    'served_by_provider',
-    'falls_back_to',
-    'guarded_by',
-    'performs_side_effect',
-    'validated_by',
-    'observed_after',
-  ] as const,
-  { description: 'Kind of relation between two components.' },
-);
+export const EDGE_KINDS = [
+  'contains',
+  'invokes_model',
+  'calls_tool',
+  'hands_off_to',
+  'uses_prompt',
+  'reads_memory',
+  'writes_memory',
+  'queries_retrieval',
+  'publishes_to_queue',
+  'consumes_from_queue',
+  'calls_service',
+  'queries_database',
+  'provides_tool',
+  'served_by_provider',
+  'falls_back_to',
+  'guarded_by',
+  'performs_side_effect',
+  'validated_by',
+  'observed_after',
+] as const;
+
+export const EdgeKind = literals(EDGE_KINDS, {
+  description: 'Kind of relation between two components.',
+});
 export type EdgeKind = Static<typeof EdgeKind>;
 
 export const BackoffKind = literals(['none', 'fixed', 'exponential', 'unknown'] as const);

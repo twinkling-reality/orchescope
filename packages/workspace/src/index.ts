@@ -13,6 +13,12 @@ export {
 export { DEFAULT_EXCLUDED_DIRECTORIES } from './excluded.ts';
 export { type GitFacts, readGitFacts, resolveRevision } from './git.ts';
 export {
+  type ManifestTemplateResult,
+  manifestTemplate,
+  writeManifestTemplate,
+} from './manifest-template.ts';
+export {
+  type InitOptions,
   type InitResult,
   initWorkspace,
   type OpenWorkspaceOptions,

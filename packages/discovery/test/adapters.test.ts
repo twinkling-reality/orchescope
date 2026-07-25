@@ -307,6 +307,92 @@ export async function answer(prompt: string) {
   });
 });
 
+describe('the manifest', () => {
+  const manifest = [
+    'schemaVersion: 1',
+    'components:',
+    '  - kind: agent',
+    '    name: orchestrator',
+    '    runtimeName: orchestrator',
+    '    definedIn: src/orchestrator.rb',
+    '    definedAtLine: 12',
+    '  - kind: tool',
+    '    name: issue_refund',
+    '    sideEffect: financial',
+    'edges:',
+    '  - kind: calls_tool',
+    '    from: orchestrator',
+    '    to: issue_refund',
+    '    policy:',
+    '      retry:',
+    '        maxAttempts: 3',
+    '        bounded: true',
+    '        backoff: exponential',
+    '        idempotency: absent',
+    '',
+  ].join('\n');
+
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    workspace.write('.orchescope/manifest.yaml', manifest);
+    workspace.write('src/orchestrator.rb', "puts 'a language this build does not parse'\n");
+  };
+
+  it('declares components and relations for a language no adapter parses', async () => {
+    const { result, ids, edges, adapters } = await scan(build);
+    assert.ok(
+      adapters.some(
+        (entry) => entry.adapterId === 'adapter:manifest' && entry.status === 'completed',
+      ),
+      `the manifest adapter did not apply: ${adapters.map((entry) => `${entry.adapterId}=${entry.status}`).join(', ')}`,
+    );
+    assert.ok(
+      ids.includes('agent:orchestrator'),
+      `expected the declared agent in ${ids.join(', ')}`,
+    );
+    assert.ok(ids.includes('tool:issue_refund'));
+    assert.ok(
+      edges.includes('calls_tool:agent:orchestrator->tool:issue_refund'),
+      `expected the declared relation in ${edges.join(', ')}`,
+    );
+    assert.equal(result.agentSystemDetected, true);
+  });
+
+  it('cites the manifest entry as the evidence and never claims observation', async () => {
+    const { result } = await scan(build);
+    const agent = result.graph.components.find(
+      (component) => component.id === 'agent:orchestrator',
+    );
+    assert.ok(agent !== undefined);
+    assert.equal(agent.basis, 'discovered');
+    assert.deepEqual(agent.presence, { static: true, runtime: false, manifest: true });
+    assert.deepEqual(agent.configLocations, [
+      { file: '.orchescope/manifest.yaml', pointer: '/components/0' },
+    ]);
+    assert.equal(agent.metadata['runtimeName'], 'orchestrator');
+    assert.ok(agent.evidence.length > 0, 'the declared component carries no evidence');
+    const cited = result.evidence.filter((record) => agent.evidence.includes(record.id));
+    assert.equal(cited.length, agent.evidence.length, 'a cited evidence record is missing');
+    assert.ok(
+      cited.every((record) => record.kind === 'config_entry'),
+      `a manifest declaration must be config entry evidence, saw ${cited.map((record) => record.kind).join(', ')}`,
+    );
+  });
+
+  it('records a rejected manifest as a failed adapter naming the field', async () => {
+    const { result, adapters } = await scan((workspace) => {
+      workspace.write(
+        '.orchescope/manifest.yaml',
+        ['schemaVersion: 1', 'components:', '  - kind: tool', 'edges: []', ''].join('\n'),
+      );
+    });
+    const entry = adapters.find((adapter) => adapter.adapterId === 'adapter:manifest');
+    assert.equal(entry?.status, 'failed');
+    assert.match(entry?.detail ?? '', /is not a valid manifest/);
+    assert.match(entry?.detail ?? '', /name/);
+    assert.equal(result.agentSystemDetected, false);
+  });
+});
+
 describe('a repository with none of them', () => {
   it('reports no agent system rather than inventing one', async () => {
     const { result, ids } = await scan((workspace) => {

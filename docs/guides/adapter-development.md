@@ -8,6 +8,8 @@ manifest becomes repetitive.
 `.orchescope/manifest.yaml` is a first class input, not a fallback. Anything declared there is a real component with
 `manifest` presence, participates in reconciliation, and can be the subject of a finding:
 
+`orchescope init --manifest` writes a template with the accepted vocabulary in it. Filled in, it looks like this:
+
 ```yaml
 schemaVersion: 1
 components:
@@ -17,24 +19,19 @@ components:
     runtimeName: orchestrator
     definedIn: src/orchestrator.rb
     definedAtLine: 12
-    details:
-      for: agent
-      role: orchestrator
   - kind: tool
     name: issue_refund
     runtimeName: issue_refund
     definedIn: src/tools/refund.rb
-    sideEffect:
-      class: financial
-      idempotency: absent
+    sideEffect: financial
     permissions:
       - kind: network
         scope: https://payments.example
         mode: write
 edges:
   - kind: calls_tool
-    from: { kind: agent, name: orchestrator }
-    to: { kind: tool, name: issue_refund }
+    from: orchestrator
+    to: issue_refund
     policy:
       retry:
         maxAttempts: 3
@@ -43,11 +40,14 @@ edges:
         idempotency: absent
 ```
 
+An edge endpoint is a component `name`: one declared here, or one another adapter discovered from source, which is what lets
+a manifest annotate code Orchescope already reads.
+
 This is the whole path for a language Orchescope cannot parse. Runtime evidence still works, because the receiver reads spans
 regardless of what wrote them, and `runtimeName` is what joins a span to the declaration.
 
-Two fields carry most of the value. `sideEffect.idempotency: absent` turns "we cannot tell" into a finding with a known
-basis. `policy.retry` on the edge is what lets the retry rule fire.
+Two fields carry most of the value. `sideEffect: financial` states the effect class instead of leaving it unknown, and
+`policy.retry.idempotency: absent` on the edge is what lets the retry rule fire.
 
 ## Writing an adapter
 

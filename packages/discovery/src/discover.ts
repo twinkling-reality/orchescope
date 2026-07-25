@@ -128,6 +128,17 @@ const runAdapter = (
       detail: failure.message.slice(0, 500),
     };
   }
+  if (findings.problem !== undefined) {
+    return {
+      ...base,
+      componentsFound: findings.componentsFound,
+      edgesFound: findings.edgesFound,
+      filesInspected: findings.filesInspected,
+      durationMs: monotonicMs() - startedAt,
+      status: 'failed',
+      detail: findings.problem.slice(0, 500),
+    };
+  }
   return {
     ...base,
     componentsFound: findings.componentsFound,

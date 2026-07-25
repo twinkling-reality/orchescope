@@ -199,9 +199,7 @@ export const auditCommand = async (
   if (serve) {
     await serveUntilInterrupted(context, result, options);
   } else if (!context.json) {
-    context.stdout(
-      `\n${context.style.dim('next:')} ${nextCommand(result.bundle, result.runsConsidered.length > 0)}\n`,
-    );
+    context.stdout(`\n${context.style.dim('next:')} ${nextCommand(result)}\n`);
   }
 
   return failing.length > 0 ? EXIT_CODES.findings : EXIT_CODES.success;
