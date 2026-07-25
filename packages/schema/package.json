@@ -1,0 +1,14 @@
+{
+  "name": "@orchescope/schema",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Versioned data contracts for the Orchescope system graph, evidence, findings, scenarios, runs and goals.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "0.34.52"
+  }
+}
