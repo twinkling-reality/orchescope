@@ -5,7 +5,7 @@ import { indexGraph } from '@orchescope/graph';
 import type { EdgePolicy, SystemGraph } from '@orchescope/schema';
 import { buildGraph, componentDraft, edgeDraft } from '@orchescope/testkit';
 import { evaluateRules } from '../src/engine.ts';
-import type { RuleContext } from '../src/rule.ts';
+import type { Rule, RuleContext } from '../src/rule.ts';
 import {
   architectureShapeRule,
   safeRetryRule,
@@ -368,5 +368,98 @@ describe('the order findings are reported in', () => {
     assert.equal(findings[0]?.severity, 'high');
     assert.equal(findings[1]?.severity, 'low');
     assert.match(findings[1]?.title ?? '', /^40 tools/);
+  });
+
+  it('puts the finding that can become a goal first when the severity is the same', () => {
+    const ruleFor = (id: string, eligible: boolean): Rule => ({
+      id,
+      category: 'reliability',
+      summary: id,
+      evaluate: () => ({
+        status: 'fired',
+        drafts: [
+          {
+            ruleId: id,
+            category: 'reliability',
+            polarity: 'risk',
+            severity: 'medium',
+            confidence: 0.9,
+            basis: 'discovered',
+            title: id,
+            explanation: 'one sentence.',
+            impact: 'one sentence.',
+            components: ['agent:orchestrator'],
+            evidence: [orchestrator.evidence[0]?.id ?? ''],
+            goalEligible: eligible,
+            goalReason: eligible ? 'A bounded edit.' : 'A decision for the owner.',
+          },
+        ],
+      }),
+    });
+
+    const findings = evaluateRules({
+      scanId: 'scan_0000000000000000',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      graph: indexGraph(buildGraph([orchestrator], [])),
+      context: {
+        delta: undefined,
+        runs: [],
+        benchmarks: [],
+        chaosReports: [],
+        scenarios: [],
+        evidenceById: new Map(),
+      },
+      rules: [ruleFor('a-decision', false), ruleFor('a-bounded-edit', true)],
+    }).findingSet.findings;
+
+    assert.deepEqual(
+      findings.map((finding) => finding.title),
+      ['a-bounded-edit', 'a-decision'],
+    );
+  });
+});
+
+describe('topology-shape reachability', () => {
+  const stranded = componentDraft({ kind: 'tool', name: 'stranded', file: 'src/tools/away.ts' });
+  const model = componentDraft({ kind: 'model', name: 'gpt-4.1-mini', file: 'src/main.ts' });
+
+  const unreachable = (graph: SystemGraph) => {
+    const outcome = architectureShapeRule.evaluate(contextFor(graph));
+    return outcome.status === 'fired'
+      ? outcome.drafts.filter((draft) => draft.occurrence?.key === 'unreachable')
+      : [];
+  };
+
+  /**
+   * Two hundred and eight components in one repository were reported unreachable, each one carrying the claim that
+   * the wiring was missing or the component was left over. Neither was true: the entry point was outside the
+   * repository, because the repository is a library. The observation stands and the inference does not, so the
+   * third cause is named and the proportion is reported with its sample size.
+   */
+  it('names every cause of an unreachable component, including one outside this repository', () => {
+    const drafts = unreachable(
+      buildGraph(
+        [orchestrator, model, stranded],
+        [edgeDraft('invokes_model', orchestrator, model)],
+      ),
+    );
+    assert.equal(drafts.length, 1);
+    assert.match(drafts[0]?.explanation ?? '', /the entry point is outside this repository/);
+    const metric = drafts[0]?.metrics?.find((entry) => entry.name === 'unreachableComponents');
+    assert.equal(metric?.value, 1);
+    assert.equal(
+      metric?.sampleSize,
+      2,
+      'the agent and the tool participate in control flow, the model does not',
+    );
+  });
+
+  it('stays quiet when every component that participates in control flow is reached', () => {
+    assert.deepEqual(
+      unreachable(
+        buildGraph([orchestrator, refund], [edgeDraft('calls_tool', orchestrator, refund)]),
+      ),
+      [],
+    );
   });
 });
