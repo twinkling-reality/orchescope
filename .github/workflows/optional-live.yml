@@ -1,0 +1,118 @@
+name: optional live checks
+
+# Nothing here is required, and nothing here runs automatically.
+#
+# These checks need something the required set deliberately refuses to depend on: a provider credential, outbound network
+# access, or a longer budget than a pull request should spend. Keeping them separate is what lets a fork run the entire
+# required gate with no secret at all.
+#
+# A maintainer starts this by hand. Costs are bounded by the same policy settings the product enforces, and the run
+# summary records what was spent.
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_analysis:
+        description: Run the model based analysis path against a real provider
+        type: boolean
+        default: false
+      long_benchmark:
+        description: Run the benchmark with enough repetitions to report quantiles
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  NO_COLOR: '1'
+
+jobs:
+  model-analysis:
+    name: model based analysis against a real provider
+    if: inputs.model_analysis
+    runs-on: ubuntu-latest
+    environment: live-checks
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: enable the path this check exists to exercise
+        run: |
+          pnpm orchescope -- --cwd apps/demo init
+          node --input-type=module -e "
+            import { readFileSync, writeFileSync } from 'node:fs';
+            const path = 'apps/demo/.orchescope/config.json';
+            const config = JSON.parse(readFileSync(path, 'utf8'));
+            config.policy.allowOutboundNetwork = true;
+            config.policy.allowPaidModels = true;
+            config.policy.maxCostUsd = 1;
+            config.semanticAnalysis = {
+              ...config.semanticAnalysis,
+              enabled: true,
+              provider: 'anthropic',
+              apiKeyEnv: 'ANTHROPIC_API_KEY',
+              maxTasks: 4,
+              maxCostUsd: 1,
+            };
+            writeFileSync(path, JSON.stringify(config, null, 2) + '\n');
+          "
+
+      - name: audit with model based analysis enabled
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          pnpm orchescope -- --cwd apps/demo audit --json > audit.json
+          node --input-type=module -e "
+            import { readFileSync } from 'node:fs';
+            const { data } = JSON.parse(readFileSync('audit.json', 'utf8'));
+            const proposed = data.findings.filter((finding) => finding.basis === 'model_interpreted');
+            for (const finding of proposed) {
+              if (finding.evidence.length === 0) throw new Error(finding.id + ' has no evidence');
+              if (['critical', 'high'].includes(finding.severity)) {
+                throw new Error(finding.id + ' exceeds the cap for a model interpreted basis');
+              }
+            }
+            console.log(proposed.length + ' model interpreted finding(s), all within the severity cap');
+          "
+
+  long-benchmark:
+    name: benchmark with enough repetitions to report quantiles
+    if: inputs.long_benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Twenty repetitions per variant is what a p95 needs. The required set runs three, which is honest about withholding
+      # the quantiles it cannot compute rather than reporting them from too few samples.
+      - name: benchmark the demonstration system
+        run: |
+          pnpm orchescope -- --cwd apps/demo benchmark \
+            --scenario support-desk --agents 1,2,4 --repetitions 20 --warmup 2 --json > benchmark.json
+          node --input-type=module -e "
+            import { readFileSync } from 'node:fs';
+            const { data } = JSON.parse(readFileSync('benchmark.json', 'utf8'));
+            for (const variant of data.variants) {
+              if (variant.durationMs.p95 === undefined) {
+                throw new Error(variant.variantId + ' still withheld p95 with ' + variant.completedRuns + ' runs');
+              }
+            }
+            console.log(data.variants.length + ' variant(s) with reportable quantiles');
+          "
+      - uses: actions/upload-artifact@v4
+        with:
+          name: long-benchmark
+          path: benchmark.json
+          retention-days: 30

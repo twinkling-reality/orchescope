@@ -40,10 +40,18 @@ const modelIdentity = (name: string): ComponentIdentity =>
   globalIdentity('model', GLOBAL_NAMESPACES.model, name);
 
 /** Reads the model from `model: openai('gpt-4o')` or `model: myModel`. */
+/**
+ * The model identifier, as this SDK expresses it.
+ *
+ * The idiomatic form is a provider call carrying the model as its first argument, as in `openai('gpt-4o-mini')`. When the
+ * call names no model the provider is still recorded, with the model marked unspecified rather than guessed.
+ */
 const modelNameFrom = (value: ArgumentFact | undefined): string | undefined => {
   if (value === undefined) return undefined;
   if (value.kind === 'string') return value.value;
   if (value.kind === 'call') {
+    const first = value.args[0];
+    if (first !== undefined && first.kind === 'string') return first.value;
     const provider = value.path[value.path.length - 1];
     return provider === undefined ? undefined : `${provider}/unspecified`;
   }

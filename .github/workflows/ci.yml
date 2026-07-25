@@ -1,0 +1,243 @@
+name: ci
+
+# Every job here runs without a credential. Nothing in the required set reaches a paid provider, a registry token or a
+# hosted service, so a fork's pull request runs the same checks as a maintainer's branch.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Colour in a log is noise, and the CLI is asserted to emit none when the output is not a terminal.
+  NO_COLOR: '1'
+
+jobs:
+  check:
+    name: format, lint, types, boundaries, unused, schema drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+
+  test:
+    name: unit and integration on ${{ matrix.os }}
+    # Linux and macOS only, because those are the platforms the README claims. Adding Windows to this matrix would be
+    # claiming support that no test has established.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+
+  e2e:
+    name: command line contract and the improvement loop
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:e2e
+
+  browser:
+    name: browser workspace and accessibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:web
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:ui
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-failures
+          path: test-results/
+          retention-days: 7
+
+  demo:
+    name: audit the demonstration system and generate a report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: the demonstration system runs offline with no credentials
+        run: pnpm demo
+
+      - name: a scenario runs and is evaluated
+        run: pnpm orchescope -- --cwd apps/demo test --scenario support-desk --json > scenario.json
+
+      - name: the audit detects the system and reports findings with evidence
+        run: |
+          pnpm orchescope -- --cwd apps/demo audit --json > audit.json
+          node --input-type=module -e "
+            import { readFileSync } from 'node:fs';
+            const { data } = JSON.parse(readFileSync('audit.json', 'utf8'));
+            if (data.agentSystemDetected !== true) throw new Error('no agent system detected');
+            if (data.summary.componentCount < 10) throw new Error('too few components');
+            if (data.findings.length === 0) throw new Error('no findings');
+            for (const finding of data.findings) {
+              if (finding.evidence.length === 0) throw new Error(finding.id + ' has no evidence');
+              if (finding.components.length === 0) throw new Error(finding.id + ' names no component');
+            }
+            if (!data.findings.some((f) => f.polarity === 'strength')) throw new Error('no strength reported');
+            if (data.reconciliation === undefined) throw new Error('no reconciliation delta');
+            console.log(data.summary.componentCount + ' components, ' + data.findings.length + ' findings');
+          "
+
+      - name: every export format is produced
+        run: |
+          for format in json mermaid sarif; do
+            pnpm orchescope -- --cwd apps/demo export --format "$format" --out "report.$format"
+            test -s "report.$format"
+          done
+
+      - name: the schema documents validate the documents they describe
+        run: pnpm schemas:verify
+
+  package:
+    name: build, pack, install and audit with the tarball
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:web
+      # Builds the bundle, packs a tarball, records its checksum, installs it into a temporary prefix and audits a project
+      # with it. This is what catches a bundle that cannot resolve its own parsers once installed.
+      - run: pnpm package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate
+          path: |
+            release/*.tgz
+            release/*.sha256
+            release/release-summary.json
+          retention-days: 14
+
+  supply-chain:
+    name: licences, advisories, inventory, secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: every runtime dependency is redistributable
+        run: pnpm run licenses:check
+
+      - name: known advisories
+        run: pnpm audit --prod --audit-level high
+
+      - name: software bill of materials
+        run: pnpm sbom
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: release/sbom.cdx.json
+          retention-days: 14
+
+      - name: no secret in the working tree
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  documentation:
+    name: the commands the documentation promises
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # A documented command that does not exist is a defect, so the ones the README and the guides tell a reader to run
+      # are executed here rather than trusted.
+      - name: every documented command exists and answers
+        run: |
+          set -eux
+          pnpm orchescope -- --version
+          pnpm orchescope -- --help
+          pnpm orchescope -- doctor --json > doctor.json
+          for command in audit trace test benchmark chaos compare goal goals export open init doctor mcp; do
+            pnpm orchescope -- "$command" --help > /dev/null
+          done
+          pnpm orchescope -- mcp install --list > /dev/null
+
+      - name: every internal documentation link resolves
+        run: |
+          node --input-type=module -e "
+            import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
+            import { dirname, join, resolve } from 'node:path';
+            const walk = (directory) =>
+              readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+                const path = join(directory, entry.name);
+                if (entry.isDirectory()) return entry.name === 'node_modules' ? [] : walk(path);
+                return path.endsWith('.md') ? [path] : [];
+              });
+            const files = ['README.md', 'CONTRIBUTING.md', 'SECURITY.md', 'AGENTS.md', 'PLANS.md', 'CODE_OF_CONDUCT.md']
+              .filter((file) => existsSync(file))
+              .concat(walk('docs'));
+            const broken = [];
+            for (const file of files) {
+              for (const match of readFileSync(file, 'utf8').matchAll(/\]\(([^)#][^)]*)\)/g)) {
+                const target = match[1].split('#')[0];
+                if (target.length === 0 || /^[a-z]+:/.test(target)) continue;
+                const resolved = resolve(dirname(file), target);
+                if (!existsSync(resolved)) broken.push(file + ' -> ' + target);
+              }
+            }
+            if (broken.length > 0) throw new Error('broken links:\n' + broken.join('\n'));
+            console.log(files.length + ' documents checked, every internal link resolves');
+          "

@@ -29,4 +29,10 @@ export {
   runScenarioUseCase,
 } from './scenario.ts';
 export { scenarioPolicyFrom } from './scenario-policy.ts';
-export { runTrace, type TraceRequest, type TraceResult } from './trace.ts';
+export {
+  importTrace,
+  type ImportTraceRequest,
+  runTrace,
+  type TraceRequest,
+  type TraceResult,
+} from './trace.ts';

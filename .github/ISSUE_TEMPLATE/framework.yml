@@ -1,0 +1,37 @@
+name: Framework not recognised
+description: Orchescope did not discover a framework your system uses
+labels: [discovery]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Only frameworks with a tested adapter are claimed, and the list is in the README. Anything else can be declared in
+        `.orchescope/manifest.yaml`, which is a first class input rather than a fallback: see
+        docs/guides/adapter-development.md.
+  - type: input
+    id: framework
+    attributes:
+      label: Framework and version
+      placeholder: my-framework 2.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: shape
+    attributes:
+      label: How a component is declared in it
+      description: A small, real example of how an agent, a tool or a model is defined
+      render: typescript
+    validations:
+      required: true
+  - type: textarea
+    id: coverage
+    attributes:
+      label: What the audit reported
+      description: The `coverage.adapters` block from `orchescope audit --json`
+      render: json
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: Contribution
+      options:
+        - label: I would be willing to write the adapter and its fixture

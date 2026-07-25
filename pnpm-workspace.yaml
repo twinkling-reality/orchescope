@@ -16,3 +16,9 @@ packageExtensions:
   dependency-cruiser:
     dependencies:
       typescript: 6.0.3
+
+# The Model Context Protocol SDK pulls in an older node server whose static file handling had a Windows path traversal.
+# Orchescope uses the SDK's stdio transport and never its HTTP server, and the transitive package is pinned forward anyway
+# so an advisory scan of a published install comes back clean.
+overrides:
+  '@hono/node-server': '>=2.0.5'

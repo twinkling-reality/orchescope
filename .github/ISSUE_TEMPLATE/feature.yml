@@ -1,0 +1,30 @@
+name: Feature proposal
+description: Something Orchescope should be able to answer and cannot
+labels: [proposal]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        docs/product/non-goals.md lists the boundaries that are deliberate. If your proposal crosses one, say why the
+        boundary should move.
+  - type: textarea
+    id: question
+    attributes:
+      label: What question about an agent system would this let someone answer
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: What evidence would the answer be based on
+      description: Source, configuration, spans, a measured run, something else
+    validations:
+      required: true
+  - type: textarea
+    id: falsifiable
+    attributes:
+      label: How would a reader know the answer is wrong
+      description: >
+        This is the question that decides whether a feature belongs here. An answer nobody can check is not a finding.
+    validations:
+      required: true

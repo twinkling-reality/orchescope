@@ -1,0 +1,58 @@
+version: 2
+
+# The dependency set is small and deliberate, so updates are grouped and monthly rather than a stream of single bumps.
+# Every pull request still has to pass the whole gate, including the packaging job that installs the tarball and audits a
+# project with it, which is what catches a parser upgrade that breaks resolution once installed.
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+      day: monday
+    open-pull-requests-limit: 3
+    versioning-strategy: increase
+    labels: [dependencies]
+    commit-message:
+      prefix: Update
+    groups:
+      runtime:
+        applies-to: version-updates
+        patterns:
+          - oxc-parser
+          - web-tree-sitter
+          - tree-sitter-python
+          - '@dagrejs/dagre'
+          - '@modelcontextprotocol/sdk'
+          - '@sinclair/typebox'
+          - commander
+          - graphology
+          - preact
+          - sigma
+          - smol-toml
+          - yaml
+      tooling:
+        applies-to: version-updates
+        patterns:
+          - '@biomejs/biome'
+          - '@playwright/test'
+          - '@types/node'
+          - dependency-cruiser
+          - esbuild
+          - knip
+          - typescript
+    ignore:
+      # A major bump to either parser changes the fact model, so it is a deliberate piece of work rather than an update.
+      - dependency-name: oxc-parser
+        update-types: [version-update:semver-major]
+      - dependency-name: web-tree-sitter
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+      day: monday
+    labels: [dependencies]
+    commit-message:
+      prefix: Update

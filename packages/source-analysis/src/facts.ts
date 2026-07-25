@@ -20,7 +20,8 @@ export type ArgumentFact =
   | { readonly kind: 'identifier'; readonly name: string }
   | { readonly kind: 'member'; readonly path: readonly string[] }
   | { readonly kind: 'array'; readonly items: readonly ArgumentFact[] }
-  | { readonly kind: 'call'; readonly path: readonly string[] }
+  /** `args` carries what the call was given, which is where an SDK such as `openai('gpt-4o-mini')` puts the model. */
+  | { readonly kind: 'call'; readonly path: readonly string[]; readonly args: readonly ArgumentFact[] }
   | { readonly kind: 'function' }
   | { readonly kind: 'template'; readonly value: string; readonly hasSubstitutions: boolean }
   | { readonly kind: 'unknown'; readonly nodeType: string };

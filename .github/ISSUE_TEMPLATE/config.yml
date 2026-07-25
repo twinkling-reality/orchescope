@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/orchescope/orchescope/security/advisories/new
+    about: Report privately. Do not open a public issue for a security problem.
+  - name: Documentation
+    url: https://github.com/orchescope/orchescope/tree/main/docs
+    about: Guides, architecture, protocols and the threat model.

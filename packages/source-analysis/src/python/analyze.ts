@@ -130,7 +130,15 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
     }
     case 'call': {
       const callee = childField(node, 'function');
-      return { kind: 'call', path: callee === undefined ? [] : attributePath(callee) };
+      const argumentList = childField(node, 'arguments');
+      return {
+        kind: 'call',
+        path: callee === undefined ? [] : attributePath(callee),
+        args:
+          argumentList === undefined
+            ? []
+            : namedChildren(argumentList).map((child) => argumentFact(child, context)),
+      };
     }
     case 'list':
     case 'tuple':

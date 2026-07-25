@@ -225,7 +225,11 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
     case 'NewExpression': {
       const callee = asNode(field(node, 'callee'));
       const path = callee === undefined ? [] : calleePath(callee);
-      return { kind: 'call', path };
+      return {
+        kind: 'call',
+        path,
+        args: nodeArray(field(node, 'arguments')).map((argument) => argumentFact(argument, context)),
+      };
     }
     case 'ArrowFunctionExpression':
     case 'FunctionExpression':

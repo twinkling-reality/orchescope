@@ -13,7 +13,7 @@
     "@orchescope/graph": "workspace:*",
     "@orchescope/schema": "workspace:*",
     "@orchescope/source-analysis": "workspace:*",
-    "yaml": "2.8.1"
+    "yaml": "2.9.0"
   },
   "devDependencies": {
     "@orchescope/testkit": "workspace:*"

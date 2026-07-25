@@ -3,11 +3,13 @@ import { OrchescopeError, stableJson } from '@orchescope/domain';
 import type { BenchmarkReport, ChaosReport } from '@orchescope/schema';
 import {
   compareUseCase,
+  importTrace,
   loadScenario,
   runBenchmarkUseCase,
   runChaosUseCase,
   runScenarioUseCase,
   runTrace,
+  type TraceResult,
 } from '@orchescope/usecases';
 import type { CommandContext } from '../context.ts';
 import { EXIT_CODES } from '../exit.ts';
@@ -20,31 +22,7 @@ import { comparisonSummary, scenarioSummary } from '../terminal/summary.ts';
  * rounding up to a claim.
  */
 
-export const traceCommand = async (
-  context: CommandContext,
-  command: readonly string[],
-  options: { readonly label?: string; readonly timeout?: string },
-): Promise<number> => {
-  if (command.length === 0) {
-    throw new OrchescopeError('INVALID_ARGUMENT', 'There is nothing to run.', {
-      remediation:
-        'Pass the command after a double dash, for example: orchescope trace -- npm run agent',
-    });
-  }
-  const result = await runTrace({
-    workspace: context.workspace,
-    command,
-    orchescopeVersion: context.version,
-    ...(options.label === undefined ? {} : { label: options.label }),
-    ...(options.timeout === undefined ? {} : { timeoutMs: Number.parseInt(options.timeout, 10) }),
-    onStdout: (chunk) => {
-      if (!context.json && !context.quiet) context.stdout(chunk);
-    },
-    onStderr: (chunk) => {
-      if (!context.json && !context.quiet) context.stderr(chunk);
-    },
-  });
-
+const writeTraceResult = (context: CommandContext, result: TraceResult): number => {
   if (context.json) {
     context.stdout(
       `${stableJson({
@@ -83,6 +61,52 @@ export const traceCommand = async (
     context.stdout(context.style.dim('next: orchescope audit --open\n'));
   }
   return result.run.status === 'completed' ? EXIT_CODES.success : EXIT_CODES.target;
+};
+
+export const traceCommand = async (
+  context: CommandContext,
+  command: readonly string[],
+  options: { readonly label?: string; readonly timeout?: string; readonly import?: string },
+): Promise<number> => {
+  if (options.import !== undefined) {
+    if (command.length > 0) {
+      throw new OrchescopeError(
+        'INVALID_ARGUMENT',
+        'Importing spans and running a command are different operations.',
+        { remediation: 'Pass either --import <file> or a command after a double dash, not both.' },
+      );
+    }
+    return writeTraceResult(
+      context,
+      importTrace({
+        workspace: context.workspace,
+        file: options.import,
+        orchescopeVersion: context.version,
+        ...(options.label === undefined ? {} : { label: options.label }),
+      }),
+    );
+  }
+  if (command.length === 0) {
+    throw new OrchescopeError('INVALID_ARGUMENT', 'There is nothing to run.', {
+      remediation:
+        'Pass the command after a double dash, for example: orchescope trace -- npm run agent',
+    });
+  }
+  const result = await runTrace({
+    workspace: context.workspace,
+    command,
+    orchescopeVersion: context.version,
+    ...(options.label === undefined ? {} : { label: options.label }),
+    ...(options.timeout === undefined ? {} : { timeoutMs: Number.parseInt(options.timeout, 10) }),
+    onStdout: (chunk) => {
+      if (!context.json && !context.quiet) context.stdout(chunk);
+    },
+    onStderr: (chunk) => {
+      if (!context.json && !context.quiet) context.stderr(chunk);
+    },
+  });
+
+  return writeTraceResult(context, result);
 };
 
 export const testCommand = async (

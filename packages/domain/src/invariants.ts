@@ -51,6 +51,15 @@ export const componentViolations = (component: Component): readonly InvariantVio
   return violations;
 };
 
+export /**
+ * Relations a component may have with itself.
+ *
+ * A graph node that routes back to itself is a real and common shape: it is how a framework expresses "try again", and
+ * it is exactly the looping behaviour the finding rules exist to report, so it is recorded rather than dropped. A
+ * component containing itself, or invoking itself as a model, would be a construction error.
+ */
+const SELF_EDGE_KINDS = new Set(['observed_after', 'hands_off_to']);
+
 export const edgeViolations = (
   edge: Edge,
   componentIds: ReadonlySet<string>,
@@ -61,10 +70,10 @@ export const edgeViolations = (
     violations.push({ subject, rule: `unknown source component ${edge.from}` });
   if (!componentIds.has(edge.to))
     violations.push({ subject, rule: `unknown target component ${edge.to}` });
-  if (edge.from === edge.to && edge.kind !== 'observed_after') {
+  if (edge.from === edge.to && !SELF_EDGE_KINDS.has(edge.kind)) {
     violations.push({
       subject,
-      rule: `self edge is only allowed for observed_after, not ${edge.kind}`,
+      rule: `a self edge is not meaningful for ${edge.kind}`,
     });
   }
   if (edge.evidence.length === 0) violations.push({ subject, rule: 'an edge must carry evidence' });
