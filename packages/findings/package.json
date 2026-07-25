@@ -1,0 +1,16 @@
+{
+  "name": "@orchescope/findings",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic finding rules, severity policy and review of model produced findings.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@orchescope/domain": "workspace:*",
+    "@orchescope/graph": "workspace:*",
+    "@orchescope/schema": "workspace:*"
+  }
+}
