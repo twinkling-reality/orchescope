@@ -3,9 +3,8 @@
  */
 
 export {
-  type ComponentFixture,
-  TEST_TIMESTAMP,
   buildGraph,
+  type ComponentFixture,
   componentDraft,
   edgeDraft,
   emptyCoverage,
@@ -13,11 +12,12 @@ export {
   observedEdge,
   runtimeTopology,
   sideEffectRecord,
+  TEST_TIMESTAMP,
   testProvenance,
 } from './builders.ts';
 export {
-  type TempWorkspace,
   createTempWorkspace,
+  type TempWorkspace,
   writeNodeProject,
   writePythonProject,
 } from './workspace.ts';

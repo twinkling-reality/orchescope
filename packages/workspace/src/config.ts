@@ -1,0 +1,191 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+import { OrchescopeError, stableJson } from '@orchescope/domain';
+import {
+  formatIssues,
+  MIN_READABLE_VERSIONS,
+  type OrchescopeConfig,
+  OrchescopeConfig as OrchescopeConfigSchema,
+  SCHEMA_VERSIONS,
+  validateDocument,
+} from '@orchescope/schema';
+import { DEFAULT_EXCLUDED_DIRECTORIES } from './excluded.ts';
+import type { WorkspacePaths } from './paths.ts';
+
+/**
+ * Typed configuration.
+ *
+ * Defaults are chosen so that the first run of `orchescope audit` is read only and offline: no outbound network,
+ * no paid models, no filesystem writes outside `.orchescope`, chaos limited to the local deterministic
+ * environment. Anything that could cost money or change something outside the store has to be turned on
+ * deliberately, and the refusal message names the setting.
+ *
+ * Configuration is read once at the edge and passed inward as a value. Nothing in the core reads a file.
+ */
+
+export const DEFAULT_CONFIG: OrchescopeConfig = {
+  schemaVersion: 1,
+  analysis: {
+    include: ['**/*'],
+    exclude: [...DEFAULT_EXCLUDED_DIRECTORIES],
+    maxFileBytes: 512 * 1024,
+    maxFiles: 20_000,
+    concurrency: 8,
+    followSymlinks: false,
+    timeoutMs: 120_000,
+  },
+  runtime: {
+    receiverHost: '127.0.0.1',
+    receiverPort: 0,
+    maxSpansPerRun: 50_000,
+    maxSpanAttributeBytes: 4_096,
+    maxRequestBytes: 8 * 1024 * 1024,
+    exportDrainMs: 400,
+  },
+  report: {
+    host: '127.0.0.1',
+    port: 0,
+    openByDefault: false,
+    retainReports: 20,
+  },
+  policy: {
+    allowProcessSpawn: true,
+    allowOutboundNetwork: false,
+    allowPaidModels: false,
+    allowFilesystemWrites: false,
+    maxCostUsd: 0,
+    maxRunDurationMs: 300_000,
+    maxConcurrentRuns: 4,
+    maxTotalRuns: 200,
+    allowedChaosEnvironments: ['local_deterministic'],
+    allowedCommands: [
+      'node',
+      'npm',
+      'npx',
+      'pnpm',
+      'yarn',
+      'python3',
+      'python',
+      'uv',
+      'deno',
+      'bun',
+    ],
+  },
+  semanticAnalysis: {
+    enabled: false,
+    provider: 'none',
+    model: 'unset',
+    maxTasks: 0,
+    maxTokensPerTask: 4_000,
+    maxCostUsd: 0,
+    requestTimeoutMs: 60_000,
+  },
+  redaction: {
+    extraPatterns: [],
+    sensitiveEnvFragments: [],
+  },
+};
+
+export type ConfigLoad = {
+  readonly config: OrchescopeConfig;
+  readonly source: 'defaults' | 'file';
+  readonly problems: readonly string[];
+};
+
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+
+/**
+ * Merges a partial configuration document over the defaults, one section at a time. A section is merged rather
+ * than replaced so that setting one policy value does not silently reset the rest.
+ */
+const mergeConfig = (partial: Record<string, unknown>): OrchescopeConfig => {
+  const merged: Mutable<OrchescopeConfig> = {
+    ...DEFAULT_CONFIG,
+    analysis: { ...DEFAULT_CONFIG.analysis },
+    runtime: { ...DEFAULT_CONFIG.runtime },
+    report: { ...DEFAULT_CONFIG.report },
+    policy: { ...DEFAULT_CONFIG.policy },
+    semanticAnalysis: { ...DEFAULT_CONFIG.semanticAnalysis },
+    redaction: { ...DEFAULT_CONFIG.redaction },
+  };
+  const sections = [
+    'analysis',
+    'runtime',
+    'report',
+    'policy',
+    'semanticAnalysis',
+    'redaction',
+  ] as const;
+  for (const section of sections) {
+    const value = partial[section];
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      merged[section] = { ...merged[section], ...(value as object) } as never;
+    }
+  }
+  if (typeof partial['projectName'] === 'string') merged.projectName = partial['projectName'];
+  if (typeof partial['schemaVersion'] === 'number') {
+    merged.schemaVersion = partial['schemaVersion'] as 1;
+  }
+  return merged;
+};
+
+export const loadConfig = (paths: WorkspacePaths): ConfigLoad => {
+  let text: string;
+  try {
+    text = readFileSync(paths.configFile, 'utf8');
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ENOENT') {
+      return { config: DEFAULT_CONFIG, source: 'defaults', problems: [] };
+    }
+    throw new OrchescopeError('CONFIG_INVALID', 'The configuration file could not be read.', {
+      cause: error,
+      detail: { file: paths.configFile },
+    });
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text) as unknown;
+  } catch (error) {
+    throw new OrchescopeError('CONFIG_INVALID', 'The configuration file is not valid JSON.', {
+      cause: error,
+      detail: { file: paths.configFile },
+      remediation: 'Fix the JSON syntax, or delete the file to fall back to the defaults.',
+    });
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new OrchescopeError(
+      'CONFIG_INVALID',
+      'The configuration file must contain a JSON object.',
+      {
+        detail: { file: paths.configFile },
+      },
+    );
+  }
+  const merged = mergeConfig(parsed as Record<string, unknown>);
+  const validated = validateDocument(
+    OrchescopeConfigSchema,
+    SCHEMA_VERSIONS.config,
+    MIN_READABLE_VERSIONS.config,
+    merged,
+  );
+  if (!validated.ok) {
+    throw new OrchescopeError(
+      'CONFIG_INVALID',
+      `The configuration is not valid: ${formatIssues(validated.issues)}`,
+      {
+        detail: { file: paths.configFile },
+        remediation:
+          'Correct the reported fields, or delete the file to fall back to the defaults.',
+      },
+    );
+  }
+  return { config: validated.value as OrchescopeConfig, source: 'file', problems: [] };
+};
+
+export const writeConfig = (paths: WorkspacePaths, config: OrchescopeConfig): void => {
+  writeFileSync(paths.configFile, `${stableJson(config)}\n`, { mode: 0o600 });
+};
+
+export const STATE_GITIGNORE = `# Orchescope keeps analysis state here. Configuration is meant to be committed; state is not.
+state/
+cache/
+`;

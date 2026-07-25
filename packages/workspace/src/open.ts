@@ -1,0 +1,150 @@
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  type Clock,
+  formatTimestamp,
+  projectId as makeProjectId,
+  sha256Hex,
+} from '@orchescope/domain';
+import {
+  createLogger,
+  type Logger,
+  type ProgressReporter,
+  silentProgress,
+} from '@orchescope/observability';
+import {
+  type ArtifactStore,
+  createArtifactStore,
+  createStore,
+  type Database,
+  openDatabase,
+  type Store,
+} from '@orchescope/persistence';
+import { createRedactor, type Redactor } from '@orchescope/redaction';
+import type { OrchescopeConfig, Sha256Hex } from '@orchescope/schema';
+import { DEFAULT_CONFIG, loadConfig, STATE_GITIGNORE, writeConfig } from './config.ts';
+import { type GitFacts, readGitFacts } from './git.ts';
+import {
+  ensureStateDirectories,
+  resolvePaths,
+  type WorkspacePaths,
+  workspaceExists,
+} from './paths.ts';
+
+/**
+ * Opening a workspace.
+ *
+ * This is the composition root for everything that touches the outside world: configuration, the database, the
+ * artifact store, redaction, logging and git facts are constructed here and passed inward as values. No core
+ * package reaches back out for them.
+ */
+
+export type Workspace = {
+  readonly paths: WorkspacePaths;
+  readonly config: OrchescopeConfig;
+  readonly configSource: 'defaults' | 'file';
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly projectPathHash: Sha256Hex;
+  readonly git: GitFacts | undefined;
+  readonly store: Store;
+  readonly database: Database;
+  readonly artifacts: ArtifactStore;
+  readonly redactor: Redactor;
+  readonly logger: Logger;
+  readonly progress: ProgressReporter;
+  readonly clock: Clock;
+  readonly close: () => void;
+};
+
+export type OpenWorkspaceOptions = {
+  readonly root: string;
+  readonly clock?: Clock;
+  readonly progress?: ProgressReporter;
+  readonly logSink?: Parameters<typeof createLogger>[0]['sink'];
+  readonly logLevel?: 'debug' | 'info' | 'warning' | 'error';
+  /** Overrides for a single invocation, for example a command line flag. Not written to disk. */
+  readonly overrides?: (config: OrchescopeConfig) => OrchescopeConfig;
+};
+
+const systemClock: Clock = {
+  now: () => formatTimestamp(Date.now()),
+  monotonicMs: () => Number(process.hrtime.bigint() / 1_000_000n),
+};
+
+export const openWorkspace = (options: OpenWorkspaceOptions): Workspace => {
+  const paths = resolvePaths(options.root);
+  const clock = options.clock ?? systemClock;
+  const loaded = loadConfig(paths);
+  const config = options.overrides === undefined ? loaded.config : options.overrides(loaded.config);
+
+  ensureStateDirectories(paths);
+
+  const redactor = createRedactor({
+    extraPatterns: config.redaction.extraPatterns,
+    ...(config.redaction.sensitiveEnvFragments.length > 0
+      ? { sensitiveFragments: config.redaction.sensitiveEnvFragments }
+      : {}),
+  });
+  const logger = createLogger({
+    level: options.logLevel ?? 'warning',
+    sink:
+      options.logSink ??
+      (() => {
+        // A workspace opened by a library caller stays silent unless a sink is supplied.
+      }),
+    redactor,
+  });
+
+  const database = openDatabase(paths.databaseFile);
+  const artifacts = createArtifactStore(paths.artifacts, database, clock.now);
+  const store = createStore({ database, artifacts, now: clock.now });
+
+  const projectPathHash = sha256Hex(paths.root) as Sha256Hex;
+  const projectId = makeProjectId(projectPathHash);
+  const projectName = config.projectName ?? paths.root.split('/').pop() ?? 'project';
+  const git = readGitFacts(paths.root);
+  store.ensureProject(projectId, projectName, projectPathHash);
+
+  return {
+    paths,
+    config,
+    configSource: loaded.source,
+    projectId,
+    projectName,
+    projectPathHash,
+    git,
+    store,
+    database,
+    artifacts,
+    redactor,
+    logger,
+    progress: options.progress ?? silentProgress,
+    clock,
+    close: () => database.close(),
+  };
+};
+
+export type InitResult = {
+  readonly created: boolean;
+  readonly configFile: string;
+  readonly alreadyExisted: boolean;
+};
+
+/**
+ * Creates the workspace directory and a configuration file with the defaults written out in full, so the
+ * settings are discoverable by reading the file rather than by reading the documentation.
+ */
+export const initWorkspace = (root: string, projectName?: string): InitResult => {
+  const paths = resolvePaths(root);
+  const existed = workspaceExists(paths);
+  ensureStateDirectories(paths);
+  if (!existed) {
+    writeConfig(paths, {
+      ...DEFAULT_CONFIG,
+      ...(projectName === undefined ? {} : { projectName }),
+    });
+  }
+  writeFileSync(join(paths.orchescope, '.gitignore'), STATE_GITIGNORE, { mode: 0o600 });
+  return { created: !existed, configFile: paths.configFile, alreadyExisted: existed };
+};

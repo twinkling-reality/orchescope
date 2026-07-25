@@ -1,0 +1,17 @@
+{
+  "name": "@orchescope/report",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Report bundle assembly, deterministic graph layout, and export to Mermaid, SARIF and standalone HTML.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "3.0.0",
+    "@orchescope/domain": "workspace:*",
+    "@orchescope/redaction": "workspace:*",
+    "@orchescope/schema": "workspace:*"
+  }
+}

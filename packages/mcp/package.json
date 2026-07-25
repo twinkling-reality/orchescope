@@ -1,0 +1,21 @@
+{
+  "name": "@orchescope/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Model Context Protocol server exposing Orchescope operations to coding agents with bounded output.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@orchescope/domain": "workspace:*",
+    "@orchescope/goals": "workspace:*",
+    "@orchescope/report": "workspace:*",
+    "@orchescope/schema": "workspace:*",
+    "@orchescope/usecases": "workspace:*",
+    "@orchescope/workspace": "workspace:*",
+    "@sinclair/typebox": "0.34.52"
+  }
+}

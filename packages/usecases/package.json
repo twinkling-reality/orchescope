@@ -1,0 +1,30 @@
+{
+  "name": "@orchescope/usecases",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Application services: audit, trace, scenario execution, benchmarking, chaos, comparison and the goal loop.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@orchescope/benchmark": "workspace:*",
+    "@orchescope/chaos": "workspace:*",
+    "@orchescope/comparison": "workspace:*",
+    "@orchescope/discovery": "workspace:*",
+    "@orchescope/domain": "workspace:*",
+    "@orchescope/findings": "workspace:*",
+    "@orchescope/goals": "workspace:*",
+    "@orchescope/graph": "workspace:*",
+    "@orchescope/persistence": "workspace:*",
+    "@orchescope/policy": "workspace:*",
+    "@orchescope/report": "workspace:*",
+    "@orchescope/runtime": "workspace:*",
+    "@orchescope/scenarios": "workspace:*",
+    "@orchescope/schema": "workspace:*",
+    "@orchescope/source-analysis": "workspace:*",
+    "@orchescope/traces": "workspace:*",
+    "@orchescope/workspace": "workspace:*"
+  }
+}

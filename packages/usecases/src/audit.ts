@@ -1,0 +1,326 @@
+import { discover } from '@orchescope/discovery';
+import { createDeadline, type Deadline } from '@orchescope/domain';
+import { evaluateRules, linkConflicts } from '@orchescope/findings';
+import { computeDelta, indexGraph, type RunSideEffects, reconcile } from '@orchescope/graph';
+import { buildReportBundle } from '@orchescope/report';
+import type {
+  ComponentId,
+  ComponentRunMetrics,
+  Evidence,
+  Finding,
+  FindingSet,
+  ReconciliationDelta,
+  ReportBundle,
+  RunRecord,
+  SystemGraph,
+} from '@orchescope/schema';
+import { DEFAULT_EXCLUDED_DIRECTORIES, type FactCache } from '@orchescope/source-analysis';
+import { componentKey, deriveTopology } from '@orchescope/traces';
+import type { Workspace } from '@orchescope/workspace';
+import { resolveCapabilities } from './capabilities.ts';
+
+/**
+ * The audit use case.
+ *
+ * The pipeline order is fixed and cheap first: manifests and configuration, then source facts, then adapters,
+ * then runtime reconciliation against runs already in the store, then deterministic rules, then the report.
+ * Nothing in it requires a model or a network, which is what makes the first run useful on a repository nobody
+ * has instrumented yet.
+ */
+
+export type AuditRequest = {
+  readonly workspace: Workspace;
+  readonly orchescopeVersion: string;
+  /** How many recent runs to reconcile against. Zero performs a static only audit. */
+  readonly runLimit?: number;
+  readonly deadline?: Deadline;
+  readonly cache?: FactCache;
+  readonly served?: boolean;
+};
+
+export type AuditResult = {
+  readonly graph: SystemGraph;
+  readonly findingSet: FindingSet;
+  readonly reconciliation: ReconciliationDelta | undefined;
+  readonly bundle: ReportBundle;
+  readonly reportDigest: string;
+  readonly agentSystemDetected: boolean;
+  readonly runsConsidered: readonly RunRecord[];
+  readonly scanId: string;
+};
+
+/**
+ * Only the newest experiment per subject is used.
+ *
+ * A stored history is valuable, and feeding all of it to the rules is not: an old chaos report describes behaviour that
+ * a later change may have fixed, and reporting both would put two contradicting findings in front of a reader with no
+ * way to tell which is current.
+ */
+const latestChaosReports = (workspace: Workspace) => {
+  const bySubject = new Map<string, ReturnType<typeof workspace.store.listChaosReports>[number]>();
+  for (const report of workspace.store.listChaosReports(workspace.projectId, 50)) {
+    const key = `${report.scenarioId}|${report.environment}`;
+    const current = bySubject.get(key);
+    if (current === undefined || current.startedAt < report.startedAt) bySubject.set(key, report);
+  }
+  return [...bySubject.values()];
+};
+
+const latestBenchmarks = (workspace: Workspace) => {
+  const bySubject = new Map<string, ReturnType<typeof workspace.store.listBenchmarks>[number]>();
+  for (const report of workspace.store.listBenchmarks(workspace.projectId, 50)) {
+    const key = `${report.scenarioId}|${report.dimension}`;
+    const current = bySubject.get(key);
+    if (current === undefined || current.startedAt < report.startedAt) bySubject.set(key, report);
+  }
+  return [...bySubject.values()];
+};
+
+type ReconcileStage = {
+  readonly graph: SystemGraph;
+  readonly evidence: readonly Evidence[];
+  readonly reconciliation: ReconciliationDelta | undefined;
+  readonly runsConsidered: readonly RunRecord[];
+};
+
+/**
+ * Joins the stored runs to the static graph.
+ *
+ * Attribution matters here: a span carries the observed component key, and reconciliation resolved that observed
+ * component to a declared one. Joining the two is what lets a duplicated effect name the tool that produced it rather
+ * than saying only that duplication happened.
+ */
+const reconcileStoredRuns = (input: {
+  readonly workspace: Workspace;
+  readonly graph: SystemGraph;
+  readonly runLimit: number;
+}): ReconcileStage => {
+  const { workspace, runLimit } = input;
+  const evidence: Evidence[] = [];
+  const runsConsidered: RunRecord[] = [];
+  if (runLimit <= 0) {
+    return { graph: input.graph, evidence, reconciliation: undefined, runsConsidered };
+  }
+
+  const ingestPhase = workspace.progress.phase('reconcile', 'Reconciling runtime evidence');
+  const summaries = workspace.store.listRuns({ projectId: workspace.projectId, limit: runLimit });
+  const topologies = [];
+  const runSideEffects: RunSideEffects[] = [];
+  const spanToComponentKey = new Map<string, string>();
+  for (const summary of summaries) {
+    const run = workspace.store.runById(summary.runId);
+    const bundle = workspace.store.traceForRun(summary.runId);
+    if (run === undefined || bundle === undefined) continue;
+    const derived = deriveTopology(bundle);
+    topologies.push(derived.topology);
+    evidence.push(...derived.evidence);
+    runsConsidered.push(run);
+    runSideEffects.push({ runId: summary.runId, sideEffects: bundle.sideEffects });
+    for (const [spanId, key] of derived.spanToComponentKey) spanToComponentKey.set(spanId, key);
+  }
+
+  if (topologies.length === 0) {
+    ingestPhase.skip('no run with trace data is stored for this project');
+    return { graph: input.graph, evidence, reconciliation: undefined, runsConsidered };
+  }
+
+  const reconciled = reconcile(input.graph, topologies);
+  evidence.push(...reconciled.evidence);
+
+  const componentIdByKey = new Map<string, ComponentId>();
+  for (const match of reconciled.matches) {
+    componentIdByKey.set(componentKey(match.observedKind, match.observedName), match.componentId);
+  }
+  const spanToComponent = new Map<string, ComponentId>();
+  for (const [spanId, key] of spanToComponentKey) {
+    const componentId = componentIdByKey.get(key);
+    if (componentId !== undefined) spanToComponent.set(spanId, componentId);
+  }
+
+  const delta = computeDelta({ graph: reconciled.graph, runs: runSideEffects, spanToComponent });
+  evidence.push(...delta.evidence);
+  ingestPhase.finish(
+    `${topologies.length} run(s) reconciled, ${delta.delta.exercisedNotDeclared.components.length} undeclared component(s), ${delta.delta.contradictions.length} contradiction(s)`,
+  );
+  return {
+    graph: reconciled.graph,
+    evidence,
+    reconciliation: delta.delta,
+    runsConsidered,
+  };
+};
+
+const assembleReport = (input: {
+  readonly workspace: Workspace;
+  readonly graph: SystemGraph;
+  readonly findings: readonly Finding[];
+  readonly evidence: readonly Evidence[];
+  readonly runsConsidered: readonly RunRecord[];
+  readonly componentMetrics: readonly ComponentRunMetrics[];
+  readonly reconciliation: ReconciliationDelta | undefined;
+  readonly served: boolean;
+}): ReportBundle => {
+  const { workspace, graph, findings, runsConsidered } = input;
+  const scenarios = workspace.store.listScenarios(workspace.projectId);
+  const componentsByRun = new Map<string, readonly string[]>();
+  for (const run of runsConsidered) {
+    componentsByRun.set(
+      run.id,
+      workspace.store.componentMetricsForRun(run.id).map((metric) => metric.componentId),
+    );
+  }
+
+  return buildReportBundle({
+    graph,
+    findings,
+    evidence: input.evidence,
+    runs: runsConsidered,
+    scenarios,
+    scenarioRuns: runsConsidered
+      .filter((run) => run.scenarioId !== undefined)
+      .map((run) => ({
+        runId: run.id,
+        scenarioId: run.scenarioId as string,
+        scenarioName:
+          scenarios.find((scenario) => scenario.id === run.scenarioId)?.name ??
+          (run.scenarioId as string),
+        ...(run.variantId === undefined ? {} : { variantId: run.variantId }),
+        status: run.status,
+        ...(run.metrics.taskSuccess === undefined ? {} : { taskSuccess: run.metrics.taskSuccess }),
+        durationMs: run.metrics.durationMs,
+        evaluators: [],
+        faultsApplied: run.faultPlanId === undefined ? [] : [run.faultPlanId],
+      })),
+    componentMetrics: input.componentMetrics,
+    benchmarks: latestBenchmarks(workspace),
+    chaosReports: latestChaosReports(workspace),
+    comparisons: workspace.store.listComparisons(workspace.projectId),
+    goals: workspace.store.listGoals(workspace.projectId),
+    reconciliation: input.reconciliation,
+    capabilities: resolveCapabilities({
+      workspace,
+      served: input.served,
+      scenarioCount: scenarios.length,
+      runCount: runsConsidered.length,
+      hasEligibleFindings: findings.some((finding) => finding.goalReadiness.eligible),
+    }),
+    generatedAt: graph.provenance.generatedAt,
+    redactor: workspace.redactor,
+    componentsByRun,
+  });
+};
+
+export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
+  const { workspace } = request;
+  const { config } = workspace;
+  const handle =
+    request.deadline === undefined
+      ? createDeadline(config.analysis.timeoutMs, workspace.clock.monotonicMs)
+      : undefined;
+  const deadline = request.deadline ?? (handle as Deadline);
+
+  try {
+    const discoverPhase = workspace.progress.phase('discover', 'Discovering components');
+    const scan = await discover({
+      root: workspace.paths.root,
+      projectName: workspace.projectName,
+      orchescopeVersion: request.orchescopeVersion,
+      clock: workspace.clock,
+      deadline,
+      traversal: {
+        maxFileBytes: config.analysis.maxFileBytes,
+        maxFiles: config.analysis.maxFiles,
+        followSymlinks: config.analysis.followSymlinks,
+        excludeDirectories:
+          config.analysis.exclude.length > 0
+            ? config.analysis.exclude
+            : DEFAULT_EXCLUDED_DIRECTORIES,
+        excludePrefixes: [],
+      },
+      concurrency: config.analysis.concurrency,
+      ...(request.cache === undefined ? {} : { cache: request.cache }),
+      ...(workspace.git === undefined ? {} : { git: workspace.git }),
+    });
+    discoverPhase.finish(
+      `${scan.graph.components.length} components, ${scan.graph.edges.length} relations, ${scan.graph.coverage.filesParsed} files parsed`,
+    );
+
+    const evidence: Evidence[] = [...scan.evidence];
+    const reconciled = reconcileStoredRuns({
+      workspace,
+      graph: scan.graph,
+      runLimit: request.runLimit ?? 10,
+    });
+    evidence.push(...reconciled.evidence);
+    const graph = reconciled.graph;
+    const reconciliation = reconciled.reconciliation;
+    const runsConsidered = reconciled.runsConsidered;
+
+    const analysePhase = workspace.progress.phase('analyse', 'Reviewing findings');
+    const indexed = indexGraph(graph);
+    const evidenceById = new Map(evidence.map((record) => [record.id, record]));
+    const componentMetrics = runsConsidered.flatMap((run) =>
+      workspace.store.componentMetricsForRun(run.id),
+    );
+    const evaluated = evaluateRules({
+      scanId: graph.provenance.scanId,
+      generatedAt: graph.provenance.generatedAt,
+      graph: indexed,
+      context: {
+        delta: reconciliation,
+        runs: runsConsidered.map((run) => ({
+          run,
+          componentMetrics: workspace.store.componentMetricsForRun(run.id),
+        })),
+        benchmarks: latestBenchmarks(workspace),
+        chaosReports: latestChaosReports(workspace),
+        scenarios: workspace.store.listScenarios(workspace.projectId),
+        evidenceById,
+      },
+    });
+    evidence.push(...evaluated.evidence);
+    const findings: readonly Finding[] = linkConflicts(evaluated.findingSet.findings);
+    const findingSet: FindingSet = { ...evaluated.findingSet, findings: [...findings] };
+    analysePhase.finish(
+      `${findings.filter((finding) => finding.polarity === 'risk').length} finding(s), ${findings.filter((finding) => finding.polarity === 'strength').length} strength(s)`,
+    );
+
+    const reportPhase = workspace.progress.phase('report', 'Generating report');
+    workspace.store.saveScan(graph, evidence);
+    workspace.store.saveFindings(graph.provenance.scanId, findings);
+
+    const componentsByRun = new Map<string, readonly string[]>();
+    for (const run of runsConsidered) {
+      componentsByRun.set(
+        run.id,
+        workspace.store.componentMetricsForRun(run.id).map((metric) => metric.componentId),
+      );
+    }
+
+    const bundle = assembleReport({
+      workspace,
+      graph,
+      findings,
+      evidence,
+      runsConsidered,
+      componentMetrics,
+      reconciliation,
+      served: request.served ?? false,
+    });
+    const reportDigest = workspace.store.saveReport(bundle, workspace.projectId);
+    reportPhase.finish(`report ${bundle.reportId}`);
+
+    return {
+      graph,
+      findingSet,
+      reconciliation,
+      bundle,
+      reportDigest,
+      agentSystemDetected: scan.agentSystemDetected,
+      runsConsidered,
+      scanId: graph.provenance.scanId,
+    };
+  } finally {
+    handle?.dispose();
+  }
+};

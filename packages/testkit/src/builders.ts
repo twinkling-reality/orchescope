@@ -1,4 +1,5 @@
 import { buildIdentity, moduleNamespace, sourceSpanEvidence } from '@orchescope/domain';
+import { type ComponentDraft, type EdgeDraft, SystemGraphBuilder } from '@orchescope/graph';
 import type {
   ComponentKind,
   EdgeKind,
@@ -11,7 +12,6 @@ import type {
   SideEffectRecord,
   SystemGraph,
 } from '@orchescope/schema';
-import { type ComponentDraft, type EdgeDraft, SystemGraphBuilder } from '@orchescope/graph';
 
 /**
  * Builders for tests. Every value is deterministic so that a whole document can be compared without
