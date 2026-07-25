@@ -13,6 +13,22 @@ const PRODUCER = 'rule:reconciliation';
 
 const componentLabel = (id: ComponentId): string => id;
 
+/**
+ * A name that is only the word for what the thing is.
+ *
+ * `agent` for an agent carries no identity: it says the kind and not which one, so nothing can be joined to it. The
+ * comparison is on the shape of the name rather than on a list of library defaults, because a list of the names each
+ * library falls back to would be out of date the moment a library changed one.
+ */
+const carriesNoIdentity = (name: string, kind: string): boolean => {
+  const normalise = (value: string): string =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_-]+/g, '');
+  return normalise(name) === normalise(kind);
+};
+
 export const declaredNotExercisedRule: Rule = {
   id: 'declared-not-exercised',
   category: 'scenario_coverage',
@@ -75,9 +91,19 @@ export const exercisedNotDeclaredRule: Rule = {
     if (undeclared.length === 0) return clear('every observed component matched a declaration');
 
     const drafts: FindingDraft[] = [];
+    let withoutIdentity = 0;
     for (const componentId of undeclared) {
       const component = context.graph.component(componentId);
       if (component === undefined) continue;
+      /*
+       * A component observed as `agent` was not necessarily undeclared: it was reported under a name that cannot
+       * identify anything, so no declaration could have matched it. Claiming it runs undeclared would be an inference
+       * the evidence does not support, and `observed-name-carries-no-identity` reports it instead.
+       */
+      if (carriesNoIdentity(component.displayName, component.kind)) {
+        withoutIdentity += 1;
+        continue;
+      }
       drafts.push({
         ruleId: 'exercised-not-declared',
         occurrence: {
@@ -111,7 +137,12 @@ export const exercisedNotDeclaredRule: Rule = {
         tags: ['reconciliation', 'exercised-not-declared'],
       });
     }
-    return fired(drafts);
+    return fired(
+      drafts,
+      withoutIdentity === 0
+        ? undefined
+        : `${withoutIdentity} observed component(s) arrived under a name that is only their kind, which observed-name-carries-no-identity reports instead`,
+    );
   },
 };
 
@@ -247,9 +278,70 @@ export const duplicateSideEffectRule: Rule = {
   },
 };
 
+/**
+ * The join is by name, so a name that identifies nothing is where the join stops.
+ *
+ * Pointing the delta at a third party repository for the first time produced exactly this: an agent that the
+ * repository declares as `support_agent` arrived from the instrumentation as `agent`, so the declaration stayed
+ * unexercised and an undeclared component appeared beside it. Neither of those is what happened. What happened is
+ * that the run did not say which agent it was, which is a defect in the instrumentation and a bounded one to fix.
+ */
+export const unnamedObservationRule: Rule = {
+  id: 'observed-name-carries-no-identity',
+  category: 'observability',
+  summary:
+    'A component observed under a name that is only its kind, so no declaration can match it.',
+  evaluate: (context) => {
+    if (context.delta === undefined) return insufficient('no reconciliation has been performed');
+    const anonymous = context.delta.exercisedNotDeclared.components
+      .map((componentId) => context.graph.component(componentId))
+      .filter((component) => component !== undefined)
+      .filter((component) => carriesNoIdentity(component.displayName, component.kind));
+    if (anonymous.length === 0) {
+      return clear('every observed component arrived under a name that identifies something');
+    }
+
+    const drafts: FindingDraft[] = anonymous.map((component) => ({
+      ruleId: 'observed-name-carries-no-identity',
+      occurrence: {
+        key: 'unnamed',
+        groupedTitle: '{count} components were observed under names that are only their kind',
+      },
+      category: 'observability' as const,
+      polarity: 'risk' as const,
+      severity: 'medium' as const,
+      confidence: CONFIDENCE_BANDS.deterministic,
+      basis: 'observed' as const,
+      title: `The observed ${component.kind} is named "${component.displayName}", which is only its kind`,
+      explanation: `The instrumentation reported this ${component.kind} as ${component.displayName}, which says what it is rather than which one it is. A name that is only a kind cannot be joined to any declaration, so this run cannot say which declared ${component.kind} it exercised, and a library that reports something with no explicit name usually reports it this way.`,
+      impact:
+        'Every declaration of that kind stays unexercised in the delta, and the run adds a component nobody declared instead of joining to one. The coverage number is wrong in both directions.',
+      components: [component.id],
+      evidence: component.evidence.slice(0, 3) as EvidenceId[],
+      recommendation: {
+        summary: `Give the ${component.kind} an explicit name where it is defined, or map it in .orchescope/manifest.yaml with a runtimeName.`,
+        steps: [
+          'Name the component at its definition, which is what most libraries emit into the span when it is set.',
+          'If the name cannot be changed, declare the mapping with runtimeName in the manifest.',
+          'Rerun the same scenario and read the delta again.',
+        ],
+        effort: 'small' as const,
+        risk: 'low' as const,
+      },
+      goalEligible: true,
+      goalReason:
+        'Naming a component at its definition is a bounded edit, and the next run shows whether it worked.',
+      requiresRuntimeEvidence: true,
+      tags: ['reconciliation', 'observability'],
+    }));
+    return fired(drafts);
+  },
+};
+
 export const RECONCILIATION_RULES: readonly Rule[] = [
   declaredNotExercisedRule,
   exercisedNotDeclaredRule,
+  unnamedObservationRule,
   contradictedDeclarationRule,
   duplicateSideEffectRule,
 ];
