@@ -1,0 +1,430 @@
+import { CONFIDENCE_BANDS } from '@orchescope/domain';
+import type { SystemGraphBuilder } from '@orchescope/graph';
+import type { ComponentIdentity, EdgePolicy, SideEffectClass } from '@orchescope/schema';
+import type { CallFact, ModuleFacts } from '@orchescope/source-analysis';
+import { calleeName, dotted, findEntry, numberValue, objectArgument, stringValue } from '@orchescope/source-analysis';
+import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
+import { GLOBAL_NAMESPACES, createDrafts, globalIdentity, sourceIdentity } from '../drafts.ts';
+
+/**
+ * External effects: network calls, datastores, queues, retries and the operations that change something
+ * outside the process.
+ *
+ * This adapter is deliberately conservative. It classifies an operation as a non idempotent write only
+ * when the call itself says so, for example an HTTP POST or a `charge` style verb, and otherwise records
+ * `unknown`. Guessing that an operation is safe to retry is the one mistake that would make an
+ * Orchescope recommendation dangerous, so unknown is a first class answer here.
+ */
+
+const ADAPTER_ID = 'adapter:effects';
+const drafts = createDrafts(ADAPTER_ID);
+
+const HTTP_CLIENTS = [
+  { path: 'fetch', packages: [] as string[] },
+  { path: 'axios', packages: ['axios'] },
+  { path: 'got', packages: ['got'] },
+  { path: 'requests', packages: ['requests'] },
+  { path: 'httpx', packages: ['httpx'] },
+  { path: 'urllib.request.urlopen', packages: ['urllib'] },
+];
+
+const HTTP_METHOD_NAMES = new Set([
+  'get',
+  'post',
+  'put',
+  'patch',
+  'delete',
+  'head',
+  'options',
+  'request',
+  'fetch',
+  'send',
+  'stream',
+]);
+
+const DATASTORE_CLIENTS: readonly { readonly names: readonly string[]; readonly store: string }[] = [
+  { names: ['PrismaClient'], store: 'prisma' },
+  { names: ['Pool', 'Client'], store: 'postgres' },
+  { names: ['createClient'], store: 'redis' },
+  { names: ['MongoClient'], store: 'mongodb' },
+  { names: ['create_engine', 'sessionmaker'], store: 'sqlalchemy' },
+  { names: ['connect'], store: 'sqlite' },
+  { names: ['DatabaseSync'], store: 'sqlite' },
+];
+
+const QUEUE_CLIENTS: readonly { readonly names: readonly string[]; readonly queue: string }[] = [
+  { names: ['Queue', 'Worker', 'FlowProducer'], queue: 'bullmq' },
+  { names: ['Celery'], queue: 'celery' },
+  { names: ['SQSClient', 'SendMessageCommand'], queue: 'sqs' },
+];
+
+const RETRY_HELPERS = new Set([
+  'pRetry',
+  'retry',
+  'withRetry',
+  'backoff',
+  'tenacity',
+  'Retrying',
+  'retry_with_backoff',
+]);
+
+const WRITE_VERBS = [
+  'charge',
+  'refund',
+  'pay',
+  'transfer',
+  'create',
+  'delete',
+  'remove',
+  'update',
+  'send',
+  'notify',
+  'email',
+  'post',
+  'publish',
+  'issue',
+  'cancel',
+  'provision',
+];
+
+const READ_VERBS = ['get', 'list', 'read', 'fetch', 'lookup', 'search', 'query', 'find', 'check'];
+
+/** Classifies an operation from its own name and its HTTP method, never from optimism. */
+export const classifyEffect = (name: string, httpMethod?: string): SideEffectClass => {
+  const lowered = name.toLowerCase();
+  if (httpMethod !== undefined) {
+    const method = httpMethod.toLowerCase();
+    if (method === 'get' || method === 'head' || method === 'options') return 'read_only';
+    if (method === 'put') return 'idempotent_write';
+    if (method === 'delete') return 'destructive';
+    if (method === 'post' || method === 'patch') {
+      return WRITE_VERBS.some((verb) => lowered.includes(verb)) ? 'non_idempotent_write' : 'unknown';
+    }
+  }
+  if (lowered.includes('refund') || lowered.includes('charge') || lowered.includes('pay')) {
+    return 'financial';
+  }
+  if (lowered.includes('delete') || lowered.includes('drop') || lowered.includes('purge')) {
+    return 'destructive';
+  }
+  if (lowered.includes('notify') || lowered.includes('email') || lowered.includes('sms')) {
+    return 'external_notification';
+  }
+  if (WRITE_VERBS.some((verb) => lowered.startsWith(verb))) return 'non_idempotent_write';
+  if (READ_VERBS.some((verb) => lowered.startsWith(verb))) return 'read_only';
+  return 'unknown';
+};
+
+const hostOf = (url: string): string | undefined => {
+  const match = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]+)/i.exec(url);
+  return match?.[2];
+};
+
+type Found = { components: number; edges: number; files: Set<string> };
+
+const serviceIdentity = (host: string): ComponentIdentity =>
+  globalIdentity('external_service', GLOBAL_NAMESPACES.service, host);
+
+/**
+ * Resolves the component an effect belongs to.
+ *
+ * When the enclosing scope already produced a component, for example an agent discovered by a framework
+ * adapter, the effect attaches to it. Otherwise the enclosing function becomes an entry point component,
+ * because an effect with no caller cannot be reasoned about and inventing an agent would overstate the
+ * architecture.
+ */
+const ensureCaller = (
+  module: ModuleFacts,
+  call: CallFact,
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+  found: Found,
+): ComponentIdentity => {
+  const name = call.enclosing ?? 'module-scope';
+  const existing = context.bindings.lookup(module.file, name);
+  if (existing !== undefined) return existing;
+  const identity = sourceIdentity('entrypoint', module.file, name);
+  builder.addComponent(
+    drafts.sourceComponent({
+      kind: 'entrypoint',
+      file: module.file,
+      name,
+      location: call.location,
+      symbol: name,
+      confidence: CONFIDENCE_BANDS.structural,
+      metadata: { inferredFrom: 'enclosing scope of an external effect' },
+      tags: ['entrypoint'],
+    }),
+  );
+  found.components += 1;
+  context.bindings.register(module.file, name, identity);
+  return identity;
+};
+
+const httpMethodOf = (call: CallFact): string | undefined => {
+  const last = calleeName(call);
+  if (HTTP_METHOD_NAMES.has(last) && last !== 'fetch' && last !== 'request') return last;
+  const entries = objectArgument(call, 1);
+  return stringValue(findEntry(entries, 'method')?.value);
+};
+
+const discoverHttp = (
+  module: ModuleFacts,
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+  found: Found,
+): void => {
+  for (const call of module.calls) {
+    const path = dotted(call.calleePath);
+    const root = call.calleePath[0] ?? '';
+    const client = HTTP_CLIENTS.find(
+      (candidate) => path === candidate.path || root === candidate.path.split('.')[0],
+    );
+    if (client === undefined) continue;
+    const first = call.args[0];
+    const url = first !== undefined && first.kind === 'string' ? first.value : undefined;
+    const host = url === undefined ? undefined : hostOf(url);
+    const method = httpMethodOf(call);
+    const effect = classifyEffect(call.enclosing ?? path, method);
+    const target = host ?? 'unresolved-host';
+
+    builder.addComponent(
+      drafts.sourceComponent({
+        kind: 'external_service',
+        identity: serviceIdentity(target),
+        file: module.file,
+        name: target,
+        location: call.location,
+        symbol: path,
+        confidence: host === undefined ? CONFIDENCE_BANDS.heuristic : CONFIDENCE_BANDS.strongStructural,
+        details: {
+          for: 'external_service',
+          ...(host === undefined ? {} : { host }),
+          protocol: 'http',
+          authKind: 'unknown',
+        },
+        sideEffect: effect,
+        permissions: [{ kind: 'network', scope: target, mode: effect === 'read_only' ? 'read' : 'write' }],
+        metadata: {
+          client: path,
+          ...(method === undefined ? {} : { httpMethod: method }),
+          ...(url === undefined ? { urlIsDynamic: true } : { url }),
+        },
+        tags: ['http'],
+      }),
+    );
+    found.components += 1;
+    found.files.add(module.file);
+
+    builder.addEdge(
+      drafts.edge({
+        kind: 'calls_service',
+        from: ensureCaller(module, call, context, builder, found),
+        to: serviceIdentity(target),
+        location: call.location,
+        symbol: path,
+        confidence: CONFIDENCE_BANDS.structural,
+        metadata: {
+          ...(method === undefined ? {} : { httpMethod: method }),
+          sideEffect: effect,
+        },
+      }),
+    );
+    found.edges += 1;
+  }
+};
+
+const discoverStores = (
+  module: ModuleFacts,
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+  found: Found,
+): void => {
+  for (const call of module.calls) {
+    const name = calleeName(call);
+    const store = DATASTORE_CLIENTS.find((candidate) => candidate.names.includes(name));
+    if (store !== undefined) {
+      const identity = globalIdentity('database', GLOBAL_NAMESPACES.datastore, store.store);
+      builder.addComponent(
+        drafts.sourceComponent({
+          kind: 'database',
+          identity,
+          file: module.file,
+          name: store.store,
+          location: call.location,
+          symbol: dotted(call.calleePath),
+          confidence: CONFIDENCE_BANDS.structural,
+          sideEffect: 'unknown',
+          permissions: [{ kind: 'database', scope: store.store, mode: 'write' }],
+          metadata: { client: dotted(call.calleePath) },
+          tags: ['datastore'],
+        }),
+      );
+      found.components += 1;
+      found.files.add(module.file);
+      builder.addEdge(
+        drafts.edge({
+          kind: 'queries_database',
+          from: ensureCaller(module, call, context, builder, found),
+          to: identity,
+          location: call.location,
+          symbol: dotted(call.calleePath),
+          confidence: CONFIDENCE_BANDS.heuristic,
+        }),
+      );
+      found.edges += 1;
+      continue;
+    }
+    const queue = QUEUE_CLIENTS.find((candidate) => candidate.names.includes(name));
+    if (queue === undefined) continue;
+    const first = call.args[0];
+    const queueName = first !== undefined && first.kind === 'string' ? first.value : queue.queue;
+    const identity = globalIdentity('queue', GLOBAL_NAMESPACES.queue, queueName);
+    const entries = objectArgument(call, 1);
+    const concurrency = numberValue(findEntry(entries, 'concurrency')?.value);
+    builder.addComponent(
+      drafts.sourceComponent({
+        kind: 'queue',
+        identity,
+        file: module.file,
+        name: queueName,
+        location: call.location,
+        symbol: dotted(call.calleePath),
+        confidence: CONFIDENCE_BANDS.structural,
+        details: {
+          for: 'queue',
+          bounded: concurrency !== undefined,
+          ...(concurrency === undefined ? {} : { workerCount: concurrency }),
+        },
+        permissions: [{ kind: 'queue', scope: queueName, mode: 'write' }],
+        metadata: { client: dotted(call.calleePath), library: queue.queue },
+        tags: ['queue'],
+      }),
+    );
+    found.components += 1;
+    found.files.add(module.file);
+    builder.addEdge(
+      drafts.edge({
+        kind: name === 'Worker' ? 'consumes_from_queue' : 'publishes_to_queue',
+        from: ensureCaller(module, call, context, builder, found),
+        to: identity,
+        location: call.location,
+        symbol: dotted(call.calleePath),
+        confidence: CONFIDENCE_BANDS.structural,
+        ...(concurrency === undefined ? {} : { policy: { concurrency } }),
+      }),
+    );
+    found.edges += 1;
+  }
+};
+
+/**
+ * Retry detection. Two shapes are recognised: an explicit retry helper with an attempt option, and a
+ * loop containing a try that contains a call. The second shape is reported with a bounded attempt count
+ * only when the loop is a counted loop, and with `bounded: false` otherwise, because an unbounded retry
+ * around a side effect is one of the findings this exists to support.
+ */
+const discoverRetries = (
+  module: ModuleFacts,
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+  found: Found,
+): void => {
+  for (const call of module.calls) {
+    if (!RETRY_HELPERS.has(calleeName(call))) continue;
+    const entries = objectArgument(call, 1);
+    const attempts =
+      numberValue(findEntry(entries, 'retries')?.value) ??
+      numberValue(findEntry(entries, 'attempts')?.value) ??
+      numberValue(findEntry(entries, 'stop_after_attempt')?.value);
+    const wrapped = call.args[0];
+    const wrappedName =
+      wrapped === undefined
+        ? undefined
+        : wrapped.kind === 'identifier'
+          ? wrapped.name
+          : wrapped.kind === 'call'
+            ? wrapped.path[wrapped.path.length - 1]
+            : undefined;
+    if (wrappedName === undefined) continue;
+    const target = context.bindings.lookup(module.file, wrappedName);
+    if (target === undefined) continue;
+    const policy: EdgePolicy = {
+      retry: {
+        ...(attempts === undefined ? {} : { maxAttempts: attempts }),
+        bounded: attempts !== undefined,
+        backoff: findEntry(entries, 'backoff') === undefined ? 'unknown' : 'exponential',
+        idempotency: 'unknown',
+      },
+    };
+    builder.addEdge(
+      drafts.edge({
+        kind: target.kind === 'tool' ? 'calls_tool' : 'calls_service',
+        from: ensureCaller(module, call, context, builder, found),
+        to: target,
+        location: call.location,
+        symbol: `${calleeName(call)}(${wrappedName})`,
+        policy,
+        confidence: CONFIDENCE_BANDS.structural,
+        metadata: { retryHelper: calleeName(call) },
+      }),
+    );
+    found.edges += 1;
+    found.files.add(module.file);
+  }
+
+  for (const construct of module.controlFlow) {
+    if (construct.kind !== 'try_catch' || construct.contains.length === 0) continue;
+    const enclosingLoop = module.controlFlow.find(
+      (candidate) =>
+        candidate.kind === 'loop' &&
+        candidate.location.startLine <= construct.location.startLine &&
+        (candidate.location.endLine ?? candidate.location.startLine) >=
+          (construct.location.endLine ?? construct.location.startLine),
+    );
+    if (enclosingLoop === undefined) continue;
+    for (const path of construct.contains) {
+      const name = path[path.length - 1];
+      if (name === undefined) continue;
+      const target = context.bindings.lookup(module.file, name);
+      if (target === undefined) continue;
+      builder.addEdge(
+        drafts.edge({
+          kind: target.kind === 'tool' ? 'calls_tool' : 'calls_service',
+          from:
+            context.bindings.lookup(module.file, construct.enclosing ?? 'module-scope') ??
+            sourceIdentity('entrypoint', module.file, construct.enclosing ?? 'module-scope'),
+          to: target,
+          location: construct.location,
+          symbol: `retry loop around ${name}`,
+          confidence: CONFIDENCE_BANDS.heuristic,
+          policy: {
+            retry: { bounded: false, backoff: 'unknown', idempotency: 'unknown' },
+          },
+          metadata: { retryShape: 'loop-with-try' },
+        }),
+      );
+      found.edges += 1;
+    }
+  }
+};
+
+export const effectsAdapter: AgentSystemAdapter = {
+  id: ADAPTER_ID,
+  version: '1',
+  ecosystem: 'javascript',
+  appliesTo: (context) => context.modules.length > 0,
+  discover: (context, builder): AdapterFindings => {
+    const found: Found = { components: 0, edges: 0, files: new Set() };
+    for (const module of context.modules) {
+      discoverHttp(module, context, builder, found);
+      discoverStores(module, context, builder, found);
+      discoverRetries(module, context, builder, found);
+    }
+    return {
+      componentsFound: found.components,
+      edgesFound: found.edges,
+      filesInspected: found.files.size,
+    };
+  },
+};

@@ -1,0 +1,21 @@
+{
+  "name": "@orchescope/discovery",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic static discovery of agent system components from manifests, source facts and configuration.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@orchescope/domain": "workspace:*",
+    "@orchescope/graph": "workspace:*",
+    "@orchescope/schema": "workspace:*",
+    "@orchescope/source-analysis": "workspace:*",
+    "yaml": "2.8.1"
+  },
+  "devDependencies": {
+    "@orchescope/testkit": "workspace:*"
+  }
+}
