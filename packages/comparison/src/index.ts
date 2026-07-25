@@ -5,9 +5,9 @@
 
 export {
   type CompareInput,
-  DEFAULT_COMPARED_METRICS,
-  type MetricSample,
   compare,
   compareMetric,
+  DEFAULT_COMPARED_METRICS,
+  type MetricSample,
   samplesFromRuns,
 } from './compare.ts';

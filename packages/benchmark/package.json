@@ -1,0 +1,16 @@
+{
+  "name": "@orchescope/benchmark",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Single dimension benchmarking with warmup exclusion and honest limitations on every report.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@orchescope/domain": "workspace:*",
+    "@orchescope/scenarios": "workspace:*",
+    "@orchescope/schema": "workspace:*"
+  }
+}

@@ -3,25 +3,26 @@
  * of anything a language model proposed.
  */
 
+export { resolveByRuntimeName, taskLevelComponents } from './attribution.ts';
 export { DEFAULT_RULES, type EngineResult, type EvaluateInput, evaluateRules } from './engine.ts';
 export {
+  linkConflicts,
   type ReviewInput,
   type ReviewOutcome,
   type ReviewVerdict,
-  linkConflicts,
   reviewModelFinding,
 } from './review.ts';
 export {
+  clear,
   type FindingDraft,
+  fired,
+  insufficient,
+  notApplicable,
   type Rule,
   type RuleContext,
   type RuleOutcome,
   type RuleStatus,
   type RunEvidence,
-  clear,
-  fired,
-  insufficient,
-  notApplicable,
 } from './rule.ts';
 export { EXPERIMENT_RULES } from './rules/experiments.ts';
 export { RECONCILIATION_RULES } from './rules/reconciliation.ts';

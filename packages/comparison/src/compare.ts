@@ -1,4 +1,9 @@
-import { comparisonId as makeComparisonId, differenceIsMeaningful, mean, relativeChange } from '@orchescope/domain';
+import {
+  differenceIsMeaningful,
+  comparisonId as makeComparisonId,
+  mean,
+  relativeChange,
+} from '@orchescope/domain';
 import { diffGraphs } from '@orchescope/graph';
 import type {
   Comparison,
@@ -58,6 +63,21 @@ export type MetricSample = {
   readonly values: readonly number[];
 };
 
+/**
+ * Metrics that count something which must not happen at all.
+ *
+ * For these, crossing the zero boundary is a categorical change in behaviour rather than a statistical claim: a
+ * duplicated payment that happened once and now happens never is decided by presence, not by a sample size. Latency
+ * and token counts still go through the distribution rule, because there a small sample genuinely cannot support a
+ * direction.
+ */
+const INCIDENT_METRICS = new Set([
+  'duplicateSideEffects',
+  'prohibitedSideEffects',
+  'policyViolations',
+  'userInterventions',
+]);
+
 const directionFor = (
   metric: string,
   baseline: number,
@@ -65,6 +85,17 @@ const directionFor = (
   meaningful: { readonly meaningful: boolean; readonly reason: string },
 ): { readonly direction: MetricDelta['direction']; readonly caveat: string | undefined } => {
   if (baseline === candidate) return { direction: 'unchanged', caveat: undefined };
+  if (INCIDENT_METRICS.has(metric) && (baseline === 0 || candidate === 0)) {
+    return candidate === 0
+      ? {
+          direction: 'improved',
+          caveat: 'decided by presence rather than by distribution: the event no longer occurs',
+        }
+      : {
+          direction: 'regressed',
+          caveat: 'decided by presence rather than by distribution: the event now occurs',
+        };
+  }
   if (!meaningful.meaningful) {
     return { direction: 'indeterminate', caveat: meaningful.reason };
   }
@@ -97,7 +128,11 @@ export const compareMetric = (
       caveat: 'one side has no samples',
     };
   }
-  const meaningful = differenceIsMeaningful(baseline.values, candidate.values, minimumSamplesPerSide);
+  const meaningful = differenceIsMeaningful(
+    baseline.values,
+    candidate.values,
+    minimumSamplesPerSide,
+  );
   const decided = directionFor(baseline.metric, baselineMean, candidateMean, meaningful);
   const relative = relativeChange(baselineMean, candidateMean);
   return {
@@ -138,7 +173,8 @@ const numericMetric = (run: RunRecord, metric: string): number | undefined => {
   const value = metrics[metric];
   if (typeof value === 'number') return value;
   if (metric === 'totalTokens') return run.metrics.inputTokens + run.metrics.outputTokens;
-  if (metric === 'successRate') return run.metrics.taskSuccess === undefined ? undefined : run.metrics.taskSuccess ? 1 : 0;
+  if (metric === 'successRate')
+    return run.metrics.taskSuccess === undefined ? undefined : run.metrics.taskSuccess ? 1 : 0;
   return undefined;
 };
 
@@ -163,7 +199,9 @@ export const DEFAULT_COMPARED_METRICS: readonly string[] = [
   'userInterventions',
 ];
 
-const verdictFrom = (deltas: readonly MetricDelta[]): { verdict: ComparisonVerdict; reason: string } => {
+const verdictFrom = (
+  deltas: readonly MetricDelta[],
+): { verdict: ComparisonVerdict; reason: string } => {
   const success = deltas.find((delta) => delta.metric === 'successRate');
   const regressions = deltas.filter((delta) => delta.direction === 'regressed');
   const improvements = deltas.filter((delta) => delta.direction === 'improved');
@@ -238,7 +276,9 @@ export const compare = (input: CompareInput): Comparison => {
     );
   }
   if (metricDeltas.some((delta) => delta.metric === 'costUsd')) {
-    limitations.push('cost is derived from token counts and a configured price table, not measured');
+    limitations.push(
+      'cost is derived from token counts and a configured price table, not measured',
+    );
   }
   if (input.baselineGraph === undefined || input.candidateGraph === undefined) {
     limitations.push('no graph delta was computed because one side has no scan');
@@ -263,11 +303,14 @@ export const compare = (input: CompareInput): Comparison => {
             .map((finding) => finding.id),
           introduced: input.candidateFindings
             .filter(
-              (finding) => !input.baselineFindings?.some((baseline) => baseline.ruleId === finding.ruleId),
+              (finding) =>
+                !input.baselineFindings?.some((baseline) => baseline.ruleId === finding.ruleId),
             )
             .map((finding) => finding.id),
           unchanged: input.candidateFindings
-            .filter((finding) => input.baselineFindings?.some((baseline) => baseline.ruleId === finding.ruleId))
+            .filter((finding) =>
+              input.baselineFindings?.some((baseline) => baseline.ruleId === finding.ruleId),
+            )
             .map((finding) => finding.id),
         }
       : undefined;
@@ -294,7 +337,9 @@ export const compare = (input: CompareInput): Comparison => {
       comparedMetrics: metrics.length,
       baselineRuns: input.baselineRuns.length,
       candidateRuns: input.candidateRuns.length,
-      ...(input.scenarioResults === undefined ? {} : { scenarioResults: input.scenarioResults.length }),
+      ...(input.scenarioResults === undefined
+        ? {}
+        : { scenarioResults: input.scenarioResults.length }),
     },
   };
 };

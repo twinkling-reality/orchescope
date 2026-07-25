@@ -1,6 +1,21 @@
 import { CONFIDENCE_BANDS, derivedEvidence, faultInjectionEvidence } from '@orchescope/domain';
-import type { BenchmarkReport, EvidenceId, VariantResult } from '@orchescope/schema';
-import { type FindingDraft, type Rule, clear, fired, insufficient, notApplicable } from '../rule.ts';
+import type {
+  BenchmarkReport,
+  ChaosReport,
+  ComponentId,
+  EvidenceId,
+  VariantResult,
+} from '@orchescope/schema';
+import { resolveByRuntimeName, taskLevelComponents } from '../attribution.ts';
+import {
+  clear,
+  type FindingDraft,
+  fired,
+  insufficient,
+  notApplicable,
+  type Rule,
+  type RuleContext,
+} from '../rule.ts';
 
 /**
  * Rules that read experiment results: topology benchmarks, concurrency benchmarks and chaos runs.
@@ -11,6 +26,19 @@ import { type FindingDraft, type Rule, clear, fired, insufficient, notApplicable
  */
 
 const PRODUCER = 'rule:experiments';
+
+/**
+ * A fault names its target the way the running system does. The component it landed on is named first, and the task
+ * level components follow, because a fault that ends the task is a fact about the task as well as about the target.
+ */
+const attributionFor = (
+  context: Parameters<Rule['evaluate']>[0],
+  target: string,
+): readonly string[] => {
+  const resolved = resolveByRuntimeName(context.graph, target);
+  const task = taskLevelComponents(context.graph);
+  return resolved === undefined ? [...task] : [resolved, ...task.filter((id) => id !== resolved)];
+};
 
 const variantLabel = (variant: VariantResult): string =>
   variant.variant.agents !== undefined
@@ -32,10 +60,111 @@ const orderedVariants = (report: BenchmarkReport): readonly VariantResult[] =>
     return leftKey - rightKey;
   });
 
+type AgentCountComparison = {
+  readonly report: BenchmarkReport;
+  readonly baseline: VariantResult;
+  readonly variant: VariantResult;
+  readonly baselineLatency: number;
+  readonly variantLatency: number;
+  readonly baselineSuccess: number;
+  readonly variantSuccess: number;
+  readonly components: readonly ComponentId[];
+};
+
+/**
+ * The finding for one variant pair.
+ *
+ * Sample sizes travel with every number, and the finding is only eligible to become a goal once both sides have enough
+ * runs to support the claim: a difference from a handful of runs is not a trend.
+ */
+const agentCountDraft = (input: AgentCountComparison): FindingDraft => {
+  const { baseline, variant, baselineLatency, variantLatency, baselineSuccess, variantSuccess } =
+    input;
+  const tokenRatio = tokensOf(baseline) === 0 ? undefined : tokensOf(variant) / tokensOf(baseline);
+  const enoughRuns = baseline.completedRuns >= 5 && variant.completedRuns >= 5;
+  const record = derivedEvidence({
+    producer: PRODUCER,
+    rule: 'agent-count-does-not-pay-for-itself',
+    inputs: [] as EvidenceId[],
+    note: `${variantLabel(variant)} against ${variantLabel(baseline)}: latency ${Math.round(baselineLatency)} ms to ${Math.round(variantLatency)} ms, success ${baselineSuccess.toFixed(2)} to ${variantSuccess.toFixed(2)}, tokens ${tokensOf(baseline)} to ${tokensOf(variant)}`,
+    basis: 'observed',
+  });
+
+  return {
+    ruleId: 'agent-count-does-not-pay-for-itself',
+    category: 'agent_complexity',
+    polarity: 'risk',
+    severity: 'medium',
+    confidence: enoughRuns ? CONFIDENCE_BANDS.strongStructural : CONFIDENCE_BANDS.heuristic,
+    basis: 'observed',
+    title: `Going from ${variantLabel(baseline)} to ${variantLabel(variant)} costs latency without improving success`,
+    explanation: `Median duration moved from ${Math.round(baselineLatency)} ms to ${Math.round(variantLatency)} ms while task success moved from ${(baselineSuccess * 100).toFixed(0)} percent to ${(variantSuccess * 100).toFixed(0)} percent${tokenRatio === undefined ? '' : `, and token usage changed by a factor of ${tokenRatio.toFixed(2)}`}. Sample sizes were ${baseline.completedRuns} and ${variant.completedRuns} completed runs, which is stated because a difference from a handful of runs is not a trend.`,
+    impact:
+      'The extra coordination is being paid for in latency and tokens and is not returning a measurable success improvement on this scenario.',
+    components: [...input.components],
+    newEvidence: [record],
+    evidence: [],
+    metrics: [
+      {
+        name: 'p50_duration_ms',
+        value: Math.round(variantLatency),
+        unit: 'ms',
+        sampleSize: variant.completedRuns,
+        basis: 'observed',
+        comparisonValue: Math.round(baselineLatency),
+      },
+      {
+        name: 'success_rate',
+        value: Number(variantSuccess.toFixed(3)),
+        unit: 'fraction',
+        sampleSize: variant.completedRuns,
+        basis: 'observed',
+        comparisonValue: Number(baselineSuccess.toFixed(3)),
+      },
+      {
+        name: 'total_tokens',
+        value: tokensOf(variant),
+        unit: 'tokens',
+        sampleSize: variant.completedRuns,
+        basis: 'observed',
+        comparisonValue: tokensOf(baseline),
+      },
+    ],
+    recommendation: {
+      summary: `Run this scenario with ${variantLabel(baseline)} unless another scenario shows a gain.`,
+      steps: [
+        'Check whether a different scenario benefits from the higher agent count.',
+        'If not, set the agent count to the lower value.',
+        'Rerun the benchmark to confirm the change holds.',
+      ],
+      effort: 'small',
+      risk: 'low',
+    },
+    suggestedExperiment: {
+      description: 'Rerun the agent count benchmark after changing the default.',
+      command: [
+        'orchescope',
+        'benchmark',
+        '--scenario',
+        input.report.scenarioId,
+        '--agents',
+        '1,2,4',
+      ],
+      expectedSignal: 'the chosen count has the best latency at equal or better success',
+    },
+    goalEligible: enoughRuns,
+    goalReason: enoughRuns
+      ? 'The change is a configuration value and the check is a rerun of the same benchmark.'
+      : 'More repetitions are needed before this is worth acting on.',
+    tags: ['topology', 'agent-count'],
+  };
+};
+
 export const agentCountRule: Rule = {
   id: 'agent-count-does-not-pay-for-itself',
   category: 'agent_complexity',
-  summary: 'Whether adding agents improved task success enough to justify its latency and token cost.',
+  summary:
+    'Whether adding agents improved task success enough to justify its latency and token cost.',
   evaluate: (context) => {
     const reports = context.benchmarks.filter((report) => report.dimension === 'agent_count');
     if (reports.length === 0) return notApplicable('no agent count benchmark has been run');
@@ -57,85 +186,28 @@ export const agentCountRule: Rule = {
 
         const latencyWorse = variantLatency > baselineLatency * 1.1;
         const successGain = variantSuccess - baselineSuccess;
-        const tokenRatio = tokensOf(baseline) === 0 ? undefined : tokensOf(variant) / tokensOf(baseline);
         if (!latencyWorse || successGain > 0.02) continue;
 
-        const record = derivedEvidence({
-          producer: PRODUCER,
-          rule: 'agent-count-does-not-pay-for-itself',
-          inputs: [] as EvidenceId[],
-          note: `${variantLabel(variant)} against ${variantLabel(baseline)}: latency ${Math.round(baselineLatency)} ms to ${Math.round(variantLatency)} ms, success ${baselineSuccess.toFixed(2)} to ${variantSuccess.toFixed(2)}, tokens ${tokensOf(baseline)} to ${tokensOf(variant)}`,
-          basis: 'observed',
-        });
-
-        drafts.push({
-          ruleId: 'agent-count-does-not-pay-for-itself',
-          category: 'agent_complexity',
-          polarity: 'risk',
-          severity: 'medium',
-          confidence:
-            baseline.completedRuns >= 5 && variant.completedRuns >= 5
-              ? CONFIDENCE_BANDS.strongStructural
-              : CONFIDENCE_BANDS.heuristic,
-          basis: 'observed',
-          title: `Going from ${variantLabel(baseline)} to ${variantLabel(variant)} costs latency without improving success`,
-          explanation: `Median duration moved from ${Math.round(baselineLatency)} ms to ${Math.round(variantLatency)} ms while task success moved from ${(baselineSuccess * 100).toFixed(0)} percent to ${(variantSuccess * 100).toFixed(0)} percent${tokenRatio === undefined ? '' : `, and token usage changed by a factor of ${tokenRatio.toFixed(2)}`}. Sample sizes were ${baseline.completedRuns} and ${variant.completedRuns} completed runs, which is stated because a difference from a handful of runs is not a trend.`,
-          impact:
-            'The extra coordination is being paid for in latency and tokens and is not returning a measurable success improvement on this scenario.',
-          components: [],
-          newEvidence: [record],
-          evidence: [],
-          metrics: [
-            {
-              name: 'p50_duration_ms',
-              value: Math.round(variantLatency),
-              unit: 'ms',
-              sampleSize: variant.completedRuns,
-              basis: 'observed',
-              comparisonValue: Math.round(baselineLatency),
-            },
-            {
-              name: 'success_rate',
-              value: Number(variantSuccess.toFixed(3)),
-              unit: 'fraction',
-              sampleSize: variant.completedRuns,
-              basis: 'observed',
-              comparisonValue: Number(baselineSuccess.toFixed(3)),
-            },
-            {
-              name: 'total_tokens',
-              value: tokensOf(variant),
-              unit: 'tokens',
-              sampleSize: variant.completedRuns,
-              basis: 'observed',
-              comparisonValue: tokensOf(baseline),
-            },
-          ],
-          recommendation: {
-            summary: `Run this scenario with ${variantLabel(baseline)} unless another scenario shows a gain.`,
-            steps: [
-              'Check whether a different scenario benefits from the higher agent count.',
-              'If not, set the agent count to the lower value.',
-              'Rerun the benchmark to confirm the change holds.',
-            ],
-            effort: 'small',
-            risk: 'low',
-          },
-          suggestedExperiment: {
-            description: 'Rerun the agent count benchmark after changing the default.',
-            command: ['orchescope', 'benchmark', '--scenario', report.scenarioId, '--agents', '1,2,4'],
-            expectedSignal: 'the chosen count has the best latency at equal or better success',
-          },
-          goalEligible: baseline.completedRuns >= 5 && variant.completedRuns >= 5,
-          goalReason:
-            baseline.completedRuns >= 5
-              ? 'The change is a configuration value and the check is a rerun of the same benchmark.'
-              : 'More repetitions are needed before this is worth acting on.',
-          tags: ['topology', 'agent-count'],
-        });
+        drafts.push(
+          agentCountDraft({
+            report,
+            baseline,
+            variant,
+            baselineLatency,
+            variantLatency,
+            baselineSuccess,
+            variantSuccess,
+            components: taskLevelComponents(context.graph),
+          }),
+        );
       }
     }
-    return fired(drafts, drafts.length === 0 ? 'higher agent counts did not cost latency without a success gain' : undefined);
+    return fired(
+      drafts,
+      drafts.length === 0
+        ? 'higher agent counts did not cost latency without a success gain'
+        : undefined,
+    );
   },
 };
 
@@ -144,13 +216,16 @@ export const concurrencySaturationRule: Rule = {
   category: 'performance',
   summary: 'Where added concurrency stops buying throughput.',
   evaluate: (context) => {
-    const reports = context.benchmarks.filter((report) => report.dimension === 'traffic_concurrency');
+    const reports = context.benchmarks.filter(
+      (report) => report.dimension === 'traffic_concurrency',
+    );
     if (reports.length === 0) return notApplicable('no traffic concurrency benchmark has been run');
 
     const drafts: FindingDraft[] = [];
     for (const report of reports) {
       const variants = orderedVariants(report);
-      if (variants.length < 2) return insufficient('a concurrency comparison needs at least two variants');
+      if (variants.length < 2)
+        return insufficient('a concurrency comparison needs at least two variants');
       const baseline = variants[0];
       if (baseline === undefined) continue;
       const baselineLatency = latencyOf(baseline);
@@ -172,12 +247,15 @@ export const concurrencySaturationRule: Rule = {
           polarity: 'risk',
           severity: 'medium',
           confidence:
-            variant.completedRuns >= 5 ? CONFIDENCE_BANDS.strongStructural : CONFIDENCE_BANDS.heuristic,
+            variant.completedRuns >= 5
+              ? CONFIDENCE_BANDS.strongStructural
+              : CONFIDENCE_BANDS.heuristic,
           basis: 'observed',
           title: `Latency grows faster than load between concurrency ${baselineConcurrency} and ${variantConcurrency}`,
           explanation: `Concurrency rose by a factor of ${concurrencyRatio.toFixed(1)} and median duration rose by a factor of ${latencyRatio.toFixed(1)}, from ${Math.round(baselineLatency)} ms to ${Math.round(latency)} ms, over ${variant.completedRuns} completed run(s). Growth faster than the added load means something in the path is a bottleneck rather than a parallel resource.`,
-          impact: 'Beyond this point, more traffic makes every request slower rather than serving more of them.',
-          components: [],
+          impact:
+            'Beyond this point, more traffic makes every request slower rather than serving more of them.',
+          components: [...taskLevelComponents(context.graph)],
           evidence: [],
           metrics: [
             {
@@ -198,7 +276,8 @@ export const concurrencySaturationRule: Rule = {
             },
           ],
           recommendation: {
-            summary: 'Find the shared resource that serialises the work, then bound the queue in front of it.',
+            summary:
+              'Find the shared resource that serialises the work, then bound the queue in front of it.',
             steps: [
               'Look at the latency overlay for the component whose self time grows with concurrency.',
               'Bound the queue or raise the worker count for that component.',
@@ -208,13 +287,129 @@ export const concurrencySaturationRule: Rule = {
             risk: 'medium',
           },
           goalEligible: false,
-          goalReason: 'The remedy depends on which resource saturates, which needs a human to identify.',
+          goalReason:
+            'The remedy depends on which resource saturates, which needs a human to identify.',
           tags: ['concurrency', 'saturation'],
         });
       }
     }
-    return fired(drafts, drafts.length === 0 ? 'latency grew no faster than the added concurrency' : undefined);
+    return fired(
+      drafts,
+      drafts.length === 0 ? 'latency grew no faster than the added concurrency' : undefined,
+    );
   },
+};
+
+type ChaosOutcome = ChaosReport['outcomes'][number];
+
+/**
+ * What one injected fault did.
+ *
+ * A duplicated external effect outranks a task that failed cleanly: a failure the caller can see is recoverable, an
+ * effect that reached the outside world twice is not. An absorbed fault is recorded as a strength, because resilience
+ * that was measured is worth as much to a reader as a defect.
+ */
+const chaosOutcomeDraft = (
+  context: RuleContext,
+  outcome: ChaosOutcome,
+  scenarioId: string,
+): FindingDraft => {
+  const record = faultInjectionEvidence({
+    producer: PRODUCER,
+    runId: outcome.runId,
+    faultKind: outcome.faultKind,
+    target: outcome.target,
+    appliedCount: outcome.appliedCount,
+  });
+  const duplicated = outcome.duplicateSideEffects > 0;
+  const collapsed = !outcome.taskCompleted;
+  const amplified = (outcome.costAmplification ?? 1) > 1.5;
+
+  if (!collapsed && !duplicated && !amplified) {
+    return {
+      ruleId: 'resilience-under-injected-fault',
+      category: 'resilience',
+      polarity: 'strength',
+      severity: 'info',
+      confidence: CONFIDENCE_BANDS.deterministic,
+      basis: 'simulated',
+      title: `${outcome.faultKind} on ${outcome.target} was absorbed`,
+      explanation: `The fault was applied ${outcome.appliedCount} time(s), the task still completed, recovery ${outcome.recovered ? 'happened' : 'was not needed'}, no side effect was duplicated and cost amplification stayed at ${(outcome.costAmplification ?? 1).toFixed(2)}.`,
+      impact: 'This failure mode is handled without user intervention.',
+      components: attributionFor(context, outcome.target),
+      newEvidence: [record],
+      evidence: [],
+      goalEligible: false,
+      goalReason: 'Nothing to change.',
+      tags: ['positive', 'chaos', outcome.faultKind],
+    };
+  }
+
+  const headline = collapsed
+    ? 'the task did not complete'
+    : duplicated
+      ? 'a side effect was duplicated'
+      : 'cost amplified';
+  return {
+    ruleId: 'resilience-under-injected-fault',
+    category: 'resilience',
+    polarity: 'risk',
+    severity: duplicated ? 'high' : collapsed ? 'medium' : 'low',
+    confidence: CONFIDENCE_BANDS.deterministic,
+    basis: 'simulated',
+    title: `${outcome.faultKind} on ${outcome.target}: ${headline}`,
+    explanation: `The fault was applied ${outcome.appliedCount} time(s) in run ${outcome.runId}. Task completed: ${outcome.taskCompleted}. Recovered: ${outcome.recovered}. Duplicate side effects: ${outcome.duplicateSideEffects}. Cost amplification against the baseline: ${(outcome.costAmplification ?? 1).toFixed(2)}. Retry amplification: ${(outcome.retryAmplification ?? 1).toFixed(2)}. This is a simulated failure, so the claim is about behaviour under an injected fault rather than about production.`,
+    impact: duplicated
+      ? 'The failure path produces a duplicated external effect, which is visible outside the system.'
+      : collapsed
+        ? 'A single dependency failure ends the task rather than degrading it.'
+        : 'The failure path costs materially more than the healthy path.',
+    components: attributionFor(context, outcome.target),
+    newEvidence: [record],
+    evidence: [],
+    metrics: [
+      {
+        name: 'duplicate_side_effects',
+        value: outcome.duplicateSideEffects,
+        unit: 'count',
+        sampleSize: 1,
+        basis: 'simulated',
+      },
+      {
+        name: 'cost_amplification',
+        value: Number((outcome.costAmplification ?? 1).toFixed(2)),
+        unit: 'ratio',
+        sampleSize: 1,
+        basis: 'simulated',
+      },
+    ],
+    recommendation: {
+      summary: collapsed
+        ? 'Degrade instead of failing: return the part of the answer that does not need the failed dependency.'
+        : 'Make the retried operation safe to repeat, then rerun this fault.',
+      steps: [
+        'Reproduce with the same seed and fault plan.',
+        collapsed
+          ? 'Handle the failure at the call site and continue with a reduced answer.'
+          : 'Attach an idempotency key or remove the retry.',
+        'Rerun the chaos scenario and compare against the baseline run.',
+      ],
+      effort: 'medium',
+      risk: 'medium',
+    },
+    suggestedExperiment: {
+      description: `Reapply ${outcome.faultKind} on ${outcome.target} with the same seed.`,
+      command: ['orchescope', 'chaos', '--scenario', scenarioId],
+      expectedSignal: collapsed
+        ? 'the task completes with a degraded answer'
+        : 'duplicate side effects drop to zero',
+    },
+    goalEligible: duplicated,
+    goalReason: duplicated
+      ? 'The change is local to the retried operation and the check is a deterministic rerun.'
+      : 'Choosing how to degrade is a design decision.',
+    tags: ['chaos', outcome.faultKind],
+  };
 };
 
 export const resilienceRule: Rule = {
@@ -226,98 +421,7 @@ export const resilienceRule: Rule = {
     const drafts: FindingDraft[] = [];
     for (const report of context.chaosReports) {
       for (const outcome of report.outcomes) {
-        const record = faultInjectionEvidence({
-          producer: PRODUCER,
-          runId: outcome.runId,
-          faultKind: outcome.faultKind,
-          target: outcome.target,
-          appliedCount: outcome.appliedCount,
-        });
-        const duplicated = outcome.duplicateSideEffects > 0;
-        const collapsed = !outcome.taskCompleted;
-        const amplified = (outcome.costAmplification ?? 1) > 1.5;
-
-        if (collapsed || duplicated || amplified) {
-          drafts.push({
-            ruleId: 'resilience-under-injected-fault',
-            category: 'resilience',
-            polarity: 'risk',
-            severity: duplicated ? 'high' : collapsed ? 'medium' : 'low',
-            confidence: CONFIDENCE_BANDS.deterministic,
-            basis: 'simulated',
-            title: `${outcome.faultKind} on ${outcome.target}: ${collapsed ? 'the task did not complete' : duplicated ? 'a side effect was duplicated' : 'cost amplified'}`,
-            explanation: `The fault was applied ${outcome.appliedCount} time(s) in run ${outcome.runId}. Task completed: ${outcome.taskCompleted}. Recovered: ${outcome.recovered}. Duplicate side effects: ${outcome.duplicateSideEffects}. Cost amplification against the baseline: ${(outcome.costAmplification ?? 1).toFixed(2)}. Retry amplification: ${(outcome.retryAmplification ?? 1).toFixed(2)}. This is a simulated failure, so the claim is about behaviour under an injected fault rather than about production.`,
-            impact: duplicated
-              ? 'The failure path produces a duplicated external effect, which is visible outside the system.'
-              : collapsed
-                ? 'A single dependency failure ends the task rather than degrading it.'
-                : 'The failure path costs materially more than the healthy path.',
-            components: [],
-            newEvidence: [record],
-            evidence: [],
-            metrics: [
-              {
-                name: 'duplicate_side_effects',
-                value: outcome.duplicateSideEffects,
-                unit: 'count',
-                sampleSize: 1,
-                basis: 'simulated',
-              },
-              {
-                name: 'cost_amplification',
-                value: Number((outcome.costAmplification ?? 1).toFixed(2)),
-                unit: 'ratio',
-                sampleSize: 1,
-                basis: 'simulated',
-              },
-            ],
-            recommendation: {
-              summary: collapsed
-                ? 'Degrade instead of failing: return the part of the answer that does not need the failed dependency.'
-                : 'Make the retried operation safe to repeat, then rerun this fault.',
-              steps: [
-                'Reproduce with the same seed and fault plan.',
-                collapsed
-                  ? 'Handle the failure at the call site and continue with a reduced answer.'
-                  : 'Attach an idempotency key or remove the retry.',
-                'Rerun the chaos scenario and compare against the baseline run.',
-              ],
-              effort: 'medium',
-              risk: 'medium',
-            },
-            suggestedExperiment: {
-              description: `Reapply ${outcome.faultKind} on ${outcome.target} with the same seed.`,
-              command: ['orchescope', 'chaos', '--scenario', report.scenarioId],
-              expectedSignal: collapsed
-                ? 'the task completes with a degraded answer'
-                : 'duplicate side effects drop to zero',
-            },
-            goalEligible: duplicated,
-            goalReason: duplicated
-              ? 'The change is local to the retried operation and the check is a deterministic rerun.'
-              : 'Choosing how to degrade is a design decision.',
-            tags: ['chaos', outcome.faultKind],
-          });
-          continue;
-        }
-
-        drafts.push({
-          ruleId: 'resilience-under-injected-fault',
-          category: 'resilience',
-          polarity: 'strength',
-          severity: 'info',
-          confidence: CONFIDENCE_BANDS.deterministic,
-          basis: 'simulated',
-          title: `${outcome.faultKind} on ${outcome.target} was absorbed`,
-          explanation: `The fault was applied ${outcome.appliedCount} time(s), the task still completed, recovery ${outcome.recovered ? 'happened' : 'was not needed'}, no side effect was duplicated and cost amplification stayed at ${(outcome.costAmplification ?? 1).toFixed(2)}.`,
-          impact: 'This failure mode is handled without user intervention.',
-          components: [],
-          newEvidence: [record],
-          evidence: [],
-          goalEligible: false,
-          goalReason: 'Nothing to change.',
-          tags: ['positive', 'chaos', outcome.faultKind],
-        });
+        drafts.push(chaosOutcomeDraft(context, outcome, report.scenarioId));
       }
       if (report.notApplied.length > 0) {
         return fired(

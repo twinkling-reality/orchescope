@@ -1,6 +1,6 @@
-import { CONFIDENCE_BANDS, absenceEvidence, derivedEvidence } from '@orchescope/domain';
+import { absenceEvidence, CONFIDENCE_BANDS, derivedEvidence } from '@orchescope/domain';
 import type { ComponentId, EvidenceId } from '@orchescope/schema';
-import { type FindingDraft, type Rule, clear, fired, insufficient } from '../rule.ts';
+import { clear, type FindingDraft, fired, insufficient, type Rule } from '../rule.ts';
 
 /**
  * Reconciliation rules: the four deltas between what the repository declares and what a run exercises.
@@ -78,7 +78,8 @@ export const exercisedNotDeclaredRule: Rule = {
         ruleId: 'exercised-not-declared',
         category: 'architecture',
         polarity: 'risk',
-        severity: component.kind === 'model' || component.kind === 'external_service' ? 'high' : 'medium',
+        severity:
+          component.kind === 'model' || component.kind === 'external_service' ? 'high' : 'medium',
         confidence: CONFIDENCE_BANDS.deterministic,
         basis: 'observed',
         title: `${component.displayName} runs without being declared anywhere in the repository`,
@@ -167,14 +168,16 @@ export const duplicateSideEffectRule: Rule = {
     }
     const drafts: FindingDraft[] = context.delta.duplicateSideEffects.map((duplicate) => {
       const component =
-        duplicate.componentId === undefined ? undefined : context.graph.component(duplicate.componentId);
+        duplicate.componentId === undefined
+          ? undefined
+          : context.graph.component(duplicate.componentId);
       const attempts = duplicate.retryAttempts.filter((attempt) => attempt > 1);
       const attributed = attempts.length > 0;
       const record = derivedEvidence({
         producer: PRODUCER,
         rule: 'duplicate-side-effect',
         inputs: duplicate.evidence,
-        note: `${duplicate.key} occurred ${duplicate.occurrences} times${attributed ? ` including attempt ${attempts.join(', ')}` : ''}`,
+        note: `${duplicate.key} occurred ${duplicate.occurrences} times inside one run${attributed ? ` including attempt ${attempts.join(', ')}` : ''}`,
       });
       return {
         ruleId: 'duplicate-side-effect',
@@ -183,8 +186,8 @@ export const duplicateSideEffectRule: Rule = {
         severity: duplicate.idempotencyKeyPresent ? ('medium' as const) : ('high' as const),
         confidence: CONFIDENCE_BANDS.deterministic,
         basis: 'observed' as const,
-        title: `${duplicate.key.split('|')[0] ?? 'side effect'} happened ${duplicate.occurrences} times for one request`,
-        explanation: `The side effect ${duplicate.key} was recorded ${duplicate.occurrences} times within a single run${attributed ? `, and at least one occurrence came from retry attempt ${attempts.join(' and ')}` : ''}. ${duplicate.idempotencyKeyPresent ? 'An idempotency key was present, so the duplication happened despite it.' : 'No idempotency key was present, so nothing downstream can collapse the duplicates.'}`,
+        title: `${duplicate.key.split('|')[0] ?? 'side effect'} happened ${duplicate.occurrences} times in one run`,
+        explanation: `The side effect ${duplicate.key} was recorded ${duplicate.occurrences} times within a single run, and ${duplicate.totalOccurrences} times across ${duplicate.runIds.length} observed run(s)${attributed ? `, and at least one occurrence came from retry attempt ${attempts.join(' and ')}` : ''}. ${duplicate.idempotencyKeyPresent ? 'An idempotency key was present, so the duplication happened despite it.' : 'No idempotency key was present, so nothing downstream can collapse the duplicates.'}`,
         impact:
           'A duplicated external effect is visible to the user or to a third party. For a payment, a notification or a provisioning call, the second one is a real incident.',
         components: component === undefined ? [] : [component.id],
@@ -213,12 +216,14 @@ export const duplicateSideEffectRule: Rule = {
           risk: 'medium',
         },
         suggestedExperiment: {
-          description: 'Rerun the scenario that produced the duplicate with the same seed and fault plan.',
+          description:
+            'Rerun the scenario that produced the duplicate with the same seed and fault plan.',
           command: ['orchescope', 'chaos', '--scenario', 'scenarios/support-desk.yaml'],
           expectedSignal: 'duplicateSideEffects drops to zero while task success is unchanged',
         },
         goalEligible: true,
-        goalReason: 'The change is local to one operation and the check is a rerun with the same seed.',
+        goalReason:
+          'The change is local to one operation and the check is a rerun with the same seed.',
         tags: ['reconciliation', 'duplicate-effect'],
       };
     });

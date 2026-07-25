@@ -79,7 +79,11 @@ export const reviewModelFinding = (input: ReviewInput): ReviewOutcome => {
  * Records a conflict on both findings rather than dropping either. A reviewer needs to see that two rules
  * disagreed; silently keeping one is how a report becomes confidently wrong.
  */
-export const linkConflicts = (findings: readonly Finding[]): readonly Finding[] => {
+/** Two findings conflict when they say opposite things about the same component in the same category. */
+const conflicting = (left: Finding, right: Finding): boolean =>
+  left.id !== right.id && left.category === right.category && left.polarity !== right.polarity;
+
+const groupByComponent = (findings: readonly Finding[]): ReadonlyMap<string, Finding[]> => {
   const byComponent = new Map<string, Finding[]>();
   for (const finding of findings) {
     for (const componentId of finding.components) {
@@ -88,13 +92,14 @@ export const linkConflicts = (findings: readonly Finding[]): readonly Finding[] 
       else bucket.push(finding);
     }
   }
+  return byComponent;
+};
+
+export const linkConflicts = (findings: readonly Finding[]): readonly Finding[] => {
   const conflicts = new Map<string, Set<string>>();
-  for (const bucket of byComponent.values()) {
+  for (const bucket of groupByComponent(findings).values()) {
     for (const left of bucket) {
-      for (const right of bucket) {
-        if (left.id === right.id) continue;
-        if (left.category !== right.category) continue;
-        if (left.polarity === right.polarity) continue;
+      for (const right of bucket.filter((candidate) => conflicting(left, candidate))) {
         const set = conflicts.get(left.id) ?? new Set<string>();
         set.add(right.id);
         conflicts.set(left.id, set);

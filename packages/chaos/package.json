@@ -1,0 +1,16 @@
+{
+  "name": "@orchescope/chaos",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent specific fault injection suites with one fault per plan and attributable outcomes.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@orchescope/domain": "workspace:*",
+    "@orchescope/scenarios": "workspace:*",
+    "@orchescope/schema": "workspace:*"
+  }
+}

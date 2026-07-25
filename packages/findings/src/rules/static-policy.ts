@@ -1,7 +1,12 @@
-import { CONFIDENCE_BANDS, absenceEvidence, derivedEvidence } from '@orchescope/domain';
-import { isControlFlowKind, unreachableComponents, controlFlowCycles, degrees } from '@orchescope/graph';
+import { absenceEvidence, CONFIDENCE_BANDS, derivedEvidence } from '@orchescope/domain';
+import {
+  controlFlowCycles,
+  degrees,
+  isControlFlowKind,
+  unreachableComponents,
+} from '@orchescope/graph';
 import type { Component, Edge, EvidenceId, SideEffectClass } from '@orchescope/schema';
-import { type FindingDraft, type Rule, clear, fired, notApplicable } from '../rule.ts';
+import { clear, type FindingDraft, fired, notApplicable, type Rule } from '../rule.ts';
 
 /**
  * Rules that read the declared model only.
@@ -20,8 +25,10 @@ const RETRY_UNSAFE_EFFECTS: readonly SideEffectClass[] = [
   'unknown',
 ];
 
-const targetOf = (context: { graph: { component: (id: string) => Component | undefined } }, edge: Edge) =>
-  context.graph.component(edge.to);
+const targetOf = (
+  context: { graph: { component: (id: string) => Component | undefined } },
+  edge: Edge,
+) => context.graph.component(edge.to);
 
 export const unsafeRetryRule: Rule = {
   id: 'retry-around-non-idempotent-operation',
@@ -50,7 +57,8 @@ export const unsafeRetryRule: Rule = {
         category: 'reliability',
         polarity: 'risk',
         severity: effect === 'unknown' ? 'medium' : 'high',
-        confidence: effect === 'unknown' ? CONFIDENCE_BANDS.structural : CONFIDENCE_BANDS.strongStructural,
+        confidence:
+          effect === 'unknown' ? CONFIDENCE_BANDS.structural : CONFIDENCE_BANDS.strongStructural,
         basis: 'discovered',
         title: `Retry around ${target.displayName} can repeat an effect that is not known to be idempotent`,
         explanation: `${source?.displayName ?? edge.from} retries ${target.displayName}, whose effect class is ${effect}, and no idempotency key was found on the operation. Retrying an operation that is not idempotent produces the effect twice whenever the first attempt fails after the effect has already happened, which is exactly the case a timeout cannot distinguish.`,
@@ -72,16 +80,21 @@ export const unsafeRetryRule: Rule = {
           risk: 'medium',
         },
         suggestedExperiment: {
-          description: 'Inject a tool timeout on the first attempt and count the resulting effects.',
+          description:
+            'Inject a tool timeout on the first attempt and count the resulting effects.',
           command: ['orchescope', 'chaos', '--scenario', 'scenarios/support-desk.yaml'],
           expectedSignal: 'one effect instead of two, with task success unchanged',
         },
         goalEligible: true,
-        goalReason: 'The change is local to one call site and is verified by a deterministic chaos run.',
+        goalReason:
+          'The change is local to one call site and is verified by a deterministic chaos run.',
         tags: ['retry', 'idempotency'],
       });
     }
-    return fired(drafts, drafts.length === 0 ? 'every retried operation declared an idempotency key' : undefined);
+    return fired(
+      drafts,
+      drafts.length === 0 ? 'every retried operation declared an idempotency key' : undefined,
+    );
   },
 };
 
@@ -105,8 +118,12 @@ export const unboundedRetryRule: Rule = {
         basis: 'discovered',
         title: `Retry of ${target?.displayName ?? edge.to} has no attempt ceiling`,
         explanation: `The retry around ${target?.displayName ?? edge.to} was discovered as a loop with a catch and no attempt limit could be established from the source. An unbounded retry converts a persistent downstream failure into unbounded cost and an unbounded wait.`,
-        impact: 'A failing dependency can consume the whole budget of a run and never surface an error.',
-        components: [...(target === undefined ? [] : [target.id]), ...(source === undefined ? [] : [source.id])],
+        impact:
+          'A failing dependency can consume the whole budget of a run and never surface an error.',
+        components: [
+          ...(target === undefined ? [] : [target.id]),
+          ...(source === undefined ? [] : [source.id]),
+        ],
         edges: [edge.id],
         evidence: edge.evidence as EvidenceId[],
         recommendation: {
@@ -123,7 +140,10 @@ export const unboundedRetryRule: Rule = {
         tags: ['retry'],
       });
     }
-    return fired(drafts, drafts.length === 0 ? 'every discovered retry had an attempt ceiling' : undefined);
+    return fired(
+      drafts,
+      drafts.length === 0 ? 'every discovered retry had an attempt ceiling' : undefined,
+    );
   },
 };
 
@@ -147,7 +167,8 @@ export const missingTimeoutRule: Rule = {
           basis: 'discovered',
           title: 'Every discovered model invocation declares a timeout',
           explanation: `All ${modelEdges.length} model invocation relations carry an explicit timeout, so a hung provider cannot stall a run indefinitely.`,
-          impact: 'A slow or hanging provider fails fast instead of consuming the whole run budget.',
+          impact:
+            'A slow or hanging provider fails fast instead of consuming the whole run budget.',
           components: modelEdges.map((edge) => edge.from),
           edges: modelEdges.map((edge) => edge.id),
           evidence,
@@ -157,8 +178,18 @@ export const missingTimeoutRule: Rule = {
         },
       ]);
     }
-    const drafts: FindingDraft[] = missing.map((edge) => {
-      const target = context.graph.component(edge.to);
+    // Grouped by the model rather than reported per relation: five callers of one untimed model is one problem with
+    // five call sites, and five findings would bury the rest of the report.
+    const byModel = new Map<string, typeof missing>();
+    for (const edge of missing) {
+      const bucket = byModel.get(edge.to);
+      if (bucket === undefined) byModel.set(edge.to, [edge]);
+      else bucket.push(edge);
+    }
+
+    const drafts: FindingDraft[] = [...byModel].map(([modelId, edges]) => {
+      const target = context.graph.component(modelId);
+      const callers = [...new Set(edges.map((edge) => edge.from))];
       return {
         ruleId: 'model-call-without-timeout',
         category: 'reliability' as const,
@@ -166,15 +197,18 @@ export const missingTimeoutRule: Rule = {
         severity: 'medium' as const,
         confidence: CONFIDENCE_BANDS.structural,
         basis: 'discovered' as const,
-        title: `Model call to ${target?.displayName ?? edge.to} declares no timeout`,
-        explanation: `No timeout was found in the configuration of this model invocation. A provider that stops responding will hold the request until something else gives up, and nothing in the declared configuration says when that is.`,
+        title: `Model call to ${target?.displayName ?? modelId} declares no timeout`,
+        explanation: `No timeout was found in the configuration of ${edges.length} invocation relation(s) reaching this model, from ${callers.length} caller(s). A provider that stops responding will hold the request until something else gives up, and nothing in the declared configuration says when that is.`,
         impact: 'One unresponsive provider call can consume an entire run.',
-        components: [edge.from, ...(target === undefined ? [] : [target.id])],
-        edges: [edge.id],
-        evidence: edge.evidence as EvidenceId[],
+        components: [...callers, ...(target === undefined ? [] : [target.id])],
+        edges: edges.map((edge) => edge.id),
+        evidence: edges.flatMap((edge) => edge.evidence.slice(0, 2)) as EvidenceId[],
         recommendation: {
           summary: 'Set an explicit request timeout on the model client or the call site.',
-          steps: ['Choose a timeout from the observed p95 latency plus headroom.', 'Set it at the client.'],
+          steps: [
+            'Choose a timeout from the observed p95 latency plus headroom.',
+            'Set it at the client.',
+          ],
           effort: 'small' as const,
           risk: 'low' as const,
         },
@@ -198,7 +232,8 @@ export const approvalBoundaryRule: Rule = {
         component.sideEffect === 'destructive' ||
         component.sideEffect === 'non_idempotent_write',
     );
-    if (risky.length === 0) return notApplicable('no operation with a risky effect class was discovered');
+    if (risky.length === 0)
+      return notApplicable('no operation with a risky effect class was discovered');
 
     const drafts: FindingDraft[] = [];
     for (const component of risky) {
@@ -220,7 +255,8 @@ export const approvalBoundaryRule: Rule = {
           basis: 'discovered',
           title: `${component.displayName} is behind an approval boundary`,
           explanation: `${component.displayName} has effect class ${component.sideEffect} and is guarded: ${guarded ? 'an approval relation was discovered' : requiresApproval ? 'the tool declares that approval is required' : 'the calling relation declares that approval is required'}.`,
-          impact: 'The risky operation cannot run without an explicit decision, which is the correct shape.',
+          impact:
+            'The risky operation cannot run without an explicit decision, which is the correct shape.',
           components: [component.id],
           evidence: component.evidence.slice(0, 3) as EvidenceId[],
           goalEligible: false,
@@ -261,7 +297,8 @@ export const approvalBoundaryRule: Rule = {
           risk: 'low',
         },
         goalEligible: true,
-        goalReason: 'The scope is one call site plus a scenario that asserts the approval happened.',
+        goalReason:
+          'The scope is one call site plus a scenario that asserts the approval happened.',
         requiresHumanReview: true,
         tags: ['approval', 'side-effect'],
       });
@@ -277,7 +314,11 @@ export const promptInjectionBoundaryRule: Rule = {
   evaluate: (context) => {
     const prompts = context.graph
       .componentsOfKind('prompt')
-      .filter((component) => component.details?.for === 'prompt' && component.details.interpolatesUntrustedInput === true);
+      .filter(
+        (component) =>
+          component.details?.for === 'prompt' &&
+          component.details.interpolatesUntrustedInput === true,
+      );
     if (prompts.length === 0) {
       return clear('no prompt was discovered that interpolates a value at run time');
     }
@@ -288,7 +329,9 @@ export const promptInjectionBoundaryRule: Rule = {
       ...context.graph.componentsOfKind('mcp_server'),
     ];
     if (untrustedSources.length === 0) {
-      return clear('prompts interpolate values, and no retrieval or tool output was discovered as a source');
+      return clear(
+        'prompts interpolate values, and no retrieval or tool output was discovered as a source',
+      );
     }
 
     const drafts: FindingDraft[] = prompts.map((prompt) => ({
@@ -306,7 +349,8 @@ export const promptInjectionBoundaryRule: Rule = {
       evidence: prompt.evidence.slice(0, 3) as EvidenceId[],
       taxonomy: ['owasp-llm:LLM01', 'owasp-asi:ASI01'],
       recommendation: {
-        summary: 'Separate untrusted content from instructions and constrain what the model may do with it.',
+        summary:
+          'Separate untrusted content from instructions and constrain what the model may do with it.',
         steps: [
           'Pass retrieved or tool provided text as data in a clearly delimited section, never concatenated into the instruction.',
           'Restrict the tools available while untrusted content is in context.',
@@ -316,9 +360,11 @@ export const promptInjectionBoundaryRule: Rule = {
         risk: 'medium',
       },
       suggestedExperiment: {
-        description: 'Inject an instruction into retrieved content and assert the system ignores it.',
+        description:
+          'Inject an instruction into retrieved content and assert the system ignores it.',
         command: ['orchescope', 'chaos', '--scenario', 'scenarios/support-desk.yaml'],
-        expectedSignal: 'no policy violation and no prohibited effect while the injected content is present',
+        expectedSignal:
+          'no policy violation and no prohibited effect while the injected content is present',
       },
       goalEligible: true,
       goalReason: 'The change is local to prompt assembly and is checked by an injection scenario.',
@@ -358,8 +404,22 @@ export const architectureShapeRule: Rule = {
       });
     }
 
+    // Reachability is only meaningful for components that participate in control flow. A prompt, a model or a
+    // provider is reached by being referenced, not by being called, so listing them here would be noise that buries
+    // the finding a reader needs.
+    const reachabilityKinds = new Set([
+      'agent',
+      'tool',
+      'mcp_server',
+      'worker',
+      'queue',
+      'retrieval',
+      'memory',
+      'database',
+      'external_service',
+    ]);
     const unreachable = unreachableComponents(context.graph).filter(
-      (component) => component.presence.static && component.kind !== 'provider',
+      (component) => component.presence.static && reachabilityKinds.has(component.kind),
     );
     for (const component of unreachable) {
       drafts.push({
@@ -394,7 +454,8 @@ export const architectureShapeRule: Rule = {
           'These components form a cycle in the declared control flow. A cycle is a legitimate pattern for a plan and act loop, and it is also where an unbounded loop lives, so it is worth an explicit iteration ceiling.',
         impact: 'Without a ceiling, a cycle can consume the whole budget of a run.',
         components: [...new Set(cycle)],
-        evidence: (context.graph.component(cycle[0] ?? '')?.evidence.slice(0, 1) ?? []) as EvidenceId[],
+        evidence: (context.graph.component(cycle[0] ?? '')?.evidence.slice(0, 1) ??
+          []) as EvidenceId[],
         goalEligible: false,
         goalReason: 'Whether the cycle is intended is a question for the owner.',
         tags: ['cycle'],
@@ -435,13 +496,16 @@ export const broadPermissionRule: Rule = {
     if (context.runs.length === 0) {
       return {
         status: 'insufficient_evidence',
-        detail: 'permission breadth is only meaningful against observed use, and no run has been ingested',
+        detail:
+          'permission breadth is only meaningful against observed use, and no run has been ingested',
         drafts: [],
       };
     }
     const drafts: FindingDraft[] = [];
     for (const component of context.graph.graph.components) {
-      const writePermissions = component.permissions.filter((permission) => permission.mode === 'write');
+      const writePermissions = component.permissions.filter(
+        (permission) => permission.mode === 'write',
+      );
       if (writePermissions.length === 0) continue;
       if (component.presence.runtime && component.metadata['observedSideEffect'] === true) continue;
       if (!component.presence.runtime) continue;
@@ -461,13 +525,15 @@ export const broadPermissionRule: Rule = {
         basis: 'inferred',
         title: `${component.displayName} holds write access it was not observed using`,
         explanation: `${component.displayName} declares ${writePermissions.length} write permission(s) on ${writePermissions.map((permission) => permission.scope).join(', ')}, ran in ${context.runs.length} observed run(s), and performed no recorded side effect. Observed use is not proof that write access is unnecessary, and it is the evidence available.`,
-        impact: 'Broader access than a component needs widens the blast radius of a prompt injection or a bug.',
+        impact:
+          'Broader access than a component needs widens the blast radius of a prompt injection or a bug.',
         components: [component.id],
         newEvidence: [record],
         evidence: component.evidence.slice(0, 2) as EvidenceId[],
         taxonomy: ['owasp-llm:LLM06'],
         recommendation: {
-          summary: 'Narrow the permission to what the observed paths need, or record why the wider access is required.',
+          summary:
+            'Narrow the permission to what the observed paths need, or record why the wider access is required.',
           steps: [
             'Check whether any path needs write access to this scope.',
             'Narrow the credential or the configuration if not.',
@@ -476,12 +542,16 @@ export const broadPermissionRule: Rule = {
           risk: 'medium',
         },
         goalEligible: false,
-        goalReason: 'Narrowing a permission needs a human to confirm no unobserved path depends on it.',
+        goalReason:
+          'Narrowing a permission needs a human to confirm no unobserved path depends on it.',
         requiresHumanReview: true,
         tags: ['permissions', 'least-privilege'],
       });
     }
-    return fired(drafts, drafts.length === 0 ? 'every write permission was matched by observed use' : undefined);
+    return fired(
+      drafts,
+      drafts.length === 0 ? 'every write permission was matched by observed use' : undefined,
+    );
   },
 };
 
@@ -493,7 +563,10 @@ export const unusedConfiguredToolRule: Rule = {
     const tools = context.graph.componentsOfKind('tool');
     if (tools.length === 0) return notApplicable('no tool was discovered');
     const orphans = tools.filter(
-      (tool) => !context.graph.incoming(tool.id).some((edge) => isControlFlowKind(edge.kind) || edge.kind === 'provides_tool'),
+      (tool) =>
+        !context.graph
+          .incoming(tool.id)
+          .some((edge) => isControlFlowKind(edge.kind) || edge.kind === 'provides_tool'),
     );
     if (orphans.length === 0) return clear('every discovered tool has at least one caller');
 

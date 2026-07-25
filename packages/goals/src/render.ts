@@ -65,7 +65,9 @@ export const renderAgentPrompt = (goal: Goal): string =>
     bullet(goal.acceptanceCriteria.map((criterion) => criterionText(criterion))),
     '',
     'How the change is validated',
-    bullet(goal.validation.commands.map((entry) => `${entry.command.join(' ')}  (${entry.purpose})`)),
+    bullet(
+      goal.validation.commands.map((entry) => `${entry.command.join(' ')}  (${entry.purpose})`),
+    ),
     goal.validation.baselineRunIds.length === 0
       ? '  compare against: no baseline run was recorded'
       : `  compare against: ${goal.validation.baselineRunIds.join(', ')}`,
@@ -88,7 +90,9 @@ export const renderGoalMarkdown = (goal: Goal): string =>
     `- Finding: ${goal.findingId}`,
     `- Risk: ${goal.risk}`,
     `- Created: ${goal.createdAt}`,
-    goal.expectedImprovement === undefined ? '' : `- Expected improvement: ${goal.expectedImprovement}`,
+    goal.expectedImprovement === undefined
+      ? ''
+      : `- Expected improvement: ${goal.expectedImprovement}`,
     '',
     '## Problem',
     '',
@@ -122,14 +126,18 @@ export const renderGoalMarkdown = (goal: Goal): string =>
     '',
     '## Acceptance criteria',
     '',
-    ...goal.acceptanceCriteria.map((criterion) => `- **${criterion.id}** ${criterionText(criterion)}`),
+    ...goal.acceptanceCriteria.map(
+      (criterion) => `- **${criterion.id}** ${criterionText(criterion)}`,
+    ),
     '',
     '## Validation',
     '',
     ...goal.validation.commands.map((entry) => `- \`${entry.command.join(' ')}\` ${entry.purpose}`),
     '',
     `Repetitions: ${goal.validation.repetitions}. Baseline runs: ${
-      goal.validation.baselineRunIds.length === 0 ? 'none recorded' : goal.validation.baselineRunIds.join(', ')
+      goal.validation.baselineRunIds.length === 0
+        ? 'none recorded'
+        : goal.validation.baselineRunIds.join(', ')
     }.`,
     '',
     '## Rollback',
@@ -141,7 +149,9 @@ export const renderGoalMarkdown = (goal: Goal): string =>
       : [
           '## Validation history',
           '',
-          ...goal.validationResults.map((entry) => `- ${entry.at}: ${entry.verdict} (${entry.comparisonId})`),
+          ...goal.validationResults.map(
+            (entry) => `- ${entry.at}: ${entry.verdict} (${entry.comparisonId})`,
+          ),
         ]),
   ]
     .filter((line) => line !== '')

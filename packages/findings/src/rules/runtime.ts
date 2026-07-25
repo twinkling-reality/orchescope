@@ -1,6 +1,13 @@
 import { CONFIDENCE_BANDS, derivedEvidence, metricEvidence } from '@orchescope/domain';
 import type { ComponentId, EvidenceId } from '@orchescope/schema';
-import { type FindingDraft, type Rule, clear, fired, insufficient, notApplicable } from '../rule.ts';
+import {
+  clear,
+  type FindingDraft,
+  fired,
+  insufficient,
+  notApplicable,
+  type Rule,
+} from '../rule.ts';
 
 /**
  * Rules that need observed runs.
@@ -69,7 +76,9 @@ export const sequentialIndependentCallsRule: Rule = {
       .edgesOfKind('calls_tool')
       .filter((edge) => edge.observation !== undefined && edge.observation.executionCount > 0);
     if (toolEdges.length < 2) {
-      return notApplicable('fewer than two observed tool relations, so ordering cannot be compared');
+      return notApplicable(
+        'fewer than two observed tool relations, so ordering cannot be compared',
+      );
     }
 
     const bySource = new Map<string, typeof toolEdges>();
@@ -97,7 +106,9 @@ export const sequentialIndependentCallsRule: Rule = {
         (total, edge) => total + (edge.observation?.totalDurationMs ?? 0),
         0,
       );
-      const slowest = Math.max(...neverParallel.map((edge) => edge.observation?.maxDurationMs ?? 0));
+      const slowest = Math.max(
+        ...neverParallel.map((edge) => edge.observation?.maxDurationMs ?? 0),
+      );
       const savingMs = Math.max(0, totalSequential - slowest);
       if (savingMs <= 0) continue;
 
@@ -127,7 +138,10 @@ export const sequentialIndependentCallsRule: Rule = {
             name: 'sequential_total_ms',
             value: Math.round(totalSequential),
             unit: 'ms',
-            sampleSize: neverParallel.reduce((total, edge) => total + (edge.observation?.executionCount ?? 0), 0),
+            sampleSize: neverParallel.reduce(
+              (total, edge) => total + (edge.observation?.executionCount ?? 0),
+              0,
+            ),
             basis: 'observed',
           },
           {
@@ -158,7 +172,12 @@ export const sequentialIndependentCallsRule: Rule = {
         tags: ['latency', 'parallelism'],
       });
     }
-    return fired(drafts, drafts.length === 0 ? 'no pair of independent tool calls ran strictly sequentially' : undefined);
+    return fired(
+      drafts,
+      drafts.length === 0
+        ? 'no pair of independent tool calls ran strictly sequentially'
+        : undefined,
+    );
   },
 };
 
@@ -218,11 +237,17 @@ export const latencyConcentrationRule: Rule = {
           },
         ],
         goalEligible: false,
-        goalReason: 'Where the time goes is a measurement. What to do about it depends on the component.',
+        goalReason:
+          'Where the time goes is a measurement. What to do about it depends on the component.',
         tags: ['latency'],
       });
     }
-    return fired(drafts, drafts.length === 0 ? 'no single component held more than 40 percent of self time' : undefined);
+    return fired(
+      drafts,
+      drafts.length === 0
+        ? 'no single component held more than 40 percent of self time'
+        : undefined,
+    );
   },
 };
 
@@ -279,14 +304,18 @@ export const tokenConcentrationRule: Rule = {
         tags: ['cost', 'tokens'],
       });
     }
-    return fired(drafts, drafts.length === 0 ? 'token usage was spread across components' : undefined);
+    return fired(
+      drafts,
+      drafts.length === 0 ? 'token usage was spread across components' : undefined,
+    );
   },
 };
 
 export const repeatedContextRule: Rule = {
   id: 'workers-receive-comparably-large-context',
   category: 'cost',
-  summary: 'Several workers receiving similarly large inputs, consistent with a shared full context.',
+  summary:
+    'Several workers receiving similarly large inputs, consistent with a shared full context.',
   evaluate: (context) => {
     if (context.runs.length === 0) return insufficient('no run has been ingested');
     const totals = aggregateByComponent(context);
@@ -307,14 +336,18 @@ export const repeatedContextRule: Rule = {
     const largest = Math.max(...perExecution.map((candidate) => candidate.tokensPerExecution));
     if (largest < 500) return clear('no agent received a large input per execution');
     const similar = perExecution.filter(
-      (candidate) => candidate.tokensPerExecution >= largest * 0.8 && candidate.tokensPerExecution >= 500,
+      (candidate) =>
+        candidate.tokensPerExecution >= largest * 0.8 && candidate.tokensPerExecution >= 500,
     );
-    if (similar.length < 2) return clear('agent input sizes differ, which is what a narrowed context looks like');
+    if (similar.length < 2)
+      return clear('agent input sizes differ, which is what a narrowed context looks like');
 
     const record = derivedEvidence({
       producer: PRODUCER,
       rule: 'workers-receive-comparably-large-context',
-      inputs: similar.flatMap((candidate) => candidate.component?.evidence.slice(0, 1) ?? []) as EvidenceId[],
+      inputs: similar.flatMap(
+        (candidate) => candidate.component?.evidence.slice(0, 1) ?? [],
+      ) as EvidenceId[],
       note: `${similar.length} agents each received between ${Math.round(largest * 0.8)} and ${Math.round(largest)} input tokens per execution`,
     });
 
@@ -328,12 +361,19 @@ export const repeatedContextRule: Rule = {
         basis: 'observed',
         title: `${similar.length} agents each receive a comparably large input`,
         explanation: `${similar
-          .map((candidate) => `${candidate.component?.displayName ?? candidate.entry.componentId} at ${Math.round(candidate.tokensPerExecution)} tokens`)
-          .join(', ')} per execution. Inputs of the same size arriving at several agents is what passing the full conversation to each one looks like. Orchescope cannot see the prompt content by default, since the conventions make content capture opt in, so this is a shape rather than a proof.`,
+          .map(
+            (candidate) =>
+              `${candidate.component?.displayName ?? candidate.entry.componentId} at ${Math.round(candidate.tokensPerExecution)} tokens`,
+          )
+          .join(
+            ', ',
+          )} per execution. Inputs of the same size arriving at several agents is what passing the full conversation to each one looks like. Orchescope cannot see the prompt content by default, since the conventions make content capture opt in, so this is a shape rather than a proof.`,
         impact: `Each agent pays for context it may not use. At ${Math.round(largest)} tokens per call, the redundant share is the largest single lever on cost here.`,
         components: similar.map((candidate) => candidate.entry.componentId),
         newEvidence: [record],
-        evidence: similar.flatMap((candidate) => candidate.component?.evidence.slice(0, 1) ?? []) as EvidenceId[],
+        evidence: similar.flatMap(
+          (candidate) => candidate.component?.evidence.slice(0, 1) ?? [],
+        ) as EvidenceId[],
         metrics: similar.map((candidate) => ({
           name: `input_tokens_per_execution:${candidate.entry.componentId}`,
           value: Math.round(candidate.tokensPerExecution),
@@ -357,7 +397,8 @@ export const repeatedContextRule: Rule = {
           expectedSignal: 'input tokens fall while task success is unchanged',
         },
         goalEligible: true,
-        goalReason: 'The change is bounded to the payload construction and is checked by a run comparison.',
+        goalReason:
+          'The change is bounded to the payload construction and is checked by a run comparison.',
         tags: ['cost', 'context'],
       },
     ]);
@@ -373,7 +414,8 @@ export const unreliableRelationRule: Rule = {
     const drafts: FindingDraft[] = [];
     for (const edge of context.graph.graph.edges) {
       const observation = edge.observation;
-      if (observation === undefined || observation.executionCount < MIN_EXECUTIONS_FOR_ERROR_RATE) continue;
+      if (observation === undefined || observation.executionCount < MIN_EXECUTIONS_FOR_ERROR_RATE)
+        continue;
       const rate = observation.errorCount / observation.executionCount;
       if (rate < ERROR_RATE_THRESHOLD) continue;
       const target = context.graph.component(edge.to);
@@ -387,7 +429,8 @@ export const unreliableRelationRule: Rule = {
         basis: 'observed',
         title: `${source?.displayName ?? edge.from} to ${target?.displayName ?? edge.to} failed ${observation.errorCount} of ${observation.executionCount} times`,
         explanation: `The observed error rate on this relation is ${Math.round(rate * 100)} percent over ${observation.executionCount} executions, with ${observation.retryCount} retries recorded.`,
-        impact: 'A relation that fails this often shapes both the latency distribution and the cost.',
+        impact:
+          'A relation that fails this often shapes both the latency distribution and the cost.',
         components: [edge.from, edge.to],
         edges: [edge.id],
         evidence: edge.evidence.slice(0, 3) as EvidenceId[],
@@ -405,7 +448,12 @@ export const unreliableRelationRule: Rule = {
         tags: ['errors'],
       });
     }
-    return fired(drafts, drafts.length === 0 ? 'no relation exceeded a 20 percent error rate with at least five executions' : undefined);
+    return fired(
+      drafts,
+      drafts.length === 0
+        ? 'no relation exceeded a 20 percent error rate with at least five executions'
+        : undefined,
+    );
   },
 };
 
@@ -434,7 +482,10 @@ export const observabilityCoverageRule: Rule = {
             .flatMap((component) => component.evidence.slice(0, 1)) as EvidenceId[],
           recommendation: {
             summary: 'Record one run with orchescope trace.',
-            steps: ['Run: orchescope trace -- <the command that starts your system>', 'Rerun the audit.'],
+            steps: [
+              'Run: orchescope trace -- <the command that starts your system>',
+              'Rerun the audit.',
+            ],
             effort: 'small',
             risk: 'low',
           },

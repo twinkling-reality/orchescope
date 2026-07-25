@@ -3,8 +3,8 @@ import {
   capSeverity,
   compareSeverity,
   dedupeEvidence,
-  findingId as makeFindingId,
   findingViolations,
+  findingId as makeFindingId,
 } from '@orchescope/domain';
 import type { IndexedGraph } from '@orchescope/graph';
 import type {
@@ -15,9 +15,9 @@ import type {
   FindingSet,
   Timestamp,
 } from '@orchescope/schema';
-import { type FindingDraft, type Rule, type RuleContext, type RuleStatus } from './rule.ts';
-import { RECONCILIATION_RULES } from './rules/reconciliation.ts';
+import type { FindingDraft, Rule, RuleContext, RuleStatus } from './rule.ts';
 import { EXPERIMENT_RULES } from './rules/experiments.ts';
+import { RECONCILIATION_RULES } from './rules/reconciliation.ts';
 import { RUNTIME_RULES } from './rules/runtime.ts';
 import { STATIC_RULES } from './rules/static-policy.ts';
 
@@ -61,11 +61,23 @@ export type EvaluateInput = {
   readonly rules?: readonly Rule[];
 };
 
-export const evaluateRules = (input: EvaluateInput): EngineResult => {
-  const rules = input.rules ?? DEFAULT_RULES;
-  const context: RuleContext = { ...input.context, graph: input.graph };
+type EvaluatedRule = {
+  ruleId: string;
+  category: FindingCategory;
+  status: RuleStatus;
+  detail?: string;
+};
 
-  const evaluated: { ruleId: string; category: FindingCategory; status: RuleStatus; detail?: string }[] = [];
+/** Runs every rule and collects what each one produced, including the ones that produced nothing. */
+const collectDrafts = (
+  rules: readonly Rule[],
+  context: RuleContext,
+): {
+  readonly evaluated: EvaluatedRule[];
+  readonly drafts: FindingDraft[];
+  readonly newEvidence: Evidence[];
+} => {
+  const evaluated: EvaluatedRule[] = [];
   const drafts: FindingDraft[] = [];
   const newEvidence: Evidence[] = [];
 
@@ -82,18 +94,70 @@ export const evaluateRules = (input: EvaluateInput): EngineResult => {
       newEvidence.push(...(draft.newEvidence ?? []));
     }
   }
+  return { evaluated, drafts, newEvidence };
+};
 
-  drafts.sort(draftOrder);
+/**
+ * One draft becomes one finding.
+ *
+ * Severity is capped by what the basis and the confidence can support, so a rule cannot report a critical risk from an
+ * inference. A strength is always informational: a good design is not a severity.
+ */
+const toFinding = (
+  draft: FindingDraft,
+  input: EvaluateInput,
+  sequence: number,
+  componentIds: ReadonlySet<string>,
+  evidenceIds: readonly EvidenceId[],
+): Finding => {
+  const capped = capSeverity(draft.severity, draft.basis, draft.confidence);
+  return {
+    id: makeFindingId(draft.category, sequence),
+    ruleId: draft.ruleId,
+    category: draft.category,
+    polarity: draft.polarity,
+    severity: draft.polarity === 'strength' ? 'info' : capped.severity,
+    confidence: draft.confidence,
+    basis: draft.basis,
+    title: draft.title,
+    explanation: draft.explanation,
+    impact: draft.impact,
+    components: draft.components.filter((id) => componentIds.has(id)),
+    edges: [...(draft.edges ?? [])],
+    sourceLocations: draft.components
+      .map((id) => input.graph.component(id))
+      .flatMap((component) => component?.sourceLocations.slice(0, 2) ?? []),
+    evidence: [...evidenceIds],
+    metrics: [...(draft.metrics ?? [])],
+    ...(draft.recommendation === undefined ? {} : { recommendation: draft.recommendation }),
+    ...(draft.suggestedExperiment === undefined
+      ? {}
+      : { suggestedExperiment: draft.suggestedExperiment }),
+    goalReadiness: {
+      eligible: draft.goalEligible,
+      reason: draft.goalReason,
+      requiresRuntimeEvidence: draft.requiresRuntimeEvidence ?? false,
+      requiresHumanReview: draft.requiresHumanReview ?? false,
+    },
+    taxonomy: [...(draft.taxonomy ?? [])],
+    conflictsWith: [],
+    tags: [...(draft.tags ?? []), ...(capped.capReason === undefined ? [] : ['severity-capped'])],
+    createdAt: input.generatedAt,
+    metadata: capped.capReason === undefined ? {} : { severityCapReason: capped.capReason },
+  };
+};
+
+export const evaluateRules = (input: EvaluateInput): EngineResult => {
+  const context: RuleContext = { ...input.context, graph: input.graph };
+  const collected = collectDrafts(input.rules ?? DEFAULT_RULES, context);
+  const evaluated = collected.evaluated;
+  const drafts = [...collected.drafts].sort(draftOrder);
 
   const sequences = new Map<FindingCategory, number>();
   const componentIds = new Set(input.graph.graph.components.map((component) => component.id));
   const findings: Finding[] = [];
 
   for (const draft of drafts) {
-    const sequence = (sequences.get(draft.category) ?? 0) + 1;
-    sequences.set(draft.category, sequence);
-    const capped = capSeverity(draft.severity, draft.basis, draft.confidence);
-    const severity = draft.polarity === 'strength' ? 'info' : capped.severity;
     const evidenceIds = [
       ...new Set([...(draft.newEvidence ?? []).map((record) => record.id), ...draft.evidence]),
     ] as EvidenceId[];
@@ -109,43 +173,9 @@ export const evaluateRules = (input: EvaluateInput): EngineResult => {
       continue;
     }
 
-    findings.push({
-      id: makeFindingId(draft.category, sequence),
-      ruleId: draft.ruleId,
-      category: draft.category,
-      polarity: draft.polarity,
-      severity,
-      confidence: draft.confidence,
-      basis: draft.basis,
-      title: draft.title,
-      explanation: draft.explanation,
-      impact: draft.impact,
-      components: draft.components.filter((id) => componentIds.has(id)),
-      edges: [...(draft.edges ?? [])],
-      sourceLocations: draft.components
-        .map((id) => input.graph.component(id))
-        .flatMap((component) => component?.sourceLocations.slice(0, 2) ?? []),
-      evidence: evidenceIds,
-      metrics: [...(draft.metrics ?? [])],
-      ...(draft.recommendation === undefined ? {} : { recommendation: draft.recommendation }),
-      ...(draft.suggestedExperiment === undefined
-        ? {}
-        : { suggestedExperiment: draft.suggestedExperiment }),
-      goalReadiness: {
-        eligible: draft.goalEligible,
-        reason: draft.goalReason,
-        requiresRuntimeEvidence: draft.requiresRuntimeEvidence ?? false,
-        requiresHumanReview: draft.requiresHumanReview ?? false,
-      },
-      taxonomy: [...(draft.taxonomy ?? [])],
-      conflictsWith: [],
-      tags: [
-        ...(draft.tags ?? []),
-        ...(capped.capReason === undefined ? [] : [`severity-capped`]),
-      ],
-      createdAt: input.generatedAt,
-      metadata: capped.capReason === undefined ? {} : { severityCapReason: capped.capReason },
-    });
+    const sequence = (sequences.get(draft.category) ?? 0) + 1;
+    sequences.set(draft.category, sequence);
+    findings.push(toFinding(draft, input, sequence, componentIds, evidenceIds));
   }
 
   findings.sort((left, right) => {
@@ -168,6 +198,6 @@ export const evaluateRules = (input: EvaluateInput): EngineResult => {
       findings,
       rulesEvaluated: evaluated,
     },
-    evidence: dedupeEvidence(newEvidence),
+    evidence: dedupeEvidence(collected.newEvidence),
   };
 };

@@ -1,4 +1,4 @@
-import { OrchescopeError, goalId as makeGoalId } from '@orchescope/domain';
+import { goalId as makeGoalId, OrchescopeError } from '@orchescope/domain';
 import type {
   AcceptanceCriterion,
   Component,
@@ -35,7 +35,9 @@ export type CreateGoalInput = {
   readonly repetitions: number;
 };
 
-const RELATIVE_IMPROVEMENT_BY_RULE: Readonly<Record<string, { metric: string; threshold: number }>> = {
+const RELATIVE_IMPROVEMENT_BY_RULE: Readonly<
+  Record<string, { metric: string; threshold: number }>
+> = {
   'independent-calls-run-sequentially': { metric: 'durationMs.p95', threshold: 0.15 },
   'workers-receive-comparably-large-context': { metric: 'inputTokens', threshold: 0.2 },
   'agent-count-does-not-pay-for-itself': { metric: 'durationMs.p50', threshold: 0.1 },
@@ -126,7 +128,14 @@ const validationPlanFor = (input: CreateGoalInput): ValidationPlan => {
   for (const scenarioId of input.validationScenarioIds) {
     commands.push({
       purpose: `rerun the scenario that produced the evidence for ${input.finding.id}`,
-      command: ['orchescope', 'test', '--scenario', scenarioId, '--repetitions', String(input.repetitions)],
+      command: [
+        'orchescope',
+        'test',
+        '--scenario',
+        scenarioId,
+        '--repetitions',
+        String(input.repetitions),
+      ],
     });
   }
   if (input.baselineRunIds.length > 0) {
@@ -233,7 +242,10 @@ export const createGoal = (input: CreateGoalInput): Goal => {
     affectedComponents: [...input.finding.components],
     sourceLocations: [...input.finding.sourceLocations],
     scope: scopeFor(input),
-    risk: input.finding.recommendation?.risk === 'unknown' ? 'medium' : (input.finding.recommendation?.risk ?? 'medium'),
+    risk:
+      input.finding.recommendation?.risk === 'unknown'
+        ? 'medium'
+        : (input.finding.recommendation?.risk ?? 'medium'),
     acceptanceCriteria: [...acceptanceCriteriaFor(input.finding, input.validationScenarioIds)],
     validation: validationPlanFor(input),
     ...(improvement === undefined

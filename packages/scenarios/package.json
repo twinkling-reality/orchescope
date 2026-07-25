@@ -1,0 +1,21 @@
+{
+  "name": "@orchescope/scenarios",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Scenario parsing, loading, environment mapping, deterministic evaluation and repeated execution.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@orchescope/domain": "workspace:*",
+    "@orchescope/runtime": "workspace:*",
+    "@orchescope/schema": "workspace:*",
+    "@orchescope/traces": "workspace:*",
+    "yaml": "2.8.1"
+  },
+  "devDependencies": {
+    "@orchescope/testkit": "workspace:*"
+  }
+}
