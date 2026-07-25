@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { OrchescopeError, type Deadline } from '@orchescope/domain';
+import { type Deadline, OrchescopeError } from '@orchescope/domain';
 
 /**
  * Supervised process execution.
@@ -159,10 +159,14 @@ export const runProcess = async (request: ProcessRequest): Promise<ProcessOutcom
   request.deadline.signal.removeEventListener('abort', onParentAbort);
 
   if (spawnError !== undefined) {
-    throw new OrchescopeError('TARGET_FAILED', `The target could not be started: ${spawnError.message}`, {
-      cause: spawnError,
-      detail: { executable },
-    });
+    throw new OrchescopeError(
+      'TARGET_FAILED',
+      `The target could not be started: ${spawnError.message}`,
+      {
+        cause: spawnError,
+        detail: { executable },
+      },
+    );
   }
 
   return {

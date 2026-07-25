@@ -2,13 +2,13 @@ import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Clock, Deadline } from '@orchescope/domain';
+import type { FaultPlan, TargetResult, TraceBundle } from '@orchescope/schema';
 import {
+  formatIssues,
   TARGET_ENV,
   TargetResult as TargetResultSchema,
-  formatIssues,
   validate,
 } from '@orchescope/schema';
-import type { FaultPlan, TargetResult, TraceBundle } from '@orchescope/schema';
 import { type ProcessOutcome, runProcess } from './process.ts';
 import { type ReceiverHandle, startReceiver } from './receiver.ts';
 

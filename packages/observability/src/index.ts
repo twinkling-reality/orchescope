@@ -3,20 +3,20 @@
  */
 
 export {
-  type LogFields,
-  type LogLevel,
-  type LogRecord,
-  type Logger,
-  type LoggerOptions,
   collectingSink,
   createLogger,
+  type LogFields,
+  type Logger,
+  type LoggerOptions,
+  type LogLevel,
+  type LogRecord,
 } from './logger.ts';
 export {
+  collectingProgress,
+  createProgressReporter,
   type PhaseName,
   type ProgressEvent,
   type ProgressReporter,
   type ProgressSink,
-  collectingProgress,
-  createProgressReporter,
   silentProgress,
 } from './progress.ts';

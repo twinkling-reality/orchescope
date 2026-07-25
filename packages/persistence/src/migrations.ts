@@ -18,7 +18,8 @@ export type Migration = {
 export const MIGRATIONS: readonly Migration[] = [
   {
     version: 1,
-    description: 'initial schema for projects, scans, graphs, runs, spans, findings, goals and artifacts',
+    description:
+      'initial schema for projects, scans, graphs, runs, spans, findings, goals and artifacts',
     statements: [
       `CREATE TABLE project (
         id TEXT PRIMARY KEY,

@@ -11,15 +11,15 @@ export {
   startFaultProxy,
 } from './fault-proxy.ts';
 export {
+  commandIsAllowed,
   type ProcessOutcome,
   type ProcessRequest,
-  commandIsAllowed,
   runProcess,
 } from './process.ts';
 export { type ReceiverHandle, type ReceiverOptions, startReceiver } from './receiver.ts';
 export {
-  type TraceSessionRequest,
-  type TraceSessionResult,
   buildTargetEnv,
   runTracedSession,
+  type TraceSessionRequest,
+  type TraceSessionResult,
 } from './session.ts';

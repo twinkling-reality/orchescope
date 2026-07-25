@@ -98,7 +98,10 @@ export type BudgetUsage = {
 
 export const budgetDecision = (policy: PolicyConfig, usage: BudgetUsage): Decision => {
   if (usage.runs > policy.maxTotalRuns) {
-    return deny(`the run count ${usage.runs} exceeds the ceiling of ${policy.maxTotalRuns}`, 'policy.maxTotalRuns');
+    return deny(
+      `the run count ${usage.runs} exceeds the ceiling of ${policy.maxTotalRuns}`,
+      'policy.maxTotalRuns',
+    );
   }
   if (usage.costUsd > policy.maxCostUsd) {
     return deny(
@@ -138,7 +141,10 @@ export const semanticAnalysisDecision = (
     return deny('no model provider is configured', 'semanticAnalysis.provider');
   }
   if (!policy.allowOutboundNetwork) {
-    return deny('model based analysis needs outbound network access', 'policy.allowOutboundNetwork');
+    return deny(
+      'model based analysis needs outbound network access',
+      'policy.allowOutboundNetwork',
+    );
   }
   if (!policy.allowPaidModels) {
     return deny('model based analysis may incur cost', 'policy.allowPaidModels');
@@ -156,7 +162,10 @@ export const semanticAnalysisDecision = (
 };
 
 /** Actions that change something outside the store, and the setting that grants each one. */
-export const writeActionDecision = (policy: PolicyConfig, action: 'open_browser' | 'write_file' | 'git_worktree'): Decision => {
+export const writeActionDecision = (
+  policy: PolicyConfig,
+  action: 'open_browser' | 'write_file' | 'git_worktree',
+): Decision => {
   if (action === 'open_browser') return allow();
   return policy.allowFilesystemWrites
     ? allow()

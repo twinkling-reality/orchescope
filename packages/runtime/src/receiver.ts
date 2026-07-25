@@ -1,13 +1,13 @@
-import { createServer } from 'node:http';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
+import { createServer } from 'node:http';
 import { gunzipSync } from 'node:zlib';
 import { OrchescopeError } from '@orchescope/domain';
 import type { TraceBundle } from '@orchescope/schema';
 import {
-  type NormalizeOptions,
   decodeTraceJson,
   decodeTraceProtobuf,
   mergeBundles,
+  type NormalizeOptions,
   normalizeTraces,
 } from '@orchescope/traces';
 
@@ -120,14 +120,20 @@ export const startReceiver = async (options: ReceiverOptions): Promise<ReceiverH
           normalizeTraces(decodeTraceProtobuf(new Uint8Array(body.bytes)), normalizeOptions).bundle,
         );
       } else {
-        respond(response, 415, JSON.stringify({ error: `unsupported content type ${contentType}` }));
+        respond(
+          response,
+          415,
+          JSON.stringify({ error: `unsupported content type ${contentType}` }),
+        );
         return;
       }
     } catch (error) {
       respond(
         response,
         400,
-        JSON.stringify({ error: error instanceof Error ? error.message : 'body could not be decoded' }),
+        JSON.stringify({
+          error: error instanceof Error ? error.message : 'body could not be decoded',
+        }),
       );
       return;
     }

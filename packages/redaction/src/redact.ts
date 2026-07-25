@@ -21,12 +21,16 @@ export type RedactionRule = {
 /**
  * Patterns are anchored on documented credential prefixes where one exists, because a prefix match is precise,
  * and fall back to high entropy shapes only where a prefix does not exist.
+ *
+ * Several prefixes nest inside others, and the first rule to match decides the label a reader sees. Rather than rely
+ * on the order of this list, each pattern that has a longer sibling excludes it, so a key is named correctly however
+ * the rules are arranged.
  */
 export const DEFAULT_RULES: readonly RedactionRule[] = [
   {
     id: 'openai-key',
     description: 'OpenAI style API key',
-    pattern: /\bsk-[A-Za-z0-9_-]{16,}\b/g,
+    pattern: /\bsk-(?!ant-)(?!live_)(?!test_)[A-Za-z0-9_-]{16,}\b/g,
     label: 'openai-api-key',
   },
   {
@@ -68,7 +72,8 @@ export const DEFAULT_RULES: readonly RedactionRule[] = [
   {
     id: 'private-key-block',
     description: 'PEM private key block',
-    pattern: /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/g,
+    pattern:
+      /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/g,
     label: 'private-key',
   },
   {

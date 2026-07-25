@@ -9,7 +9,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@orchescope/domain": "workspace:*",
     "@orchescope/redaction": "workspace:*"
   }
 }

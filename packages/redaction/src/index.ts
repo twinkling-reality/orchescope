@@ -4,11 +4,11 @@
  */
 
 export {
+  createRedactor,
   DEFAULT_RULES,
   DEFAULT_SENSITIVE_FRAGMENTS,
   type RedactionRule,
   type Redactor,
   type RedactorOptions,
-  createRedactor,
   redactDeep,
 } from './redact.ts';

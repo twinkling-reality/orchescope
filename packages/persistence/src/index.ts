@@ -5,14 +5,14 @@
 
 export { type ArtifactStore, createArtifactStore } from './artifacts.ts';
 export {
-  type Database,
-  type Row,
-  type SqlValue,
   asBoolean,
   asInteger,
   asNullable,
+  type Database,
   integrityCheck,
   openDatabase,
+  type Row,
+  type SqlValue,
 } from './database.ts';
-export { LATEST_SCHEMA_VERSION, type Migration, MIGRATIONS } from './migrations.ts';
-export { type RunSummary, type ScanSummary, type Store, createStore } from './store.ts';
+export { LATEST_SCHEMA_VERSION, MIGRATIONS, type Migration } from './migrations.ts';
+export { createStore, type RunSummary, type ScanSummary, type Store } from './store.ts';

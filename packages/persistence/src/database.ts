@@ -42,7 +42,9 @@ const compareVersion = (version: string): number => {
 };
 
 const readUserVersion = (database: DatabaseSync): number => {
-  const row = database.prepare('PRAGMA user_version').get() as { user_version?: number } | undefined;
+  const row = database.prepare('PRAGMA user_version').get() as
+    | { user_version?: number }
+    | undefined;
   return typeof row?.user_version === 'number' ? row.user_version : 0;
 };
 
@@ -84,28 +86,42 @@ export const openDatabase = (path: string): Database => {
   } catch (error) {
     throw new OrchescopeError('STORE_CORRUPT', `The store at ${path} could not be opened.`, {
       cause: error,
-      remediation: 'Check the file permissions, or remove .orchescope/state to start a fresh store.',
+      remediation:
+        'Check the file permissions, or remove .orchescope/state to start a fresh store.',
     });
   }
 
-  const versionRow = handle.prepare('SELECT sqlite_version() AS version').get() as
-    | { version?: string }
-    | undefined;
-  const sqliteVersion = versionRow?.version ?? '0.0.0';
-  if (compareVersion(sqliteVersion) < 0) {
+  // Opening a handle does not read the file. A file that is not a database, or one that has been truncated, fails on
+  // the first statement instead, so every step up to the migration is classified together rather than reaching the
+  // caller as an unclassified driver error.
+  let sqliteVersion: string;
+  let schemaVersion: number;
+  try {
+    const versionRow = handle.prepare('SELECT sqlite_version() AS version').get() as
+      | { version?: string }
+      | undefined;
+    sqliteVersion = versionRow?.version ?? '0.0.0';
+    if (compareVersion(sqliteVersion) < 0) {
+      throw new OrchescopeError(
+        'UNSUPPORTED_PLATFORM',
+        `This Node build bundles SQLite ${sqliteVersion} and Orchescope needs ${REQUIRED_SQLITE_VERSION.join('.')} or newer.`,
+        { remediation: 'Upgrade Node.js to a build with a newer bundled SQLite.' },
+      );
+    }
+    handle.exec('PRAGMA journal_mode = WAL');
+    handle.exec('PRAGMA synchronous = NORMAL');
+    handle.exec('PRAGMA busy_timeout = 5000');
+    handle.exec('PRAGMA foreign_keys = ON');
+    schemaVersion = migrate(handle);
+  } catch (error) {
     handle.close();
-    throw new OrchescopeError(
-      'UNSUPPORTED_PLATFORM',
-      `This Node build bundles SQLite ${sqliteVersion} and Orchescope needs ${REQUIRED_SQLITE_VERSION.join('.')} or newer.`,
-      { remediation: 'Upgrade Node.js to a build with a newer bundled SQLite.' },
-    );
+    if (error instanceof OrchescopeError) throw error;
+    throw new OrchescopeError('STORE_CORRUPT', `The store at ${path} could not be read.`, {
+      cause: error,
+      remediation:
+        'Remove .orchescope/state to start a fresh store, keeping any exports you still need.',
+    });
   }
-
-  handle.exec('PRAGMA journal_mode = WAL');
-  handle.exec('PRAGMA synchronous = NORMAL');
-  handle.exec('PRAGMA busy_timeout = 5000');
-  handle.exec('PRAGMA foreign_keys = ON');
-  const schemaVersion = migrate(handle);
 
   let depth = 0;
 
@@ -139,7 +155,9 @@ export const openDatabase = (path: string): Database => {
   };
 };
 
-export const integrityCheck = (database: Database): { readonly ok: boolean; readonly detail: string } => {
+export const integrityCheck = (
+  database: Database,
+): { readonly ok: boolean; readonly detail: string } => {
   const row = database.get('PRAGMA integrity_check');
   const value = row === undefined ? undefined : Object.values(row)[0];
   const detail = typeof value === 'string' ? value : 'unknown';

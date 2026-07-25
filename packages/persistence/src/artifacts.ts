@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { OrchescopeError, canonicalJson, sha256Hex } from '@orchescope/domain';
+import { canonicalJson, OrchescopeError, sha256Hex } from '@orchescope/domain';
 import type { Database } from './database.ts';
 
 /**
@@ -30,9 +30,13 @@ const DIGEST_PATTERN = /^[0-9a-f]{64}$/;
 
 const assertDigest = (digest: string): void => {
   if (!DIGEST_PATTERN.test(digest)) {
-    throw new OrchescopeError('ARTIFACT_INVALID', 'An artifact digest must be 64 lowercase hex characters.', {
-      detail: { digest: digest.slice(0, 80) },
-    });
+    throw new OrchescopeError(
+      'ARTIFACT_INVALID',
+      'An artifact digest must be 64 lowercase hex characters.',
+      {
+        detail: { digest: digest.slice(0, 80) },
+      },
+    );
   }
 };
 
@@ -74,11 +78,15 @@ export const createArtifactStore = (
     try {
       return readFileSync(target, 'utf8');
     } catch (error) {
-      throw new OrchescopeError('ARTIFACT_MISSING', `Artifact ${digest.slice(0, 12)} is not in the store.`, {
-        cause: error,
-        detail: { digest },
-        remediation: 'Rerun the command that produced it, or import the artifact again.',
-      });
+      throw new OrchescopeError(
+        'ARTIFACT_MISSING',
+        `Artifact ${digest.slice(0, 12)} is not in the store.`,
+        {
+          cause: error,
+          detail: { digest },
+          remediation: 'Rerun the command that produced it, or import the artifact again.',
+        },
+      );
     }
   };
 
