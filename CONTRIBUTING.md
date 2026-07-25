@@ -35,6 +35,7 @@ pnpm test:ui
 | `pnpm test:ui` | The browser workspace, in Chromium, against a real served report |
 | `pnpm test:coverage` | Coverage, for looking at rather than for a threshold |
 | `pnpm orchescope <args>` | Run the CLI from source |
+| `pnpm --silent orchescope <args>` | The same, with pnpm's own banner off, which is what `--json` capture needs |
 | `pnpm demo` | Run the demonstration agent system |
 | `pnpm build` | Bundle the publishable artifact |
 | `pnpm package` | Pack a tarball, checksum it, install it and audit a project with it |
@@ -51,8 +52,8 @@ evidence. A new adapter needs a fixture repository and a test asserting the comp
 is what makes the support claim in the README true. A bug fix needs the test that reproduces the bug.
 
 **Evidence in the pull request.** State what you ran and what it printed. For anything touching discovery, run
-`pnpm orchescope --cwd apps/demo audit --json` and read the coverage block, not just the exit code. For anything touching
-the report, run `pnpm build:web` and look at the page.
+`pnpm --silent orchescope --cwd apps/demo audit --json` and read the coverage block, not just the exit code. For anything
+touching the report, run `pnpm build:web` and look at the page.
 
 **Honesty about what you did not do.** A pull request that says "tests pass" when `test:ui` was not run is worse than one
 that says the browser tests were not run.

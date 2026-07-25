@@ -33,6 +33,9 @@ pnpm demo                    # run the bundled demonstration agent system
 
 `pnpm verify` runs `check`, `test` and `test:e2e`. That is the gate a change has to pass.
 
+Capturing `--json` from source needs `pnpm --silent orchescope <args>`: pnpm writes its own banner to standard output,
+and without `--silent` the captured document is not parseable. An installed `orchescope` binary needs nothing extra.
+
 ## Architecture boundaries
 
 Dependencies point inward. `pnpm deps` fails the build when they do not.
@@ -111,7 +114,7 @@ Rules the tooling enforces:
 ## Validation before you claim a change works
 
 1. `pnpm verify` from a clean checkout.
-2. For anything touching discovery: run `pnpm orchescope audit --json` against `apps/demo` and read the coverage
+2. For anything touching discovery: run `pnpm --silent orchescope --cwd apps/demo audit --json` and read the coverage
    block, not just the exit code.
 3. For anything touching runtime: `pnpm orchescope trace -- node apps/demo/src/main.ts` and confirm spans arrived.
 4. For anything touching the report: `pnpm build:web` then `pnpm orchescope audit --serve` and look at the page.
