@@ -21,6 +21,38 @@ orchescope trace --label "nightly" --timeout 120000 -- npm run agent
 The command must be on `policy.allowedCommands`. That list is what bounds what Orchescope will execute, so a command not on
 it is refused with the setting named rather than run.
 
+## What Orchescope sets, and what your process has to do with it
+
+These are set for the target process, and nothing else is required of it:
+
+| Variable | Value |
+| --- | --- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | the receiver, on `127.0.0.1` on a port the operating system chose |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | the same address with `/v1/traces` |
+| `OTEL_TRACES_EXPORTER` | `otlp` |
+| `OTEL_METRICS_EXPORTER`, `OTEL_LOGS_EXPORTER` | `none`, because only traces are read |
+| `OTEL_SERVICE_NAME` | the project name, unless the environment already sets one |
+| `OTEL_BSP_SCHEDULE_DELAY` | `200`, so a short run still flushes |
+| `ORCHESCOPE_OTLP_ENDPOINT`, `ORCHESCOPE_RUN_ID`, `ORCHESCOPE_RESULT_FILE` | for a target that wants to report a result without tracing |
+
+Your process needs an OpenTelemetry SDK loaded, exporting over **HTTP rather than gRPC**. The two ecosystems Orchescope
+analyses load one like this, and both read the variables above without any Orchescope specific code:
+
+```
+# Node, with the OpenTelemetry auto instrumentation packages installed in your project
+orchescope trace -- node --import @opentelemetry/auto-instrumentations-node/register src/main.js
+
+# Python, with the opentelemetry distro and its instrumentation installed
+orchescope trace -- opentelemetry-instrument python -m app
+```
+
+Those two loaders and their packages are OpenTelemetry's, not Orchescope's, and their names are their own. What Orchescope
+guarantees is the receiver and the variables in the table.
+
+When a run collects nothing, the command line says so and names the three causes worth checking: no SDK was loaded, the SDK
+exported over gRPC, or the process exited before flushing. `OTEL_BSP_SCHEDULE_DELAY` and `runtime.exportDrainMs` are what
+make the last case unlikely, but a process that calls `process.exit` in a callback can still beat the flush.
+
 ## What the audit does with the spans
 
 ```

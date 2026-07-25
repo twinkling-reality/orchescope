@@ -19,6 +19,7 @@ export {
 export { type ReceiverHandle, type ReceiverOptions, startReceiver } from './receiver.ts';
 export {
   buildTargetEnv,
+  OTEL_EXPORT_VARIABLES,
   runTracedSession,
   type TraceSessionRequest,
   type TraceSessionResult,

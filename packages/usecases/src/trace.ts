@@ -6,7 +6,11 @@ import {
   OrchescopeError,
 } from '@orchescope/domain';
 import { assertAllowed, commandDecision } from '@orchescope/policy';
-import { runTracedSession, type TraceSessionResult } from '@orchescope/runtime';
+import {
+  OTEL_EXPORT_VARIABLES,
+  runTracedSession,
+  type TraceSessionResult,
+} from '@orchescope/runtime';
 import type { RunEnvironment, RunRecord, Timestamp } from '@orchescope/schema';
 import {
   type DecodedTraceRequest,
@@ -43,6 +47,11 @@ export type TraceResult = {
   readonly receiverUrl: string;
   readonly targetResultProblem: string | undefined;
   readonly environment: RunEnvironment;
+  /**
+   * The OpenTelemetry variables that were set for the target. Reported so that a run which collected nothing can
+   * name what the exporter was expected to honour, rather than leaving the reader to guess.
+   */
+  readonly otlpVariables: readonly string[];
 };
 
 /**
@@ -208,6 +217,7 @@ export const runTrace = async (request: TraceRequest): Promise<TraceResult> => {
       receiverUrl: session.receiverUrl,
       targetResultProblem: session.targetResultProblem,
       environment,
+      otlpVariables: [...OTEL_EXPORT_VARIABLES],
     };
   } finally {
     handle?.dispose();
@@ -301,6 +311,8 @@ export const importTrace = (request: ImportTraceRequest): TraceResult => {
     receiverUrl: 'imported',
     targetResultProblem: undefined,
     environment,
+    // An import sets no environment for anything: the spans already existed.
+    otlpVariables: [],
   };
 };
 

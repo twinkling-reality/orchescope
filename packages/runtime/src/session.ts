@@ -59,6 +59,16 @@ export type TraceSessionResult = {
  * exports to the local receiver with no code change, and the Orchescope variables are set so that a target
  * with no tracing at all can still report a result.
  */
+/**
+ * The OpenTelemetry variables set for the target, named once so that a command line can tell a reader which
+ * variables their exporter was expected to honour rather than restating a list that could drift.
+ */
+export const OTEL_EXPORT_VARIABLES = [
+  'OTEL_EXPORTER_OTLP_ENDPOINT',
+  'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT',
+  'OTEL_TRACES_EXPORTER',
+] as const;
+
 export const buildTargetEnv = (input: {
   readonly baseEnv: Readonly<Record<string, string | undefined>>;
   readonly endpoint: string;
@@ -72,9 +82,9 @@ export const buildTargetEnv = (input: {
   for (const [key, value] of Object.entries(input.baseEnv)) {
     if (value !== undefined) env[key] = value;
   }
-  env['OTEL_EXPORTER_OTLP_ENDPOINT'] = input.endpoint;
-  env['OTEL_EXPORTER_OTLP_TRACES_ENDPOINT'] = `${input.endpoint}/v1/traces`;
-  env['OTEL_TRACES_EXPORTER'] = 'otlp';
+  env[OTEL_EXPORT_VARIABLES[0]] = input.endpoint;
+  env[OTEL_EXPORT_VARIABLES[1]] = `${input.endpoint}/v1/traces`;
+  env[OTEL_EXPORT_VARIABLES[2]] = 'otlp';
   env['OTEL_METRICS_EXPORTER'] = 'none';
   env['OTEL_LOGS_EXPORTER'] = 'none';
   env['OTEL_SERVICE_NAME'] = env['OTEL_SERVICE_NAME'] ?? input.serviceName;

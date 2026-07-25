@@ -13,7 +13,7 @@ import {
 } from '@orchescope/usecases';
 import type { CommandContext } from '../context.ts';
 import { EXIT_CODES } from '../exit.ts';
-import { comparisonSummary, scenarioSummary } from '../terminal/summary.ts';
+import { comparisonSummary, noSpansLines, scenarioSummary } from '../terminal/summary.ts';
 
 /**
  * Commands that execute the audited system: trace, test, benchmark, chaos and compare.
@@ -37,6 +37,8 @@ const writeTraceResult = (context: CommandContext, result: TraceResult): number 
           metrics: result.run.metrics,
           exitCode: result.exitCode,
           targetResultProblem: result.targetResultProblem,
+          receiverUrl: result.receiverUrl,
+          otlpVariables: result.otlpVariables,
         },
       })}\n`,
     );
@@ -46,19 +48,16 @@ const writeTraceResult = (context: CommandContext, result: TraceResult): number 
       `  ${result.spanCount} span(s) from ${result.serviceNames.length || 0} service(s), status ${result.run.status}\n`,
     );
     if (result.spanCount === 0) {
-      context.stdout(
-        `${context.style.warn('!')} no spans arrived. The target may not be instrumented, or it may not honour OTEL_EXPORTER_OTLP_ENDPOINT.\n`,
-      );
-      context.stdout(
-        context.style.dim(
-          `  Orchescope listened on ${result.receiverUrl} and accepts OTLP over HTTP in protobuf or JSON.\n`,
-        ),
-      );
+      context.stdout(`${noSpansLines(context.style, result)}\n`);
     }
     if (result.targetResultProblem !== undefined) {
       context.stdout(`${context.style.warn('!')} ${result.targetResultProblem}\n`);
     }
-    context.stdout(context.style.dim('next: orchescope audit --open\n'));
+    context.stdout(
+      context.style.dim(
+        `next: ${result.spanCount === 0 ? 'instrument the target, or declare it in .orchescope/manifest.yaml, then run orchescope audit' : 'orchescope audit --open'}\n`,
+      ),
+    );
   }
   return result.run.status === 'completed' ? EXIT_CODES.success : EXIT_CODES.target;
 };
