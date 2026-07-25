@@ -83,6 +83,7 @@ const unsupportedAreas = (
     if (fileCount === 0) continue;
     areas.push({
       area: `${language} source files (${fileCount})`,
+      kind: 'language_not_analysed',
       reason: 'Orchescope analyses JavaScript, TypeScript and Python source in this release.',
       remediation:
         'Declare the components in .orchescope/manifest.yaml so they appear in the graph.',
@@ -128,6 +129,7 @@ const adapterBlindSpots = (
     if (used.length === 0) continue;
     areas.push({
       area: `${used.join(', ')} used in source, read by ${adapter.id}`,
+      kind: 'adapter_blind_spot',
       reason:
         'The adapter that claims this framework ran and found no component, so this build does not read the form this repository uses.',
       remediation:
@@ -151,6 +153,7 @@ const discardedRelations = (discarded: readonly DiscardedEdge[]): readonly Unsup
   }
   return [...byAdapter.entries()].map(([producer, count]) => ({
     area: `${count} relation(s) discarded from ${producer}`,
+    kind: 'discarded_relation' as const,
     reason:
       'The adapter reported a relation whose endpoint it never added, so the relation was dropped to keep the graph valid.',
     remediation:

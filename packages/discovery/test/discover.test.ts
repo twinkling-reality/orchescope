@@ -2,7 +2,14 @@ import assert from 'node:assert/strict';
 import { after, describe, it } from 'node:test';
 import { createDeadline, fixedClock } from '@orchescope/domain';
 import { DEFAULT_EXCLUDED_DIRECTORIES } from '@orchescope/source-analysis';
-import { createTempWorkspace, writeNodeProject, writePythonProject } from '@orchescope/testkit';
+import {
+  componentDraft,
+  createTempWorkspace,
+  edgeDraft,
+  writeNodeProject,
+  writePythonProject,
+} from '@orchescope/testkit';
+import type { AgentSystemAdapter } from '../src/adapter.ts';
 import { discover } from '../src/discover.ts';
 
 /**
@@ -239,7 +246,9 @@ describe('static discovery', () => {
       'adapters that do not apply must be recorded',
     );
     assert.ok(
-      coverage.unsupported.some((entry) => entry.area.includes('go')),
+      coverage.unsupported.some(
+        (entry) => entry.kind === 'language_not_analysed' && entry.area.includes('go'),
+      ),
       `expected Go to be reported as unsupported, got ${JSON.stringify(coverage.unsupported)}`,
     );
     assert.equal(
@@ -275,5 +284,70 @@ describe('static discovery', () => {
       first.result.graph.components.map((component) => component.id),
     );
     assert.equal(second.graph.graphId, first.result.graph.graphId);
+  });
+});
+
+/**
+ * The three unsupported areas have three different owners, and the corpus harness holds them apart, so the
+ * discriminator each one carries is asserted here rather than left to be read out of the prose.
+ */
+describe('a relation whose endpoint the adapter never added', () => {
+  const scanWithAdapter = async (adapter: AgentSystemAdapter) => {
+    const workspace = createTempWorkspace('orchescope-discard-');
+    workspaces.push(workspace);
+    writeNodeProject(workspace, { name: 'plain-app' });
+    workspace.write('src/index.ts', 'export const value = 1;\n');
+    const clock = fixedClock(0, 1);
+    const handle = createDeadline(30_000, clock.monotonicMs);
+    try {
+      return await discover({
+        root: workspace.root,
+        orchescopeVersion: '0.1.0',
+        clock,
+        deadline: handle,
+        traversal,
+        concurrency: 4,
+        adapters: [adapter],
+      });
+    } finally {
+      handle.dispose();
+    }
+  };
+
+  const stub = (discoverEdge: boolean): AgentSystemAdapter => ({
+    id: 'adapter:stub',
+    version: '1',
+    ecosystem: 'javascript',
+    packages: [],
+    appliesTo: () => true,
+    discover: (_context, builder) => {
+      const of = (kind: 'agent' | 'tool', name: string) =>
+        componentDraft({ kind, name, file: 'src/index.ts', discoveredBy: 'adapter:stub' });
+      const agent = of('agent', 'triage');
+      const missing = of('tool', 'ghost');
+      builder.addComponent(agent);
+      if (discoverEdge) {
+        builder.addEdge(edgeDraft('calls_tool', agent, missing, { discoveredBy: 'adapter:stub' }));
+      }
+      return { componentsFound: 1, edgesFound: discoverEdge ? 1 : 0, filesInspected: 1 };
+    },
+  });
+
+  it('is reported as a discarded relation naming the adapter that produced it', async () => {
+    const result = await scanWithAdapter(stub(true));
+    const discarded = result.graph.coverage.unsupported.filter(
+      (area) => area.kind === 'discarded_relation',
+    );
+    assert.equal(discarded.length, 1, JSON.stringify(result.graph.coverage.unsupported));
+    assert.match(discarded[0]?.area ?? '', /adapter:stub/);
+    assert.equal(result.graph.edges.length, 0);
+  });
+
+  it('reports nothing when every endpoint exists', async () => {
+    const result = await scanWithAdapter(stub(false));
+    assert.deepEqual(
+      result.graph.coverage.unsupported.filter((area) => area.kind === 'discarded_relation'),
+      [],
+    );
   });
 });

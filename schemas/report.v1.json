@@ -5023,6 +5023,22 @@
                     "minLength": 1,
                     "type": "string"
                   },
+                  "kind": {
+                    "anyOf": [
+                      {
+                        "const": "language_not_analysed",
+                        "type": "string"
+                      },
+                      {
+                        "const": "adapter_blind_spot",
+                        "type": "string"
+                      },
+                      {
+                        "const": "discarded_relation",
+                        "type": "string"
+                      }
+                    ]
+                  },
                   "reason": {
                     "minLength": 1,
                     "type": "string"

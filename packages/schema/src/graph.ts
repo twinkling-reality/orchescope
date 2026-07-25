@@ -52,11 +52,24 @@ export const AdapterRun = Type.Object(
 );
 export type AdapterRun = Static<typeof AdapterRun>;
 
+/**
+ * Why an area is unsupported, separated because the three causes belong to different owners: a
+ * language nobody has written a parser for is a limit of this release, an adapter that read nothing
+ * from a framework it claims is a reader that is behind, and a discarded relation is a defect in the
+ * adapter that reported it. A reader that has to match on prose cannot tell them apart.
+ */
+const UnsupportedAreaKind = literals([
+  'language_not_analysed',
+  'adapter_blind_spot',
+  'discarded_relation',
+] as const);
+
 export const UnsupportedArea = Type.Object(
   {
     area: NonEmptyString({
       description: 'What Orchescope could not model, for example "Go source files".',
     }),
+    kind: Type.Optional(UnsupportedAreaKind),
     reason: NonEmptyString(),
     remediation: Type.Optional(
       NonEmptyString({ description: 'How the user can supply the missing facts.' }),
