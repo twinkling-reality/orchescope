@@ -148,7 +148,7 @@ Topology rules, so that `ORCHESCOPE_AGENTS` is honoured rather than reported:
 | 7 | The full conversation is passed to every worker although each reads one field | `src/agents/workers.ts:60`, prompt built at `:63` |
 | 8 | Good architecture: (a) the refund cannot be reached without the approval boundary, (b) every model call has an explicit deadline and a bounded retry with backoff | (a) `src/tools/refund.ts:11` and `:49`, (b) `src/model.ts:15` |
 | 9 | A `check_inventory` timeout ends the whole task instead of degrading | `src/agents/orchestrator.ts:84` |
-| 10 | A tool whose name is assembled at runtime, so it runs on every request and is declared nowhere | `src/tools/metering.ts:7`, called at `src/agents/orchestrator.ts:192` |
+| 10 | A tool whose name is assembled at runtime, so it runs on every request and is declared nowhere | `src/tools/metering.ts:7`, called at `src/agents/orchestrator.ts:193` |
 
 Issue 10 is what makes the fourth reconciliation delta visible. `metering_record_usage` appears in every trace and in no
 source file or manifest, because its name is joined from parts. A team reading their own repository would not find it.
