@@ -16,7 +16,7 @@ pnpm corpus:exercise    # the same, and also runs the entries that can produce s
 node scripts/corpus.mjs --check langgraph flask     # named entries only
 ```
 
-The first full run clones thirteen repositories into `corpus/.cache`, which git ignores. Later runs reuse the clone and
+The first full run clones the pinned repositories into `corpus/.cache`, which git ignores. Later runs reuse the clone and
 check out the pinned commit again, so a formatter pointed at the cache cannot change what is measured.
 
 Nothing is vendored. This repository is Apache-2.0 and the corpus is not, so the corpus stays outside it.
@@ -25,15 +25,16 @@ Nothing is vendored. This repository is Apache-2.0 and the corpus is not, so the
 
 ```
 langgraphjs  agent system, 750 components, 708 relations
-  parse rate    1165/1381 files (84%)
+  parse rate    1165/1165 files in a language this build reads (100%), 1381 discovered
   adapters      effects 334c/221r, langgraph 1240c/1014r, prompts 144c/2r
   blind spots   ai used in source, read by adapter:vercel-ai-sdk; openai used in source, read by adapter:model-sdk
   findings      6 across 2 rule(s), 0 strength(s)
   expectation   matched
 ```
 
-Three of those lines are the measurement. **Parse rate** is how much of the repository the readers actually saw: a reader
-that parsed a third of a tree knows a third of it, and 33% is a real number in this corpus. **Adapters** is what each one
+Three of those lines are the measurement. **Parse rate** is how much of the source this build claims to read it actually
+read, which is not how much of the tree it walked: a repository of a thousand test fixtures and six hundred Python files
+is fully read at six hundred, and dividing by the tree would call that a third. **Adapters** is what each one
 contributed, in components and relations, which is the only honest answer to which adapter is worth maintaining. **Blind
 spots** are the frameworks a repository imports that the adapter claiming them read nothing from, and they stay printed
 until an adapter earns their removal.

@@ -68,6 +68,10 @@ export const probeJavaScriptParser = (): { readonly ok: boolean; readonly detail
   }
 };
 
+/** The languages this build reads. Everything else is discovered, counted and never parsed. */
+export const isSupportedLanguage = (language: string): boolean =>
+  language === 'typescript' || language === 'javascript' || language === 'python';
+
 export type AnalysisResult = {
   readonly facts: readonly ModuleFacts[];
   readonly skipped: readonly SkippedFile[];
@@ -136,12 +140,7 @@ export const analyzeFileSet = async (
   fileSet: FileSet,
   options: AnalyzeOptions,
 ): Promise<AnalysisResult> => {
-  const parseable = fileSet.files.filter(
-    (file) =>
-      file.language === 'typescript' ||
-      file.language === 'javascript' ||
-      file.language === 'python',
-  );
+  const parseable = fileSet.files.filter((file) => isSupportedLanguage(file.language));
 
   const settled = await settleWithConcurrency(
     parseable,

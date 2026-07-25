@@ -82,6 +82,14 @@ export type UnsupportedArea = Static<typeof UnsupportedArea>;
 export const ScanCoverage = Type.Object(
   {
     filesDiscovered: NonNegativeInt,
+    /**
+     * How many of the discovered files are in a language this build reads.
+     *
+     * Without it, `filesParsed` over `filesDiscovered` reads as a coverage rate and measures something else: a
+     * repository of a thousand test fixtures and six hundred Python files would report a third, when every Python
+     * file was read. This is the denominator that means what a reader assumes it means.
+     */
+    filesInSupportedLanguages: Type.Optional(NonNegativeInt),
     filesParsed: NonNegativeInt,
     bytesParsed: NonNegativeInt,
     skipped: Type.Array(SkippedFile),

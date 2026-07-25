@@ -152,10 +152,16 @@ defect in an adapter.
   AI SDK read from an application rather than from the library that defines it, and the model SDK adapter from
   `anthropic-quickstarts`. `tests/e2e/corpus.test.ts` holds that coverage claim rather than trusting it, and fails if a
   framework adapter stops appearing anywhere in the corpus.
-- **The summary reports parse rate, adapter contribution and blind spots per repository.** The parse rates run from 33%
-  on `pydantic-ai` to 96% on `openai-agents-python`, which is a number nothing in this repository could previously have
-  told anyone. Four blind spots are recorded across three repositories, each naming a framework a repository imports and
-  the adapter that read nothing from it.
+- **The summary reports parse rate, adapter contribution and blind spots per repository.** Thirteen of the fourteen
+  entries parse every file in a language this build reads; `pydantic-ai` parses 596 of 600 and the four it misses are
+  Python files past the size limit. Four blind spots are recorded across three repositories, each naming a framework a
+  repository imports and the adapter that read nothing from it.
+- **The first number the corpus reported was wrong, and the corpus is what caught it.** The summary divided files
+  parsed by files discovered and called it a parse rate, so `pydantic-ai` read as 33% when every Python file in it had
+  been parsed: the repository holds 1233 test fixtures in YAML and 598 Python files, and the denominator counted the
+  fixtures. Coverage now carries `filesInSupportedLanguages`, which counts the files this build claims to read
+  including the ones it was refused, and the rate is against that. Evidence: one test that counts a Python file too
+  large to read and excludes a YAML fixture that was never claimed.
 - **Breaking one adapter deliberately fails the check and names it.** Making the LangGraph adapter skip every module it
   had matched took `langgraphjs` from 750 components to 119, and the check exited 1 reporting
   `adapters.adapter:langgraph.componentsFound: expected 1240, observed 0` first, with the blind spot line naming
@@ -169,8 +175,9 @@ defect in an adapter.
 
 - **No relation was discarded anywhere.** The phase 16 fix holds across 14 repositories and 9198 components rather than
   across the one repository that produced the crash.
-- **`pydantic-ai` parses 596 of 1808 discovered files.** Two thirds of that repository is invisible to the readers, and
-  the expectation says so on every run instead of leaving it to be discovered again.
+- **`pydantic-ai` is the only entry that does not read everything it claims to.** Four Python files are past the size
+  limit, so 596 of 600 are parsed. Every other entry reads all of them, which is a stronger statement than the corpus
+  could make before the denominator was fixed.
 - **`axios` yields 128 components, all of them from the effect reader, and no agent system.** That is the ceiling for
   what the retry, timeout and side effect rules cost on code that has nothing to do with agents.
 - **`packages/discovery` yields nothing at all.** Every framework name this product knows appears in that directory as a

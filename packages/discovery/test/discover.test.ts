@@ -351,3 +351,44 @@ describe('a relation whose endpoint the adapter never added', () => {
     );
   });
 });
+
+/**
+ * `filesParsed` over `filesDiscovered` reads as a coverage rate and measures something else. A repository of 1233
+ * test fixtures and 598 Python files reported a third when every Python file in it had been read, so the coverage
+ * report carries the denominator that means what a reader assumes it means.
+ */
+describe('how much of what this build reads was read', () => {
+  it('counts a file this build claims to read and could not, and excludes one it never claimed', async () => {
+    const workspace = createTempWorkspace('orchescope-coverage-');
+    workspaces.push(workspace);
+    writeNodeProject(workspace, { name: 'mixed' });
+    workspace.write('src/small.ts', 'export const value = 1;\n');
+    workspace.write('src/big.ts', `export const text = '${'x'.repeat(2048)}';\n`);
+    workspace.write('fixtures/cassette.yaml', `recorded: ${'y'.repeat(2048)}\n`);
+    const clock = fixedClock(0, 1);
+    const handle = createDeadline(30_000, clock.monotonicMs);
+    try {
+      const result = await discover({
+        root: workspace.root,
+        orchescopeVersion: '0.1.0',
+        clock,
+        deadline: handle,
+        traversal: { ...traversal, maxFileBytes: 1024 },
+        concurrency: 4,
+      });
+      const coverage = result.graph.coverage;
+      assert.equal(coverage.filesParsed, 1, 'only the small TypeScript file could be parsed');
+      assert.equal(
+        coverage.filesInSupportedLanguages,
+        2,
+        'the TypeScript file that was too large is still a file this build claims to read',
+      );
+      assert.ok(
+        coverage.filesDiscovered >= 2,
+        'the YAML fixture is discovered and is not a file this build claims to read',
+      );
+    } finally {
+      handle.dispose();
+    }
+  });
+});

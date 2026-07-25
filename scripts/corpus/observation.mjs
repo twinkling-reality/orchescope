@@ -60,7 +60,9 @@ export const observationOf = (entry, audit, bundle, exercise) => {
     },
     files: {
       discovered: coverage.filesDiscovered,
+      inSupportedLanguages: coverage.filesInSupportedLanguages,
       parsed: coverage.filesParsed,
+      skipped: coverage.skipped.length,
       truncated: coverage.truncated,
     },
     /* Every adapter, including the ones that did not apply: an adapter going quiet is the drift this file exists to show. */

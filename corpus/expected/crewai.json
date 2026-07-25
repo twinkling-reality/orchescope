@@ -82,7 +82,9 @@
   "discardedRelations": [],
   "files": {
     "discovered": 2027,
+    "inSupportedLanguages": 1272,
     "parsed": 1272,
+    "skipped": 7,
     "truncated": false
   },
   "findings": {

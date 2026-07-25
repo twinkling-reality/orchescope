@@ -21,7 +21,9 @@ import {
   analyzeFileSet,
   collectFiles,
   type FactCache,
+  isSupportedLanguage,
   type Language,
+  languageOf,
   type ModuleFacts,
   readManifests,
   type TraversalOptions,
@@ -270,6 +272,13 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
 
   const coverage: ScanCoverage = {
     filesDiscovered: fileSet.files.length,
+    /*
+     * Files refused before analysis count too. A Python file too large to read is a file this build claims to read
+     * and did not, and leaving it out of the denominator would report every such repository as fully parsed.
+     */
+    filesInSupportedLanguages:
+      fileSet.files.filter((file) => isSupportedLanguage(file.language)).length +
+      fileSet.skipped.filter((entry) => isSupportedLanguage(languageOf(entry.file))).length,
     filesParsed: analysis.facts.length,
     bytesParsed: analysis.bytesParsed,
     skipped: [...analysis.skipped],

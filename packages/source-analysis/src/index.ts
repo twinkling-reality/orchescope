@@ -14,6 +14,7 @@ export {
   cacheKey,
   type FactCache,
   inMemoryFactCache,
+  isSupportedLanguage,
   probeJavaScriptParser,
 } from './analyzer.ts';
 export {

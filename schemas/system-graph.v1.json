@@ -1014,6 +1014,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "filesInSupportedLanguages": {
+          "minimum": 0,
+          "type": "integer"
+        },
         "filesParsed": {
           "minimum": 0,
           "type": "integer"

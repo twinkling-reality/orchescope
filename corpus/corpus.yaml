@@ -97,8 +97,9 @@ repositories:
     commit: ed0f40c0e5061722f7d9f579ed7efff1b74e3ea5
     kind: agent_system
     why: >-
-      The newest adapter, so the one with the least field evidence behind it. It also has the lowest parse rate in
-      the corpus, and that number is worth watching on its own.
+      The newest adapter, so the one with the least field evidence behind it. It is also the only entry that does
+      not read every file it claims to: four Python files are past the size limit, and that number is worth watching
+      on its own.
 
   - name: pydantic-ai-exercised
     source: git
