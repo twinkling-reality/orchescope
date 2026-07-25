@@ -31,7 +31,7 @@ tool.
 | 15. Documentation and open source setup | done | `README.md`, `docs/`, `SECURITY.md`, `CONTRIBUTING.md`, CI workflows |
 | 16. Installable product | in progress | see below |
 
-548 unit and integration tests, 78 end to end tests, 10 browser tests. `pnpm verify` is green.
+567 unit and integration tests, 78 end to end tests, 10 browser tests. `pnpm verify` is green.
 
 ## Phase 16: what a stranger meets
 
