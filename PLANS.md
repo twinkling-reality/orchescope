@@ -30,9 +30,9 @@ tool.
 | 14. Packaging and distribution | done | `pnpm package`: stage `release/stage`, install the tarball and audit a project with it |
 | 15. Documentation and open source setup | done | `README.md`, `docs/`, `SECURITY.md`, `CONTRIBUTING.md`, CI workflows |
 | 16. Installable product | in progress | see below |
-| 17. Measured against real repositories | in progress | milestone 1 done: `pnpm corpus` across thirteen pinned repositories |
+| 17. Measured against real repositories | in progress | milestones 1 and 2 done: `pnpm corpus` across thirteen pinned repositories |
 
-581 unit and integration tests, 85 end to end tests, 10 browser tests. `pnpm verify` is green.
+589 unit and integration tests, 85 end to end tests, 10 browser tests. `pnpm verify` is green.
 
 ## Phase 16: what a stranger meets
 
@@ -118,7 +118,7 @@ and it is listed item by item because only some of it is done.
 
 ## Phase 17: measured against real repositories
 
-Milestone 1 is done, three remain. The reason for the phase is in the numbers above: every defect in phase 16 that
+Milestones 1 and 2 are done, two remain. The reason for the phase is in the numbers above: every defect in phase 16 that
 mattered was found by pointing the tool at a real repository, and none of them could have been found by the fixtures.
 Every adapter is validated against a fixture written by whoever wrote the adapter, which is circular: the fixture
 encodes what the author already believed.
@@ -176,21 +176,51 @@ defect in an adapter.
 - **`packages/discovery` yields nothing at all.** Every framework name this product knows appears in that directory as a
   string literal, and no reader claims a component from it.
 
-### Milestone 2: findings that survive a real repository
+### Milestone 2: findings that survive a real repository. Done.
 
-`openai/openai-agents-python` produces 439 findings, 211 from `topology-shape` and 193 from
+`openai/openai-agents-python` produced 439 findings, 211 from `topology-shape` and 193 from
 `configured-tool-has-no-caller`. Two hundred instances of one pattern is one problem, not two hundred, and a `low`
-finding repeated 193 times must not bury a `high` one. Those counts are now pinned in
-`corpus/expected/openai-agents-python.json`, so the before and after this milestone needs is a diff rather than a
-recollection.
+finding repeated 193 times buried every `high` one under it.
 
-Group by rule into one finding with a representative instance, an occurrence count and the component list. Cap per
-rule output with the withheld count stated rather than silently. Rank by severity, then goal eligibility, then blast
-radius. Re examine `configured-tool-has-no-caller` and `topology-shape` against the corpus: a rule that fires on two
-hundred sites in a healthy repository is probably measuring the wrong thing.
+A draft now names the pattern it is an instance of, and drafts from one rule naming the same pattern become one finding
+carrying the occurrence count, the affected components and the sites. The component list stops at twenty five with the
+number withheld stated in the text and carried as a metric with its sample size, because a list that stops without
+saying so reads as a complete list. Findings are ordered by severity, then risks before strengths, then whether the
+finding can become a bounded goal, then how much of the system it touches.
 
-**Acceptance evidence.** The same repository yields a report a person can read, with the finding count and rule
-distribution before and after, plus rule tests for grouping including one that proves a withheld count is stated.
+**Acceptance evidence.**
+
+- **The same repository yields a report a person can read.** 439 findings became 8, and the count of two hundred moved
+  from the length of the report into the title of one finding: `208 components cannot be reached from any declared
+  entry point`, `193 tools are defined and nothing in this repository calls them`. The five `medium` findings now sit
+  above the three `low` ones, and within each the ones that can become a goal come first.
+
+  | Rule | Before | After |
+  | --- | --- | --- |
+  | `topology-shape` | 211 | 2 |
+  | `configured-tool-has-no-caller` | 193 | 1 |
+  | `model-call-without-timeout` | 15 | 1 |
+  | `prompt-injection-boundary` | 13 | 1 |
+  | `retry-around-non-idempotent-operation` | 3 | 1 |
+  | `unbounded-retry` | 3 | 1 |
+  | `observability-coverage` | 1 | 1 |
+  | **total** | **439** | **8** |
+
+  The same collapse across the rest of the corpus: `openai-agents-js` 149 to 5, `pydantic-ai` 58 to 7, `crewai` 12 to
+  5, `langgraph` 24 to 3, the demonstration 9 to 7. Every one of those is a committed diff in `corpus/expected`.
+- **Rule tests for grouping**, including one that proves the withheld count is stated: forty instances become one
+  finding whose `componentsWithheld` metric is 15 with a sample size of 40, whose component list is 25 long, and whose
+  explanation says `15 of the 40 affected components are not listed here`. A pattern that happened once carries no
+  occurrence metric and keeps its own title.
+- **Two rules re examined, and both were reporting an inference as an observation.** `configured-tool-has-no-caller`
+  said "either the wiring is missing, or the tool is left over". Neither was true of the 193 it fired on: the callers
+  are in a tool list assembled at run time, or in an application that is not this repository, because this repository
+  is a library. `topology-shape` made the same mistake about reachability. Both now state what was observed, name the
+  third cause, and report the proportion with its sample size: 193 of 271 discovered tools, 208 of 917 components that
+  participate in control flow. Those proportions are what tell a reader that the shape belongs to the repository
+  rather than to any one component, and they are the measurement that a threshold could later be built on. The rules
+  discriminate rather than fire everywhere: `pydantic-ai` has 471 tools and no orphan among them, and the
+  demonstration has none either.
 
 ### Milestone 3: the runtime join on something other than the demonstration
 

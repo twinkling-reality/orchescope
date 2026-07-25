@@ -79,11 +79,25 @@ So a rule that infers something at `0.6` confidence and proposes `critical` prod
 `severity-capped` and the reason. An inference cannot be dressed as an observation, and a low confidence claim cannot be
 made loud by asserting it more strongly.
 
+## One pattern is one finding
+
+A rule that fires on every instance it sees produces a report nobody reads: `openai/openai-agents-python` produced 439
+findings, 211 from one rule and 193 from another, and a `low` finding repeated 193 times buries every `high` one under
+it. A draft therefore names the pattern it is an instance of, and drafts from one rule that name the same pattern become
+one finding with the occurrence count, the affected components and the sites.
+
+Nothing is dropped silently. The component list stops at twenty five, and the number withheld is stated in the
+explanation and carried as a metric with its sample size, because a list that stops without saying so reads as a
+complete list. The same repository now produces eight findings, and the count of two hundred is in the title of one of
+them rather than in the length of the report.
+
 ## Identifiers, ordering and conflicts
 
 Identifiers are `OSC-<CATEGORY>-<NNNN>`, assigned from a deterministic ordering of drafts, so the same scan produces the
-same identifiers and a goal can reference one. Findings are then sorted by severity, with risks before strengths and
-identifier order as the tie break, which makes report output byte for byte reproducible.
+same identifiers and a goal can reference one. Findings are then sorted by severity, then risks before strengths, then
+whether the finding can become a bounded goal, then how much of the system it touches, with identifier order as the tie
+break. That order is what a person should read them in, and it is deterministic, so report output stays byte for byte
+reproducible.
 
 When two rules disagree about the same component in the same category, the conflict is recorded on both findings rather
 than one being dropped. A reviewer needs to see that two rules disagreed; silently keeping one is how a report becomes
@@ -98,7 +112,8 @@ the `model_interpreted` basis. A proposal that fails review is discarded, and th
 ## Where to look
 
 - `packages/findings/src/rule.ts`: the outcome types.
-- `packages/findings/src/engine.ts`: evidence checks, severity capping, identifiers, invariants.
+- `packages/findings/src/engine.ts`: evidence checks, severity capping, identifiers, ordering, invariants.
+- `packages/findings/src/grouping.ts`: the collapse of many instances into one finding, and the withheld count.
 - `packages/findings/src/rules/`: the four families.
 - `packages/domain/src/severity.ts`: the caps.
 - `packages/findings/src/review.ts`: conflict linking and model review.
