@@ -1,0 +1,262 @@
+import { createHash } from 'node:crypto';
+import { type Dirent, readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
+import { OrchescopeError } from '@orchescope/domain';
+import type { SkippedFile } from '@orchescope/schema';
+
+/**
+ * Repository traversal.
+ *
+ * Traversal is the first place a hostile repository can attack an analyser, so the rules are explicit:
+ * symbolic links are not followed unless the caller asks, nothing outside the root is read, files over
+ * the size limit are skipped and reported rather than truncated, and the file count is bounded.
+ */
+
+export type Language = 'javascript' | 'typescript' | 'python' | 'json' | 'yaml' | 'toml' | 'other';
+
+export type SourceFile = {
+  /** Repository relative POSIX path. */
+  readonly path: string;
+  readonly absolutePath: string;
+  readonly language: Language;
+  readonly byteLength: number;
+};
+
+export type FileSet = {
+  readonly root: string;
+  readonly files: readonly SourceFile[];
+  readonly skipped: readonly SkippedFile[];
+  readonly truncated: boolean;
+  /**
+   * Counts of every file extension seen during traversal, including languages Orchescope does not
+   * analyse. This is what lets a scan say "this repository also contains Go" instead of presenting an
+   * incomplete graph with no explanation.
+   */
+  readonly extensionCounts: Readonly<Record<string, number>>;
+};
+
+export type TraversalOptions = {
+  readonly maxFileBytes: number;
+  readonly maxFiles: number;
+  readonly followSymlinks: boolean;
+  /** Directory names never entered. Matched exactly against a path segment. */
+  readonly excludeDirectories: readonly string[];
+  /** Additional path prefixes to exclude, repository relative. */
+  readonly excludePrefixes: readonly string[];
+};
+
+export const DEFAULT_EXCLUDED_DIRECTORIES: readonly string[] = [
+  '.git',
+  'node_modules',
+  '.venv',
+  'venv',
+  '__pycache__',
+  '.mypy_cache',
+  '.pytest_cache',
+  '.ruff_cache',
+  'dist',
+  'build',
+  'out',
+  'coverage',
+  '.next',
+  '.nuxt',
+  '.turbo',
+  '.orchescope',
+  'target',
+  'vendor',
+  '.tox',
+  '.idea',
+  '.vscode-test',
+];
+
+const EXTENSION_LANGUAGE: Readonly<Record<string, Language>> = {
+  '.ts': 'typescript',
+  '.tsx': 'typescript',
+  '.mts': 'typescript',
+  '.cts': 'typescript',
+  '.js': 'javascript',
+  '.jsx': 'javascript',
+  '.mjs': 'javascript',
+  '.cjs': 'javascript',
+  '.py': 'python',
+  '.pyi': 'python',
+  '.json': 'json',
+  '.jsonc': 'json',
+  '.yaml': 'yaml',
+  '.yml': 'yaml',
+  '.toml': 'toml',
+};
+
+export const languageOf = (path: string): Language => {
+  const dot = path.lastIndexOf('.');
+  if (dot < 0) return 'other';
+  return EXTENSION_LANGUAGE[path.slice(dot).toLowerCase()] ?? 'other';
+};
+
+export const toPosix = (path: string): string => (sep === '/' ? path : path.split(sep).join('/'));
+
+const isExcluded = (relativePath: string, options: TraversalOptions): boolean =>
+  options.excludePrefixes.some(
+    (prefix) => relativePath === prefix || relativePath.startsWith(`${prefix}/`),
+  );
+
+type Walker = {
+  readonly files: SourceFile[];
+  readonly skipped: SkippedFile[];
+  readonly extensionCounts: Map<string, number>;
+  truncated: boolean;
+};
+
+const classifyEntry = (
+  entry: Dirent,
+  absolutePath: string,
+  relativePath: string,
+  options: TraversalOptions,
+  walker: Walker,
+): 'directory' | 'file' | 'skip' => {
+  if (entry.isSymbolicLink()) {
+    if (!options.followSymlinks) {
+      walker.skipped.push({ file: relativePath, reason: 'symlink', detail: 'symbolic links are not followed' });
+      return 'skip';
+    }
+    try {
+      return statSync(absolutePath).isDirectory() ? 'directory' : 'file';
+    } catch {
+      walker.skipped.push({ file: relativePath, reason: 'unreadable', detail: 'broken symbolic link' });
+      return 'skip';
+    }
+  }
+  if (entry.isDirectory()) return 'directory';
+  if (entry.isFile()) return 'file';
+  walker.skipped.push({ file: relativePath, reason: 'unreadable', detail: 'not a regular file' });
+  return 'skip';
+};
+
+const walk = (root: string, current: string, options: TraversalOptions, walker: Walker): void => {
+  if (walker.truncated) return;
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(current, { withFileTypes: true });
+  } catch (error) {
+    walker.skipped.push({
+      file: toPosix(relative(root, current)) || '.',
+      reason: 'unreadable',
+      detail: error instanceof Error ? error.message : 'directory could not be read',
+    });
+    return;
+  }
+  entries.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
+
+  for (const entry of entries) {
+    if (walker.truncated) return;
+    const absolutePath = join(current, entry.name);
+    const relativePath = toPosix(relative(root, absolutePath));
+    if (isExcluded(relativePath, options)) continue;
+
+    const kind = classifyEntry(entry, absolutePath, relativePath, options, walker);
+    if (kind === 'skip') continue;
+    if (kind === 'directory') {
+      if (options.excludeDirectories.includes(entry.name)) continue;
+      walk(root, absolutePath, options, walker);
+      continue;
+    }
+
+    const dot = entry.name.lastIndexOf('.');
+    if (dot > 0) {
+      const extension = entry.name.slice(dot).toLowerCase();
+      walker.extensionCounts.set(extension, (walker.extensionCounts.get(extension) ?? 0) + 1);
+    }
+
+    const language = languageOf(entry.name);
+    if (language === 'other') continue;
+
+    let byteLength: number;
+    try {
+      byteLength = statSync(absolutePath).size;
+    } catch (error) {
+      walker.skipped.push({
+        file: relativePath,
+        reason: 'unreadable',
+        detail: error instanceof Error ? error.message : 'stat failed',
+      });
+      continue;
+    }
+    if (byteLength > options.maxFileBytes) {
+      walker.skipped.push({
+        file: relativePath,
+        reason: 'too_large',
+        detail: `${byteLength} bytes exceeds the ${options.maxFileBytes} byte limit`,
+      });
+      continue;
+    }
+    walker.files.push({ path: relativePath, absolutePath, language, byteLength });
+    if (walker.files.length >= options.maxFiles) {
+      walker.truncated = true;
+      walker.skipped.push({
+        file: relativePath,
+        reason: 'ignored',
+        detail: `file limit of ${options.maxFiles} reached, traversal stopped`,
+      });
+      return;
+    }
+  }
+};
+
+export const collectFiles = (root: string, options: TraversalOptions): FileSet => {
+  const stats = statSync(root);
+  if (!stats.isDirectory()) {
+    throw new OrchescopeError('INVALID_ARGUMENT', 'The analysis root must be a directory.', {
+      detail: { root },
+    });
+  }
+  const walker: Walker = {
+    files: [],
+    skipped: [],
+    extensionCounts: new Map(),
+    truncated: false,
+  };
+  walk(root, root, options, walker);
+  return {
+    root,
+    files: walker.files,
+    skipped: walker.skipped,
+    truncated: walker.truncated,
+    extensionCounts: Object.fromEntries(walker.extensionCounts),
+  };
+};
+
+export type FileContents = {
+  readonly file: SourceFile;
+  readonly text: string;
+  /** SHA-256 of the raw bytes, used as the cache key and recorded on evidence. */
+  readonly hash: string;
+};
+
+/**
+ * Reads a file as UTF-8 and records its digest. A file containing a NUL byte in its first kilobyte is
+ * treated as binary and rejected, because a mislabelled binary would otherwise reach a parser.
+ */
+export const readSource = (file: SourceFile): FileContents | SkippedFile => {
+  let bytes: Buffer;
+  try {
+    bytes = readFileSync(file.absolutePath);
+  } catch (error) {
+    return {
+      file: file.path,
+      reason: 'unreadable',
+      detail: error instanceof Error ? error.message : 'read failed',
+    };
+  }
+  const probe = bytes.subarray(0, 1024);
+  if (probe.includes(0)) {
+    return { file: file.path, reason: 'binary', detail: 'NUL byte within the first kilobyte' };
+  }
+  return {
+    file,
+    text: bytes.toString('utf8'),
+    hash: createHash('sha256').update(bytes).digest('hex'),
+  };
+};
+
+export const isSkipped = (value: FileContents | SkippedFile): value is SkippedFile =>
+  (value as SkippedFile).reason !== undefined;
