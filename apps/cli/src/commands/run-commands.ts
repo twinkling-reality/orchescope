@@ -5,6 +5,7 @@ import {
   compareUseCase,
   importTrace,
   loadScenario,
+  receiveTraces,
   runBenchmarkUseCase,
   runChaosUseCase,
   runScenarioUseCase,
@@ -107,6 +108,62 @@ export const traceCommand = async (
 
   return writeTraceResult(context, result);
 };
+
+/**
+ * A duration a person would type. Bare digits mean seconds, because that is what a reader who omitted the unit meant.
+ */
+const DURATION = /^(\d+)(ms|s|m|h)?$/;
+const UNIT_MS: Readonly<Record<string, number>> = { ms: 1, s: 1_000, m: 60_000, h: 3_600_000 };
+
+export const parseDuration = (value: string): number => {
+  const match = DURATION.exec(value.trim());
+  const amount = match?.[1];
+  if (amount === undefined) {
+    throw new OrchescopeError('INVALID_ARGUMENT', `${value} is not a duration.`, {
+      remediation: 'Use a number with an optional unit, for example 90s, 10m or 1h.',
+    });
+  }
+  return Number.parseInt(amount, 10) * (UNIT_MS[match?.[2] ?? 's'] ?? 1_000);
+};
+
+/**
+ * Listens for spans from a system Orchescope did not start.
+ *
+ * The endpoint is printed the moment it is listening, because the operator has to paste it into something else
+ * before anything can arrive, and a command that prints only at the end would be useless for that.
+ */
+export const receiveCommand = async (
+  context: CommandContext,
+  options: { readonly for: string; readonly label?: string },
+): Promise<number> => {
+  const durationMs = parseDuration(options.for);
+  const result = await receiveTraces({
+    workspace: context.workspace,
+    orchescopeVersion: context.version,
+    durationMs,
+    ...(options.label === undefined ? {} : { label: options.label }),
+    onListening: ({ url, variables }) => {
+      if (context.json || context.quiet) return;
+      context.stdout(`\n${context.style.bold('Listening')} on ${url} for ${options.for}\n`);
+      context.stdout(`  Point your system at it and rerun it:\n    ${variables}\n`);
+      context.stdout(
+        context.style.dim('  It accepts OTLP over HTTP on /v1/traces, protobuf or JSON.\n'),
+      );
+    },
+    until: interrupted(),
+  });
+  return writeTraceResult(context, result);
+};
+
+/** Resolves when the operator interrupts, so a window can be ended early without losing what arrived. */
+const interrupted = (): Promise<void> =>
+  new Promise<void>((resolve) => {
+    const stop = () => {
+      process.off('SIGINT', stop);
+      resolve();
+    };
+    process.once('SIGINT', stop);
+  });
 
 export const testCommand = async (
   context: CommandContext,

@@ -26,5 +26,8 @@
     "@orchescope/source-analysis": "workspace:*",
     "@orchescope/traces": "workspace:*",
     "@orchescope/workspace": "workspace:*"
+  },
+  "devDependencies": {
+    "@orchescope/testkit": "workspace:*"
   }
 }

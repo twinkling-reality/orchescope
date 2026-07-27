@@ -242,7 +242,7 @@ jobs:
           pnpm orchescope --version
           pnpm orchescope --help
           pnpm --silent orchescope doctor --json > doctor.json
-          for command in audit trace test benchmark chaos compare goal goals export open init doctor mcp; do
+          for command in audit trace receive test benchmark chaos compare goal goals export open init doctor mcp; do
             pnpm orchescope "$command" --help > /dev/null
           done
           pnpm orchescope mcp install --list > /dev/null

@@ -9,6 +9,7 @@ import { openAiAgentsAdapter } from './adapters/openai-agents.ts';
 import { promptsAdapter } from './adapters/prompts.ts';
 import { pydanticAiAdapter } from './adapters/pydantic-ai.ts';
 import { vercelAiSdkAdapter } from './adapters/vercel-ai-sdk.ts';
+import { workersBindingsAdapter } from './adapters/workers-bindings.ts';
 
 /**
  * Adapter order.
@@ -21,6 +22,7 @@ import { vercelAiSdkAdapter } from './adapters/vercel-ai-sdk.ts';
 export const DEFAULT_ADAPTERS: readonly AgentSystemAdapter[] = [
   mcpAdapter,
   manifestAdapter,
+  workersBindingsAdapter,
   openAiAgentsAdapter,
   langGraphAdapter,
   crewAiAdapter,

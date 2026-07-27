@@ -7,11 +7,13 @@ import type {
   Edge,
   Evidence,
   EvidenceId,
+  JoinSummary,
   ReconciliationDelta,
   SideEffectRecord,
   SystemGraph,
 } from '@orchescope/schema';
 import { isObservableKind } from './analysis.ts';
+import type { ComponentMatch } from './reconcile.ts';
 
 /**
  * The declared versus exercised delta.
@@ -324,6 +326,24 @@ export type DeltaInput = {
   readonly runs: readonly RunSideEffects[];
   /** Span identifier to component identifier, produced by trace attribution. */
   readonly spanToComponent: ReadonlyMap<string, ComponentId>;
+  /** How reconciliation joined each observed name, so the delta can say which joins are the weak ones. */
+  readonly matches?: readonly ComponentMatch[];
+  /** Observed names that matched more than one declaration and were joined to none. */
+  readonly ambiguous?: readonly { readonly observedName: string }[];
+};
+
+const summarizeJoins = (input: DeltaInput): JoinSummary => {
+  const matches = input.matches ?? [];
+  const onNameAlone = matches
+    .filter((match) => match.rule === 'kind_and_name')
+    .map((match) => match.componentId);
+  return {
+    byCodeLocation: matches.filter((match) => match.rule === 'code_location').length,
+    byRuntimeName: matches.filter((match) => match.rule === 'runtime_name').length,
+    byKindAndName: onNameAlone.length,
+    onNameAlone: [...new Set(onNameAlone)],
+    ambiguous: [...new Set((input.ambiguous ?? []).map((entry) => entry.observedName))],
+  };
 };
 
 export type DeltaResult = {
@@ -366,6 +386,7 @@ export const computeDelta = (input: DeltaInput): DeltaResult => {
     },
     contradictions: [...contradictions],
     duplicateSideEffects: [...duplicates],
+    joins: summarizeJoins(input),
     coverage: {
       declaredComponents,
       exercisedComponents,

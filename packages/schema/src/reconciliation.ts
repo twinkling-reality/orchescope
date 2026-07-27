@@ -80,12 +80,36 @@ export const DuplicateSideEffect = Type.Object(
 );
 export type DuplicateSideEffect = Static<typeof DuplicateSideEffect>;
 
+/**
+ * How the observed names were joined to declarations.
+ *
+ * A run reports names and a repository declares identities, so every join is made by a rule and the rules are not
+ * equally strong. A match on a code location is the observation and the declaration pointing at the same line. A match
+ * on kind and name alone is the weakest: it is correct whenever a name means one thing in a repository, and wrong when
+ * two modules use the same word. That has already happened once here, where a model observed as `test` joined a
+ * declaration in an unrelated test file, so the count is reported rather than left for a reader to assume.
+ */
+export const JoinSummary = Type.Object(
+  {
+    byCodeLocation: NonNegativeInt,
+    byRuntimeName: NonNegativeInt,
+    byKindAndName: NonNegativeInt,
+    /** Components joined on kind and name alone, which is the rule that can match the wrong module. */
+    onNameAlone: Type.Array(ComponentId),
+    /** Observed names that matched more than one declaration, and were therefore joined to none. */
+    ambiguous: Type.Array(NonEmptyString()),
+  },
+  { additionalProperties: false },
+);
+export type JoinSummary = Static<typeof JoinSummary>;
+
 export const ReconciliationDelta = Type.Object(
   {
     declaredNotExercised: DeclaredNotExercised,
     exercisedNotDeclared: ExercisedNotDeclared,
     contradictions: Type.Array(Contradiction),
     duplicateSideEffects: Type.Array(DuplicateSideEffect),
+    joins: JoinSummary,
     coverage: Type.Object(
       {
         declaredComponents: NonNegativeInt,

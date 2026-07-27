@@ -92,6 +92,12 @@ export const ScanCoverage = Type.Object(
     filesInSupportedLanguages: Type.Optional(NonNegativeInt),
     filesParsed: NonNegativeInt,
     bytesParsed: NonNegativeInt,
+    /**
+     * How many files were skipped in total. `skipped` lists a bounded sample of them, because a repository with a
+     * vendored dependency tree in it can skip thousands of files for one reason, and a list that long is not a
+     * report. The count is separate so that bounding the list never changes the measurement.
+     */
+    filesSkipped: Type.Optional(NonNegativeInt),
     skipped: Type.Array(SkippedFile),
     languages: Type.Array(
       Type.Object(

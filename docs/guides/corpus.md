@@ -96,19 +96,32 @@ change to an adapter shows up immediately.
 
 ## An entry that runs
 
-Most entries are read and never executed. One is executed: `pydantic-ai-exercised` declares an `exercise` block, and
-`--exercise` builds a virtual environment under the cache, installs what the block lists, and runs
-`corpus/runs/pydantic-ai/exercise.py` through `orchescope trace`. The audit that follows has a stored run, so the
-expectation carries the declared against exercised delta as well as the static numbers.
+Most entries are read and never executed. Two are executed, one per language, because instrumentation is the half of
+the join that differs most between them and a decoder that reads one dialect says nothing about the other:
 
-That entry is a second entry for a repository already in the corpus, at the same commit, because a stored run adds
-components and relations to the graph and one expectation cannot describe a repository both with and without its own
-run. Without `--exercise` it is skipped and the skip is printed.
+| Entry | Environment | What it drives |
+| --- | --- | --- |
+| `pydantic-ai-exercised` | `pythonPackages`, installed into a virtual environment under the cache | the repository's own `bank_support` example with the library's own `TestModel` |
+| `vercel-ai-chatbot-exercised` | `nodePackages`, installed into a `node_modules` at the root of the cache | the application's own mock model and its own `getWeather` tool, through `@ai-sdk/otel` |
 
-Nothing pays for a provider. The driver uses the library's own offline model, forces a placeholder API key so a real
-one in the environment cannot be picked up, and sets `ALLOW_MODEL_REQUESTS` to false so any attempt to reach a provider
-raises instead of sending a request. It does install and execute third party code, which is why it never happens
-unless it is asked for.
+An exercise block declares exactly one of the two package lists, and the script extension has to match. The Node tree
+sits at the root of the cache rather than inside the checkout, one directory above it, which is where Node looks next
+when a bare import inside a checkout finds nothing closer. Installing into the checkout would edit a pinned third party
+repository, and a scan afterwards would measure something other than the commit the corpus names.
+
+Each is a second entry for a repository already in the corpus, at the same commit, because a stored run adds components
+and relations to the graph and one expectation cannot describe a repository both with and without its own run. Without
+`--exercise` they are skipped and the skip is printed.
+
+Nothing pays for a provider. The Python driver uses the library's own offline model, forces a placeholder API key so a
+real one in the environment cannot be picked up, and sets `ALLOW_MODEL_REQUESTS` to false so any attempt to reach a
+provider raises instead of sending a request. The Node driver uses the application's own mock model and calls its tool
+with no arguments, which is the branch of that tool's own code that answers without contacting a weather service. Both
+install and execute third party code, which is why neither happens unless it is asked for.
+
+The expectation records the join by identity: which components joined, which arrived without a counterpart, and which
+joins rest on a name alone. That last one is the weak rule, and it is the difference between a join that is
+established and a join that is a name meaning one thing in one repository.
 
 ## Both polarities
 

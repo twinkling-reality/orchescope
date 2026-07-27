@@ -28,13 +28,13 @@ const run = (command, args, options = {}) =>
  * The environment is rebuilt only when the package list changes, because installing it takes longer than every other
  * part of a corpus run put together. The marker records the list that produced the environment that is there.
  */
-export const prepareEnvironment = (root, entry, checkout) => {
+const prepareVirtualEnvironment = (root, entry, checkout) => {
   const directory = join(cacheDirectory(root), 'venvs', entry.name);
   const python = join(directory, 'bin/python');
   const marker = join(directory, MARKER);
   const wanted = `${JSON.stringify(entry.exercise.pythonPackages)}\n`;
   if (existsSync(python) && existsSync(marker) && readFileSync(marker, 'utf8') === wanted) {
-    return python;
+    return { interpreter: python };
   }
 
   rmSync(directory, { recursive: true, force: true });
@@ -50,24 +50,53 @@ export const prepareEnvironment = (root, entry, checkout) => {
     run(python, ['-m', 'pip', 'install', '--quiet', ...target], { env: environment });
   }
   writeFileSync(marker, wanted, { mode: 0o644 });
-  return python;
+  return { interpreter: python };
 };
 
+/**
+ * A node_modules tree the checkout can resolve against, without installing into the checkout.
+ *
+ * Installing into a pinned third party repository would edit it, and a scan afterwards would measure something other
+ * than the commit the corpus names. The tree therefore sits at the root of the cache, one directory above every
+ * checkout, which is exactly where Node looks next when a bare import inside a checkout finds nothing closer. That is
+ * what lets the repository's own modules import the SDK they are written against while the checkout stays untouched.
+ */
+const prepareNodeEnvironment = (root, entry) => {
+  const directory = cacheDirectory(root);
+  const marker = join(directory, `${entry.name}-${MARKER}`);
+  const wanted = `${JSON.stringify(entry.exercise.nodePackages)}\n`;
+  const modules = join(directory, 'node_modules');
+  if (existsSync(marker) && readFileSync(marker, 'utf8') === wanted) return { modules };
+
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(
+    join(directory, 'package.json'),
+    `${JSON.stringify({ name: 'orchescope-corpus-environment', private: true }, null, 2)}\n`,
+    { mode: 0o644 },
+  );
+  run('npm', ['install', '--silent', '--no-audit', '--no-fund', ...entry.exercise.nodePackages], {
+    cwd: directory,
+    env: { ...process.env, ...(entry.exercise.buildEnvironment ?? {}) },
+  });
+  writeFileSync(marker, wanted, { mode: 0o644 });
+  return { modules };
+};
+
+export const prepareEnvironment = (root, entry, checkout) =>
+  entry.exercise.nodePackages === undefined
+    ? prepareVirtualEnvironment(root, entry, checkout)
+    : prepareNodeEnvironment(root, entry);
+
 /** Returns what the run produced, so a corpus summary can say whether spans arrived at all. */
-export const exerciseRepository = (root, entry, checkout, python) => {
+export const exerciseRepository = (root, entry, checkout, environment) => {
+  const script = join(root, entry.exercise.script);
+  const command =
+    environment.interpreter === undefined
+      ? ['node', script, checkout, environment.modules]
+      : [environment.interpreter, script, checkout];
   const output = run(
     'node',
-    [
-      join(root, 'apps/cli/src/main.ts'),
-      '--cwd',
-      checkout,
-      'trace',
-      '--json',
-      '--',
-      python,
-      join(root, entry.exercise.script),
-      checkout,
-    ],
+    [join(root, 'apps/cli/src/main.ts'), '--cwd', checkout, 'trace', '--json', '--', ...command],
     { cwd: root, env: { ...process.env, NO_COLOR: '1' } },
   );
   const document = JSON.parse(output);

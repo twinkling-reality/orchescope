@@ -7,8 +7,8 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 40,
-      "edgesFound": 23,
+      "componentsFound": 38,
+      "edgesFound": 21,
       "filesInspected": 11,
       "status": "completed"
     },
@@ -55,10 +55,16 @@
       "status": "not_applicable"
     },
     "adapter:vercel-ai-sdk": {
-      "componentsFound": 28,
+      "componentsFound": 23,
       "edgesFound": 14,
       "filesInspected": 10,
       "status": "completed"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     }
   },
   "agentSystemDetected": true,
@@ -71,9 +77,9 @@
       "external_service": 2,
       "model": 2,
       "prompt": 7,
-      "tool": 10
+      "tool": 5
     },
-    "total": 46
+    "total": 41
   },
   "discardedRelations": [],
   "files": {
@@ -85,18 +91,17 @@
   },
   "findings": {
     "byRule": {
-      "configured-tool-has-no-caller": 1,
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
       "prompt-injection-boundary": 1,
       "topology-shape": 1
     },
     "bySeverity": {
-      "low": 2,
+      "info": 1,
       "medium": 3
     },
-    "strengths": 0,
-    "total": 5
+    "strengths": 1,
+    "total": 4
   },
   "kind": "agent_system",
   "languagesNotAnalysed": [],

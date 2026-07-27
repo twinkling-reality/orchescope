@@ -11,7 +11,7 @@ import {
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { asRecord, asString, asStringArray, jsonPointer } from '../config-files.ts';
 import { configIdentity, createDrafts, sourceIdentity } from '../drafts.ts';
-import { matchCalls, projectUses } from '../matching.ts';
+import { decoratedDefinitions, definitionForCall, matchCalls, projectUses } from '../matching.ts';
 
 /**
  * Model Context Protocol discovery, from configuration files and from SDK call sites.
@@ -215,13 +215,104 @@ const discoverServers = (
       }),
     );
     files.add(match.module.file);
-    context.bindings.register(
-      match.module.file,
-      name,
-      sourceIdentity('mcp_server', match.module.file, name),
-    );
+    const identity = sourceIdentity('mcp_server', match.module.file, name);
+    context.bindings.register(match.module.file, name, identity);
+    // The variable too, because `@mcp.tool()` names the variable rather than the server.
+    const variable = definitionForCall(match.module, match.call);
+    if (variable !== undefined)
+      context.bindings.register(match.module.file, variable.name, identity);
   }
   return { components: matches.length, matches };
+};
+
+/** The variable a server was assigned to, per file, so a decorator on it can be attributed. */
+const serversByVariable = (
+  servers: readonly SdkMatch[],
+): ReadonlyMap<string, { readonly server: SdkMatch; readonly name: string }> => {
+  const byVariable = new Map<string, { server: SdkMatch; name: string }>();
+  for (const server of servers) {
+    const variable = definitionForCall(server.module, server.call);
+    if (variable === undefined) continue;
+    byVariable.set(`${server.module.file}|${variable.name}`, {
+      server,
+      name: serverNameOf(server),
+    });
+  }
+  return byVariable;
+};
+
+/**
+ * Tools registered by decorating a function, which is how the Python SDK documents it.
+ *
+ * `@mcp.tool()` takes its name from the function unless the decorator overrides it, exactly as the library does at
+ * run time, and the decorated function's own docstring is not read as a description because a docstring is written
+ * for a developer while a tool description is written for a model. A decorator whose receiver is not a server this
+ * adapter found is left alone: `tool` is too common a name to claim on its own.
+ */
+const discoverDecoratedTools = (
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+  servers: readonly SdkMatch[],
+  files: Set<string>,
+): { components: number; edges: number } => {
+  let components = 0;
+  let edges = 0;
+  const byVariable = serversByVariable(servers);
+
+  for (const decorated of decoratedDefinitions(context.modules, ['tool'], SDK_PACKAGES)) {
+    for (const decorator of decorated.definition.decorators) {
+      const method = decorator.path[decorator.path.length - 1];
+      const owner = decorator.path[0];
+      if (method !== 'tool' || owner === undefined || decorator.path.length < 2) continue;
+      const server = byVariable.get(`${decorated.module.file}|${owner}`);
+      if (server === undefined) continue;
+
+      const first = decorator.args[0];
+      const entries = first !== undefined && first.kind === 'object' ? first.entries : [];
+      const toolName = stringValue(findEntry(entries, 'name')?.value) ?? decorated.definition.name;
+      const description = stringValue(findEntry(entries, 'description')?.value);
+      const identity = sourceIdentity('tool', decorated.module.file, toolName);
+
+      builder.addComponent(
+        drafts.sourceComponent({
+          kind: 'tool',
+          file: decorated.module.file,
+          name: toolName,
+          location: decorated.definition.location,
+          symbol: `@${owner}.${method} ${decorated.definition.name}`,
+          confidence: decorated.resolved
+            ? CONFIDENCE_BANDS.deterministic
+            : CONFIDENCE_BANDS.heuristic,
+          ...(description === undefined ? {} : { description }),
+          details: { for: 'tool', ...annotationDetails(first) },
+          metadata: {
+            declaredBy: 'mcp-server',
+            runtimeName: toolName,
+            annotationsAreSelfDeclared: true,
+          },
+          tags: ['mcp', 'tool'],
+        }),
+      );
+      components += 1;
+      files.add(decorated.module.file);
+      context.bindings.register(decorated.module.file, decorated.definition.name, identity);
+      context.bindings.register(decorated.module.file, toolName, identity);
+
+      builder.addEdge(
+        drafts.edge({
+          kind: 'provides_tool',
+          from: sourceIdentity('mcp_server', decorated.module.file, server.name),
+          to: identity,
+          location: decorated.definition.location,
+          symbol: `@${owner}.${method} ${toolName}`,
+          confidence: CONFIDENCE_BANDS.strongStructural,
+        }),
+      );
+      edges += 1;
+      break;
+    }
+  }
+  return { components, edges };
 };
 
 const discoverTools = (
@@ -294,7 +385,12 @@ const discoverFromSdk = (
   const files = new Set<string>();
   const servers = discoverServers(context, builder, files);
   const tools = discoverTools(context, builder, servers.matches, files);
-  return { components: servers.components + tools.components, edges: tools.edges, files };
+  const decorated = discoverDecoratedTools(context, builder, servers.matches, files);
+  return {
+    components: servers.components + tools.components + decorated.components,
+    edges: tools.edges + decorated.edges,
+    files,
+  };
 };
 
 export const mcpAdapter: AgentSystemAdapter = {

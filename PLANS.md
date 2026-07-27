@@ -30,9 +30,11 @@ tool.
 | 14. Packaging and distribution | done | `pnpm package`: stage `release/stage`, install the tarball and audit a project with it |
 | 15. Documentation and open source setup | done | `README.md`, `docs/`, `SECURITY.md`, `CONTRIBUTING.md`, CI workflows |
 | 16. Installable product | in progress | see below |
-| 17. Measured against real repositories | done | `pnpm corpus` across fourteen pinned repositories, `docs/architecture/adr/0002-deterministic-analysis.md` |
+| 17. Measured against real repositories | done | `pnpm corpus` across fifteen pinned entries, `docs/architecture/adr/0002-deterministic-analysis.md` |
+| 18. The joins the pipeline computed and dropped | done | see below |
+| 19. The map named the harness and missed the system | done | see below |
 
-594 unit and integration tests, 85 end to end tests, 10 browser tests. `pnpm verify` is green.
+657 unit and integration tests, 92 end to end tests, 10 browser tests. `pnpm verify` is green.
 
 ## Phase 16: what a stranger meets
 
@@ -261,9 +263,9 @@ author's code is not evidence of anything.
   on a list of the fallback names each library uses, because such a list is wrong the moment one of them changes.
   Evidence: five tests in `packages/findings/test/reconciliation-rules.test.ts`.
 
-**Still open.** `trace --import` reads a file; importing from a running collector is the missing path and still needs
-a design. Scoping component identity to a module rather than to a repository is the fix for the accidental match, and
-it is a design question rather than a patch.
+**Both of the questions this raised were answered in phase 18.** A run that happens elsewhere is collected with
+`orchescope receive` rather than exported to a file first. And the accidental match was never an identity problem:
+identity is already scoped to a module, and what was missing was a delta that says which joins rest on a name alone.
 
 ### Milestone 4: the breadth ceiling, decided from evidence. Done.
 
@@ -312,18 +314,170 @@ Four shapes, every one of them found here rather than imagined. Look for them in
 All interface work. The report leads with signal well enough to work with, and what limits the product today is the
 depth and breadth of what it has to report. Interface work comes after these four milestones.
 
-### What phase 17 leaves open
+### What phase 17 left open, and what became of it
 
-- **Import from a running collector.** `trace --import` reads a file. Importing from a collector is the missing path
-  and needs a design before an implementation.
-- **Component identity scoped to a module rather than a repository.** The first third party join matched a model named
-  `test` to a declaration in an unrelated test file. It is a real match by name and the wrong one, and the fix is a
-  design question.
-- **Four blind spots with names on them.** `langgraphjs` imports the Vercel AI SDK and an OpenAI client that the
-  adapters claiming them read nothing from; `crewai` and `anthropic-quickstarts` import the MCP SDK in source while the
-  MCP adapter reads configuration. Each is an adapter form to learn, and each has a pinned repository to prove it on.
-- **A second exercised entry, in JavaScript.** The join has been shown on one repository, one library and one run of
-  four spans. Nothing establishes it for JavaScript instrumentation.
+Every item here was taken up in phase 18. What that phase found is recorded above; this is the ledger.
+
+- **Import from a running collector.** Answered by receiving rather than fetching: `orchescope receive`.
+- **Component identity scoped to a module rather than a repository.** Identity already was module scoped. The real
+  defects were a path alias splitting one component into two, and a weak match rule that looked like a strong one from
+  outside. Both are fixed, and a join now reports the rule that made it.
+- **Four blind spots with names on them.** Two were false, one was a matcher defect shared by every Python adapter,
+  and one is a true statement about a repository that declares nothing to read.
+- **A second exercised entry, in JavaScript.** `vercel-ai-chatbot-exercised`, six spans, one joined tool, and an
+  identity defect found in the process.
+
+## Phase 18: the joins the pipeline computed and dropped
+
+Four numbers were derived correctly, carried most of the way, and then discarded before anything could read them.
+None of them failed loudly: an absent overlay looks exactly like a system that did nothing, and a criterion that
+cannot be judged reads as an honest refusal rather than as a missing wire. Every one was found by reading the code
+rather than by a failing test, which is why the packages they lived in now have tests.
+
+**Per component runtime metrics were never stored.** `deriveTopology` computes executions, self time, tokens, errors
+and retries per observed name, and `audit` builds the map from observed name to component identity, and nothing
+joined the two: every caller of `saveRun` passed an empty list. The consequences were quiet and wide. The map carried
+no runtime overlay at all, because all five are gated on that array. `latency-concentrated-in-one-component` reported
+"no self time was recorded" and `tokens-concentrated-in-one-component` reported "no token usage was reported by the
+instrumentation" on a run whose own record carried 1379 input and 84 output tokens, which is an inference presented as
+an observation. Attribution now happens where both halves exist, during the audit that reconciled them, and it covers
+components that only exist because they ran as well as ones that met a declaration. Evidence:
+`packages/usecases/test/runtime-attribution.test.ts`, `packages/report/test/overlays.test.ts`, and
+`tests/e2e/runtime-metrics.test.ts`, which asserts on the numbers rather than on an exit code because that is the only
+way this class of defect announces itself.
+
+**Scenario evaluator outcomes never reached the report.** `test --scenario` judges every criterion and stores the
+result, and the report bundle hardcoded an empty list for each scenario run, so the workspace showed that runs had
+happened and never what they were judged by. The browser test passed throughout, on a bundle written by hand.
+
+**Goal validation never received the scenario results it needed.** A goal created from a finding carries a
+`scenario_passes` criterion whenever a scenario exists, and neither the command line nor the agent interface passed
+any results to judge it with, so it was always undecided and a goal carrying one could never validate. That is the
+end of the loop this product is built around. The results are now read from the store inside the use case, so both
+surfaces are fixed at once, and a result that predates the goal leaves the criterion undecided with the reason
+stated: judging a change against its own baseline is the one mistake the criterion exists to prevent.
+
+**The price table had no way in.** `estimateCost` and `PriceTable` had no caller and configuration had no `pricing`
+key, while the README and the cost overlay both described a configured price table. Configuration now carries one,
+`init` writes it empty so it is discoverable, and cost is estimated from observed tokens against the provider and
+model the spans reported. A component whose model has no configured price carries no cost rather than a cost of zero,
+and the report answers a `cost_estimate` capability saying which half is missing: no price configured, or no tokens
+observed to apply one to.
+
+### What the corpus said about the same release
+
+- **Two of the four blind spots were never blind spots.** `langgraphjs` imports the Vercel AI SDK and an OpenAI client
+  in `import type` statements, which are erased before the program runs and can construct nothing. An adapter reading
+  nothing from them is correct, and counting them was the reader accusing itself.
+- **The other two were one defect in the shared matcher.** `from mcp.server import FastMCP` did not match the package
+  `mcp`, because module matching understood `@scope/pkg/sub` and not `pkg.sub`, while the coverage report already
+  split on the dot. One reader behind the other is what a blind spot looks like from outside. Teaching the matcher the
+  dotted form, and teaching the MCP adapter the `@mcp.tool()` decorator the Python SDK documents, closed both:
+  `anthropic-quickstarts` gained the server and tool it declares, and six MCP servers with 65 tools appeared in
+  `openai-agents-python`. The same fix widened four Python repositories, because `from crewai.tools import ...` and
+  `from langgraph.graph import ...` now resolve.
+- **And it immediately over-matched, and the corpus caught that too.** A repository with its own `agents` package had
+  every `from agents.agent import Agent` read as the OpenAI Agents SDK, eight components in a repository that uses
+  none. A specifier rooted in one of the repository's own top level Python packages is never a distribution, and
+  `anthropic-quickstarts` went back to reporting no such adapter.
+- **`crewai` keeps its blind spot, and the reason it prints was wrong.** Its FastMCP servers are inside string
+  literals that its tests write to disk, so there is nothing to read. The reason now names the second cause: a
+  repository can import a framework as a client and declare nothing an adapter could read.
+
+### The join in JavaScript, and the identity defect it found
+
+`vercel-ai-chatbot-exercised` pins the same commit as the static entry and drives the application's own offline model
+and its own tool through the SDK's OpenTelemetry integration. Six spans arrive, no provider is called, and the tool is
+invoked on the branch of its own code that answers without contacting a weather service.
+
+Two things worth recording. The SDK emits nothing from version 7 until `@ai-sdk/otel` is registered, so a driver
+written against the previous documentation runs, succeeds, and exports zero spans. And what it emits is the generative
+AI convention rather than a dialect of its own, so nothing had to be taught to the reader.
+
+The tool arrived and joined nothing, because the repository declared it twice: once where `tool()` is called and once
+where it is passed into a `tools` map in another module. Identity is `(kind, module, local name)`, and the reference
+in the second module never resolved to the first because the symbol index followed relative specifiers only and the
+import is `@/lib/ai/tools/get-weather`. An unresolved reference becomes a new component, so a path alias was quietly
+splitting one tool into two. The index now resolves `@/` and `~/`, which cannot be package names because an npm scope
+is never empty; the repository went from 46 components to 41 with all 30 relations kept.
+
+**A join is now reported with the rule that made it.** Identity was already scoped to a module, so the open question
+was never identity: it was that a match on kind and name alone is the weakest rule and looked like every other join
+from outside. The delta carries the counts and names the components joined on a name alone, which is what makes the
+`model:test` match in `pydantic-ai` visible as the weak join it always was rather than a footnote in prose.
+
+### Spans from a system Orchescope did not start
+
+`orchescope receive --for 10m` stands the receiver up for a window and stores whatever arrives. It is receiving rather
+than fetching, and that is the design decision: OTLP is a push protocol with no query interface, and every backend
+that stores spans has its own API, so fetching would have meant choosing a vendor and calling it the integration. It
+prints the endpoint the moment it is listening, ends on the deadline or on an interrupt without losing what arrived,
+and stays bound to loopback. Evidence: `tests/e2e/receive.test.ts`.
+
+### What the first repository outside the corpus found
+
+Pointed at a private TypeScript monorepo with a menu bar application and a mobile target in it, three defects that
+fourteen pinned repositories had not produced:
+
+- **8,591 skipped files in one coverage report**, 8,590 of them symbolic links inside a CocoaPods header directory.
+  That is unbounded output, which this repository prohibits, and it was also useless: every line described a vendored
+  dependency. `Pods`, `.build`, `DerivedData`, `Carthage` and `.gradle` are now excluded like `node_modules`, and the
+  list is bounded at twenty per reason with the withheld count stated.
+- **Bounding it changed a measurement, and the corpus caught that within the hour.** `pydantic-ai` went from 596 of
+  600 files parsed to 596 of 596, which reads as complete coverage and was a truncated list: the denominator counts
+  skipped files in a language this build reads, and four of them fell outside the sample. Counting now happens over
+  the whole list and bounding only over what is listed, with the total carried separately as `filesSkipped`.
+- **Fifty one Swift files went unmentioned.** The coverage report said every file in a language this build reads had
+  been read, which was true and was not the whole answer, while the README promises that a file in a language it
+  cannot parse is reported rather than ignored. Swift and Kotlin are now named.
+
+One more thing that repository found: the comment beside the duplicated exclusion list said the two copies were kept
+in step by a test, and there was no such test. The first time one list gained an entry the other did not, which is
+how the vendored directories stayed unexcluded through a full run of the gate. That test exists now.
+
+## Phase 19: the map named the harness and missed the system
+
+The same repository was scanned again and its graph was wrong in a way a passing gate could not see. It reported a
+`sqlite` database whose every source location was a test double or a port scaffold, while the database the repository
+actually runs on, a Cloudflare D1 binding behind fifty seven prepared statements in twenty four modules, was not in the
+graph at all. Nothing failed. The scan was fast, the coverage was honest about files, and the picture was inverted.
+
+Four defects, each with a test that fires it and a test that stays quiet without it.
+
+**A client root matched any member of itself.** `axios.get` is a request and `axios.isCancel` is not, and the matcher
+accepted both because it compared only the root. Two things followed. A promise chain repeats the root at every link,
+so one `fetch(url).then().then().catch()` became four components and four edges at one source location. A test double
+is configured through the same shape, so `fetch.mockResolvedValue(...)` was recorded as a call to an unresolved host,
+which made the heaviest edge in that repository's graph twelve lines of mock setup in a single test file. The operation
+names this build already recognised were the vocabulary that separated them. What the corpus said about the old
+behaviour is the point: of the `httpx` members `langgraph` was counting as service calls, `httpx.get` appeared three
+times, against 218 `httpx.AsyncClient`, 193 `httpx.Response` and 116 `httpx.ASGITransport`, none of which issues a
+request. Its `calls_service` count fell from 353 to 4 and became true.
+
+**A test harness reaches real clients at fakes.** Effects discovered only in a test file describe the harness, and
+carrying them into the graph manufactures an unexercised declaration for every one of them, which is the rule the join
+exists to run. The effects adapter now skips test files by the conventions the three ecosystems share. `spec` alone is
+deliberately not one of them: a directory of that name holds API documents at least as often as tests. The corpus
+priced it honestly. `langgraph` has 740 datastore client constructions under test paths and 53 outside, and its
+`queries_database` count fell from 168 to 14. Every one of `pydantic-ai`'s 97 `consumes_from_queue` relations came from
+`tests/test_temporal.py`, where a Temporal `Worker` had been read as a BullMQ one.
+
+**A binding exists only in the deployment manifest.** `env.EVENTS_DB` is a property access whose meaning is in a file no
+source reader opened, so a worker's database, namespaces, buckets and queues were invisible. `adapter:workers-bindings`
+reads a Cloudflare Workers manifest and joins it to the code through the binding name, which is the one identifier both
+halves share. Reading it needed the traversal to run before configuration, because the manifest sits beside the worker
+it deploys and not at the repository root; the candidates come from that bounded walk under the same exclusions and the
+same file limit, and the count read is capped. The relation carries the reach and claims nothing about the operation,
+because passing a binding to a function is not evidence of what happens to it there. That repository went from one
+false datastore to three real ones and 21 relations reaching them.
+
+**And the terminal divided by the wrong number.** The line a reader meets on a repository with no agent system read
+`929 of 962 files in a language this build parses were read`, when 929 of 929 had been read and the other 33 were JSON,
+YAML and TOML, which `isSupportedLanguage` excludes by name. Phase 18 added `filesInSupportedLanguages` and corrected
+discovery, the schema, the corpus scripts and the guides, and touched no file under `apps/cli`. The corpus could not
+catch it because the corpus compares JSON and this was prose.
+
+Thirteen corpus entries were re-recorded. Every movement is a number falling toward what the repository contains.
 
 ## What each phase had to establish
 
@@ -373,16 +527,23 @@ extend it without reading every file.
 
 ## Known limitations, stated rather than hidden
 
-- **Two language ecosystems.** JavaScript with TypeScript, and Python. Anything else is declared in the manifest and reported
-  as not inspected.
+- **Two language ecosystems.** JavaScript with TypeScript, and Python. Go, Rust, Java, Kotlin, Swift, C#, Ruby and PHP
+  are named in the coverage report as not inspected; anything else is declared in the manifest.
 - **Six framework adapters**, each with a fixture: OpenAI Agents SDK, LangGraph, CrewAI, Pydantic AI, Vercel AI SDK, and
-  model SDKs, plus MCP configuration and the manifest. The OpenAI Agents SDK and LangGraph carry a Python fixture as well
-  as a JavaScript one; CrewAI and Pydantic AI are Python only because the frameworks are; the Vercel AI SDK is JavaScript
-  only for the same reason.
+  model SDKs, plus MCP configuration, Cloudflare Workers bindings and the manifest. The OpenAI Agents SDK and LangGraph
+  carry a Python fixture as well as a JavaScript one; CrewAI and Pydantic AI are Python only because the frameworks are;
+  the Vercel AI SDK is JavaScript only for the same reason.
+- **One deployment platform reads its bindings.** Cloudflare Workers only. A repository on another platform declares its
+  infrastructure in the manifest, and its stores are otherwise discovered from client constructions in source.
+- **Effects in test files are not mapped.** A component only a test constructs cannot appear in a run, so carrying it
+  into the graph would report an unexercised declaration for every double. Test files are recognised by naming
+  convention, so a test written somewhere no convention names is still read as source.
 - **One repository at a time.** Cross repository identity is not designed.
 - **No answer quality measurement.** Behaviour, cost, reliability and structure only.
-- **Cost is derived from token counts and a configured price table.** No price table ships, so cost is absent until one is
-  configured, and every cost figure carries the `estimated` basis.
+- **Cost is derived from observed token counts and the price table in `pricing`, which is empty until it is filled in.**
+  No price table ships, because a price this repository guessed would be wrong the week a provider changed it. Until one
+  is configured, tokens are reported and cost is not, and the report says which of the two halves is missing. Every cost
+  figure carries the `estimated` basis.
 - **Nothing calls a model.** Analysis is deterministic, and the model based path that was scaffolded and never
   implemented was removed rather than finished. The decision, the corpus evidence behind it and what would reverse it
   are in [ADR 0002](docs/architecture/adr/0002-deterministic-analysis.md).
@@ -395,7 +556,6 @@ extend it without reading every file.
 Nothing here is committed work, and none of it is required for the product to be useful. It is recorded so a reader knows the
 shape of the boundaries.
 
-- A price table format, so cost stops being absent by default.
 - More adapters, each gated on a fixture that makes the claim true.
 - A design for cross repository identity, which is the prerequisite for auditing a system split across services.
 - Import from a collector rather than only from a file, for teams whose runs happen elsewhere.

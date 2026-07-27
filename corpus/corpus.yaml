@@ -143,6 +143,31 @@ repositories:
       framework repository and a consumer of that framework are different shapes, and an adapter can read one
       without reading the other.
 
+  - name: vercel-ai-chatbot-exercised
+    source: git
+    url: https://github.com/vercel/ai-chatbot.git
+    commit: c2f8235e1f3ea903ad8b7f61447c4f74164b5c58
+    kind: agent_system
+    why: >-
+      The same commit as the entry above, measured with a run in it. The join had only ever been shown on Python, and
+      instrumentation is the half of it that differs most between languages: a decoder that reads one dialect says
+      nothing about the other. This is the entry that holds the JavaScript half.
+    exercise:
+      why: >-
+        The application's own offline model and its own tool, driven through the SDK's OpenTelemetry integration. No
+        provider is called, no credential is used, and the tool is invoked on the branch of its own code that answers
+        without contacting a weather service. What it cannot reach is the application's own agents, which are Next.js
+        server actions needing a request, a session and a database, and that limit is part of what this entry records.
+      script: corpus/runs/vercel-ai-chatbot/exercise.mjs
+      # The SDK the repository pins, the integration that emits spans from version 7 onwards, the exporter, and zod,
+      # which the repository's own tool imports.
+      nodePackages:
+        - ai@7.0.15
+        - '@ai-sdk/otel'
+        - '@opentelemetry/sdk-trace-node'
+        - '@opentelemetry/exporter-trace-otlp-http'
+        - zod
+
   - name: anthropic-quickstarts
     source: git
     url: https://github.com/anthropics/anthropic-quickstarts.git

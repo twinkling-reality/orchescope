@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parse as parseToml } from 'smol-toml';
 import { parse as parseYaml } from 'yaml';
 
 /**
@@ -8,9 +9,14 @@ import { parse as parseYaml } from 'yaml';
  * The list is explicit rather than a glob, because reading every JSON file in a repository would be
  * both slow and a way for a hostile repository to feed a parser arbitrary input. Each document keeps
  * its raw text length and a JSON pointer helper so evidence can point at the exact key.
+ *
+ * A caller may name further paths, and `platformConfigPaths` derives them from the bounded traversal by file name so
+ * that a deployment manifest in a workspace package is read as well as one at the root. That keeps the guarantee the
+ * explicit list exists for: every path read is one the traversal already walked, under the same exclusions and the
+ * same file limit, and the count of them is capped.
  */
 
-export type ConfigFormat = 'json' | 'yaml';
+export type ConfigFormat = 'json' | 'yaml' | 'toml';
 
 export type ConfigDocument = {
   readonly path: string;
@@ -97,6 +103,33 @@ export const jsonPointer = (segments: readonly (string | number)[]): string =>
         .map((segment) => String(segment).replaceAll('~', '~0').replaceAll('/', '~1'))
         .join('/')}`;
 
+const formatOf = (path: string): ConfigFormat => {
+  if (path.endsWith('.yaml') || path.endsWith('.yml')) return 'yaml';
+  if (path.endsWith('.toml')) return 'toml';
+  return 'json';
+};
+
+/**
+ * Deployment manifests that declare infrastructure, found by file name in the traversal rather than at a fixed path.
+ *
+ * A Cloudflare Workers manifest sits beside the worker it deploys, which in a workspace is not the repository root.
+ * Reading only the root missed every binding in one repository: a D1 database, two KV namespaces and a cron trigger
+ * declared in `packages/worker/wrangler.toml`, while fifty seven prepared statements ran against the first of them.
+ *
+ * Only names on this list are read, the candidates come from the bounded traversal so the exclusions and the file
+ * limit already applied, and the count read is capped. A repository with more of them than the cap is a repository
+ * whose extra manifests are not read, which is why the cap is stated rather than silent.
+ */
+const PLATFORM_CONFIG_NAMES = new Set(['wrangler.toml', 'wrangler.json', 'wrangler.jsonc']);
+
+export const MAX_PLATFORM_CONFIGS = 32;
+
+export const platformConfigPaths = (paths: readonly string[]): readonly string[] =>
+  paths
+    .filter((path) => PLATFORM_CONFIG_NAMES.has(path.split('/').at(-1) ?? ''))
+    .sort()
+    .slice(0, MAX_PLATFORM_CONFIGS);
+
 export const readConfigDocuments = (
   root: string,
   extraPaths: readonly string[] = [],
@@ -120,14 +153,17 @@ export const readConfigDocuments = (
       }
       continue;
     }
-    const isYaml = relativePath.endsWith('.yaml') || relativePath.endsWith('.yml');
+    const format = formatOf(relativePath);
     try {
-      const data = isYaml
-        ? (parseYaml(text) as unknown)
-        : (JSON.parse(stripJsonComments(text)) as unknown);
+      const data =
+        format === 'yaml'
+          ? (parseYaml(text) as unknown)
+          : format === 'toml'
+            ? (parseToml(text) as unknown)
+            : (JSON.parse(stripJsonComments(text)) as unknown);
       documents.push({
         path: relativePath,
-        format: isYaml ? 'yaml' : 'json',
+        format,
         data,
         byteLength: Buffer.byteLength(text, 'utf8'),
       });

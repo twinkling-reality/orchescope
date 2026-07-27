@@ -7,9 +7,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 562,
-      "edgesFound": 324,
-      "filesInspected": 68,
+      "componentsFound": 40,
+      "edgesFound": 22,
+      "filesInspected": 15,
       "status": "completed"
     },
     "adapter:langgraph": {
@@ -25,15 +25,15 @@
       "status": "not_applicable"
     },
     "adapter:mcp": {
-      "componentsFound": 3,
-      "edgesFound": 0,
-      "filesInspected": 2,
+      "componentsFound": 36,
+      "edgesFound": 31,
+      "filesInspected": 4,
       "status": "completed"
     },
     "adapter:model-sdk": {
-      "componentsFound": 103,
+      "componentsFound": 105,
       "edgesFound": 24,
-      "filesInspected": 53,
+      "filesInspected": 55,
       "status": "completed"
     },
     "adapter:openai-agents": {
@@ -44,17 +44,23 @@
     },
     "adapter:prompts": {
       "componentsFound": 892,
-      "edgesFound": 26,
+      "edgesFound": 1,
       "filesInspected": 224,
       "status": "completed"
     },
     "adapter:pydantic-ai": {
-      "componentsFound": 2506,
+      "componentsFound": 2517,
       "edgesFound": 626,
       "filesInspected": 201,
       "status": "completed"
     },
     "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:workers-bindings": {
       "componentsFound": 0,
       "edgesFound": 0,
       "filesInspected": 0,
@@ -65,18 +71,17 @@
   "blindSpots": [],
   "components": {
     "byKind": {
-      "agent": 420,
+      "agent": 426,
       "database": 2,
-      "entrypoint": 241,
-      "external_service": 3,
-      "mcp_server": 3,
+      "entrypoint": 18,
+      "external_service": 1,
+      "mcp_server": 5,
       "model": 16,
       "prompt": 750,
       "provider": 6,
-      "queue": 1,
-      "tool": 471
+      "tool": 502
     },
-    "total": 1913
+    "total": 1726
   },
   "discardedRelations": [],
   "files": {
@@ -92,29 +97,28 @@
       "observability-coverage": 1,
       "prompt-injection-boundary": 1,
       "retry-around-non-idempotent-operation": 1,
-      "topology-shape": 2,
-      "unbounded-retry": 1
+      "topology-shape": 2
     },
     "bySeverity": {
       "low": 2,
-      "medium": 5
+      "medium": 4
     },
     "strengths": 0,
-    "total": 7
+    "total": 6
   },
   "kind": "agent_system",
   "languagesNotAnalysed": [],
   "name": "pydantic-ai",
   "relations": {
     "byKind": {
-      "calls_service": 122,
+      "calls_service": 6,
       "calls_tool": 471,
-      "consumes_from_queue": 97,
       "invokes_model": 65,
-      "queries_database": 23,
+      "provides_tool": 31,
+      "queries_database": 12,
       "served_by_provider": 12,
-      "uses_prompt": 16
+      "uses_prompt": 1
     },
-    "total": 806
+    "total": 598
   }
 }

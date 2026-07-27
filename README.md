@@ -88,6 +88,7 @@ orchescope audit
 | --- | --- |
 | `orchescope audit` | Discover the system, reconcile it against stored runs, report findings |
 | `orchescope trace -- <command>` | Run a command, collect its OpenTelemetry spans, store them as a run |
+| `orchescope receive --for 10m` | Listen for spans from a system that is already running, store them as a run |
 | `orchescope test --scenario <id>` | Run a scenario and evaluate it |
 | `orchescope benchmark --scenario <id> --agents 1,2,4` | Vary one dimension and compare the variants |
 | `orchescope chaos --scenario <id>` | Inject the faults a scenario declares and report what each one did |
@@ -174,7 +175,8 @@ Only what is tested is claimed. Each of these has an adapter exercised by tests 
 | Pydantic AI (Python) | `Agent('provider:model', ...)`, `@agent.tool` and `@agent.tool_plain`, `retries`, `requires_approval`, `output_type` |
 | Vercel AI SDK (JavaScript and TypeScript) | `generateText`, `streamText`, `generateObject`, `tool(...)`, `maxSteps` |
 | Model SDKs | OpenAI, Anthropic and compatible clients, including base URL overrides |
-| Model Context Protocol | `mcp.json`, `.mcp.json`, `.vscode/mcp.json`, `McpServer`, `FastMCP`, tool registration |
+| Model Context Protocol | `mcp.json`, `.mcp.json`, `.vscode/mcp.json`, `McpServer`, `FastMCP` including `from mcp.server import`, `registerTool` and the `@mcp.tool()` decorator |
+| Cloudflare Workers bindings | `wrangler.toml`, `wrangler.json` and `wrangler.jsonc` anywhere in the workspace: `d1_databases`, `kv_namespaces`, `r2_buckets` and queue producers, joined to the code by the binding name |
 | OpenTelemetry | OTLP over HTTP, protobuf and JSON, `gen_ai.*` and OpenInference attributes |
 
 Each row names an ecosystem with a fixture repository under `packages/discovery/test`, written the way that framework's own
@@ -187,7 +189,21 @@ much of a repository was actually parsed, which adapter contributed what, and wh
 adapter read nothing from. See [the corpus guide](docs/guides/corpus.md).
 
 Anything else can be declared in `.orchescope/manifest.yaml`, which is a first class input rather than a fallback. A file
-in a language Orchescope cannot parse is reported as not inspected rather than ignored.
+in a language Orchescope cannot parse is reported as not inspected rather than ignored: Go, Rust, Java, Kotlin, Swift,
+C#, Ruby and PHP are named with their file counts in the coverage report.
+
+## Cost
+
+No price table ships. A price this repository guessed would be wrong the week a provider changed it, and a stale price
+turns a measurement into a wrong number reported with the authority of a measurement. Configure your own in
+`.orchescope/config.json`, keyed by the provider and model your spans report:
+
+```json
+{ "pricing": { "openai/gpt-4o-mini": { "inputPerMillion": 0.15, "outputPerMillion": 0.6 } } }
+```
+
+Until one is configured, tokens are reported and cost is not, and the report says which of the two halves is missing
+rather than showing zero. A component whose model has no configured price carries no cost rather than a cost of zero.
 
 ## Try it on the demonstration system
 

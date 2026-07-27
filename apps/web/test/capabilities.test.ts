@@ -60,6 +60,6 @@ describe('orderedCapabilities', () => {
 
   it('covers every name the schema allows', () => {
     assert.equal(new Set(CAPABILITY_NAMES).size, CAPABILITY_NAMES.length);
-    assert.equal(CAPABILITY_NAMES.length, 8);
+    assert.equal(CAPABILITY_NAMES.length, 9);
   });
 });

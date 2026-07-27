@@ -86,5 +86,60 @@ those names is now a number that a change has to keep or explain.
 One repository, one example, one library, one run of four spans. It establishes that the join works on code this
 repository did not write, and it names the three ways it can be wrong: a generic name that identifies nothing, an
 accidental match across a flat namespace, and a component kind nothing attempts to join. It does not establish anything
-about JavaScript instrumentation, about a system with more than one agent running at once, or about a repository whose
-runtime names are generated rather than written.
+about a system with more than one agent running at once, or about a repository whose runtime names are generated rather
+than written.
+
+# The same join in JavaScript
+
+Instrumentation is the half of this that differs most between languages, and a decoder that reads one dialect says
+nothing about the other. This is the second join, in JavaScript, and it found a defect the Python one could not.
+
+## What was run
+
+`vercel/ai-chatbot` at `c2f8235e1f3ea903ad8b7f61447c4f74164b5c58`, driven by `corpus/runs/vercel-ai-chatbot/exercise.mjs`
+through two pieces of that repository rather than reimplementations of them: `lib/ai/models.mock.ts`, the offline model
+it uses for its own end to end tests, and `lib/ai/tools/get-weather.ts`, a tool declared with the SDK's own `tool()`.
+The tool is called with no arguments, which is the branch of its own code that answers without contacting a weather
+service, so a real third party tool executes and nothing outside the machine is contacted.
+
+Two things about the SDK are worth recording, because both would look like a broken join from the outside:
+
+- **From version 7 the SDK emits no spans until a telemetry integration is registered.** OpenTelemetry moved out of
+  `ai` and into `@ai-sdk/otel`, and `experimental_telemetry: { isEnabled: true }` on its own now produces nothing at
+  all. A driver written against the version 6 documentation runs, succeeds and exports zero spans.
+- **What it emits is the generative AI convention, not a dialect of its own.** `gen_ai.operation.name` carries `chat`,
+  `execute_tool`, `invoke_agent` and `agent_step`; the tool arrives as `gen_ai.tool.name`. Nothing had to be taught to
+  the reader, which is the strongest evidence yet that reading the convention rather than a vendor's spelling was the
+  right call.
+
+Six spans arrived across the two steps of one generation.
+
+## The defect this found
+
+`tool:getweather` arrived exercised and joined nothing, while the repository declares that tool. It declares it
+**twice**: once at `lib/ai/tools/get-weather.ts` where `tool()` is called, and once at `app/(chat)/api/chat/route.ts`
+where the tool is passed into a `tools` map. Identity is `(kind, module, local name)`, so those were two components,
+and reconciliation refuses an ambiguous match by design: exactly one declared component of a kind may carry a name for
+the `kind_and_name` rule to fire.
+
+The cause was module resolution. The route imports the tool as `@/lib/ai/tools/get-weather`, a path alias, and the
+symbol index resolved relative specifiers only. An unresolved reference becomes a new component rather than a reference
+to an existing one, so the same tool was declared once per module that mentioned it. The index now resolves `@/` and
+`~/`, which cannot be package names because an npm scope is never empty, and a `paths` mapping in any other spelling is
+still not followed. The repository went from 46 components to 41, with all 30 relations kept and now pointing at one
+tool each.
+
+## What the delta says
+
+```
+runtime  6 span(s), 3 of 19 components exercised, 2 without a declaration
+joined                  tool:getweather
+exercisedNotDeclared    agent:corpus-exercise, model:mock/mock-model
+```
+
+Both undeclared names are honest. The agent is the driver's own, because the application's agents are Next.js server
+actions that need a request, a session and a database, and none of that is available to a corpus run. The model is the
+repository's own mock, which the repository declares nowhere because it declares models by gateway identifier. Naming
+the driver's agent after one of the application's would have staged a join rather than measured one.
+
+That is committed in `corpus/expected/vercel-ai-chatbot-exercised.json` and rechecked by `pnpm corpus:exercise`.

@@ -65,13 +65,30 @@ const normalizeSegments = (path: string): string => {
 const isRelative = (specifier: string): boolean =>
   specifier.startsWith('./') || specifier.startsWith('../') || specifier.startsWith('.');
 
-/** Resolves a JavaScript specifier that is relative to `fromFile` against the known file set. */
+/**
+ * Aliases that mean the repository root, and are not a package name by construction.
+ *
+ * `@/lib/thing` cannot be a package: an npm scope is never empty. `~/lib/thing` is the other spelling of the same
+ * convention. Anything else in a `paths` mapping is not followed, and a symbol behind one stays unresolved rather
+ * than being guessed at, which is what keeps this an algorithm with a stated limit rather than a type checker.
+ *
+ * The limit is not cosmetic: a reference that does not resolve becomes a second component for something already
+ * discovered, so the same tool ends up declared twice under two module namespaces.
+ */
+const ROOT_ALIASES = ['@/', '~/'];
+
+const isRootAliased = (specifier: string): boolean =>
+  ROOT_ALIASES.some((alias) => specifier.startsWith(alias));
+
+/** Resolves a JavaScript specifier that is relative to `fromFile`, or rooted by an alias, against the file set. */
 const resolveJavaScript = (
   fromFile: string,
   specifier: string,
   known: ReadonlySet<string>,
 ): string | undefined => {
-  const base = normalizeSegments(`${dirnameOf(fromFile)}/${specifier}`);
+  const base = isRootAliased(specifier)
+    ? normalizeSegments(specifier.slice(2))
+    : normalizeSegments(`${dirnameOf(fromFile)}/${specifier}`);
   if (known.has(base)) return base;
   const withoutExtension = base.replace(/\.(js|mjs|cjs|jsx)$/, '');
   for (const extension of JS_CANDIDATES) {
@@ -129,7 +146,7 @@ export const buildSymbolIndex = (modules: readonly ModuleFacts[]): SymbolIndex =
   const resolveSpecifier = (fromFile: string, specifier: string): string | undefined =>
     fromFile.endsWith('.py')
       ? resolvePython(fromFile, specifier, known)
-      : isRelative(specifier)
+      : isRelative(specifier) || isRootAliased(specifier)
         ? resolveJavaScript(fromFile, specifier, known)
         : undefined;
 

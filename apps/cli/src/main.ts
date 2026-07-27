@@ -13,6 +13,7 @@ import {
   benchmarkCommand,
   chaosCommand,
   compareCommand,
+  receiveCommand,
   testCommand,
   traceCommand,
 } from './commands/run-commands.ts';
@@ -176,6 +177,15 @@ program
       await withContext('trace', globals(), (context) => traceCommand(context, command, options));
     },
   );
+
+program
+  .command('receive')
+  .description('listen for spans from a system that is already running, and store them as a run')
+  .option('--for <duration>', 'how long to listen, for example 90s, 10m or 1h', '5m')
+  .option('--label <label>', 'name for this run')
+  .action(async (options: { for: string; label?: string }) => {
+    await withContext('receive', globals(), (context) => receiveCommand(context, options));
+  });
 
 program
   .command('test')

@@ -79,8 +79,24 @@ export type ValidateGoalRequest = {
   readonly workspace: Workspace;
   readonly goalId: string;
   readonly comparison?: Comparison;
-  readonly scenarioResults?: readonly ScenarioResult[];
   readonly rescanned?: boolean;
+};
+
+/**
+ * The stored results of every scenario the goal's criteria name.
+ *
+ * A goal is verified by rerunning the scenario it was created with, so the results it is judged against are read
+ * from the store rather than supplied by the caller. Passing them in would mean every surface had to remember to,
+ * and the one that forgot would report an unjudgeable criterion as undecided while the evidence sat in the store.
+ */
+const resultsForCriteria = (workspace: Workspace, goal: Goal): readonly ScenarioResult[] => {
+  const scenarioIds = new Set(
+    goal.acceptanceCriteria
+      .map((criterion) => criterion.check)
+      .filter((check) => check.kind === 'scenario_passes')
+      .map((check) => check.scenarioId),
+  );
+  return [...scenarioIds].flatMap((scenarioId) => workspace.store.scenarioResults(scenarioId));
 };
 
 export type ValidateGoalResult = {
@@ -112,7 +128,7 @@ export const validateGoalOutcome = (request: ValidateGoalRequest): ValidateGoalR
 
   const validation = validateGoal(goal, {
     comparison: request.comparison,
-    scenarioResults: request.scenarioResults ?? [],
+    scenarioResults: resultsForCriteria(workspace, goal),
     findingStillPresent: stillPresent,
     rescanned: request.rescanned ?? latestScan !== undefined,
   });

@@ -39,6 +39,7 @@ export type CapabilityInput = {
   readonly canOpenSourceLocation: boolean;
   readonly canExportStandalone: boolean;
   readonly modelInterpretationAvailable: boolean;
+  readonly costEstimateAvailable: boolean;
   readonly reasons: Readonly<Record<ReportCapability['name'], string>>;
 };
 
@@ -71,6 +72,7 @@ const capabilityList = (input: CapabilityInput): readonly ReportCapability[] => 
     ['open_source_location', input.canOpenSourceLocation],
     ['export_standalone', input.canExportStandalone],
     ['model_interpretation', input.modelInterpretationAvailable],
+    ['cost_estimate', input.costEstimateAvailable],
   ];
   return entries.map(([name, available]) => ({
     name,

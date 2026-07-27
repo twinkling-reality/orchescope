@@ -1,15 +1,15 @@
 {
   "adapters": {
     "adapter:crewai": {
-      "componentsFound": 574,
-      "edgesFound": 162,
-      "filesInspected": 54,
+      "componentsFound": 998,
+      "edgesFound": 428,
+      "filesInspected": 84,
       "status": "completed"
     },
     "adapter:effects": {
-      "componentsFound": 345,
-      "edgesFound": 194,
-      "filesInspected": 92,
+      "componentsFound": 208,
+      "edgesFound": 110,
+      "filesInspected": 68,
       "status": "completed"
     },
     "adapter:langgraph": {
@@ -31,9 +31,9 @@
       "status": "completed"
     },
     "adapter:model-sdk": {
-      "componentsFound": 79,
+      "componentsFound": 82,
       "edgesFound": 64,
-      "filesInspected": 11,
+      "filesInspected": 13,
       "status": "completed"
     },
     "adapter:openai-agents": {
@@ -44,7 +44,7 @@
     },
     "adapter:prompts": {
       "componentsFound": 568,
-      "edgesFound": 9,
+      "edgesFound": 7,
       "filesInspected": 237,
       "status": "completed"
     },
@@ -59,6 +59,12 @@
       "edgesFound": 0,
       "filesInspected": 0,
       "status": "not_applicable"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     }
   },
   "agentSystemDetected": true,
@@ -67,17 +73,17 @@
   ],
   "components": {
     "byKind": {
-      "agent": 159,
-      "agent_group": 47,
+      "agent": 260,
+      "agent_group": 90,
       "database": 4,
-      "entrypoint": 153,
+      "entrypoint": 100,
       "external_service": 2,
       "model": 6,
       "prompt": 521,
       "provider": 3,
       "queue": 1
     },
-    "total": 896
+    "total": 987
   },
   "discardedRelations": [],
   "files": {
@@ -107,14 +113,14 @@
   "name": "crewai",
   "relations": {
     "byKind": {
-      "calls_service": 86,
-      "contains": 46,
+      "calls_service": 43,
+      "contains": 104,
       "invokes_model": 25,
       "publishes_to_queue": 2,
-      "queries_database": 72,
+      "queries_database": 56,
       "served_by_provider": 6,
-      "uses_prompt": 9
+      "uses_prompt": 7
     },
-    "total": 246
+    "total": 243
   }
 }

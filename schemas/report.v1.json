@@ -1078,6 +1078,10 @@
               {
                 "const": "model_interpretation",
                 "type": "string"
+              },
+              {
+                "const": "cost_estimate",
+                "type": "string"
               }
             ]
           },
@@ -4939,6 +4943,10 @@
               "minimum": 0,
               "type": "integer"
             },
+            "filesSkipped": {
+              "minimum": 0,
+              "type": "integer"
+            },
             "languages": {
               "items": {
                 "additionalProperties": false,
@@ -5984,6 +5992,46 @@
           ],
           "type": "object"
         },
+        "joins": {
+          "additionalProperties": false,
+          "properties": {
+            "ambiguous": {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "byCodeLocation": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "byKindAndName": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "byRuntimeName": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "onNameAlone": {
+              "items": {
+                "description": "Stable component identifier, for example \"agent:orchestrator\" or \"tool:refund~1a2b3c\".",
+                "pattern": "^[a-z_]+:[a-z0-9@][a-z0-9_.@/-]*(?:~[0-9a-f]{6})?$",
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "byCodeLocation",
+            "byRuntimeName",
+            "byKindAndName",
+            "onNameAlone",
+            "ambiguous"
+          ],
+          "type": "object"
+        },
         "revision": {
           "additionalProperties": false,
           "properties": {
@@ -6010,6 +6058,7 @@
         "exercisedNotDeclared",
         "contradictions",
         "duplicateSideEffects",
+        "joins",
         "coverage"
       ],
       "type": "object"

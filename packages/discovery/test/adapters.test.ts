@@ -1000,6 +1000,329 @@ graph = builder.compile()
     });
     assert.deepEqual(blindSpots(result), []);
   });
+
+  it('does not count a type only import, which cannot construct anything at run time', async () => {
+    // Two real repositories carried a blind spot for this: a React component importing a framework's types.
+    const result = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'types-only', dependencies: { ai: '4.0.0' } });
+      workspace.write(
+        'src/message.ts',
+        `import type { UIMessage } from 'ai';
+
+export const label = (message: UIMessage): string => message.id;
+`,
+      );
+    });
+    assert.deepEqual(
+      blindSpots(result),
+      [],
+      'an erased import is not evidence that a reader is behind',
+    );
+  });
+});
+
+describe('a tool defined in one module and used in another', () => {
+  it('is one component, whether the import is relative or rooted at an alias', async () => {
+    const result = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'aliased', dependencies: { ai: '^5.0.0' } });
+      workspace.write(
+        'lib/tools/get-weather.ts',
+        `import { tool } from 'ai';
+
+export const getWeather = tool({
+  description: 'Get the current weather at a location.',
+});
+`,
+      );
+      workspace.write(
+        'app/route.ts',
+        `import { generateText } from 'ai';
+import { getWeather } from '@/lib/tools/get-weather';
+
+export async function answer(question: string) {
+  return generateText({ model: 'gpt-4o-mini', prompt: question, tools: { getWeather } });
+}
+`,
+      );
+    });
+    const weather = result.ids.filter((id) => id.startsWith('tool:getweather'));
+    assert.deepEqual(
+      weather,
+      ['tool:getweather'],
+      `the same tool was declared twice, once per module: ${weather.join(', ')}`,
+    );
+    assert.ok(
+      result.edges.some((edge) => edge.endsWith('->tool:getweather')),
+      `nothing calls the tool: ${result.edges.join(', ')}`,
+    );
+  });
+});
+
+describe('the Model Context Protocol in Python', () => {
+  it('reads a FastMCP server and the tools its decorator registers', async () => {
+    // The form the Python SDK documents: a submodule import, a server in a variable, and decorated functions.
+    const result = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'calculator', dependencies: ['mcp>=1.0'] });
+      workspace.write(
+        'src/calculator_mcp.py',
+        `from mcp.server import FastMCP
+
+mcp = FastMCP("Calculator")
+
+
+@mcp.tool(name="calculator")
+def calculator(number1: float, number2: float, operator: str) -> str:
+    return "0"
+
+
+@mcp.tool()
+def describe() -> str:
+    return "a calculator"
+`,
+      );
+    });
+    assert.ok(
+      result.ids.includes('mcp_server:calculator'),
+      `no server among ${result.ids.join(', ')}`,
+    );
+    assert.ok(
+      result.ids.includes('tool:calculator'),
+      'the name the decorator overrides was not used',
+    );
+    assert.ok(
+      result.ids.includes('tool:describe'),
+      'a decorator with no name should take the function name, which is what the library does',
+    );
+    assert.ok(
+      result.edges.includes('provides_tool:mcp_server:calculator->tool:calculator'),
+      `the server was not joined to its tool: ${result.edges.join(', ')}`,
+    );
+    assert.deepEqual(
+      result.result.graph.coverage.unsupported.filter((area) => area.kind === 'adapter_blind_spot'),
+      [],
+    );
+  });
+
+  it('does not read a local package that shares a distribution name', async () => {
+    // A repository with its own `agents` package is not a repository using the OpenAI Agents SDK.
+    const result = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'local-agents' });
+      workspace.write('agents/__init__.py', '');
+      workspace.write(
+        'agents/agent.py',
+        `class Agent:
+    def __init__(self, name: str) -> None:
+        self.name = name
+`,
+      );
+      workspace.write(
+        'agents/run.py',
+        `from agents.agent import Agent
+
+assistant = Agent(name="assistant")
+`,
+      );
+    });
+    assert.equal(
+      result.result.agentSystemDetected,
+      false,
+      `a local package was read as a framework: ${result.ids.join(', ')}`,
+    );
+  });
+});
+
+describe('Cloudflare Workers bindings', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writeNodeProject(workspace, { name: 'worker-app' });
+    // Not at the repository root, because a workspace puts the manifest beside the worker it deploys.
+    workspace.write(
+      'packages/worker/wrangler.toml',
+      `name = "events-worker"
+main = "src/index.ts"
+compatibility_date = "2024-12-18"
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "71502609ca734d54a4267176945025c7"
+
+[[d1_databases]]
+binding = "EVENTS_DB"
+database_name = "app-events"
+database_id = "c13a8424-bc2c-486c-8b50-9b8748a88b72"
+`,
+    );
+    workspace.write(
+      'packages/worker/src/settings.ts',
+      `export const readSettings = async (db: D1Database): Promise<unknown> =>
+  db.prepare('SELECT value_json FROM settings WHERE key = ?1').first();
+`,
+    );
+    workspace.write(
+      'packages/worker/src/index.ts',
+      `import { readSettings } from './settings.ts';
+
+export const overview = async (env: Env): Promise<unknown> => {
+  const settings = await readSettings(env.EVENTS_DB);
+  const pointer = await listPointers(env.SESSIONS);
+  return { settings, pointer };
+};
+`,
+    );
+  };
+
+  it('maps the database and the namespace the manifest binds, with the manifest as evidence', async () => {
+    const { result, ids } = await scan(build);
+    assert.ok(
+      ids.includes('database:app-events'),
+      `the bound D1 database should be a component, saw ${ids.join(', ')}`,
+    );
+    assert.ok(
+      ids.includes('database:sessions'),
+      `the bound KV namespace should be a component, saw ${ids.join(', ')}`,
+    );
+
+    const database = result.graph.components.find(
+      (component) => component.id === 'database:app-events',
+    );
+    assert.ok(database !== undefined);
+    assert.deepEqual(database.configLocations, [
+      { file: 'packages/worker/wrangler.toml', pointer: '/d1_databases/0' },
+    ]);
+    assert.equal(database.metadata?.['binding'], 'EVENTS_DB');
+    assert.equal(database.metadata?.['service'], 'cloudflare-d1');
+  });
+
+  it('draws the relation from the code that names the binding', async () => {
+    const { edges } = await scan(build);
+    assert.ok(
+      edges.some((edge) => edge === 'queries_database:entrypoint:overview->database:app-events'),
+      `the caller should reach the database, saw ${edges.join(', ')}`,
+    );
+    assert.ok(
+      edges.some((edge) => edge === 'queries_database:entrypoint:overview->database:sessions'),
+      `the caller should reach the namespace, saw ${edges.join(', ')}`,
+    );
+  });
+
+  it('stays quiet on a repository with no such manifest', async () => {
+    const { adapters } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'plain-app' });
+      workspace.write('src/math.ts', 'export const add = (a: number, b: number) => a + b;\n');
+    });
+    const run = adapters.find((adapter) => adapter.adapterId === 'adapter:workers-bindings');
+    assert.ok(run !== undefined);
+    assert.equal(run.status, 'not_applicable');
+  });
+
+  it('does not read a wrangler.toml that declares no binding as a source of components', async () => {
+    const { ids } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'static-site' });
+      workspace.write('wrangler.toml', 'name = "static-site"\ncompatibility_date = "2024-12-18"\n');
+    });
+    assert.equal(
+      ids.some((id) => id.startsWith('database:') || id.startsWith('queue:')),
+      false,
+      `a manifest with no binding declares no store, saw ${ids.join(', ')}`,
+    );
+  });
+});
+
+describe('external effects reached through a client member', () => {
+  it('counts a promise chain as the one request it is', async () => {
+    const { ids, edges } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'chain-app' });
+      workspace.write(
+        'src/load.ts',
+        `export const load = (url: string): Promise<Float32Array> =>
+  fetch(url)
+    .then((response) => response.arrayBuffer())
+    .then((buffer) => new Float32Array(buffer))
+    .catch(() => new Float32Array(0));
+`,
+      );
+    });
+    const services = ids.filter((id) => id.startsWith('external_service:'));
+    const calls = edges.filter((edge) => edge.startsWith('calls_service:'));
+    assert.equal(services.length, 1, `one service was expected, saw ${services.join(', ')}`);
+    assert.equal(calls.length, 1, `one call was expected, saw ${calls.join(', ')}`);
+  });
+
+  it('still reads a client whose member names the operation', async () => {
+    const { ids, edges } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'axios-app', dependencies: { axios: '^1.7.0' } });
+      workspace.write(
+        'src/client.ts',
+        `import axios from 'axios';
+
+export const send = () => axios.post('https://api.example.com/orders', {});
+`,
+      );
+    });
+    assert.ok(
+      ids.some((id) => id.startsWith('external_service:')),
+      `the posted service should have been discovered, saw ${ids.join(', ')}`,
+    );
+    assert.ok(
+      edges.some((edge) => edge.startsWith('calls_service:')),
+      `the call should have been discovered, saw ${edges.join(', ')}`,
+    );
+  });
+
+  it('does not read a configured test double as a request that leaves the process', async () => {
+    const { ids, edges } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'mock-app' });
+      workspace.write(
+        'src/api.check.ts',
+        `export const prime = (body: unknown): void => {
+  fetch.mockResolvedValue({ ok: true, json: () => body });
+  fetch.mockResolvedValueOnce({ ok: false, status: 500 });
+};
+`,
+      );
+    });
+    assert.equal(
+      ids.some((id) => id.startsWith('external_service:')),
+      false,
+      `mock setup is not a request, saw ${ids.join(', ')}`,
+    );
+    assert.equal(
+      edges.some((edge) => edge.startsWith('calls_service:')),
+      false,
+      `mock setup is not a request, saw ${edges.join(', ')}`,
+    );
+  });
+});
+
+describe('an effect a test harness reaches at a fake', () => {
+  const writeStore = (workspace: ReturnType<typeof createTempWorkspace>, path: string): void => {
+    writeNodeProject(workspace, { name: 'store-app' });
+    workspace.write(
+      path,
+      `import { DatabaseSync } from 'node:sqlite';
+
+export class Store {
+  readonly db = new DatabaseSync(':memory:');
+}
+`,
+    );
+  };
+
+  it('is not mapped as a datastore of the system', async () => {
+    const { ids } = await scan((workspace) => writeStore(workspace, 'test/helpers/d1.ts'));
+    assert.equal(
+      ids.some((id) => id.startsWith('database:')),
+      false,
+      `a double is not the system's datastore, saw ${ids.join(', ')}`,
+    );
+  });
+
+  it('is mapped when the same construction is in source', async () => {
+    const { ids } = await scan((workspace) => writeStore(workspace, 'src/store.ts'));
+    assert.ok(
+      ids.includes('database:sqlite'),
+      `the datastore should have been discovered, saw ${ids.join(', ')}`,
+    );
+  });
 });
 
 describe('a repository with none of them', () => {

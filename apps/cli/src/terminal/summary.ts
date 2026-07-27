@@ -58,6 +58,16 @@ const notDetectedLines = (
   const applicable = coverage.adapters.filter((adapter) => adapter.status !== 'not_applicable');
   const inapplicable = coverage.adapters.filter((adapter) => adapter.status === 'not_applicable');
   const summary = result.bundle.summary;
+  /*
+   * The denominator is the files in a language this build reads, never every file the traversal walked. The walk
+   * counts JSON, YAML and TOML so that configuration adapters can read them, and none of the three is parsed as
+   * source, so dividing by the walk reports a repository whose every readable file was read as partly read. A scan
+   * of this repository printed "929 of 962" when 929 of 929 had been read and one file had been skipped.
+   *
+   * Coverage written by a build older than the field carries no such count. Falling back to the files parsed states
+   * the one thing still known to be true rather than reinstating the denominator that was wrong.
+   */
+  const supported = coverage.filesInSupportedLanguages ?? coverage.filesParsed;
   return [
     `${style.warn(SYMBOLS.warning)} No agent system was detected. Nothing here declared an agent, a model call, a tool or an MCP server.`,
     // A scan that found databases and services still found something, and saying otherwise reads as an empty
@@ -70,9 +80,9 @@ const notDetectedLines = (
           ),
         ]),
     style.dim(
-      coverage.filesDiscovered === 0
-        ? '  No file in a language this build parses was found.'
-        : `  ${coverage.filesParsed} of ${formatCount(coverage.filesDiscovered, 'file')} in a language this build parses were read.`,
+      supported === 0
+        ? `  No file in a language this build parses was found, out of ${formatCount(coverage.filesDiscovered, 'file')} discovered.`
+        : `  ${coverage.filesParsed} of ${formatCount(supported, 'file')} in a language this build parses were read, ${coverage.filesDiscovered} discovered.`,
     ),
     ...(inapplicable.length === 0
       ? []

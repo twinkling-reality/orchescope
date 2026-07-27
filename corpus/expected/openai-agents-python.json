@@ -7,9 +7,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 399,
-      "edgesFound": 232,
-      "filesInspected": 68,
+      "componentsFound": 91,
+      "edgesFound": 50,
+      "filesInspected": 28,
       "status": "completed"
     },
     "adapter:langgraph": {
@@ -25,9 +25,9 @@
       "status": "not_applicable"
     },
     "adapter:mcp": {
-      "componentsFound": 18,
-      "edgesFound": 0,
-      "filesInspected": 1,
+      "componentsFound": 108,
+      "edgesFound": 11,
+      "filesInspected": 9,
       "status": "completed"
     },
     "adapter:model-sdk": {
@@ -44,7 +44,7 @@
     },
     "adapter:prompts": {
       "componentsFound": 437,
-      "edgesFound": 5,
+      "edgesFound": 3,
       "filesInspected": 211,
       "status": "completed"
     },
@@ -59,6 +59,12 @@
       "edgesFound": 0,
       "filesInspected": 0,
       "status": "not_applicable"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     }
   },
   "agentSystemDetected": true,
@@ -67,16 +73,16 @@
     "byKind": {
       "agent": 620,
       "database": 2,
-      "entrypoint": 170,
-      "external_service": 8,
-      "mcp_server": 15,
+      "entrypoint": 41,
+      "external_service": 1,
+      "mcp_server": 21,
       "model": 15,
       "prompt": 370,
       "provider": 1,
       "queue": 1,
-      "tool": 271
+      "tool": 318
     },
-    "total": 1473
+    "total": 1390
   },
   "discardedRelations": [],
   "files": {
@@ -92,32 +98,31 @@
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
       "prompt-injection-boundary": 1,
-      "retry-around-non-idempotent-operation": 1,
-      "topology-shape": 2,
-      "unbounded-retry": 1
+      "topology-shape": 2
     },
     "bySeverity": {
       "low": 3,
-      "medium": 5
+      "medium": 3
     },
     "strengths": 0,
-    "total": 8
+    "total": 6
   },
   "kind": "agent_system",
   "languagesNotAnalysed": [],
   "name": "openai-agents-python",
   "relations": {
     "byKind": {
-      "calls_service": 90,
+      "calls_service": 4,
       "calls_tool": 81,
       "consumes_from_queue": 2,
       "hands_off_to": 53,
       "invokes_model": 34,
-      "publishes_to_queue": 22,
-      "queries_database": 64,
+      "provides_tool": 11,
+      "publishes_to_queue": 12,
+      "queries_database": 26,
       "served_by_provider": 1,
-      "uses_prompt": 4
+      "uses_prompt": 2
     },
-    "total": 351
+    "total": 226
   }
 }

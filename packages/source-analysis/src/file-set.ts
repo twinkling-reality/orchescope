@@ -67,6 +67,14 @@ export const DEFAULT_EXCLUDED_DIRECTORIES: readonly string[] = [
   '.tox',
   '.idea',
   '.vscode-test',
+  // Dependencies and derived output of the Apple toolchains, which a repository with a mobile or desktop surface in it
+  // carries beside its own source. Walking Pods produced eight thousand skipped symbolic links on the first real
+  // repository this was pointed at, and not one of them said anything about that repository.
+  'Pods',
+  '.build',
+  'DerivedData',
+  'Carthage',
+  '.gradle',
 ];
 
 const EXTENSION_LANGUAGE: Readonly<Record<string, Language>> = {
@@ -225,6 +233,43 @@ const walk = (root: string, current: string, options: TraversalOptions, walker: 
     considerFile(entry.name, absolutePath, relativePath, options, walker);
     if (walker.truncated) return;
   }
+};
+
+/**
+ * How many skipped files are listed for each reason before the rest are counted instead.
+ *
+ * A coverage report that names every skipped file is unbounded output dressed as thoroughness: the first repository
+ * outside the corpus that this was pointed at produced eight and a half thousand of them, all the same reason, all
+ * inside a vendored dependency directory. What a reader needs is the reason, how many, and enough examples to
+ * recognise them.
+ *
+ * This bounds what is listed and nothing else. Every count is taken from the full list first, because a limit that
+ * reaches a number turns a display decision into a measurement, and this one did: bounding before counting took a
+ * repository from 596 of 600 files parsed to 596 of 596, which reads as complete coverage and was a truncated list.
+ */
+const SKIPPED_SAMPLE_PER_REASON = 20;
+
+export const boundSkipped = (skipped: readonly SkippedFile[]): readonly SkippedFile[] => {
+  const shown = new Map<string, number>();
+  const withheld = new Map<string, number>();
+  const bounded: SkippedFile[] = [];
+  for (const entry of skipped) {
+    const seen = shown.get(entry.reason) ?? 0;
+    if (seen < SKIPPED_SAMPLE_PER_REASON) {
+      shown.set(entry.reason, seen + 1);
+      bounded.push(entry);
+      continue;
+    }
+    withheld.set(entry.reason, (withheld.get(entry.reason) ?? 0) + 1);
+  }
+  for (const [reason, count] of withheld) {
+    bounded.push({
+      file: '.',
+      reason: reason as SkippedFile['reason'],
+      detail: `${count} further file(s) were skipped for this reason and are not listed individually`,
+    });
+  }
+  return bounded;
 };
 
 export const collectFiles = (root: string, options: TraversalOptions): FileSet => {

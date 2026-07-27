@@ -10,6 +10,7 @@ import { findAssetDirectory } from '../assets.ts';
 import type { CommandContext } from '../context.ts';
 import { EXIT_CODES } from '../exit.ts';
 import { serverActionsFor } from '../server-actions.ts';
+import { type BrowserOutcome, reportReady } from '../terminal/report-ready.ts';
 import { doctorSummary } from '../terminal/summary.ts';
 
 /**
@@ -102,15 +103,23 @@ export const openCommand = async (
         data: { url: server.url, reportId: bundle.reportId },
       })}\n`,
     );
-  } else {
-    context.stdout(`${context.style.bold('Report')} ${context.style.link(server.url)}\n`);
-    context.stdout(context.style.dim('  press Ctrl+C to stop serving\n'));
   }
+  // Attempted before the block is written, so the block reports what happened rather than predicting it.
+  let outcome: BrowserOutcome = { kind: 'not_requested' };
   if (options.open === true || context.workspace.config.report.openByDefault) {
-    const outcome = await openInBrowser(server.url);
-    if (!outcome.opened && !context.json) {
-      context.stdout(`${context.style.warn('!')} could not open a browser (${outcome.detail})\n`);
-    }
+    const attempt = await openInBrowser(server.url);
+    outcome = attempt.opened ? { kind: 'opened' } : { kind: 'failed', detail: attempt.detail };
+  }
+  if (!context.json) {
+    context.stdout(
+      reportReady({
+        style: context.style,
+        url: server.url,
+        outcome,
+        columns: process.stdout.columns ?? 80,
+        platform: process.platform,
+      }),
+    );
   }
   await new Promise<void>((resolve) => {
     const stop = (): void => {

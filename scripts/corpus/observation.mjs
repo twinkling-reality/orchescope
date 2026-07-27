@@ -37,6 +37,9 @@ const runtimeOf = (exercise, bundle) => {
     declaredComponents: delta.coverage.declaredComponents,
     exercisedComponents: delta.coverage.exercisedComponents,
     joined,
+    // How each join was made. A join on kind and name alone is the one that can match the wrong module.
+    joinedOnNameAlone: [...delta.joins.onNameAlone].sort(),
+    ambiguousNames: [...delta.joins.ambiguous].sort(),
     exercisedNotDeclared: [...delta.exercisedNotDeclared.components].sort(),
     contradictions: delta.contradictions.length,
     duplicateSideEffects: delta.duplicateSideEffects.length,
@@ -62,7 +65,8 @@ export const observationOf = (entry, audit, bundle, exercise) => {
       discovered: coverage.filesDiscovered,
       inSupportedLanguages: coverage.filesInSupportedLanguages,
       parsed: coverage.filesParsed,
-      skipped: coverage.skipped.length,
+      // The count rather than the length of the listed sample, which is bounded.
+      skipped: coverage.filesSkipped ?? coverage.skipped.length,
       truncated: coverage.truncated,
     },
     /* Every adapter, including the ones that did not apply: an adapter going quiet is the drift this file exists to show. */

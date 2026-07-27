@@ -92,6 +92,7 @@ export const ReportCapability = Type.Object(
       'open_source_location',
       'export_standalone',
       'model_interpretation',
+      'cost_estimate',
     ] as const),
     available: Type.Boolean(),
     reason: NonEmptyString(),

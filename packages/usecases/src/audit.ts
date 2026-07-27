@@ -6,6 +6,7 @@ import { buildReportBundle } from '@orchescope/report';
 import type {
   ComponentId,
   ComponentRunMetrics,
+  EvaluatorResult,
   Evidence,
   Finding,
   FindingSet,
@@ -15,9 +16,14 @@ import type {
   SystemGraph,
 } from '@orchescope/schema';
 import { DEFAULT_EXCLUDED_DIRECTORIES, type FactCache } from '@orchescope/source-analysis';
-import { componentKey, deriveTopology } from '@orchescope/traces';
+import { deriveTopology } from '@orchescope/traces';
 import type { Workspace } from '@orchescope/workspace';
 import { resolveCapabilities } from './capabilities.ts';
+import {
+  type ObservedMetrics,
+  observedKeyToComponentId,
+  resolveComponentMetrics,
+} from './runtime-attribution.ts';
 
 /**
  * The audit use case.
@@ -107,6 +113,7 @@ const reconcileStoredRuns = (input: {
   const topologies = [];
   const runSideEffects: RunSideEffects[] = [];
   const spanToComponentKey = new Map<string, string>();
+  const metricsByRun: { readonly runId: string; readonly metrics: ObservedMetrics }[] = [];
   for (const summary of summaries) {
     const run = workspace.store.runById(summary.runId);
     const bundle = workspace.store.traceForRun(summary.runId);
@@ -116,6 +123,7 @@ const reconcileStoredRuns = (input: {
     evidence.push(...derived.evidence);
     runsConsidered.push(run);
     runSideEffects.push({ runId: summary.runId, sideEffects: bundle.sideEffects });
+    metricsByRun.push({ runId: summary.runId, metrics: derived.componentMetricsByName });
     for (const [spanId, key] of derived.spanToComponentKey) spanToComponentKey.set(spanId, key);
   }
 
@@ -127,20 +135,34 @@ const reconcileStoredRuns = (input: {
   const reconciled = reconcile(input.graph, topologies);
   evidence.push(...reconciled.evidence);
 
-  const componentIdByKey = new Map<string, ComponentId>();
-  for (const match of reconciled.matches) {
-    componentIdByKey.set(componentKey(match.observedKind, match.observedName), match.componentId);
-  }
+  const componentIdByKey = observedKeyToComponentId(reconciled);
   const spanToComponent = new Map<string, ComponentId>();
   for (const [spanId, key] of spanToComponentKey) {
     const componentId = componentIdByKey.get(key);
     if (componentId !== undefined) spanToComponent.set(spanId, componentId);
   }
 
-  const delta = computeDelta({ graph: reconciled.graph, runs: runSideEffects, spanToComponent });
+  let attributed = 0;
+  for (const entry of metricsByRun) {
+    const resolved = resolveComponentMetrics(
+      entry.metrics,
+      componentIdByKey,
+      workspace.config.pricing,
+    );
+    workspace.store.saveComponentMetrics(entry.runId, resolved);
+    attributed += resolved.length;
+  }
+
+  const delta = computeDelta({
+    graph: reconciled.graph,
+    runs: runSideEffects,
+    spanToComponent,
+    matches: reconciled.matches,
+    ambiguous: reconciled.ambiguous,
+  });
   evidence.push(...delta.evidence);
   ingestPhase.finish(
-    `${topologies.length} run(s) reconciled, ${delta.delta.exercisedNotDeclared.components.length} undeclared component(s), ${delta.delta.contradictions.length} contradiction(s)`,
+    `${topologies.length} run(s) reconciled, ${attributed} component metric(s) attributed, ${delta.delta.exercisedNotDeclared.components.length} undeclared component(s), ${delta.delta.contradictions.length} contradiction(s)`,
   );
   return {
     graph: reconciled.graph,
@@ -148,6 +170,33 @@ const reconcileStoredRuns = (input: {
     reconciliation: delta.delta,
     runsConsidered,
   };
+};
+
+/**
+ * The evaluator outcomes a scenario run was judged by, keyed by run.
+ *
+ * A scenario result is stored per run of the scenario and holds one repetition per execution, and each repetition
+ * carries the criteria it was judged against. The report shows those outcomes beside the run, so the join is by run
+ * identifier: a reader looking at a scenario run should see what passed and what did not, not only that it finished.
+ */
+const evaluatorsByRun = (
+  workspace: Workspace,
+  runs: readonly RunRecord[],
+): ReadonlyMap<string, readonly EvaluatorResult[]> => {
+  const wanted = new Set(runs.map((run) => run.id));
+  const scenarioIds = new Set(
+    runs.map((run) => run.scenarioId).filter((id): id is string => id !== undefined),
+  );
+  const byRun = new Map<string, readonly EvaluatorResult[]>();
+  for (const scenarioId of scenarioIds) {
+    for (const result of workspace.store.scenarioResults(scenarioId)) {
+      for (const repetition of result.repetitions) {
+        if (!wanted.has(repetition.runId)) continue;
+        byRun.set(repetition.runId, repetition.evaluators);
+      }
+    }
+  }
+  return byRun;
 };
 
 const assembleReport = (input: {
@@ -162,6 +211,7 @@ const assembleReport = (input: {
 }): ReportBundle => {
   const { workspace, graph, findings, runsConsidered } = input;
   const scenarios = workspace.store.listScenarios(workspace.projectId);
+  const evaluators = evaluatorsByRun(workspace, runsConsidered);
   const componentsByRun = new Map<string, readonly string[]>();
   for (const run of runsConsidered) {
     componentsByRun.set(
@@ -188,7 +238,7 @@ const assembleReport = (input: {
         status: run.status,
         ...(run.metrics.taskSuccess === undefined ? {} : { taskSuccess: run.metrics.taskSuccess }),
         durationMs: run.metrics.durationMs,
-        evaluators: [],
+        evaluators: [...(evaluators.get(run.id) ?? [])],
         faultsApplied: run.faultPlanId === undefined ? [] : [run.faultPlanId],
       })),
     componentMetrics: input.componentMetrics,
@@ -203,6 +253,9 @@ const assembleReport = (input: {
       scenarioCount: scenarios.length,
       runCount: runsConsidered.length,
       hasEligibleFindings: findings.some((finding) => finding.goalReadiness.eligible),
+      tokensObserved: input.componentMetrics.some(
+        (metric) => metric.inputTokens + metric.outputTokens > 0,
+      ),
     }),
     generatedAt: graph.provenance.generatedAt,
     redactor: workspace.redactor,

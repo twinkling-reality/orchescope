@@ -26,6 +26,7 @@ const deltaWith = (observed: readonly string[]): ReconciliationDelta => ({
   },
   contradictions: [],
   duplicateSideEffects: [],
+  joins: { byCodeLocation: 0, byRuntimeName: 0, byKindAndName: 0, onNameAlone: [], ambiguous: [] },
   coverage: {
     declaredComponents: 1,
     exercisedComponents: observed.length,

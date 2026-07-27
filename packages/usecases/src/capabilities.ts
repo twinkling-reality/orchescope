@@ -16,10 +16,30 @@ export type CapabilityContext = {
   readonly scenarioCount: number;
   readonly runCount: number;
   readonly hasEligibleFindings: boolean;
+  /** Whether any ingested run reported tokens, which is what a price would be applied to. */
+  readonly tokensObserved: boolean;
+};
+
+/**
+ * Why cost is or is not on this report.
+ *
+ * Cost needs two halves and a run only supplies one: a span reports tokens and no convention reports a price.
+ * Saying which half is missing is the difference between a reader concluding the run was free and a reader knowing
+ * what to configure.
+ */
+const costReason = (pricedModels: number, tokensObserved: boolean): string => {
+  if (pricedModels === 0) {
+    return 'no price is configured, so tokens are reported and cost is not. Add prices under pricing in .orchescope/config.json, keyed by provider/model';
+  }
+  if (!tokensObserved) {
+    return `${pricedModels} model price(s) are configured, and no ingested run reported any token usage to apply them to`;
+  }
+  return `cost is estimated from observed tokens and the ${pricedModels} configured model price(s)`;
 };
 
 export const resolveCapabilities = (context: CapabilityContext): CapabilityInput => {
-  const { policy } = context.workspace.config;
+  const { policy, pricing } = context.workspace.config;
+  const pricedModels = Object.keys(pricing).length;
 
   const reasons: Record<ReportCapability['name'], string> = {
     create_goal: context.hasEligibleFindings
@@ -57,6 +77,7 @@ export const resolveCapabilities = (context: CapabilityContext): CapabilityInput
       ? 'the served report can ask the local process to open an editor'
       : 'a standalone export cannot open a local editor',
     export_standalone: 'the report can be exported as a single self contained file',
+    cost_estimate: costReason(pricedModels, context.tokensObserved),
     /*
      * Permanently unavailable, and answered rather than dropped: the workspace asks about every capability it
      * knows, and a reader who has seen an older version of this product deserves the reason rather than silence.
@@ -66,6 +87,7 @@ export const resolveCapabilities = (context: CapabilityContext): CapabilityInput
   };
 
   return {
+    costEstimateAvailable: pricedModels > 0 && context.tokensObserved,
     canCreateGoal: context.hasEligibleFindings,
     canRerunScenario: context.served && context.scenarioCount > 0 && policy.allowProcessSpawn,
     canRunBenchmark: context.served && context.scenarioCount > 0 && policy.allowProcessSpawn,

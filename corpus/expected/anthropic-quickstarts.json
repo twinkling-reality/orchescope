@@ -7,9 +7,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 17,
-      "edgesFound": 10,
-      "filesInspected": 4,
+      "componentsFound": 10,
+      "edgesFound": 5,
+      "filesInspected": 3,
       "status": "completed"
     },
     "adapter:langgraph": {
@@ -25,9 +25,9 @@
       "status": "not_applicable"
     },
     "adapter:mcp": {
-      "componentsFound": 0,
-      "edgesFound": 0,
-      "filesInspected": 0,
+      "componentsFound": 2,
+      "edgesFound": 1,
+      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:model-sdk": {
@@ -59,20 +59,26 @@
       "edgesFound": 0,
       "filesInspected": 0,
       "status": "not_applicable"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     }
   },
   "agentSystemDetected": true,
-  "blindSpots": [
-    "mcp used in source, read by adapter:mcp"
-  ],
+  "blindSpots": [],
   "components": {
     "byKind": {
       "agent": 6,
-      "entrypoint": 7,
+      "entrypoint": 5,
       "external_service": 1,
+      "mcp_server": 1,
       "model": 2,
       "prompt": 36,
-      "provider": 1
+      "provider": 1,
+      "tool": 1
     },
     "total": 53
   },
@@ -88,24 +94,26 @@
     "byRule": {
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
+      "prompt-injection-boundary": 1,
       "topology-shape": 1
     },
     "bySeverity": {
-      "info": 1,
-      "medium": 2
+      "low": 1,
+      "medium": 3
     },
-    "strengths": 1,
-    "total": 3
+    "strengths": 0,
+    "total": 4
   },
   "kind": "agent_system",
   "languagesNotAnalysed": [],
   "name": "anthropic-quickstarts",
   "relations": {
     "byKind": {
-      "calls_service": 7,
+      "calls_service": 5,
       "invokes_model": 6,
+      "provides_tool": 1,
       "served_by_provider": 2
     },
-    "total": 15
+    "total": 14
   }
 }

@@ -63,6 +63,12 @@ export type ConfigComponentInput = {
   readonly configFile: string;
   readonly pointer: string;
   readonly name: string;
+  /**
+   * Overrides the identity derived from the configuration file, for a component that belongs to the project rather
+   * than to the file that happened to declare it. Two deployment manifests binding the same database name are
+   * binding one database.
+   */
+  readonly identity?: ComponentIdentity;
   readonly displayName?: string;
   readonly description?: string;
   readonly value?: string;
@@ -151,7 +157,7 @@ export const createDrafts = (producer: string): DraftFactory => ({
     };
   },
   configComponent: (input) => {
-    const identity = configIdentity(input.kind, input.configFile, input.name);
+    const identity = input.identity ?? configIdentity(input.kind, input.configFile, input.name);
     return {
       identity,
       kind: input.kind,

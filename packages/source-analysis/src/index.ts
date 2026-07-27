@@ -43,6 +43,7 @@ export {
   type TextFact,
 } from './facts.ts';
 export {
+  boundSkipped,
   collectFiles,
   DEFAULT_EXCLUDED_DIRECTORIES,
   type FileContents,
@@ -64,3 +65,4 @@ export {
   readManifests,
 } from './manifests.ts';
 export { probePythonParser, resetPythonParser } from './python/runtime.ts';
+export { isTestFile } from './test-files.ts';

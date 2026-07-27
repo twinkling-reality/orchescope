@@ -270,5 +270,44 @@ describe('the improvement loop', () => {
     );
     assert.equal(duplicateCriterion.satisfied, true);
     assert.equal(duplicateCriterion.decided, true);
+
+    // The scenario criterion is the one the product's own thesis rests on: the goal is verified by rerunning the
+    // scenario it names. It is judged from the stored result of that rerun, and the result has to postdate the goal.
+    const scenarioCriterion = validation.outcomes.find((outcome) =>
+      outcome.detail.includes('support-desk-duplicate'),
+    );
+    assert.ok(
+      scenarioCriterion !== undefined,
+      `no criterion judged the scenario that was rerun: ${validation.summary}`,
+    );
+    assert.equal(
+      scenarioCriterion.decided,
+      true,
+      `the rerun scenario left its criterion undecided: ${scenarioCriterion.detail}`,
+    );
+    assert.equal(scenarioCriterion.satisfied, true);
+
+    // What each scenario run was judged by reaches the report, rather than being computed and dropped.
+    const reportFile = join(root, 'loop-report.json');
+    await runCli(root, ['export', '--format', 'json', '--out', reportFile]);
+    const bundle = JSON.parse(readFileSync(reportFile, 'utf8')) as {
+      scenarioRuns: { scenarioId: string; evaluators: { kind: string; passed: boolean }[] }[];
+    };
+    const judged = bundle.scenarioRuns.filter((entry) => entry.evaluators.length > 0);
+    assert.ok(
+      judged.length > 0,
+      `the report carried ${bundle.scenarioRuns.length} scenario run(s) and not one evaluator outcome`,
+    );
+    // Both sides of the loop are in this report: the baseline run that duplicated the refund failed the criterion
+    // forbidding it, and the run after the fix satisfied it. A reader sees which one, rather than only that runs happened.
+    const outcomes = judged.flatMap((entry) => entry.evaluators);
+    assert.ok(
+      outcomes.some((result) => result.passed),
+      'no scenario criterion is recorded as satisfied anywhere in the report',
+    );
+    assert.ok(
+      outcomes.some((result) => !result.passed),
+      'the baseline run duplicated an effect and no criterion in the report records a failure',
+    );
   });
 });

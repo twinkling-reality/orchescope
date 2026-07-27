@@ -1022,6 +1022,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "filesSkipped": {
+          "minimum": 0,
+          "type": "integer"
+        },
         "languages": {
           "items": {
             "additionalProperties": false,

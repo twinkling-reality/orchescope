@@ -58,10 +58,16 @@ const architectureOverlay = (input: OverlayInput): Overlay => ({
   caveat: 'Two means declared and exercised, one means exercised only, zero means declared only.',
 });
 
-/** Overlays derived from per component metrics. Cost appears only when a price table produced a non zero number. */
+/**
+ * Overlays derived from per component metrics.
+ *
+ * Cost is summed only over the components a price actually covered. A component that ran without a configured price
+ * has no cost rather than a cost of zero, and putting it in the list at zero would read as free.
+ */
 const metricOverlays = (input: OverlayInput): readonly Overlay[] => {
   if (input.componentMetrics.length === 0) return [];
-  const costTotals = sumByComponent(input.componentMetrics, (metric) => metric.costUsd ?? 0);
+  const priced = input.componentMetrics.filter((metric) => metric.costUsd !== undefined);
+  const costTotals = sumByComponent(priced, (metric) => metric.costUsd ?? 0);
   const overlays: Overlay[] = [
     {
       kind: 'runtime_frequency',
@@ -107,7 +113,7 @@ const metricOverlays = (input: OverlayInput): readonly Overlay[] => {
       basis: 'observed',
     },
   ];
-  if ([...costTotals.values()].some((value) => value > 0)) {
+  if (costTotals.size > 0) {
     overlays.push({
       kind: 'cost',
       label: 'Cost',
@@ -115,7 +121,7 @@ const metricOverlays = (input: OverlayInput): readonly Overlay[] => {
       values: toValues(costTotals),
       basis: 'estimated',
       caveat:
-        'Cost is derived from token counts and a configured price table. The generative AI conventions carry no cost attribute, so no cost here was measured.',
+        'Cost is derived from observed token counts and the price table this project configures. The generative AI conventions carry no cost attribute, so no cost here was measured, and a component whose model has no configured price is absent rather than free.',
     });
   }
   return overlays;

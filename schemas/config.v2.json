@@ -124,6 +124,29 @@
       ],
       "type": "object"
     },
+    "pricing": {
+      "patternProperties": {
+        "^(.*)$": {
+          "additionalProperties": false,
+          "properties": {
+            "inputPerMillion": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "outputPerMillion": {
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          "required": [
+            "inputPerMillion",
+            "outputPerMillion"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
     "projectName": {
       "minLength": 1,
       "type": "string"
@@ -248,7 +271,8 @@
     "runtime",
     "report",
     "policy",
-    "redaction"
+    "redaction",
+    "pricing"
   ],
   "type": "object"
 }

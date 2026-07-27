@@ -150,6 +150,9 @@ importers:
       '@orchescope/source-analysis':
         specifier: workspace:*
         version: link:../source-analysis
+      smol-toml:
+        specifier: 1.7.0
+        version: 1.7.0
       yaml:
         specifier: 2.9.0
         version: 2.9.0
@@ -269,6 +272,10 @@ importers:
       '@orchescope/schema':
         specifier: workspace:*
         version: link:../schema
+    devDependencies:
+      '@orchescope/testkit':
+        specifier: workspace:*
+        version: link:../testkit
 
   packages/report-server:
     dependencies:
@@ -417,6 +424,10 @@ importers:
       '@orchescope/workspace':
         specifier: workspace:*
         version: link:../workspace
+    devDependencies:
+      '@orchescope/testkit':
+        specifier: workspace:*
+        version: link:../testkit
 
   packages/workspace:
     dependencies:

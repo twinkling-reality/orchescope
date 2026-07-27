@@ -198,6 +198,9 @@ export type TopologyResult = {
   readonly componentMetricsByName: readonly (ComponentRunMetrics & {
     readonly observedName: string;
     readonly kind: string;
+    /** The provider and model the spans reported, which is what a price is keyed by. */
+    readonly provider: string | undefined;
+    readonly model: string | undefined;
   })[];
   /** Span identifier to the observed component key, used to attribute side effects. */
   readonly spanToComponentKey: ReadonlyMap<string, string>;
@@ -604,6 +607,8 @@ export const deriveTopology = (bundle: TraceBundle): TopologyResult => {
     componentId: 'unassigned',
     observedName: accumulator.observedName,
     kind: accumulator.kind,
+    provider: accumulator.provider,
+    model: accumulator.model,
     executionCount: accumulator.spanCount,
     selfDurationMs: accumulator.selfDurationMs,
     totalDurationMs: accumulator.totalDurationMs,

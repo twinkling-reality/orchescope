@@ -20,6 +20,7 @@ export const CAPABILITY_NAMES: readonly CapabilityName[] = [
   'open_source_location',
   'export_standalone',
   'model_interpretation',
+  'cost_estimate',
 ];
 
 export interface CapabilityState {

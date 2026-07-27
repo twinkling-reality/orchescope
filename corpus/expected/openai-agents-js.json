@@ -7,9 +7,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 312,
-      "edgesFound": 251,
-      "filesInspected": 53,
+      "componentsFound": 99,
+      "edgesFound": 53,
+      "filesInspected": 38,
       "status": "completed"
     },
     "adapter:langgraph": {
@@ -27,7 +27,7 @@
     "adapter:mcp": {
       "componentsFound": 2,
       "edgesFound": 1,
-      "filesInspected": 1,
+      "filesInspected": 2,
       "status": "completed"
     },
     "adapter:model-sdk": {
@@ -59,6 +59,12 @@
       "edgesFound": 1,
       "filesInspected": 9,
       "status": "completed"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
     }
   },
   "agentSystemDetected": true,
@@ -67,15 +73,15 @@
     "byKind": {
       "agent": 292,
       "database": 3,
-      "entrypoint": 61,
-      "external_service": 4,
+      "entrypoint": 46,
+      "external_service": 3,
       "mcp_server": 15,
       "model": 9,
       "prompt": 274,
       "provider": 1,
       "tool": 125
     },
-    "total": 784
+    "total": 768
   },
   "discardedRelations": [],
   "files": {
@@ -105,15 +111,15 @@
   "name": "openai-agents-js",
   "relations": {
     "byKind": {
-      "calls_service": 15,
+      "calls_service": 13,
       "calls_tool": 79,
       "hands_off_to": 26,
       "invokes_model": 43,
       "provides_tool": 8,
-      "queries_database": 52,
+      "queries_database": 38,
       "served_by_provider": 2,
       "uses_prompt": 88
     },
-    "total": 313
+    "total": 297
   }
 }

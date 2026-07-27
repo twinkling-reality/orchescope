@@ -1,4 +1,10 @@
-import type { AcceptanceCriterion, Comparison, Goal, ScenarioResult } from '@orchescope/schema';
+import type {
+  AcceptanceCriterion,
+  Comparison,
+  Goal,
+  ScenarioResult,
+  Timestamp,
+} from '@orchescope/schema';
 
 /**
  * Evaluation of a goal's acceptance criteria against what a comparison and the validation runs actually
@@ -31,7 +37,11 @@ type CriterionInput = {
   readonly scenarioResults: readonly ScenarioResult[];
   readonly findingStillPresent: ReadonlySet<string>;
   readonly rescanned: boolean;
+  /** When the goal was created. Evidence older than this describes the code the goal is about to change. */
+  readonly goalCreatedAt: Timestamp;
 };
+
+export type ValidationInput = Omit<CriterionInput, 'goalCreatedAt'>;
 
 const undecided = (criterion: AcceptanceCriterion, detail: string): CriterionOutcome => ({
   criterion,
@@ -95,14 +105,31 @@ const metricNotWorseOutcome = (
   };
 };
 
+/**
+ * Judges a scenario criterion against the newest run of that scenario, and only against one that could have seen
+ * the change.
+ *
+ * A result that predates the goal was measured on the code the goal exists to change, so it can say nothing about
+ * whether the change worked. Reporting it as satisfied would validate a goal against its own baseline, which is the
+ * one mistake this criterion exists to prevent, so an older result leaves the criterion undecided and says why.
+ */
 const scenarioPassesOutcome = (
   criterion: AcceptanceCriterion,
   check: Extract<AcceptanceCriterion['check'], { kind: 'scenario_passes' }>,
-  results: readonly ScenarioResult[],
+  input: CriterionInput,
 ): CriterionOutcome => {
-  const result = results.find((entry) => entry.scenarioId === check.scenarioId);
-  if (result === undefined) {
+  const forScenario = input.scenarioResults
+    .filter((entry) => entry.scenarioId === check.scenarioId)
+    .toSorted((left, right) => (left.startedAt < right.startedAt ? 1 : -1));
+  if (forScenario.length === 0) {
     return undecided(criterion, `scenario ${check.scenarioId} was not run`);
+  }
+  const result = forScenario.find((entry) => entry.startedAt >= input.goalCreatedAt);
+  if (result === undefined) {
+    return undecided(
+      criterion,
+      `scenario ${check.scenarioId} has only been run before this goal was created, so its result describes the code the goal is about to change`,
+    );
   }
   return {
     criterion,
@@ -147,7 +174,7 @@ const evaluateCriterion = (
     case 'metric_not_worse':
       return metricNotWorseOutcome(criterion, check, input.comparison);
     case 'scenario_passes':
-      return scenarioPassesOutcome(criterion, check, input.scenarioResults);
+      return scenarioPassesOutcome(criterion, check, input);
     case 'finding_resolved':
       return findingResolvedOutcome(criterion, check, input);
     case 'command_succeeds':
@@ -162,8 +189,10 @@ const evaluateCriterion = (
   }
 };
 
-export const validateGoal = (goal: Goal, input: CriterionInput): GoalValidation => {
-  const outcomes = goal.acceptanceCriteria.map((criterion) => evaluateCriterion(criterion, input));
+export const validateGoal = (goal: Goal, input: ValidationInput): GoalValidation => {
+  const outcomes = goal.acceptanceCriteria.map((criterion) =>
+    evaluateCriterion(criterion, { ...input, goalCreatedAt: goal.createdAt }),
+  );
   const satisfiedCount = outcomes.filter((outcome) => outcome.satisfied).length;
   const undecidedCount = outcomes.filter((outcome) => !outcome.decided).length;
   const validated = outcomes.length > 0 && outcomes.every((outcome) => outcome.satisfied);

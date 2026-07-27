@@ -137,9 +137,36 @@ strongest join.
 whatever your telemetry calls the same thing. Reconciliation then matches on the declared name rather than needing a code
 location.
 
+## A system that is already running
+
+`trace` wraps a command, which is no help for a development server, a worker, or anything you did not start. For those,
+listen instead:
+
+```
+orchescope receive --for 10m
+```
+
+That prints the endpoint the moment it is listening. Point the running process at it and restart that process:
+
+```
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:53142 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+```
+
+The window ends when the duration elapses, or when you interrupt it, and whatever arrived is stored as a run. Nothing is
+lost by stopping early. `--for` takes `90s`, `10m` or `1h`; a bare number means seconds, and the window is capped by
+`policy.maxRunDurationMs`.
+
+The receiver binds to loopback only. A process on another machine reaches it through a tunnel you open deliberately,
+which is a decision for you rather than a default that quietly listens on a network.
+
+This is receiving, not fetching. There is no query interface to a collector, because OTLP is a push protocol and every
+backend that stores spans has its own API, so fetching would mean choosing one vendor and calling it the integration.
+If your spans already go to a collector, add a second OTLP exporter pointing at the endpoint above for as long as the
+window lasts.
+
 ## Importing spans
 
-For a system whose runs happen elsewhere:
+For spans you already have on disk:
 
 ```
 orchescope trace --import traces.ndjson

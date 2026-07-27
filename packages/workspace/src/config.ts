@@ -74,6 +74,11 @@ export const DEFAULT_CONFIG: OrchescopeConfig = {
     extraPatterns: [],
     sensitiveEnvFragments: [],
   },
+  /*
+   * Empty, and deliberately so. No price table ships, because a price this repository guessed would be wrong the week
+   * a provider changed it. Until one is configured, tokens are reported and cost is not.
+   */
+  pricing: {},
 };
 
 export type ConfigLoad = {
@@ -88,7 +93,7 @@ type Mutable<T> = { -readonly [K in keyof T]: T[K] };
  * Merges a partial configuration document over the defaults, one section at a time. A section is merged rather
  * than replaced so that setting one policy value does not silently reset the rest.
  */
-const SECTIONS = ['analysis', 'runtime', 'report', 'policy', 'redaction'] as const;
+const SECTIONS = ['analysis', 'runtime', 'report', 'policy', 'redaction', 'pricing'] as const;
 
 /**
  * Settings that were real and are not any more.
@@ -162,6 +167,7 @@ const mergeConfig = (partial: Record<string, unknown>): OrchescopeConfig => {
     report: { ...DEFAULT_CONFIG.report },
     policy: { ...DEFAULT_CONFIG.policy },
     redaction: { ...DEFAULT_CONFIG.redaction },
+    pricing: { ...DEFAULT_CONFIG.pricing },
   };
   for (const section of SECTIONS) {
     const value = partial[section];

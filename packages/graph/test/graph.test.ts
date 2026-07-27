@@ -442,3 +442,69 @@ describe('a relation whose endpoint was never added', () => {
     assert.equal(result.graph.edges.length, 1);
   });
 });
+
+describe('how a join was made', () => {
+  /**
+   * A join by name is correct whenever a name means one thing in a repository, and wrong when two modules use the
+   * same word. The first join on third party code hit exactly that: a model observed as `test` met a declaration in
+   * an unrelated test file. Nothing can decide from a span which module was meant, so the delta reports which joins
+   * rest on a name alone rather than presenting every join as equally established.
+   */
+  const model = componentDraft({ kind: 'model', name: 'test', file: 'tests/fixtures/models.py' });
+  const agent = componentDraft({ kind: 'agent', name: 'support_agent', file: 'src/support.py' });
+
+  it('says which components were joined on a name alone', () => {
+    const graph = buildGraph([model, agent]);
+    const reconciled = reconcile(graph, [
+      runtimeTopology({
+        components: [observedComponent({ kind: 'model', observedName: 'test' })],
+      }),
+    ]);
+    const result = computeDelta({
+      graph: reconciled.graph,
+      runs: [],
+      spanToComponent: new Map(),
+      matches: reconciled.matches,
+      ambiguous: reconciled.ambiguous,
+    });
+    assert.equal(result.delta.joins.byKindAndName, 1);
+    assert.deepEqual(result.delta.joins.onNameAlone, ['model:test']);
+    assert.equal(result.delta.joins.byCodeLocation, 0);
+  });
+
+  it('reports an observed name that matched more than one declaration and joined none', () => {
+    const graph = buildGraph([
+      componentDraft({ kind: 'tool', name: 'search', file: 'src/a.ts' }),
+      componentDraft({ kind: 'tool', name: 'search', file: 'src/b.ts' }),
+    ]);
+    const reconciled = reconcile(graph, [
+      runtimeTopology({
+        components: [observedComponent({ kind: 'tool', observedName: 'search' })],
+      }),
+    ]);
+    const result = computeDelta({
+      graph: reconciled.graph,
+      runs: [],
+      spanToComponent: new Map(),
+      matches: reconciled.matches,
+      ambiguous: reconciled.ambiguous,
+    });
+    assert.deepEqual(result.delta.joins.ambiguous, ['search']);
+    assert.deepEqual(result.delta.joins.onNameAlone, []);
+  });
+
+  it('reports no joins at all when nothing was reconciled', () => {
+    const result = computeDelta({
+      graph: buildGraph([agent]),
+      runs: [],
+      spanToComponent: new Map(),
+    });
+    assert.deepEqual(result.delta.joins, {
+      byCodeLocation: 0,
+      byRuntimeName: 0,
+      byKindAndName: 0,
+      onNameAlone: [],
+      ambiguous: [],
+    });
+  });
+});

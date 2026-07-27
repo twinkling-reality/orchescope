@@ -59,6 +59,12 @@
       "edgesFound": 0,
       "filesInspected": 0,
       "status": "not_applicable"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     }
   },
   "agentSystemDetected": true,

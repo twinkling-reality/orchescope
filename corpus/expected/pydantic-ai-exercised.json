@@ -25,15 +25,15 @@
       "status": "not_applicable"
     },
     "adapter:mcp": {
-      "componentsFound": 3,
-      "edgesFound": 0,
-      "filesInspected": 2,
+      "componentsFound": 36,
+      "edgesFound": 31,
+      "filesInspected": 4,
       "status": "completed"
     },
     "adapter:model-sdk": {
-      "componentsFound": 103,
+      "componentsFound": 105,
       "edgesFound": 24,
-      "filesInspected": 53,
+      "filesInspected": 55,
       "status": "completed"
     },
     "adapter:openai-agents": {
@@ -49,7 +49,7 @@
       "status": "completed"
     },
     "adapter:pydantic-ai": {
-      "componentsFound": 2506,
+      "componentsFound": 2517,
       "edgesFound": 626,
       "filesInspected": 201,
       "status": "completed"
@@ -65,18 +65,18 @@
   "blindSpots": [],
   "components": {
     "byKind": {
-      "agent": 421,
+      "agent": 427,
       "database": 2,
       "entrypoint": 241,
       "external_service": 3,
-      "mcp_server": 3,
+      "mcp_server": 5,
       "model": 16,
       "prompt": 750,
       "provider": 6,
       "queue": 1,
-      "tool": 471
+      "tool": 502
     },
-    "total": 1914
+    "total": 1953
   },
   "discardedRelations": [],
   "files": {
@@ -112,21 +112,29 @@
       "calls_tool": 472,
       "consumes_from_queue": 97,
       "invokes_model": 66,
+      "provides_tool": 31,
       "queries_database": 23,
       "served_by_provider": 12,
       "uses_prompt": 16
     },
-    "total": 808
+    "total": 839
   },
   "runtime": {
+    "ambiguousNames": [
+      "agent"
+    ],
     "contradictions": 0,
-    "declaredComponents": 917,
+    "declaredComponents": 956,
     "duplicateSideEffects": 0,
     "exercisedComponents": 3,
     "exercisedNotDeclared": [
       "agent:agent"
     ],
     "joined": [
+      "model:test",
+      "tool:customer_balance"
+    ],
+    "joinedOnNameAlone": [
       "model:test",
       "tool:customer_balance"
     ],

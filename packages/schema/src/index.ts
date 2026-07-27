@@ -55,9 +55,11 @@ export {
   AnalysisConfig,
   OrchescopeConfig,
   PolicyConfig,
+  PricingConfig,
   RedactionConfig,
   ReportConfig,
   RuntimeConfig,
+  TokenPrice,
 } from './config.ts';
 export {
   BackoffKind,
@@ -140,6 +142,7 @@ export {
   DeclaredNotExercised,
   DuplicateSideEffect,
   ExercisedNotDeclared,
+  JoinSummary,
   ReconciliationDelta,
 } from './reconciliation.ts';
 export {

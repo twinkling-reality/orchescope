@@ -13,5 +13,8 @@
     "@orchescope/domain": "workspace:*",
     "@orchescope/redaction": "workspace:*",
     "@orchescope/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "@orchescope/testkit": "workspace:*"
   }
 }

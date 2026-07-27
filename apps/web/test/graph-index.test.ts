@@ -218,6 +218,13 @@ describe('buildGraphIndex', () => {
           exercisedNotDeclared: { components: [], edges: [] },
           contradictions: [],
           duplicateSideEffects: [],
+          joins: {
+            byCodeLocation: 0,
+            byRuntimeName: 0,
+            byKindAndName: 0,
+            onNameAlone: [],
+            ambiguous: [],
+          },
           coverage: {
             declaredComponents: 2,
             exercisedComponents: 1,

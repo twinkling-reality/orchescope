@@ -233,8 +233,23 @@ export const createRunsRepository = (input: {
       .all('SELECT json FROM component_metric WHERE run_id = ?', runId)
       .map((row) => JSON.parse(text(row, 'json')) as ComponentRunMetrics);
 
+  /**
+   * Replaces the per component metrics for one run.
+   *
+   * A trace knows the name a component reported and nothing about component identity, because identity comes from a
+   * graph and a graph only exists once a scan has run. The audit that resolved those names is therefore what writes
+   * these rows, and it replaces them rather than merging: a later scan can resolve the same observed name to a
+   * different component, and two answers for one run would be a contradiction with no way to tell which is current.
+   */
+  const saveComponentMetrics = (runId: string, metrics: readonly ComponentRunMetrics[]): void =>
+    database.transaction(() => {
+      database.run('DELETE FROM component_metric WHERE run_id = ?', runId);
+      writeComponentMetrics(database, runId, metrics);
+    });
+
   return {
     saveRun,
+    saveComponentMetrics,
     runById,
     listRuns,
     traceForRun,

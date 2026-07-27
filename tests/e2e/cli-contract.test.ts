@@ -233,6 +233,32 @@ describe('a repository with no agent system', () => {
     const data = document['data'] as { agentSystemDetected: boolean };
     assert.equal(data.agentSystemDetected, false);
   });
+
+  /*
+   * `emptyProject` holds one JavaScript file and one `package.json`. The walk counts both, because configuration
+   * adapters read JSON, and only the JavaScript file is in a language this build parses. Dividing the files parsed
+   * by the files walked printed "1 of 2" and read as half a repository unread, when every file this build claims to
+   * read had been read.
+   */
+  it('counts the parse rate against the files it claims to read, not against every file walked', async () => {
+    const root = emptyProject();
+    const result = await run(['--cwd', root, 'audit'], { env: { NO_COLOR: '1' } });
+    const document = parsed(await run(['--cwd', root, 'audit', '--json']));
+    const coverage = (document['data'] as { coverage: Record<string, number> }).coverage;
+
+    assert.equal(coverage['filesParsed'], 1);
+    assert.equal(coverage['filesInSupportedLanguages'], 1);
+    assert.equal(coverage['filesDiscovered'], 2);
+    assert.match(
+      result.stdout,
+      /1 of 1 file in a language this build parses were read, 2 discovered/,
+    );
+    assert.equal(
+      /of 2 files in a language this build parses/.test(result.stdout),
+      false,
+      'the files walked were used as the denominator of the files this build parses',
+    );
+  });
 });
 
 describe('policy refusals', () => {

@@ -95,6 +95,30 @@ export const RedactionConfig = Type.Object(
 );
 export type RedactionConfig = Static<typeof RedactionConfig>;
 
+/**
+ * What one million tokens of a model cost, in USD.
+ *
+ * Prices are configured rather than shipped. A table that ships goes stale the week a provider changes a price, and a
+ * stale price turns a measurement into a wrong number reported with the authority of a measurement.
+ */
+export const TokenPrice = Type.Object(
+  {
+    inputPerMillion: NonNegativeNumber,
+    outputPerMillion: NonNegativeNumber,
+  },
+  { additionalProperties: false },
+);
+export type TokenPrice = Static<typeof TokenPrice>;
+
+/**
+ * Prices keyed by `provider/model`, exactly as the run reported them, for example `openai/gpt-4o-mini`.
+ *
+ * A key that matches nothing observed costs nothing and is not an error: a table can carry the whole fleet while a
+ * run exercises one model. A model observed with no matching key is reported without a cost rather than at zero.
+ */
+export const PricingConfig = Type.Record(NonEmptyString(), TokenPrice);
+export type PricingConfig = Static<typeof PricingConfig>;
+
 export const OrchescopeConfig = Document(
   schemaId('config'),
   SCHEMA_VERSIONS.config,
@@ -105,6 +129,7 @@ export const OrchescopeConfig = Document(
     report: ReportConfig,
     policy: PolicyConfig,
     redaction: RedactionConfig,
+    pricing: PricingConfig,
   }),
 );
 export type OrchescopeConfig = Static<typeof OrchescopeConfig>;

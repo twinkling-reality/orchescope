@@ -52,21 +52,37 @@ const checkLocalSource = (entry, problem) => {
   }
 };
 
+/**
+ * An exercise names a script and the environment that script needs.
+ *
+ * The two languages this build reads both have an agent framework with first class OpenTelemetry support, and a join
+ * shown in one of them says nothing about the other, so an exercise is either a Python one or a Node one and declares
+ * exactly one package list. A driver with no packages could not import the checkout it is meant to exercise.
+ */
 const checkExercise = (exercise, problem) => {
   if (exercise === undefined) return;
   if (!isRecord(exercise)) {
     problem('exercise has to be a mapping');
     return;
   }
-  if (typeof exercise.script !== 'string' || !exercise.script.endsWith('.py')) {
-    problem('exercise.script has to name a Python file in this repository');
+  const python = exercise.pythonPackages !== undefined;
+  const node = exercise.nodePackages !== undefined;
+  if (python === node) {
+    problem('exercise has to declare either pythonPackages or nodePackages, and not both');
   }
+  const extension = python ? '.py' : '.mjs';
+  if (typeof exercise.script !== 'string' || !exercise.script.endsWith(extension)) {
+    problem(`exercise.script has to name a ${extension} file in this repository`);
+  }
+  const packages = python ? exercise.pythonPackages : exercise.nodePackages;
   if (
-    !Array.isArray(exercise.pythonPackages) ||
-    exercise.pythonPackages.length === 0 ||
-    exercise.pythonPackages.some((name) => typeof name !== 'string')
+    !Array.isArray(packages) ||
+    packages.length === 0 ||
+    packages.some((name) => typeof name !== 'string')
   ) {
-    problem('exercise.pythonPackages has to list what the environment needs, in install order');
+    problem(
+      `exercise.${python ? 'pythonPackages' : 'nodePackages'} has to list what the environment needs, in install order`,
+    );
   }
   if (typeof exercise.why !== 'string' || exercise.why.trim().length === 0) {
     problem('exercise.why has to say what this run is meant to show');

@@ -11,6 +11,7 @@ import {
   calleeName,
   dotted,
   findEntry,
+  isTestFile,
   numberValue,
   objectArgument,
   stringValue,
@@ -214,8 +215,22 @@ const discoverHttp = (
   for (const call of module.calls) {
     const path = dotted(call.calleePath);
     const root = call.calleePath[0] ?? '';
+    /*
+     * A client reached through a member, `axios.get` or `requests.post`, is a request. Any other member of the same
+     * root is not, and matching on the root alone read two things as requests that never leave the process.
+     *
+     * A promise chain repeats the root at every link, so one `fetch(url).then().then().catch()` was counted four
+     * times: as `fetch`, `fetch.then`, `fetch.then.then` and `fetch.then.then.catch`, each with its own component
+     * and edge at the same source location. A test double is configured through the same shape, so
+     * `fetch.mockResolvedValue(...)` was recorded as a call to an unresolved host, which made the heaviest edge in
+     * a scan of one repository twelve lines of mock setup in a single test file.
+     *
+     * The operation names this build already recognises are the vocabulary that separates the two.
+     */
     const client = HTTP_CLIENTS.find(
-      (candidate) => path === candidate.path || root === candidate.path.split('.')[0],
+      (candidate) =>
+        path === candidate.path ||
+        (root === candidate.path.split('.')[0] && HTTP_METHOD_NAMES.has(calleeName(call))),
     );
     if (client === undefined) continue;
     const first = call.args[0];
@@ -482,6 +497,12 @@ export const effectsAdapter: AgentSystemAdapter = {
   discover: (context, builder): AdapterFindings => {
     const found: Found = { components: 0, edges: 0, files: new Set() };
     for (const module of context.modules) {
+      /*
+       * A test harness reaches real clients at fakes, and an effect discovered only there describes the harness
+       * rather than the system. Reading them mapped one repository's `sqlite` database entirely from a `FakeD1`
+       * over `node:sqlite` while its real database binding stayed absent from the graph.
+       */
+      if (isTestFile(module.file)) continue;
       discoverHttp(module, context, builder, found);
       discoverStores(module, context, builder, found);
       discoverRetryHelpers(module, context, builder, found);

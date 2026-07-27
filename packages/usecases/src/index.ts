@@ -28,6 +28,7 @@ export {
   type RunScenarioRequest,
   runScenarioUseCase,
 } from './scenario.ts';
+export { type ReceiveRequest, receiveTraces } from './receive.ts';
 export { scenarioPolicyFrom } from './scenario-policy.ts';
 export {
   type ImportTraceRequest,

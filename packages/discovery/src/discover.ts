@@ -21,6 +21,7 @@ import {
   analyzeFileSet,
   collectFiles,
   type FactCache,
+  boundSkipped,
   isSupportedLanguage,
   type Language,
   languageOf,
@@ -30,7 +31,7 @@ import {
 } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from './adapter.ts';
 import { createBindingRegistry } from './bindings.ts';
-import { readConfigDocuments } from './config-files.ts';
+import { platformConfigPaths, readConfigDocuments } from './config-files.ts';
 import { DEFAULT_ADAPTERS } from './registry.ts';
 import { buildSymbolIndex } from './symbol-index.ts';
 
@@ -63,10 +64,20 @@ export type ScanResult = {
   readonly agentSystemDetected: boolean;
 };
 
+/**
+ * Languages this build does not read, named by the extension a repository would carry.
+ *
+ * The list is what a real repository turns out to contain rather than what a survey says exists. Swift and Kotlin were
+ * added because the first repository outside the corpus that this was pointed at has a menu bar application and a
+ * mobile target in it, and fifty three Swift files went unmentioned: the coverage report said every file in a language
+ * this build reads had been read, which was true and was not the whole answer.
+ */
 const LANGUAGE_MARKERS: Readonly<Record<string, readonly string[]>> = {
   go: ['.go'],
   rust: ['.rs'],
   java: ['.java'],
+  kotlin: ['.kt', '.kts'],
+  swift: ['.swift'],
   csharp: ['.cs'],
   ruby: ['.rb'],
   php: ['.php'],
@@ -108,7 +119,11 @@ const distributionOf = (specifier: string): string => {
  * reader was never taught, and the result looks exactly like a repository with no agent system in it. Reporting
  * it names the ceiling instead of hiding it, which is the difference between a reader that is behind and a
  * repository that is empty. The signal is deliberately narrow: the adapter has to have claimed a distribution
- * that a parsed file actually imports, and to have finished without contributing anything.
+ * that a parsed file actually imports at run time, and to have finished without contributing anything.
+ *
+ * A type only import does not count. `import type { ToolUIPart } from "ai"` is erased before the program runs and
+ * can construct no agent, model or tool, so an adapter reading nothing from it is correct rather than behind.
+ * Counting those was how two repositories came to carry a blind spot naming a framework they render types from.
  */
 const adapterBlindSpots = (
   adapters: readonly AgentSystemAdapter[],
@@ -117,7 +132,10 @@ const adapterBlindSpots = (
 ): readonly UnsupportedArea[] => {
   const imported = new Set<string>();
   for (const module of modules) {
-    for (const entry of module.imports) imported.add(distributionOf(entry.module));
+    for (const entry of module.imports) {
+      if (entry.isType) continue;
+      imported.add(distributionOf(entry.module));
+    }
   }
 
   const areas: UnsupportedArea[] = [];
@@ -133,9 +151,9 @@ const adapterBlindSpots = (
       area: `${used.join(', ')} used in source, read by ${adapter.id}`,
       kind: 'adapter_blind_spot',
       reason:
-        'The adapter that claims this framework ran and found no component, so this build does not read the form this repository uses.',
+        'The adapter that claims this framework ran and found no component. Either this build does not read the form this repository uses, or this repository imports the framework as a client and declares nothing an adapter could read.',
       remediation:
-        'Declare the components in .orchescope/manifest.yaml so they appear in the graph, and report the form so an adapter can read it.',
+        'Declare the components in .orchescope/manifest.yaml so they appear in the graph. If the repository does declare components in source, report the form so an adapter can read it.',
     });
   }
   return areas;
@@ -228,8 +246,16 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
   const startedAt = request.clock.now();
 
   const manifests = readManifests(request.root);
-  const configs = readConfigDocuments(request.root);
+  /*
+   * The traversal runs before configuration is read so that a deployment manifest can be found where it lives rather
+   * than only at the repository root. It is a stat only walk under the same exclusions and the same file limit, so
+   * the cheap deterministic layer still runs before the expensive one: parsing is what `analyzeFileSet` does next.
+   */
   const fileSet = collectFiles(request.root, request.traversal);
+  const configs = readConfigDocuments(
+    request.root,
+    platformConfigPaths(fileSet.files.map((file) => file.path)),
+  );
   request.deadline.check('static discovery');
 
   const analysis = await analyzeFileSet(fileSet, {
@@ -281,7 +307,9 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
       fileSet.skipped.filter((entry) => isSupportedLanguage(languageOf(entry.file))).length,
     filesParsed: analysis.facts.length,
     bytesParsed: analysis.bytesParsed,
-    skipped: [...analysis.skipped],
+    // Counted from the whole list, listed from a bounded sample of it.
+    filesSkipped: analysis.skipped.length,
+    skipped: [...boundSkipped(analysis.skipped)],
     languages: [...analysis.languages],
     adapters: adapterRuns,
     unsupported: [
