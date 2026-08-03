@@ -93,7 +93,13 @@ Five controls, each covering a case the others do not:
 5. **Route and method allow lists**, with a bounded request body and a `413` rather than unbounded buffering.
 
 The served page carries a content security policy with no `unsafe-inline` and no remote origin, `nosniff`, `no-referrer`,
-`no-store`, and same origin resource and opener policies. The standalone HTML export pins its own inline script by hash.
+`no-store`, and same origin resource and opener policies. Both type faces are served as files from that same origin, so the
+policy keeps `font-src 'self'`.
+
+The standalone HTML export pins its own inline script and style by hash and carries `font-src data:` rather than `'self'`.
+Opened from a disk it is a `file:` page, where `'self'` resolves to nothing it can fetch, so the faces it inlines would be
+unreachable. The widening is bounded: `default-src 'none'` still blocks every network destination, `data:` is allowed for
+fonts and for nothing else, and a font is not executable. Evidence: `packages/report/test/standalone.test.ts`.
 
 ### Untrusted content executing in the report
 

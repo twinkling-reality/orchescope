@@ -28,6 +28,7 @@ pnpm test:e2e                # end to end tests against the bundled demonstratio
 pnpm test:ui                 # Playwright browser tests
 pnpm build                   # bundle the publishable artifact into apps/cli/dist
 pnpm build:web               # build the browser workspace into apps/web/dist
+pnpm states                  # render every cached report as a page, into states/, with an index of what each shows
 pnpm package                 # pack a tarball, checksum it, install it and run it
 pnpm orchescope <args>    # run the CLI from source
 pnpm demo                    # run the bundled demonstration agent system
@@ -120,5 +121,7 @@ Rules the tooling enforces:
    block, not just the exit code, then run `pnpm corpus` and say what moved. A fixture written by the author of an
    adapter agrees with its author; the corpus does not.
 3. For anything touching runtime: `pnpm orchescope trace -- node apps/demo/src/main.ts` and confirm spans arrived.
-4. For anything touching the report: `pnpm build:web` then `pnpm orchescope audit --serve` and look at the page.
+4. For anything touching the report: `pnpm build:web` then `pnpm orchescope audit --serve` and look at the page. Then
+   `pnpm states` and look at the reports the demonstration is not: the workspace renders 1128 states and the
+   demonstration is one of them. `docs/design/states/` says which report shows which.
 5. State what you ran and what it printed. Do not report a check as passing unless it ran.

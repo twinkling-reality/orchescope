@@ -152,7 +152,7 @@ than Node, and both offer single file compilation. Rejected because coding agent
 | Python analysis | `web-tree-sitter` 0.26 with `tree-sitter-python` 0.25 WASM grammar | Measured 5.8 MB/s, no compiler at install |
 | Storage | `node:sqlite` | SQLite 3.53.3 in the local build, WAL, `STRICT` tables, `user_version` migrations |
 | Runtime ingestion | Hand written OTLP/HTTP receiver on loopback | Accepts `application/json` and `application/x-protobuf` |
-| Graph layout | `@dagrejs/dagre` 3.0 in the CLI | MIT, deterministic across runs, positions baked into the report |
+| Graph layout | Concentric, hand written, in the CLI | Deterministic across runs, positions baked into the report, no dependency. `@dagrejs/dagre` was measured and dropped in phase 20: a layered layout puts every leaf of a hub in one rank, and every corpus graph is hub and spoke |
 | Browser rendering | `sigma` 3.0 with `graphology` 0.26, `preact` 10.29 for the shell | WebGL canvas for the graph, accessible DOM table for the same data |
 | Agent interface | `@modelcontextprotocol/sdk` 1.29 | Official SDK, stdio transport |
 | CLI parsing | `commander` 15 | Bundled, adds about 3 ms to startup |

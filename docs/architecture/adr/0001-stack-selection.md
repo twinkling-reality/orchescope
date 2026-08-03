@@ -47,7 +47,7 @@ Build Orchescope as a single process TypeScript application on Node.js 24 LTS.
 - A hand written OTLP/HTTP receiver on loopback that decodes both `application/json` and
   `application/x-protobuf`.
 - `@dagrejs/dagre` for deterministic layered layout in the CLI, with positions stored in the report
-  bundle. No layout engine ships to the browser.
+  bundle. No layout engine ships to the browser. **Superseded, see the note below.**
 - `sigma` with `graphology` for the interactive graph and `preact` for the surrounding shell, both
   built with the same esbuild used for the CLI.
 - `@modelcontextprotocol/sdk` over stdio for the agent interface.
@@ -120,3 +120,17 @@ specific evidence that decided each one are in
 [stack-evaluation.md](../../research/stack-evaluation.md). The closest call was Rust, which wins on
 startup, distribution and store throughput and loses on the one thing the product is for: reading
 TypeScript and Python well enough to be believed.
+
+## Superseded in part: graph layout, phase 20
+
+The layered layout was chosen on licence and determinism, and both of those still hold of
+`@dagrejs/dagre`. What was never measured was whether a layered layout suits the graphs this product
+actually produces, and it does not. Every agent system in the pinned corpus is hub and spoke with a
+median degree of one or two, and a layered layout puts every leaf of a hub in one rank:
+`openai-agents-python` laid out at 848 by 19050, rendered into a canvas of aspect 2.3.
+
+The layout is now concentric, still deterministic, still computed in the CLI with the positions baked
+into the bundle, and it needs no library at all, so the dependency is gone. The same graph lays out at
+2997 by 3000. Nothing else in this record changed: `sigma`, `graphology` and `preact` are unaffected,
+and no layout engine ships to the browser. The measurements are in
+[../../design/report-system.md](../../design/report-system.md).

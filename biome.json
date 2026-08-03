@@ -15,7 +15,8 @@
       "!**/*.wasm",
       "!schemas/**/*.json",
       "!corpus/.cache",
-      "!corpus/expected/**/*.json"
+      "!corpus/expected/**/*.json",
+      "!**/*.mock.html"
     ]
   },
   "formatter": {

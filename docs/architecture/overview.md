@@ -107,8 +107,9 @@ meant to be committed; state is not.
   schemas, and read only tools annotated as such.
 - **Report server** (`packages/report-server`): loopback only, capability token exchanged for a same site cookie, a Host
   allow list, Fetch metadata checks, and a strict content security policy with no inline script.
-- **Browser workspace** (`apps/web`): preact, sigma for the map, and no dependency on any Orchescope package other than
-  the schema types. It reads a bundle; it cannot reach the store.
+- **Browser workspace** (`apps/web`): preact, sigma for the map, two self hosted type faces, and no dependency on any
+  Orchescope package other than the schema types. It reads a bundle; it cannot reach the store. What it is assembled from
+  is recorded in [../design/report-system.md](../design/report-system.md).
 
 ## Where to look next
 

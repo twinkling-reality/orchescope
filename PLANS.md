@@ -24,7 +24,7 @@ tool.
 | 8. Scenarios, benchmarks, chaos | done | `pnpm orchescope --cwd apps/demo chaos --scenario support-desk-faults` |
 | 9. Comparison and the goal loop | done | `tests/e2e/improvement-loop.test.ts` |
 | 10. Command line surface | done | `tests/e2e/cli-contract.test.ts`, 25 tests |
-| 11. Report bundle and browser workspace | done | `tests/ui/workspace.spec.ts`, 10 tests in Chromium |
+| 11. Report bundle and browser workspace | done | `tests/ui/workspace.spec.ts`, 16 tests in Chromium |
 | 12. Agent interface | done | `packages/mcp/test/contract.test.ts`, 15 tests |
 | 13. Security controls | done | `packages/report-server/test/server.test.ts`, `packages/redaction/test/redact.test.ts` |
 | 14. Packaging and distribution | done | `pnpm package`: stage `release/stage`, install the tarball and audit a project with it |
@@ -33,8 +33,11 @@ tool.
 | 17. Measured against real repositories | done | `pnpm corpus` across fifteen pinned entries, `docs/architecture/adr/0002-deterministic-analysis.md` |
 | 18. The joins the pipeline computed and dropped | done | see below |
 | 19. The map named the harness and missed the system | done | see below |
+| 20. Every panel weighed the same, including the thesis | done | see below |
+| 21. The loop could not report its own outcome | done | see below |
+| 22. Panels floating on a page, and a composition that died on dark | done | see below |
 
-657 unit and integration tests, 92 end to end tests, 10 browser tests. `pnpm verify` is green.
+765 unit and integration tests, 92 end to end tests, 16 browser tests. `pnpm verify` is green.
 
 ## Phase 16: what a stranger meets
 
@@ -478,6 +481,375 @@ discovery, the schema, the corpus scripts and the guides, and touched no file un
 catch it because the corpus compares JSON and this was prose.
 
 Thirteen corpus entries were re-recorded. Every movement is a number falling toward what the repository contains.
+
+## Phase 20: every panel weighed the same, including the thesis
+
+The browser workspace drew every panel as the same bordered box and every number as the same tile, so
+the inventory count and the declared against exercised delta carried identical weight, and the delta
+was the third panel down. The section tabs were numbered one to eight, which implies a sequence that
+does not exist. The design record is [`docs/design/report-system.md`](docs/design/report-system.md).
+
+**One idea replaced eleven tinted variants: fill means evidence.** A filled shape was measured in a
+run and a hollow outline was only declared, on the delta bar, on the map nodes, in the components
+table and on the severity marker. It is the visual form of the rule this repository already states,
+that an inference is never presented as an observation, and it is carried by form rather than by hue,
+so it survives greyscale, a colour vision deficiency and a printer. Hue is now confined to a severity
+marker and the word beside it: everything that used to be tinted says itself in a word instead, and a
+state that is genuinely an alert is already a finding carrying a severity. Two hues cover five
+severities, so the mark carries the rank as well and all five forms differ without any colour at all.
+
+**The fourth state is the one that was easiest to get wrong.** A report with no run in it cannot say
+that a component was never exercised, only that there was nothing to exercise it, so nothing is
+hollowed: the map draws every node filled and says why in its own legend, and the components table
+draws a dashed mark reading `no run to compare`. Hollowing them would have been an inference presented
+as an observation in the one place the whole design claims not to.
+
+**The delta bar has a ceiling, and it states which reading it is giving.** One cell is one declared
+component up to 120. Above that the filled share is the measured rate rounded onto 120 cells and the
+caption says so, because `openai-agents-python` declares 917 and a cell per component is neither
+readable nor something to put in a document. A count that is not zero never rounds away: one component
+that ran and was never declared is the whole reason the dashed boundary is drawn. Evidence:
+`apps/web/test/delta-bar.test.ts`, thirteen cases across both scales and the degenerate inputs.
+
+**The join summary was computed by the pipeline and read by nothing.** `ReconciliationDelta.joins`
+carries `onNameAlone`, which phase 18 added because a match on kind and name alone is the weakest rule
+and looks like every other join from outside. The delta screen now names it under the bar: on the
+demonstration, two of fifteen joins rest on a name alone, and the components are listed.
+
+**Two faces are vendored and the single file export keeps them.** Manrope and JetBrains Mono, both SIL
+OFL, both latin subset variable woff2 at 65 KiB together. The served report keeps `font-src 'self'`
+and gets them as real files from its own origin, read as bytes because a font decoded as UTF-8 and
+re-encoded is a request that succeeds and a face the browser refuses without saying why. The standalone
+export gets `font-src data:` and the faces inlined, because opened from a disk it is a `file:` page
+where `'self'` reaches nothing, and an export that silently lost the type would be a different document
+rather than a plainer one. One stylesheet is built twice from one source so the `@font-face` rules have
+one definition. Evidence: `packages/report/test/standalone.test.ts` and four new cases in
+`packages/report-server/test/server.test.ts`.
+
+**Three promises the interface made and nothing held.** Keyboard focus stays visible on every control
+it can reach, reduced motion stops every animation and transition, and no section scrolls sideways at
+390px. The third failed the moment it was asserted: a grid track written as `1fr` has the widest thing
+inside it as its floor, so one wide table in the main column pushed the whole page, and the rail with
+it, 506px past the viewport. Every track is now `minmax(0, 1fr)`.
+
+**Two defects the redesign found in passing.** The search field derived its plural by suffixing `es`,
+so a shipped report read `11 findinges shown` and `33 componentes shown`; the plural is now given
+rather than derived. And a name that came out of the analysed repository was being set in an uppercase
+eyebrow, which would have rendered a scenario named `getUserById` as `GETUSERBYID`: the eyebrow now
+names the kind of block, which is this repository's own vocabulary, and the name is a heading below it.
+
+**The map was unreadable, and the layout was why.** A reader called it unusable and was right. It drew a
+column of anonymous dots with eight labels on it. Four faults, in order of depth.
+
+*The layered layout was the wrong algorithm for this data.* Every agent system in the corpus is hub and
+spoke, median degree one or two, busiest degree 18 in the demonstration, 24 in `openai-agents-python`, 98
+in `langgraphjs`. A layered layout puts every leaf of a hub in one rank, so `openai-agents-python` laid
+out at 848 by 19050 and was rendered into a canvas of aspect 2.3. A ring makes the tangential room grow
+with the radius instead, and the same graph lays out at 2997 by 3000. `@dagrejs/dagre` is gone with it;
+the replacement is eighty lines and no dependency. Evidence: nine tests in
+`packages/report/test/layout.test.ts`, holding that a star of 8, 40, 200 or 600 leaves stays within an
+aspect of 0.7 to 1.4, that the drawing grows with the square root of the count rather than the count, and
+that neither the coordinates nor their order depend on the order the components arrive in.
+
+*It drew components that are in no relation.* 1091 of 1390 in `openai-agents-python`, 368 of its 370
+prompts, 479 of its 620 agents. They are not part of any topology, they inflated the drawing 6.5 times,
+and a field of unconnected dots reads as a system. They are not drawn, and because that is a large
+omission `apps/web/src/map-census.ts` states it per kind: `Prompt 2 of 370` rather than a number with no
+shape to it. Six tests.
+
+*There is now a ceiling on names and it is arithmetic rather than taste.* The outermost ring of a drawing
+fitted into a canvas of height H has a radius of at most H/2, so two neighbours on it have at most
+2*pi*(H/2)/k pixels between them, about 2200/k at this canvas height, and a name needs about 16 of them.
+Below the ceiling every component is named. Above it the canvas draws the shape, says it is not naming
+things at this size, and names what the reader selects together with everything it touches. The same rule
+as the delta bar at 120 cells and the findings at 25 components: say which reading you are giving.
+
+*And the camera never fitted.* It started at its default ratio on a graph larger than the viewport, so it
+showed a corner. It fits once on mount, with room on the right for the outermost name, and not again,
+because refitting would undo a reader's own pan every time a filter changed.
+
+The components table gained a relations column in the same change. The canvas is hidden from assistive
+technology, so "which thing does everything hang off" had no keyboard answer, and a nought in that column
+is also how a reader finds what the map left out.
+
+**One browser test changed and three were added.** `a finding shows its basis, its evidence and where
+it came from` locates the basis by `.basis` rather than `.badge-label`, because the chip has no inner
+label element any more, and it is scoped to the disclosure summary so it cannot pass on a chip inside
+the closed body. The same test now asserts that the collapsed line carries the evidence count, which
+is stronger than the visibility check it replaced. Nothing else moved: the other nine assert behaviour
+rather than markup and passed unchanged.
+
+**One corpus expectation was re-recorded, and it was already failing.** `orchescope-discovery`
+expected 23 files where the working tree now holds 24: phase 19 added `workers-bindings.ts` to
+`packages/discovery/src` and did not re-record. Three numbers moved, all by one, and the entry still
+yields zero components, which is the ceiling its `why` claims.
+
+## Phase 21: the loop could not report its own outcome
+
+Phase 20 rebuilt the browser workspace and was measured against a report that had a scan in it and, at
+most, one traced run. That is the state `pnpm tour` produces: it builds the workspace, clears the store,
+audits, traces once and audits again. Benchmarks, chaos runs, scenario runs, comparisons and goals were
+never in it, so the Performance benchmark tables, Resilience, Scenarios, Comparisons and Goals had only
+ever been seen in their empty states. This phase built that state by hand against `apps/demo` (three
+scenario runs of `support-desk`, three of `support-desk-duplicate`, a benchmark over agent counts 1, 2
+and 4, a chaos run injecting eight faults, a comparison attached to a goal, and a goal created and
+validated) and looked at the result.
+
+**The goal loop could not report its own outcome, and said the opposite.** `orchescope goal validate`
+printed `1 of 5 criteria satisfied, 2 undecided` while the Goals screen read `This goal has not been
+validated. Nothing has yet rerun the scenarios above and compared the result against the baseline.`
+Both clauses were false: the scenarios had been rerun, which is why one criterion could be decided at
+all, and the comparison existed. Three joins were missing.
+
+*Nothing read the link that `compare --goal` writes.* A comparison records the goal it was made for,
+`comparison(goal_id, created_at DESC)` has had an index since the schema was written, and no query in
+the repository ever selected on that column. So `goal validate <id>` could only ever see a comparison
+handed to it by an explicit `--comparison`, and the two metric criteria reported `no comparison was
+recorded` while the comparison sat in the store carrying the goal's identifier. That is also a refusal
+that named no setting, which this repository forbids. `latestComparisonForGoal` is now the read the
+index exists for, bounded to one row and filtered to comparisons made after the goal, because an
+earlier one measured the code the goal exists to change and letting it decide a criterion would validate
+a change against its own baseline. On the demonstration the same goal now judges 5 of 5 criteria with
+none undecided.
+
+*Nothing recorded what was decided.* The judgement was computed and returned to whoever asked, and the
+only thing persisted was the status bit and, when a comparison had been passed in, a pointer to it. The
+report now carries the judgement instead of storing it: `ReportBundle.goalValidations` holds one entry
+per goal with the summary, the counts and each criterion's outcome, judged by the audit against the scan
+it is about. A judgement is only ever true of one state of the store, and a copy kept on the goal
+document would be stale the next time anything was rerun, whereas the report is already the artifact
+pinned to a revision. The field is optional, so a bundle written without it renders a refusal that says
+this report did not judge the goal rather than that nobody ever tried.
+
+**The goal document reported a line in a YAML file as a runtime observation.** Every evidence line in a
+goal's summary carried the class `observed`, hardcoded, and the workspace renders that class as *seen in
+a runtime trace of the system actually executing*. The two records behind the demonstration's goal are a
+`config_entry` read from `.orchescope/manifest.yaml`, which is `discovered`, and a `derived` record
+produced by `rule:static-policy`, which is `inferred`. The metric branch three lines above in the same
+function read the real class correctly. Records are now grouped by kind and class together rather than
+by kind alone, because one kind can hold records of differing classes and picking one per kind would
+report the wrong one for the rest. This is the rule `AGENTS.md` states first, and the goal document is
+the artifact least able to defend itself against breaking it: `goal show --prompt` hands that sentence
+to a coding agent, which has no way to go and check.
+
+**A finding identifier is renumbered by a rescan, and every sentence a person reads named one.** The
+finding engine's own comment claimed the opposite, that determinism "is what makes a goal that
+references OSC-PERF-0001 mean the same thing tomorrow". It does not. The sequence is a counter over one
+scan's drafts within a category, so a rule that sorts earlier and fires for the first time renumbers
+everything after it. `validateGoalOutcome` already knew this and worked around it by resolving presence
+on the rule, with a comment saying so, and the two comments contradicted each other.
+
+Demonstrated end to end: `OSC-GOAL-0001` was created from `OSC-REL-0003`, the retry finding. Running the
+scenarios **the goal's own validation plan prescribes** produced two runtime reliability findings that
+sort earlier, and the retry finding became `OSC-REL-0005` while `OSC-REL-0003` became a model timeout
+finding with nothing to do with the goal. The Goals screen's `From finding OSC-REL-0003` control
+navigated to that one, and the agent prompt named it four times. The judgement itself was never wrong,
+because it resolves on the rule; only everything a person or an agent reads was. The workspace now
+resolves a goal's finding by its rule and the components it names, and says so when the finding is
+absent from the report, which is what a resolved finding looks like. New goals state the rule in the
+criterion and keep the identifier in the check as the record of which finding the goal was cut from.
+A goal written before this change keeps the sentences it was written with; nothing rewrites a stored
+document.
+
+Evidence: seven cases in `packages/goals/test/create.test.ts`, covering the class per group, two classes
+within one kind, and that no identifier appears in any sentence a reader is sent to act on; two new
+assertions in `tests/e2e/improvement-loop.test.ts`, one judging the goal with no `--comparison` at all
+and one holding that the judgement reaches the report and names no identifier; and the changed case in
+`apps/web/test/prompt.test.ts`, which now asserts the absence rather than the presence of the
+identifier.
+
+**Measured against the corpus rather than the demonstration.** `openai-agents-python` at 1390 components
+and `langgraphjs` at 709 were audited and read on the same screens.
+
+### Two hop adjacency on the map: the evidence says do not build it
+
+The case for it was "the one thing a picture adds over the details panel is seeing two agents converge
+on one tool". Measured strictly, as a tool that two or more agents point at:
+
+| repository | agents | tools | tools two or more agents point at | anything two or more agents point at |
+| --- | --- | --- | --- | --- |
+| demonstration | 5 | 7 | 0 | 2, a model and a memory |
+| openai-agents-python | 620 | 318 | 2 | 15 |
+| langgraphjs | 414 | 0 | 0 | 13 |
+
+The convergence that exists is infrastructure rather than tools: `postgres` with 31 sources, `sqlite`
+with 24, an unresolved host with 20, `bullmq` with 14, a model with 13. Pairs of components sharing two
+or more downstream neighbours, which is what a picture would show as a visible bundle, number 3 on the
+demonstration, 2 of 474 pairs on `openai-agents-python` and 16 of 1004 on `langgraphjs`. Almost every
+pair shares exactly one node, which that node's own inbound relations already state in one hop and which
+the ring layout already places at the centre. The feature was not built.
+
+### The map refused to name anything at any magnification
+
+Rendering the corpus reports as pages found two faults in the map that the demonstration could not show,
+because at 26 components it is under every ceiling the canvas has.
+
+**The pages were rendering yesterday's coordinates with today's canvas.** Map coordinates are computed
+once, by the process that writes the bundle, which is what makes the same graph give the same map on
+every machine. It also means a stored bundle carries the layout of whatever build wrote it. The cached
+corpus bundles predated the ring layout, so crewai's 987 components sat on three x values in a box of
+608 by 98,778, and the current canvas drew that as a vertical column of overlapping dots. Nothing on the
+page admitted to it, and a reader cannot tell that from a system that really is a column. The bundles
+were re-audited, and `pnpm states` now recomputes the layout, compares, and refuses a bundle it cannot
+trust rather than drawing it, naming `pnpm corpus` as the way to refresh it. It fired on its first run,
+catching two bundles the first re-audit had skipped.
+
+**The naming ceiling reasoned about the fitted view and then applied at every view.** `2200 / k` is the
+space between neighbours when the drawing is fitted, and the canvas compared the raw node count against
+it once, at render time, with no reference to the camera. So crewai's 150 components were nameless at the
+fitted view, which is correct, and still nameless at five times magnification with each node holding half
+the canvas, which is the rendering fault the ceiling exists to prevent. The note above the canvas went on
+insisting there was no room. The rule now takes the camera: at ratio r the space is `2200 / (k * r)`, so
+`k * r <= 120`, and the names arrive as the room for them does. The decision moved out of the component
+into `apps/web/src/map-names.ts`, which is where the other twelve of these live, with ten cases beside it.
+
+Two consequences were handled with it. The note is driven by the same live value as the labels, so it
+disappears when it stops being true and says which magnification will do it. And Sigma's collision grid
+had a cell of 50px against a label of about 120px, so it was letting three names share the width of one:
+the cell now matches the label, and a graph small enough to name at the fitted view is forced past the
+grid entirely, because naming it in full is a promise the design record makes.
+
+### Found and recorded rather than fixed
+
+Looking at the populated screens turned up more than this phase changed. Each is reproducible on the
+demonstration report with a benchmark, a chaos run and scenario runs in it.
+
+- **Benchmark variant tables render every measurement as a duration.** `DistributionRow` in
+  `apps/web/src/sections/performance.tsx` hard codes the duration formatter, so 1550 tokens prints as
+  `1.55 s` and three model calls print as `3 ms`. The unit is not missing from the data; it is in the
+  field name and is dropped at the component boundary. Two tables higher on the same screen render the
+  same counts as integers.
+- **The self time overlay rounds each per run row to a whole millisecond before summing.**
+  `packages/report/src/overlays.ts` is the only overlay that quantises an addend. Across 150 rows whose
+  values run from 0.2 to 3.25 ms, three components with measured self time render as `0 ms` and the
+  ranking disagrees with the table directly above it. It also drives node size, node tone and the legend
+  on the map. The delta bar has an explicit rule against exactly this.
+- **The overview double counts.** `All 21 findings and 2 strengths` for a destination holding 19 risks
+  and 2 strengths.
+- **A repository authored name is set in an uppercase eyebrow.** `TOOL EXCEPTION INTO ISSUE_REFUND` on
+  the Resilience screen, which is the case `docs/design/report-system.md` names and phase 20 records as
+  fixed. Nothing tests the rule.
+- **Derived plurals are back**, in both layers: `1 record(s)`, `1 runs`, `1 relations name a component
+  ... and are not drawn`. Phase 20 fixed one site and stated the rule; nothing generalised it. Note that
+  `tests/ui/workspace.spec.ts` pins the plural nouns of the map's match sentence and the filtered case
+  reaches one, so a fix that only swaps nouns breaks a passing test.
+- **Raw schema keys reach the reader.** `MaxDurationMs 30000` with no unit on a screen that renders the
+  row above it as `30 s`, `metric successRate no worse than baseline within 0`, and `durationMs (ms)`,
+  which says the same thing twice while the value beside it carries no unit at all.
+- **Numbers group with an ordinary space.** `298 of 1 390` can wrap mid number, and in prose the mono
+  separator is three times the width of the surrounding Manrope word space, so it reads as two numbers.
+- **Resilience, Scenarios and Comparisons have no summary and nothing behind a click.** Measured
+  `scrollHeight` on a report of 33 components, 3 scenarios, 10 runs and 8 faults: overview 2497px, map
+  2230, findings 1733, performance 4251, resilience 4904, scenarios 4866, comparisons 1439, goals 1442.
+  Resilience renders eight fault blocks in full and its only table belongs to the faults that did not
+  happen, so "which fault was worst" takes the CLI eight lines and the browser eight scrolled blocks.
+  Scenarios renders five runs of one scenario with all twelve of their identical evaluator outcomes
+  expanded. `DisclosureRow`, `Display`, `Figure`, `RuledStat` and `StatRow` are imported by the overview
+  and almost nowhere else.
+
+## Phase 22: panels floating on a page, and a composition that died on dark
+
+The workspace drew rectangles on a visible background: 40px of paper around every screen, 16px between
+cards, and a page ground showing through every gap. Five screens had no designed main area at all and
+rendered as single column documents with a 500px ribbon of prose on the left and 900px of nothing
+beside it. The design record is [`docs/design/report-system.md`](docs/design/report-system.md).
+
+**A screen is a bento now, and there is no page ground anywhere in the stylesheet.** Twelve columns,
+`gap: 0`, and the hairline is drawn by each tile on its right and bottom edges only, so two neighbours
+share one line rather than a gutter. Four places compose a row: a band across the top, an anchor of
+four twelfths that owns the dark ground, a stage of five, and a stack of three holding one to three
+short tiles. `--column` is gone with the box it measured; the bento is full bleed at every width and
+`--measure` at 68ch is what still governs a line.
+
+**There is no theme, and the arithmetic is why.** The three grounds this replaced landed inside 1.19:1
+of each other on a dark machine and read as one grey rectangle: page against lifted surface 1.19:1,
+page against wash 1.11:1, wash against surface 1.07:1, where the same three are 17.81, 1.15 and 15.45
+in light. That is not a palette that was chosen badly. To reach even 3:1 against a near black anchor
+the lighter ground has to arrive at about `#5C626E`, which is a mid grey, so no set of dark values
+holds three grounds as far apart as a light one.
+
+A middle position was built first and rejected on sight: the anchor fixed at `#0B0D12` in both themes,
+the field and the band following the theme, on the argument that a control which changed nothing would
+be a button that fails when pressed. The dark result still read as one navy rectangle, because two
+grounds inside 1.13:1 of each other is the same failure with one fewer participant. So all three are
+fixed by role, and with no page ground left there was nothing for the theme to act on: the control is
+gone rather than left doing nothing, which is the rule this repository applies to every other control.
+`tests/ui/workspace.spec.ts` holds it from both sides, once on the order and the values of the three
+grounds and once by emulating `prefers-color-scheme: dark`, reloading and asserting nothing moved.
+
+**Every ground is still the neutral swap, which is what carries the system across.** A tile redefines
+`--ink`, `--outline`, `--sheet`, `--paper` and the two alert hues inside itself, so every existing rule
+comes over intact: a filled bar cell is that tile's ink, a hollow one is its outline, and fill still
+means evidence on the other ground. The canvas comes too, because `readPalette` reads the same
+properties off its own element. `.block` with its three levels, `.deck` and `.card` are gone and
+`.tile` replaced all of them; what is left of `.block` is `.group`, a section inside a tile.
+
+**Five screens got a main area.** Performance leads with what the runs sum to and ranks the components
+the time went into; Goals anchors on the acceptance criteria, because the criteria are the only thing
+on that screen that decides anything; Resilience gives each injected fault a row of three and anchors
+it on what the system did rather than on what it cost; Scenarios anchors on the runs, which is the
+absence `demonstration-system` is the only report in the cache to reach; Comparisons anchors on what
+the comparison does not establish, because a verdict of unchanged from one run against one is a
+refusal rather than a result. Measured `scrollHeight` at a 941px viewport on `demo-populated`, against
+the same measurement in phase 21: overview 2497 to 1141, map 2230 to 1891, findings 1733 to 1548,
+resilience 4904 to 3252, scenarios 4866 to 3768, comparisons 1439 to 1244.
+
+**Two screens got longer and it was the right trade.** Performance went from 4251 to 4514 and Goals
+from 1442 to 1850, because both gained a summary above evidence that was already there rather than
+losing any of it. On Performance the first screenful now answers what the runs measured instead of
+opening on a table header, and the four tables below it stay open.
+
+**The evidence screens are not bento, deliberately.** A components table of 1727 rows and a findings
+list carrying every source location are the document this report exists to be, and the table is the
+canvas's only keyboard reachable form, so nothing on either went behind a `···`. What they took from
+the bento is the frame: the filter rail is a tile, the canvas is the dark tile, and the table and the
+details are field tiles, hairline separated and edge to edge. The per component, metric delta and run
+tables sit under their screen's row the same way.
+
+**The refusal is the band, and its commands are named once per screen.** Thirteen of the sixteen
+cached reports have no run in them and open on it. On Performance three tiles would otherwise have
+repeated `orchescope trace`, which reads as three faults rather than one absence, so the band carries
+the commands and only the tile whose command differs names its own.
+
+**The chrome was rebuilt after the first pass shipped it unchanged.** An all caps eyebrow reading
+`ORCHESCOPE` above the project name spent two lines on a fact that never changes; it is a mark, a `/`
+and the name now, on one line. The current section was a rule under a word, which on a bar of eight
+labels reads as an underlined link rather than as a position, so it is a filled pill and where you are
+stopped being the accent's job. Three mono facts about the report ran across the top of every screen
+and are behind one icon; the two icons that remain are the same size on the same baseline, one a
+`summary` and one a `button`.
+
+The navigation came back onto one row with that. It took a row of its own because `auto 1fr auto`
+centres the middle track between its neighbours rather than on the page, which put it 128px off centre
+on the demonstration. Folding the provenance into an icon took the right zone from 331px to 84px, and
+`minmax(0, 1fr)` on both outer tracks centres the navigation on the page whatever they hold. Measured,
+the eight pills are 861px and the widest identity is 269px, so one row needs 1399px and the chrome
+drops to two rows below 1400. It is 57px tall on one row against 110px before.
+
+### What the corpus said that the demonstration did not
+
+Three of the rules above came from a report other than `apps/demo`.
+
+- A stat row wrapping at 150px fitted four ruled numbers into a five twelfths tile at 155px each and
+  left nothing under them. 240px wraps the same four to two by two in a tile and keeps them on one
+  line across a band. The rule moved from beside a stat to above it, because a rule to the left is one
+  the first item of a wrapped row draws too and a grid cannot be asked which children start a line.
+- A definition list in a full width band set `deterministic and offline` across 1240px. It stops at the
+  measure now, because its value column is prose.
+- `.lead-head.is-prose` is the same two columns with the left one at the measure rather than at 26ch,
+  for the three screens that lead with a paragraph instead of a display sentence. Its own rule is the
+  more specific one, so both narrow breakpoints name it as well as `.lead-head`: without that it took
+  68ch of a 390px screen and `Scenarios` overflowed by 223px, which the browser test caught.
+
+### Left standing
+
+The findings in phase 21's `Found and recorded rather than fixed` are untouched: the duration formatter
+in the benchmark tables, the self time overlay's rounding, the overview's double count, the uppercase
+eyebrow on a repository authored name, the derived plurals, the raw schema keys and the number
+grouping. This phase changed the frame and the main areas, not the formatters.
+
+The state tables under `docs/design/states/` are stale for the six screens this rebuilt, and the README
+says which and why. Nobody re-derived them.
 
 ## What each phase had to establish
 
