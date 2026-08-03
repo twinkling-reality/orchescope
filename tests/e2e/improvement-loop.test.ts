@@ -254,6 +254,30 @@ describe('the improvement loop', () => {
       'the static retry finding should be gone once the manifest declares the idempotency key',
     );
 
+    // Judged with no --comparison, which is how anyone following the goal's own validation plan will
+    // run it. The comparison was attached to the goal by `compare --goal`, so asking for its identifier
+    // again would be asking the reader to carry something the store already holds, and answering "no
+    // comparison was recorded" while it sits there would be false.
+    const judgedByDefault = parseJson(await runCli(root, ['goal', 'validate', goal.id, '--json']));
+    const defaultOutcomes = (
+      judgedByDefault.data['validation'] as {
+        outcomes: { satisfied: boolean; decided: boolean; detail: string }[];
+      }
+    ).outcomes;
+    const defaultDuplicate = defaultOutcomes.find((outcome) =>
+      outcome.detail.includes('duplicateSideEffects'),
+    );
+    assert.ok(
+      defaultDuplicate !== undefined,
+      'validating without --comparison judged no metric criterion',
+    );
+    assert.equal(
+      defaultDuplicate.decided,
+      true,
+      `the comparison attached to the goal did not reach the judgement: ${defaultDuplicate.detail}`,
+    );
+    assert.equal(defaultDuplicate.satisfied, true);
+
     const validated = parseJson(
       await runCli(root, ['goal', 'validate', goal.id, '--comparison', comparison.id, '--json']),
     );
@@ -292,7 +316,28 @@ describe('the improvement loop', () => {
     await runCli(root, ['export', '--format', 'json', '--out', reportFile]);
     const bundle = JSON.parse(readFileSync(reportFile, 'utf8')) as {
       scenarioRuns: { scenarioId: string; evaluators: { kind: string; passed: boolean }[] }[];
+      goalValidations?: {
+        goalId: string;
+        summary: string;
+        outcomes: { criterionId: string; satisfied: boolean; decided: boolean; detail: string }[];
+      }[];
     };
+
+    // The judgement reaches the report. Without it the goals screen has only the comparison log to read,
+    // and a goal that was judged but has no comparison attached looks like one nobody ever tried to
+    // verify, which is a stronger claim than the report can support.
+    const judgement = (bundle.goalValidations ?? []).find((entry) => entry.goalId === goal.id);
+    assert.ok(judgement !== undefined, 'the report carried no judgement for the goal it carries');
+    assert.equal(judgement.outcomes.length, goal.acceptanceCriteria.length);
+    assert.ok(
+      judgement.outcomes.some((outcome) => outcome.decided && outcome.satisfied),
+      `the report judged nothing as satisfied: ${judgement.summary}`,
+    );
+    // A finding identifier is renumbered by any rescan that changes the finding set, so no sentence a
+    // reader is asked to act on may name one.
+    for (const outcome of judgement.outcomes) {
+      assert.doesNotMatch(outcome.detail, /OSC-[A-Z]{3,5}-\d{4}/, outcome.detail);
+    }
     const judged = bundle.scenarioRuns.filter((entry) => entry.evaluators.length > 0);
     assert.ok(
       judged.length > 0,

@@ -1,6 +1,6 @@
 import { OrchescopeError } from '@orchescope/domain';
 import { createGoal, type GoalValidation, validateGoal } from '@orchescope/goals';
-import type { Comparison, Goal, ScenarioResult, Timestamp } from '@orchescope/schema';
+import type { Comparison, Finding, Goal, ScenarioResult, Timestamp } from '@orchescope/schema';
 import type { Workspace } from '@orchescope/workspace';
 
 /**
@@ -104,6 +104,52 @@ export type ValidateGoalResult = {
   readonly validation: GoalValidation;
 };
 
+/**
+ * The comparison that may decide this goal's metric criteria.
+ *
+ * `compare --goal` is how a reader states which goal a comparison is evidence for, and it is the only
+ * reason that link is recorded, so the judgement reads it back rather than asking for the identifier
+ * again on the next command. Only a comparison made after the goal is eligible: an earlier one measured
+ * the code the goal exists to change, and letting it decide a criterion would validate the change
+ * against its own baseline, which is the mistake `scenarioPassesOutcome` already refuses to make.
+ */
+const comparisonForGoal = (workspace: Workspace, goal: Goal): Comparison | undefined =>
+  workspace.store.latestComparisonForGoal(goal.id, goal.createdAt);
+
+/**
+ * Judges one goal against what the store holds.
+ *
+ * Exported because two surfaces need the same answer from the same rules: `orchescope goal validate`,
+ * which prints it, and the audit, which carries it into the report so the Goals screen can state what
+ * was decided instead of claiming nothing was.
+ *
+ * Presence of the finding is resolved on the goal's rule rather than on the identifier the criterion
+ * carries, because that identifier is a per category sequence number over one scan's findings and is
+ * renumbered whenever the set changes. The answer is expressed back in terms of the identifiers the
+ * criteria hold, so the pure judge in `@orchescope/goals` stays a function of its inputs.
+ */
+export const judgeGoal = (input: {
+  readonly workspace: Workspace;
+  readonly goal: Goal;
+  readonly findings: readonly Finding[];
+  readonly rescanned: boolean;
+  readonly comparison?: Comparison;
+}): GoalValidation => {
+  const { workspace, goal } = input;
+  const stillPresent = new Set(
+    input.findings
+      .filter((finding) => finding.ruleId === goal.metadata['ruleId'])
+      .map((finding) => finding.id),
+  );
+  if (stillPresent.size > 0) stillPresent.add(goal.findingId);
+  return validateGoal(goal, {
+    comparison: input.comparison ?? comparisonForGoal(workspace, goal),
+    scenarioResults: resultsForCriteria(workspace, goal),
+    findingStillPresent: stillPresent,
+    rescanned: input.rescanned,
+  });
+};
+
 export const validateGoalOutcome = (request: ValidateGoalRequest): ValidateGoalResult => {
   const { workspace } = request;
   const goal = workspace.store.goalById(request.goalId);
@@ -111,39 +157,34 @@ export const validateGoalOutcome = (request: ValidateGoalRequest): ValidateGoalR
     throw new OrchescopeError('NOT_FOUND', `No goal ${request.goalId}.`);
   }
   const latestScan = workspace.store.latestScan(workspace.projectId);
-  const stillPresent = new Set(
-    latestScan === undefined
-      ? []
-      : workspace.store
-          .listFindings({ scanId: latestScan.scanId })
-          .filter((finding) => finding.ruleId === goal.metadata['ruleId'])
-          .map((finding) => finding.id),
-  );
-  if (latestScan !== undefined && stillPresent.size === 0) {
-    // The finding identifier can change between scans, so absence is judged on the rule rather than the id.
-    stillPresent.delete(goal.findingId);
-  } else if (latestScan !== undefined) {
-    stillPresent.add(goal.findingId);
-  }
+  const findings =
+    latestScan === undefined ? [] : workspace.store.listFindings({ scanId: latestScan.scanId });
+  const comparison = request.comparison ?? comparisonForGoal(workspace, goal);
 
-  const validation = validateGoal(goal, {
-    comparison: request.comparison,
-    scenarioResults: resultsForCriteria(workspace, goal),
-    findingStillPresent: stillPresent,
+  const validation = judgeGoal({
+    workspace,
+    goal,
+    findings,
     rescanned: request.rescanned ?? latestScan !== undefined,
+    ...(comparison === undefined ? {} : { comparison }),
   });
 
   const now: Timestamp = workspace.clock.now();
+  // The list records the comparisons that judged this goal, so validating twice against the same one
+  // adds nothing: an entry per invocation would grow without bound and say nothing new.
+  const alreadyRecorded =
+    comparison !== undefined &&
+    goal.validationResults.some((result) => result.comparisonId === comparison.id);
   const updated: Goal = {
     ...goal,
     status: validation.validated ? 'validated' : goal.status === 'draft' ? 'draft' : 'in_progress',
     updatedAt: now,
     validationResults:
-      request.comparison === undefined
+      comparison === undefined || alreadyRecorded
         ? goal.validationResults
         : [
             ...goal.validationResults,
-            { comparisonId: request.comparison.id, at: now, verdict: request.comparison.verdict },
+            { comparisonId: comparison.id, at: now, verdict: comparison.verdict },
           ],
   };
   workspace.store.saveGoal(updated, workspace.projectId);

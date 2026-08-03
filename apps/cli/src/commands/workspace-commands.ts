@@ -149,7 +149,7 @@ const renderExport = (
       const assets = findAssetDirectory();
       return renderStandaloneHtml(bundle, {
         javascript: readFileSync(join(assets, 'app.js'), 'utf8'),
-        css: readFileSync(join(assets, 'app.css'), 'utf8'),
+        css: readFileSync(join(assets, 'app.standalone.css'), 'utf8'),
         title: `Orchescope report for ${bundle.projectName}`,
       });
     }

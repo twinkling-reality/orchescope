@@ -1,0 +1,148 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import type { Evidence, Finding } from '@orchescope/schema';
+import { createGoal } from '../src/create.ts';
+
+/**
+ * Goal creation tests.
+ *
+ * A goal is the document handed to whoever implements the change, and the two things it must not do are
+ * overstate its own evidence and name something the reader cannot find again. Both are tested here
+ * because neither is visible from inside the goal: a class of `observed` looks the same as any other
+ * until it is read back against the record it summarises, and a finding identifier looks stable until a
+ * rescan renumbers it.
+ */
+
+const evidence = (id: string, kind: Evidence['kind'], basis: Evidence['basis']): Evidence =>
+  ({ id, kind, basis, producer: 'test' }) as Evidence;
+
+const finding = (overrides: Partial<Finding> = {}): Finding =>
+  ({
+    id: 'OSC-REL-0003',
+    ruleId: 'retry-around-non-idempotent-operation',
+    category: 'reliability',
+    severity: 'high',
+    basis: 'discovered',
+    confidence: 0.85,
+    polarity: 'risk',
+    title: 'Retry around issue_refund can repeat an effect',
+    explanation: 'orchestrator retries issue_refund and no idempotency key was found.',
+    impact: 'Under a transient failure the external effect happens more than once.',
+    components: ['tool:issue_refund'],
+    sourceLocations: [{ file: 'src/tools/refund.ts', startLine: 1 }],
+    evidence: ['ev_one', 'ev_two'],
+    metrics: [],
+    tags: [],
+    goalReadiness: { eligible: true, requiresRuntimeEvidence: false, requiresHumanReview: false },
+    ...overrides,
+  }) as Finding;
+
+const create = (input: {
+  readonly finding?: Finding;
+  readonly evidence?: readonly Evidence[];
+  readonly scenarioIds?: readonly string[];
+}) =>
+  createGoal({
+    finding: input.finding ?? finding(),
+    sequence: 1,
+    now: '2026-07-27T12:00:00.000Z',
+    components: [],
+    evidence: input.evidence ?? [],
+    validationScenarioIds: input.scenarioIds ?? [],
+    baselineRunIds: [],
+    repetitions: 3,
+  });
+
+describe('createGoal, the evidence summary', () => {
+  it('carries the class of the records it counts rather than assuming they were observed', () => {
+    const goal = create({
+      evidence: [
+        evidence('ev_one', 'config_entry', 'discovered'),
+        evidence('ev_two', 'derived', 'inferred'),
+      ],
+    });
+    const bases = new Map(goal.evidenceSummary.map((entry) => [entry.label, entry.basis]));
+    assert.equal(bases.get('config_entry evidence'), 'discovered');
+    assert.equal(bases.get('derived evidence'), 'inferred');
+    assert.ok(!goal.evidenceSummary.some((entry) => entry.basis === 'observed'));
+  });
+
+  it('separates records of one kind that were established differently', () => {
+    const goal = create({
+      evidence: [
+        evidence('ev_one', 'span', 'observed'),
+        evidence('ev_two', 'span', 'simulated'),
+        evidence('ev_three', 'span', 'simulated'),
+      ],
+    });
+    const spans = goal.evidenceSummary.filter((entry) => entry.label === 'span evidence');
+    assert.equal(spans.length, 2);
+    assert.deepEqual(spans.map((entry) => `${entry.basis} ${entry.value}`).toSorted(), [
+      'observed 1 record',
+      'simulated 2 records',
+    ]);
+  });
+
+  it('says a class for a record even when the finding names no metric', () => {
+    const goal = create({ evidence: [] });
+    assert.equal(goal.evidenceSummary.length, 1);
+    assert.equal(goal.evidenceSummary[0]?.basis, 'discovered');
+    assert.equal(goal.evidenceSummary[0]?.value, '2 records referenced by the finding');
+  });
+
+  it('gives the plural rather than deriving it', () => {
+    const one = create({ evidence: [evidence('ev_one', 'config_entry', 'discovered')] });
+    assert.equal(one.evidenceSummary[0]?.value, '1 record');
+    const two = create({
+      evidence: [
+        evidence('ev_one', 'config_entry', 'discovered'),
+        evidence('ev_two', 'config_entry', 'discovered'),
+      ],
+    });
+    assert.equal(two.evidenceSummary[0]?.value, '2 records');
+  });
+});
+
+describe('createGoal, naming the finding', () => {
+  /**
+   * The identifier is a sequence number over one scan's findings within a category, so ingesting a run
+   * renumbers it. The goal's own validation plan tells the implementer to rerun the scenarios, which is
+   * exactly what produces the new findings that renumber it, so an identifier written into a statement
+   * is stale by the time the statement is read back.
+   */
+  it('states the rule in the criterion, not the identifier that a rescan renumbers', () => {
+    const goal = create({});
+    const resolved = goal.acceptanceCriteria.find(
+      (criterion) => criterion.check.kind === 'finding_resolved',
+    );
+    assert.ok(resolved !== undefined);
+    assert.equal(
+      resolved.statement,
+      'finding retry-around-non-idempotent-operation no longer fires on a rescan',
+    );
+    assert.ok(!resolved.statement.includes('OSC-REL-0003'));
+  });
+
+  it('keeps the identifier in the check, as the record of which finding the goal was cut from', () => {
+    const goal = create({});
+    const resolved = goal.acceptanceCriteria.find(
+      (criterion) => criterion.check.kind === 'finding_resolved',
+    );
+    assert.equal(
+      resolved?.check.kind === 'finding_resolved' ? resolved.check.findingId : null,
+      'OSC-REL-0003',
+    );
+    assert.equal(goal.findingId, 'OSC-REL-0003');
+    assert.equal(goal.metadata['ruleId'], 'retry-around-non-idempotent-operation');
+  });
+
+  it('names no identifier anywhere a reader is asked to go and look', () => {
+    const goal = create({ scenarioIds: ['support-desk'] });
+    const prose = [
+      goal.rollback,
+      ...goal.acceptanceCriteria.map((criterion) => criterion.statement),
+      ...goal.validation.commands.map((command) => command.purpose),
+    ];
+    for (const line of prose) assert.ok(!line.includes('OSC-REL-0003'), line);
+  });
+});

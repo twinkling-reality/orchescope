@@ -3367,6 +3367,75 @@
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
       "type": "string"
     },
+    "goalValidations": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "comparisonId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "goalId": {
+            "pattern": "^OSC-GOAL-\\d{4}$",
+            "type": "string"
+          },
+          "outcomes": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "criterionId": {
+                  "pattern": "^AC-\\d{2}$",
+                  "type": "string"
+                },
+                "decided": {
+                  "type": "boolean"
+                },
+                "detail": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "satisfied": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "criterionId",
+                "satisfied",
+                "decided",
+                "detail"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "satisfiedCount": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "summary": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "undecidedCount": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "validated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "goalId",
+          "validated",
+          "satisfiedCount",
+          "undecidedCount",
+          "summary",
+          "outcomes"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
     "goals": {
       "items": {
         "$id": "urn:orchescope:schema:goal:1",

@@ -1,6 +1,7 @@
 import { goalId as makeGoalId, OrchescopeError } from '@orchescope/domain';
 import type {
   AcceptanceCriterion,
+  ClaimBasis,
   Component,
   Evidence,
   Finding,
@@ -60,6 +61,18 @@ const writePathsFor = (components: readonly Component[], finding: Finding): read
   return [...paths].sort();
 };
 
+/**
+ * The criteria, written so that a reader can still find what they name after a rescan.
+ *
+ * A finding identifier is a sequence number inside its category, assigned over a sorted list of that
+ * scan's drafts. It is deterministic for a given set of findings and it is not stable across scans: a
+ * new rule that sorts earlier renumbers everything after it, and the runs this goal's own validation
+ * plan prescribes are exactly what produce new findings. So a criterion that named `OSC-REL-0003`
+ * would, by the time anyone read it back, be pointing at whichever finding had since inherited that
+ * number. The rule identifier is the finding's stable name and it is already what the check resolves
+ * on, so it is what the statement says. The finding identifier stays in the check as the record of
+ * which finding this goal was cut from.
+ */
 const acceptanceCriteriaFor = (
   finding: Finding,
   validationScenarioIds: readonly string[],
@@ -101,7 +114,7 @@ const acceptanceCriteriaFor = (
   }
   criteria.push({
     id: next(),
-    statement: `finding ${finding.id} no longer fires on a rescan`,
+    statement: `finding ${finding.ruleId} no longer fires on a rescan`,
     check: { kind: 'finding_resolved', findingId: finding.id },
   });
   if (finding.goalReadiness.requiresHumanReview) {
@@ -127,7 +140,7 @@ const validationPlanFor = (input: CreateGoalInput): ValidationPlan => {
   ];
   for (const scenarioId of input.validationScenarioIds) {
     commands.push({
-      purpose: `rerun the scenario that produced the evidence for ${input.finding.id}`,
+      purpose: `rerun the scenario that produced the evidence for ${input.finding.ruleId}`,
       command: [
         'orchescope',
         'test',
@@ -175,27 +188,55 @@ const scopeFor = (input: CreateGoalInput): GoalScope => {
   };
 };
 
+const records = (count: number): string => `${count} ${count === 1 ? 'record' : 'records'}`;
+
+/**
+ * The evidence behind a goal, grouped for a reader.
+ *
+ * Every line carries the evidence class of the records it counts, read from those records rather than
+ * assumed. A `config_entry` read out of a manifest is `discovered` and a rule's conclusion is
+ * `inferred`, and reporting either as `observed` would tell whoever implements the change that a line
+ * in a YAML file was seen in a runtime trace. That is the one claim this repository will not make, and
+ * a goal is the document least able to defend itself against it, because it is read by an agent that
+ * has no way to go and check.
+ *
+ * Records are therefore grouped by kind *and* class, not by kind alone: one kind can hold records of
+ * differing classes, and picking a single class per kind would report the wrong one for the rest.
+ */
 const evidenceSummaryFor = (
   finding: Finding,
   evidence: readonly Evidence[],
 ): Goal['evidenceSummary'] => {
-  const summary: { label: string; value: string; basis: string }[] = [];
+  const summary: { label: string; value: string; basis: ClaimBasis }[] = [];
   for (const metric of finding.metrics.slice(0, 8)) {
     summary.push({
       label: metric.name,
-      value: `${metric.value} ${metric.unit} over ${metric.sampleSize} sample(s)`,
+      value: `${metric.value} ${metric.unit} over ${metric.sampleSize} ${metric.sampleSize === 1 ? 'sample' : 'samples'}`,
       basis: metric.basis,
     });
   }
-  const kinds = new Map<string, number>();
-  for (const record of evidence) kinds.set(record.kind, (kinds.get(record.kind) ?? 0) + 1);
-  for (const [kind, count] of kinds) {
-    summary.push({ label: `${kind} evidence`, value: `${count} record(s)`, basis: 'observed' });
+  const groups = new Map<string, { kind: string; basis: ClaimBasis; count: number }>();
+  for (const record of evidence) {
+    const key = `${record.kind} ${record.basis}`;
+    const existing = groups.get(key);
+    groups.set(
+      key,
+      existing === undefined
+        ? { kind: record.kind, basis: record.basis, count: 1 }
+        : { ...existing, count: existing.count + 1 },
+    );
+  }
+  for (const group of groups.values()) {
+    summary.push({
+      label: `${group.kind} evidence`,
+      value: records(group.count),
+      basis: group.basis,
+    });
   }
   if (summary.length === 0) {
     summary.push({
       label: 'evidence',
-      value: `${finding.evidence.length} record(s) referenced by the finding`,
+      value: `${records(finding.evidence.length)} referenced by the finding`,
       basis: finding.basis,
     });
   }
@@ -203,7 +244,7 @@ const evidenceSummaryFor = (
 };
 
 const rollbackFor = (finding: Finding): string =>
-  `Revert the change to the paths listed in the scope. The finding ${finding.id} and its evidence remain in the store, so the situation before the change is fully described by the baseline runs named in the validation plan.`;
+  `Revert the change to the paths listed in the scope. The finding ${finding.ruleId} and its evidence remain in the store, so the situation before the change is fully described by the baseline runs named in the validation plan.`;
 
 export const createGoal = (input: CreateGoalInput): Goal => {
   if (!input.finding.goalReadiness.eligible) {

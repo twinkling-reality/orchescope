@@ -139,6 +139,14 @@ const scenarioPassesOutcome = (
   };
 };
 
+/**
+ * Judges whether the finding the goal was cut from still fires.
+ *
+ * The detail names neither identifier. A finding identifier is a per category sequence number over one
+ * scan's findings and is renumbered whenever the set changes, so by the time this outcome is read the
+ * identifier in the check may belong to a different finding. Presence is resolved by the rule before
+ * it reaches here, and the sentence says what was actually judged.
+ */
 const findingResolvedOutcome = (
   criterion: AcceptanceCriterion,
   check: Extract<AcceptanceCriterion['check'], { kind: 'finding_resolved' }>,
@@ -151,8 +159,8 @@ const findingResolvedOutcome = (
     satisfied: !present,
     decided: true,
     detail: present
-      ? `${check.findingId} still fires after the rescan`
-      : `${check.findingId} no longer fires`,
+      ? 'the finding this goal was created from still fires after the rescan'
+      : 'the finding this goal was created from is no longer reported',
   };
 };
 

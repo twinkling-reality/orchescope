@@ -25,8 +25,10 @@ const criterionText = (criterion: Goal['acceptanceCriteria'][number]): string =>
       return `${criterion.statement} (check: ${check.metric} within ${check.tolerance} of baseline)`;
     case 'scenario_passes':
       return `${criterion.statement} (check: scenario ${check.scenarioId} passes)`;
+    // The statement already names the rule, which is what presence is resolved on. Quoting the stored
+    // finding identifier here would name whichever finding had since inherited that sequence number.
     case 'finding_resolved':
-      return `${criterion.statement} (check: ${check.findingId} absent after a rescan)`;
+      return `${criterion.statement} (check: absent after a rescan)`;
     case 'command_succeeds':
       return `${criterion.statement} (check: ${check.command.join(' ')} exits zero)`;
     case 'manual_review':

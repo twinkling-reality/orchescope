@@ -10,6 +10,8 @@ import type {
   Evidence,
   Finding,
   FindingSet,
+  Goal,
+  GoalValidationSummary,
   ReconciliationDelta,
   ReportBundle,
   RunRecord,
@@ -19,6 +21,7 @@ import { DEFAULT_EXCLUDED_DIRECTORIES, type FactCache } from '@orchescope/source
 import { deriveTopology } from '@orchescope/traces';
 import type { Workspace } from '@orchescope/workspace';
 import { resolveCapabilities } from './capabilities.ts';
+import { judgeGoal } from './goal.ts';
 import {
   type ObservedMetrics,
   observedKeyToComponentId,
@@ -199,6 +202,40 @@ const evaluatorsByRun = (
   return byRun;
 };
 
+/**
+ * What each goal's acceptance criteria decide against this scan.
+ *
+ * The audit is the moment every input a goal is judged on is in hand at once: the rescan has just
+ * happened, the scenario results and the comparison the goal was attached to are in the store, and the
+ * findings are the ones this report is about. Judging here is what lets the Goals screen say which
+ * criteria were satisfied and which the evidence could not decide. Without it the screen has only the
+ * comparison log to go on, and a goal that has been validated but has no comparison attached reads as a
+ * goal nobody ever tried to verify, which is a stronger claim than the report can make.
+ */
+const judgementsForGoals = (
+  workspace: Workspace,
+  goals: readonly Goal[],
+  findings: readonly Finding[],
+): readonly GoalValidationSummary[] =>
+  goals.map((goal) => {
+    const validation = judgeGoal({ workspace, goal, findings, rescanned: true });
+    const comparisonId = workspace.store.latestComparisonForGoal(goal.id, goal.createdAt)?.id;
+    return {
+      goalId: goal.id,
+      validated: validation.validated,
+      satisfiedCount: validation.satisfiedCount,
+      undecidedCount: validation.undecidedCount,
+      summary: validation.summary,
+      ...(comparisonId === undefined ? {} : { comparisonId }),
+      outcomes: validation.outcomes.map((outcome) => ({
+        criterionId: outcome.criterion.id,
+        satisfied: outcome.satisfied,
+        decided: outcome.decided,
+        detail: outcome.detail,
+      })),
+    };
+  });
+
 const assembleReport = (input: {
   readonly workspace: Workspace;
   readonly graph: SystemGraph;
@@ -211,6 +248,7 @@ const assembleReport = (input: {
 }): ReportBundle => {
   const { workspace, graph, findings, runsConsidered } = input;
   const scenarios = workspace.store.listScenarios(workspace.projectId);
+  const goals = workspace.store.listGoals(workspace.projectId);
   const evaluators = evaluatorsByRun(workspace, runsConsidered);
   const componentsByRun = new Map<string, readonly string[]>();
   for (const run of runsConsidered) {
@@ -245,7 +283,8 @@ const assembleReport = (input: {
     benchmarks: latestBenchmarks(workspace),
     chaosReports: latestChaosReports(workspace),
     comparisons: workspace.store.listComparisons(workspace.projectId),
-    goals: workspace.store.listGoals(workspace.projectId),
+    goals,
+    goalValidations: judgementsForGoals(workspace, goals, findings),
     reconciliation: input.reconciliation,
     capabilities: resolveCapabilities({
       workspace,

@@ -99,6 +99,29 @@ export const createExperimentsRepository = (input: {
       )
       .map((row) => artifacts.getJson<Comparison>(text(row, 'digest')));
 
+  /**
+   * The newest comparison attached to a goal, no older than `notBefore`.
+   *
+   * `compare --goal` records which goal a comparison was made for, and judging that goal is the only
+   * reason to record it. Reading it back over the project wide list would be a scan bounded by that
+   * list's own limit, so a goal whose comparison was not among the newest twenty in the project would
+   * silently look as though nobody had ever compared it. This is the query `comparison_goal(goal_id,
+   * created_at DESC)` exists for.
+   *
+   * `notBefore` is the goal's creation time and is not optional in practice: a comparison made before
+   * the goal measured the code the goal exists to change, so letting it decide a metric criterion would
+   * validate the change against its own baseline.
+   */
+  const latestComparisonForGoal = (goalId: string, notBefore: string): Comparison | undefined => {
+    const row = database.get(
+      `SELECT digest FROM comparison WHERE goal_id = ? AND created_at >= ?
+       ORDER BY created_at DESC LIMIT 1`,
+      goalId,
+      notBefore,
+    );
+    return row === undefined ? undefined : artifacts.getJson<Comparison>(text(row, 'digest'));
+  };
+
   return {
     saveBenchmark,
     listBenchmarks,
@@ -107,5 +130,6 @@ export const createExperimentsRepository = (input: {
     saveComparison,
     comparisonById,
     listComparisons,
+    latestComparisonForGoal,
   };
 };

@@ -151,6 +151,7 @@ export {
   documentDescriptors,
 } from './registry.ts';
 export {
+  GoalValidationSummary,
   Overlay,
   OverlayKind,
   ReportBundle,

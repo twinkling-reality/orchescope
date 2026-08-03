@@ -101,6 +101,40 @@ export const ReportCapability = Type.Object(
 );
 export type ReportCapability = Static<typeof ReportCapability>;
 
+/**
+ * What a goal's acceptance criteria decided at the moment this report was generated.
+ *
+ * Judged rather than stored, and carried per report rather than on the goal, because a judgement is
+ * only ever true of a particular state of the store. A copy kept on the goal document would go stale
+ * the next time anything was rerun, and the report is already the artifact that is pinned to a
+ * revision. A criterion the evidence could not decide is `decided: false` and is never `satisfied`.
+ */
+export const GoalValidationSummary = Type.Object(
+  {
+    goalId: Type.String({ pattern: '^OSC-GOAL-\\d{4}$' }),
+    /** True only when every criterion is satisfied, so one undecided criterion blocks the claim. */
+    validated: Type.Boolean(),
+    satisfiedCount: NonNegativeInt,
+    undecidedCount: NonNegativeInt,
+    summary: NonEmptyString(),
+    /** The comparison that decided the metric criteria, absent when none was attached to the goal. */
+    comparisonId: Type.Optional(NonEmptyString()),
+    outcomes: Type.Array(
+      Type.Object(
+        {
+          criterionId: Type.String({ pattern: '^AC-\\d{2}$' }),
+          satisfied: Type.Boolean(),
+          decided: Type.Boolean(),
+          detail: NonEmptyString(),
+        },
+        { additionalProperties: false },
+      ),
+    ),
+  },
+  { additionalProperties: false },
+);
+export type GoalValidationSummary = Static<typeof GoalValidationSummary>;
+
 export const ReportBundle = Document(
   schemaId('report'),
   SCHEMA_VERSIONS.report,
@@ -123,6 +157,11 @@ export const ReportBundle = Document(
     chaosReports: Type.Array(ChaosReport),
     comparisons: Type.Array(Comparison),
     goals: Type.Array(Goal),
+    /**
+     * One entry per goal this report could judge. Optional because a bundle written by a build that
+     * did not judge goals carries none, and a reader must not read that silence as a verdict.
+     */
+    goalValidations: Type.Optional(Type.Array(GoalValidationSummary)),
     capabilities: Type.Array(ReportCapability),
     /** Counts shown on the overview, computed once so the UI cannot disagree with the CLI. */
     summary: Type.Object(

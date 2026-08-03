@@ -30,8 +30,15 @@ import { STATIC_RULES } from './rules/static-policy.ts';
  * refuse to emit a finding that violates a domain invariant.
  *
  * Identifier assignment is deterministic. Drafts are ordered by rule identifier and then by the components
- * they name, so the same evidence produces the same finding identifiers on every machine, which is what
- * makes a goal that references OSC-PERF-0001 mean the same thing tomorrow.
+ * they name, so the same evidence produces the same finding identifiers on every machine.
+ *
+ * Deterministic is not the same as stable, and the difference matters to anything that stores an
+ * identifier and reads it back later. The sequence is a counter over one scan's drafts within a
+ * category, so a rule that sorts earlier and fires for the first time renumbers every finding after it:
+ * ingesting a run turns OSC-REL-0003 into OSC-REL-0005 on the demonstration system. A finding's stable
+ * name is its rule and the components it names, which is what `validateGoalOutcome` resolves a goal's
+ * finding on and what a goal document quotes. Nothing should treat this number as a name that survives
+ * a rescan.
  */
 
 export const DEFAULT_RULES: readonly Rule[] = [
