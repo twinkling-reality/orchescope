@@ -75,9 +75,9 @@
   },
   "discardedRelations": [],
   "files": {
-    "discovered": 23,
-    "inSupportedLanguages": 22,
-    "parsed": 22,
+    "discovered": 24,
+    "inSupportedLanguages": 23,
+    "parsed": 23,
     "skipped": 0,
     "truncated": false
   },

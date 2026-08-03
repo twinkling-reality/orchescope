@@ -28,6 +28,7 @@
     "orchescope": "node apps/cli/src/main.ts",
     "package": "node scripts/package.mjs",
     "sbom": "node scripts/generate-sbom.mjs",
+    "states": "node scripts/states.mjs",
     "schemas": "node scripts/emit-schemas.mjs",
     "schemas:verify": "node scripts/emit-schemas.mjs --check",
     "test": "node --test --test-reporter=spec \"packages/*/test/**/*.test.ts\" \"apps/*/test/**/*.test.ts\"",
