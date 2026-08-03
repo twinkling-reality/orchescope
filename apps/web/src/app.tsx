@@ -1,5 +1,12 @@
 /**
- * The application shell: loading, routing, theme, global keys, and the eight sections.
+ * The application shell: loading, routing, global keys, and the eight sections.
+ *
+ * There is no theme. A tile owns its ground and the ground is fixed by the tile's role, so the black
+ * tile is black and the white tiles are white wherever the report is opened. That is what makes the
+ * composition survive a reader whose machine is dark, which is the case that broke every version
+ * before it: a themed palette put the page, the lifted surface and the accent band inside 1.19:1 of
+ * each other and they read as one grey rectangle. With no page ground left there is nothing for a
+ * theme to act on, so the control that offered one is gone rather than left doing nothing.
  */
 
 import type { ReportBundle } from '@orchescope/schema';
@@ -32,12 +39,9 @@ import {
   INITIAL_STATE,
   reduce,
   type SelectOptions,
-  type ThemeChoice,
 } from './store.tsx';
-import { CommandBlock, EmptyState } from './ui/atoms.tsx';
+import { Eyebrow, RefusalPanel } from './ui/primitives.tsx';
 import { Shell } from './ui/shell.tsx';
-
-const THEME_STORAGE_KEY = 'orchescope.theme';
 
 const SECTION_COMPONENTS: Readonly<Record<SectionId, () => JSX.Element>> = {
   overview: OverviewSection,
@@ -60,37 +64,10 @@ type LoadPhase =
     }
   | { readonly status: 'failed'; readonly problems: readonly string[] };
 
-function readStoredTheme(): ThemeChoice {
-  try {
-    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === 'light' || stored === 'dark' || stored === 'system') {
-      return stored;
-    }
-  } catch {
-    return 'system';
-  }
-  return 'system';
-}
-
-function storeTheme(theme: ThemeChoice): void {
-  try {
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-  } catch {
-    /* A report opened from a file may have no writable storage. The choice still applies for this visit. */
-  }
-}
-
-function resolveTheme(choice: ThemeChoice): 'light' | 'dark' {
-  if (choice !== 'system') {
-    return choice;
-  }
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
-
 function LoadingPage() {
   return (
     <div class="standalone">
-      <p class="product">Orchescope</p>
+      <Eyebrow>Orchescope</Eyebrow>
       <h1>Loading the report</h1>
       <p class="muted" role="status">
         {`Reading the report from the document, or from ${REPORT_ENDPOINT} when the document carries none.`}
@@ -102,19 +79,22 @@ function LoadingPage() {
 function FailurePage(props: { readonly problems: readonly string[] }) {
   return (
     <div class="standalone">
-      <p class="product">Orchescope</p>
-      <EmptyState
-        title="No report to show"
-        body={`This page reads one report bundle, either embedded in a script block with the identifier ${REPORT_ELEMENT_ID} or served from ${REPORT_ENDPOINT}. Neither produced a bundle it could use.`}
+      <Eyebrow>Orchescope</Eyebrow>
+      <h1>No report to show</h1>
+      <RefusalPanel
+        title={`This page reads one report bundle, and neither source produced one it could use.`}
+        commands={[auditCommand()]}
       >
-        <ul class="plain problems">
+        <p>
+          {`A bundle is either embedded in a script block with the identifier ${REPORT_ELEMENT_ID}, or served from ${REPORT_ENDPOINT}.`}
+        </p>
+        <ul class="plain">
           {props.problems.map((problem) => (
             <li key={problem}>{problem}</li>
           ))}
         </ul>
         <p>Generate a report and open it again:</p>
-        <CommandBlock argv={auditCommand()} />
-      </EmptyState>
+      </RefusalPanel>
     </div>
   );
 }
@@ -176,15 +156,6 @@ export function App() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    dispatch({ type: 'theme', theme: readStoredTheme() });
-  }, []);
-
-  useEffect(() => {
-    document.documentElement.dataset['theme'] = resolveTheme(state.theme);
-    storeTheme(state.theme);
-  }, [state.theme]);
 
   useHashRoute(dispatch);
 

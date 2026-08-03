@@ -117,15 +117,22 @@ describe('buildFindingText', () => {
 });
 
 describe('evidence class vocabulary', () => {
-  it('describes all six classes the schema allows, each with a non colour marker', () => {
+  // The evidence class is carried by its own word rather than by a colour or a glyph, so what has to
+  // hold is that no two classes can be confused for each other by a reader who only sees the word.
+  it('describes all six classes the schema allows, each named by a word of its own', () => {
     const descriptors = basisDescriptors();
     assert.equal(descriptors.length, 6);
     assert.deepEqual(
       descriptors.map((descriptor) => descriptor.value),
       ['observed', 'discovered', 'inferred', 'estimated', 'simulated', 'model_interpreted'],
     );
+    const labels = new Set(descriptors.map((descriptor) => descriptor.label));
+    assert.equal(
+      labels.size,
+      descriptors.length,
+      'two evidence classes share a label, so the word cannot tell them apart',
+    );
     for (const descriptor of descriptors) {
-      assert.ok(descriptor.marker.length > 0, `${descriptor.value} has no marker`);
       assert.ok(descriptor.label.length > 0);
       assert.ok(descriptor.meaning.length > 0);
     }
@@ -153,14 +160,23 @@ describe('severity vocabulary', () => {
     assert.ok(severityRank('low') > severityRank('info'));
   });
 
-  it('gives every severity a distinct non colour marker', () => {
-    const markers = ['critical', 'high', 'medium', 'low', 'info'].map(
-      (severity) => describeSeverity(severity).marker,
-    );
-    assert.equal(new Set(markers).size, markers.length);
+  // Two alert hues cover five severities, so hue alone cannot separate them and is never asked to.
+  // The mark has to do it, which means all five forms have to differ and so do all five words.
+  it('gives every severity a distinct mark and a distinct word, neither of them a colour', () => {
+    const severities = ['critical', 'high', 'medium', 'low', 'info'];
+    const marks = severities.map((severity) => describeSeverity(severity).mark);
+    assert.equal(new Set(marks).size, marks.length, 'two severities draw the same mark');
+    const labels = severities.map((severity) => describeSeverity(severity).label);
+    assert.equal(new Set(labels).size, labels.length, 'two severities share a word');
   });
 
-  it('ranks an unknown severity below every known one', () => {
+  it('ranks an unknown severity below every known one and marks it as belonging to no rank', () => {
     assert.equal(severityRank('catastrophic'), 0);
+    const descriptor = describeSeverity('catastrophic');
+    assert.equal(descriptor.label, 'catastrophic');
+    assert.equal(descriptor.mark, 'unranked');
+    for (const known of ['critical', 'high', 'medium', 'low', 'info']) {
+      assert.notEqual(describeSeverity(known).mark, descriptor.mark);
+    }
   });
 });

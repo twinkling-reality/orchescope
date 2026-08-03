@@ -12,8 +12,6 @@ import type { CapabilityIndex } from './capabilities.ts';
 import type { GraphIndex } from './graph-index.ts';
 import { DEFAULT_SECTION, type Route, type SectionId } from './routes.ts';
 
-export type ThemeChoice = 'system' | 'light' | 'dark';
-
 export interface AppState {
   readonly route: Route;
   readonly selected: string | null;
@@ -22,7 +20,6 @@ export interface AppState {
   readonly pending: number;
   /** Requests finished since the last time nothing was in flight, so the bar has a denominator. */
   readonly completed: number;
-  readonly theme: ThemeChoice;
   readonly helpOpen: boolean;
 }
 
@@ -32,7 +29,6 @@ export const INITIAL_STATE: AppState = {
   announcement: '',
   pending: 0,
   completed: 0,
-  theme: 'system',
   helpOpen: false,
 };
 
@@ -41,7 +37,6 @@ export type AppAction =
   | { readonly type: 'select'; readonly componentId: string | null }
   | { readonly type: 'announce'; readonly message: string }
   | { readonly type: 'pending'; readonly delta: number }
-  | { readonly type: 'theme'; readonly theme: ThemeChoice }
   | { readonly type: 'help'; readonly open: boolean };
 
 export function reduce(state: AppState, action: AppAction): AppState {
@@ -65,8 +60,6 @@ export function reduce(state: AppState, action: AppAction): AppState {
         completed: action.delta < 0 ? state.completed + 1 : state.completed,
       };
     }
-    case 'theme':
-      return { ...state, theme: action.theme };
     case 'help':
       return { ...state, helpOpen: action.open };
     default:

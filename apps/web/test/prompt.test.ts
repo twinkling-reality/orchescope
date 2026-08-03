@@ -29,10 +29,15 @@ describe('describeAcceptanceCheck', () => {
       describeAcceptanceCheck({ kind: 'scenario_passes', scenarioId: 'happy' }),
       'scenario happy passes',
     );
-    assert.equal(
-      describeAcceptanceCheck({ kind: 'finding_resolved', findingId: 'OSC-PERF-0001' }),
-      'finding OSC-PERF-0001 no longer reported',
-    );
+    // The identifier is deliberately absent. A finding identifier is a per category sequence number
+    // over one scan's findings and is renumbered whenever the set changes, so quoting it here would
+    // name whichever finding had since inherited it.
+    const resolved = describeAcceptanceCheck({
+      kind: 'finding_resolved',
+      findingId: 'OSC-PERF-0001',
+    });
+    assert.equal(resolved, 'the finding this goal was created from is no longer reported');
+    assert.ok(!resolved.includes('OSC-PERF-0001'));
     assert.equal(
       describeAcceptanceCheck({ kind: 'command_succeeds', command: ['pnpm', 'test'] }),
       'command succeeds: pnpm test',

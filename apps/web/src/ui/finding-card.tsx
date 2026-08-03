@@ -1,5 +1,9 @@
 /**
- * One finding, with its evidence and its actions.
+ * One finding: a line, expanding to its evidence and its actions.
+ *
+ * The collapsed line carries what a reader scanning a list decides on: the severity, the claim, how
+ * many evidence records stand behind it, the class of that evidence and the confidence. Everything a
+ * reader argues with is one click away rather than on the page at all times.
  *
  * Every action that needs the local server is gated on the capability the bundle declares for it, and
  * the two that do not need a server, copying the finding and reading it, always work.
@@ -20,6 +24,7 @@ import { postJson } from '../client.tsx';
 import { buildFindingText } from '../finding-text.ts';
 import {
   formatArgv,
+  formatConfidence,
   formatInteger,
   formatMetricValue,
   formatSourceLocation,
@@ -29,16 +34,17 @@ import {
 import { componentLabel, type GraphIndex } from '../graph-index.ts';
 import { useApp } from '../store.tsx';
 import { CapabilityAction, CopyButton } from './actions.tsx';
-import {
-  BasisBadge,
-  Callout,
-  Chip,
-  Confidence,
-  DefinitionList,
-  SectionHeading,
-  SeverityBadge,
-} from './atoms.tsx';
 import { EvidenceList, OpenLocationAction } from './evidence-list.tsx';
+import {
+  BasisChip,
+  Data,
+  DefinitionList,
+  DisclosureRow,
+  Eyebrow,
+  Meta,
+  RefusalPanel,
+  SeverityMark,
+} from './primitives.tsx';
 
 function Metrics(props: { readonly finding: Finding }) {
   if (props.finding.metrics.length === 0) {
@@ -46,37 +52,37 @@ function Metrics(props: { readonly finding: Finding }) {
   }
   return (
     <section>
-      <SectionHeading title="Measurements" />
-      <table class="table">
-        <thead>
-          <tr>
-            <th scope="col">Metric</th>
-            <th scope="col">Value</th>
-            <th scope="col">Compared with</th>
-            <th scope="col">Sample size</th>
-            <th scope="col">Evidence class</th>
-          </tr>
-        </thead>
-        <tbody>
-          {props.finding.metrics.map((metric) => (
-            <tr key={metric.name}>
-              <th scope="row">{metric.name}</th>
-              <td>{formatMetricValue(metric.value, metric.unit)}</td>
-              <td>
-                {metric.comparisonValue === undefined ? (
-                  <span class="muted">not compared</span>
-                ) : (
-                  formatMetricValue(metric.comparisonValue, metric.unit)
-                )}
-              </td>
-              <td>{formatInteger(metric.sampleSize)}</td>
-              <td>
-                <BasisBadge basis={metric.basis} />
-              </td>
+      <Eyebrow level={4}>Measurements</Eyebrow>
+      <div class="scroll-x">
+        <table class="table">
+          <thead>
+            <tr>
+              <th scope="col">Metric</th>
+              <th scope="col">Value</th>
+              <th scope="col">Compared with</th>
+              <th scope="col">Sample size</th>
+              <th scope="col">Evidence class</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {props.finding.metrics.map((metric) => (
+              <tr key={metric.name}>
+                <th scope="row">{metric.name}</th>
+                <td class="num">{formatMetricValue(metric.value, metric.unit)}</td>
+                <td class="num">
+                  {metric.comparisonValue === undefined
+                    ? 'not compared'
+                    : formatMetricValue(metric.comparisonValue, metric.unit)}
+                </td>
+                <td class="num">{formatInteger(metric.sampleSize)}</td>
+                <td>
+                  <BasisChip basis={metric.basis} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
@@ -88,8 +94,10 @@ function AffectedComponents(props: { readonly finding: Finding; readonly index: 
   }
   return (
     <section>
-      <SectionHeading title="Affected components" count={props.finding.components.length} />
-      <ul class="plain inline-list">
+      <Eyebrow level={4} count={props.finding.components.length}>
+        Affected components
+      </Eyebrow>
+      <ul class="plain inline-list small">
         {props.finding.components.map((componentId) => (
           <li key={componentId}>
             <button
@@ -102,7 +110,6 @@ function AffectedComponents(props: { readonly finding: Finding; readonly index: 
             >
               {componentLabel(props.index, componentId)}
             </button>
-            <span class="mono muted">{componentId}</span>
           </li>
         ))}
       </ul>
@@ -117,7 +124,7 @@ function Recommendation(props: { readonly finding: Finding }) {
   }
   return (
     <section>
-      <SectionHeading title="Recommendation" />
+      <Eyebrow level={4}>Recommendation</Eyebrow>
       <p>{recommendation.summary}</p>
       {recommendation.steps.length === 0 ? null : (
         <ol class="steps">
@@ -126,7 +133,7 @@ function Recommendation(props: { readonly finding: Finding }) {
           ))}
         </ol>
       )}
-      <p class="muted">
+      <p class="note">
         {`Effort ${recommendation.effort} and change risk ${recommendation.risk}. Both are design judgements rather than measurements.`}
       </p>
     </section>
@@ -140,12 +147,14 @@ function Experiment(props: { readonly finding: Finding }) {
   }
   return (
     <section>
-      <SectionHeading title="Suggested experiment" />
+      <Eyebrow level={4}>Suggested experiment</Eyebrow>
       <p>{experiment.description}</p>
       <pre class="command">{formatArgv(experiment.command)}</pre>
-      <p class="muted">{`Expected signal: ${experiment.expectedSignal}`}</p>
+      <p class="note">{`Expected signal: ${experiment.expectedSignal}`}</p>
       {experiment.scenarioId === undefined ? null : (
-        <p class="muted mono">{`Scenario: ${experiment.scenarioId}`}</p>
+        <Meta>
+          <span>{`Scenario ${experiment.scenarioId}`}</span>
+        </Meta>
       )}
     </section>
   );
@@ -184,7 +193,7 @@ function Actions(props: { readonly finding: Finding; readonly index: GraphIndex 
         }}
       >
         {goalId === null ? null : (
-          <p class="action-result good">
+          <p class="action-result">
             <button
               type="button"
               class="link-button"
@@ -248,105 +257,104 @@ export function FindingCard(props: {
   readonly open: boolean;
 }) {
   const { finding } = props;
-  const [expanded, setExpanded] = useState(props.open);
   return (
-    <article class={`finding finding-${finding.polarity}`} id={`finding-${finding.id}`}>
-      {/* Title, then what it means, then the classification. A reader deciding whether to care needs the
-          first two; the identifier, the basis and the confidence are what they check once they do. */}
-      <header class="finding-head">
-        <div class="finding-title">
-          <SeverityBadge severity={finding.severity} />
-          <h3>{finding.title}</h3>
-        </div>
-      </header>
-
-      <p class="finding-explanation">{finding.explanation}</p>
-      <p class="finding-impact">
-        <strong>Impact. </strong>
-        {finding.impact}
-      </p>
-
-      <div class="finding-meta">
-        <span class="mono">{finding.id}</span>
-        <Chip label={humanise(finding.category)} title={`Category: ${finding.category}`} />
-        <Chip
-          label={finding.polarity === 'strength' ? 'strength' : 'risk'}
-          tone={finding.polarity === 'strength' ? 'good' : 'bad'}
-        />
-        <BasisBadge basis={finding.basis} />
-        <Confidence value={finding.confidence} />
-      </div>
-
-      <button
-        type="button"
-        class="button subtle"
-        aria-expanded={expanded}
-        onClick={() => {
-          setExpanded(!expanded);
-        }}
+    <article class="finding" id={`finding-${finding.id}`}>
+      <DisclosureRow
+        open={props.open}
+        lead={<SeverityMark severity={finding.severity} />}
+        title={finding.title}
+        meta={
+          <>
+            <Data>{formatInteger(finding.evidence.length)}</Data>
+            {' evidence · '}
+            <BasisChip basis={finding.basis} />
+            {' · '}
+            <Data title="Confidence in this claim, from 0 to 1.">
+              {formatConfidence(finding.confidence)}
+            </Data>
+          </>
+        }
       >
-        {expanded ? 'Hide evidence and actions' : 'Show evidence and actions'}
-      </button>
+        <p>{finding.explanation}</p>
+        <p>
+          <strong>Impact. </strong>
+          {finding.impact}
+        </p>
+        <Meta>
+          <span>{finding.id}</span>
+          <span>{humanise(finding.category)}</span>
+          <span>{finding.polarity === 'strength' ? 'strength' : 'risk'}</span>
+          <span>{finding.ruleId}</span>
+        </Meta>
 
-      {expanded ? (
-        <div class="finding-body fade-in">
-          <Metrics finding={finding} />
-          <AffectedComponents finding={finding} index={props.index} />
-          {finding.sourceLocations.length === 0 ? null : (
-            <section>
-              <SectionHeading title="Source locations" count={finding.sourceLocations.length} />
-              <ul class="plain">
-                {finding.sourceLocations.map((location) => (
-                  <li class="location" key={`${location.file}:${location.startLine}`}>
-                    <span class="mono">
-                      {formatSourceLocation(location.file, location.startLine, location.endLine)}
-                    </span>
-                    <OpenLocationAction file={location.file} line={location.startLine} />
-                  </li>
-                ))}
-              </ul>
-            </section>
+        <Metrics finding={finding} />
+        <AffectedComponents finding={finding} index={props.index} />
+
+        {finding.sourceLocations.length === 0 ? null : (
+          <section>
+            <Eyebrow level={4} count={finding.sourceLocations.length}>
+              Source locations
+            </Eyebrow>
+            <ul class="plain small">
+              {finding.sourceLocations.map((location) => (
+                <li class="location" key={`${location.file}:${location.startLine}`}>
+                  <span class="mono">
+                    {formatSourceLocation(location.file, location.startLine, location.endLine)}
+                  </span>
+                  <OpenLocationAction file={location.file} line={location.startLine} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        <section>
+          <Eyebrow level={4} count={finding.evidence.length}>
+            Evidence
+          </Eyebrow>
+          <EvidenceList evidenceIds={finding.evidence} index={props.index} />
+        </section>
+
+        <Recommendation finding={finding} />
+        <Experiment finding={finding} />
+
+        <section>
+          <Eyebrow level={4}>Classification</Eyebrow>
+          <DefinitionList
+            rows={[
+              {
+                label: 'Taxonomy',
+                value:
+                  finding.taxonomy.length === 0
+                    ? 'no unambiguous mapping'
+                    : finding.taxonomy.join(', '),
+                code: finding.taxonomy.length > 0,
+              },
+              {
+                label: 'Tags',
+                value: finding.tags.length === 0 ? 'none' : finding.tags.join(', '),
+              },
+              { label: 'Recorded', value: formatTimestamp(finding.createdAt) },
+              {
+                label: 'Goal readiness',
+                value: `${finding.goalReadiness.eligible ? 'eligible' : 'not eligible'}: ${finding.goalReadiness.reason}`,
+              },
+            ]}
+          />
+          {finding.conflictsWith.length === 0 ? null : (
+            <RefusalPanel
+              title={`This finding conflicts with ${finding.conflictsWith.join(', ')}, and both are kept.`}
+            >
+              <p>
+                Two rules reached claims that cannot both be right. Neither is withdrawn, because
+                discarding one would be choosing between them without evidence.
+              </p>
+            </RefusalPanel>
           )}
-          <section>
-            <SectionHeading title="Evidence" count={finding.evidence.length} />
-            <EvidenceList evidenceIds={finding.evidence} index={props.index} />
-          </section>
-          <Recommendation finding={finding} />
-          <Experiment finding={finding} />
-          <section>
-            <SectionHeading title="Classification" />
-            <DefinitionList
-              rows={[
-                {
-                  label: 'Taxonomy',
-                  value:
-                    finding.taxonomy.length === 0
-                      ? 'no unambiguous mapping'
-                      : finding.taxonomy.join(', '),
-                  code: finding.taxonomy.length > 0,
-                },
-                {
-                  label: 'Tags',
-                  value: finding.tags.length === 0 ? 'none' : finding.tags.join(', '),
-                },
-                { label: 'Rule', value: finding.ruleId, code: true },
-                { label: 'Recorded', value: formatTimestamp(finding.createdAt) },
-                {
-                  label: 'Goal readiness',
-                  value: `${finding.goalReadiness.eligible ? 'eligible' : 'not eligible'}: ${finding.goalReadiness.reason}`,
-                },
-              ]}
-            />
-            {finding.conflictsWith.length === 0 ? null : (
-              <Callout
-                tone="warn"
-                title={`This finding conflicts with ${finding.conflictsWith.join(', ')}, and both are kept.`}
-              />
-            )}
-          </section>
-          <Actions finding={finding} index={props.index} />
-        </div>
-      ) : null}
+        </section>
+
+        <Actions finding={finding} index={props.index} />
+      </DisclosureRow>
     </article>
   );
 }

@@ -3,7 +3,12 @@
  *
  * Overlay values are precomputed in the bundle. This module only turns them into a colour and a size,
  * and it keeps the absence of a value distinct from a value of zero: a component with no measurement
- * is drawn in the neutral colour and named as having no data, never as the cheapest or the fastest.
+ * is drawn hollow and named as having no data, never as the cheapest or the fastest.
+ *
+ * The ramp is neutral, from the outline grey to the ink, because nothing on this page carries meaning
+ * in hue except severity. Magnitude is carried twice, by tone and by size, so a reader who cannot
+ * separate two greys still has the radius, and both ends stay legible in either theme because the two
+ * endpoints are the theme's own.
  */
 
 import type { Overlay } from '@orchescope/schema';
@@ -19,10 +24,16 @@ export interface OverlayScale {
   readonly values: ReadonlyMap<string, number>;
 }
 
+/** What a component with no measurement is drawn in. Never a point on the ramp. */
 export const NEUTRAL_COLOR = '#8b8f9a';
 
-/** Sequential ramp. Both ends stay visible on a light and on a dark canvas. */
-const RAMP: readonly string[] = ['#9ecbff', '#5aa2f0', '#3f6fd8', '#5148c4', '#6b2fa8'];
+export interface Ramp {
+  readonly from: string;
+  readonly to: string;
+}
+
+/** The light theme's outline and ink. The canvas passes the resolved pair for the theme in force. */
+export const DEFAULT_RAMP: Ramp = { from: '#aeb5c1', to: '#12151c' };
 
 export const MIN_NODE_SIZE = 3;
 export const MAX_NODE_SIZE = 14;
@@ -71,7 +82,7 @@ function parseHex(hex: string): readonly [number, number, number] {
   const r = Number.parseInt(hex.slice(1, 3), 16);
   const g = Number.parseInt(hex.slice(3, 5), 16);
   const b = Number.parseInt(hex.slice(5, 7), 16);
-  return [r, g, b];
+  return [Number.isFinite(r) ? r : 0, Number.isFinite(g) ? g : 0, Number.isFinite(b) ? b : 0];
 }
 
 function toHex(channel: number): string {
@@ -79,24 +90,14 @@ function toHex(channel: number): string {
   return clamped.toString(16).padStart(2, '0');
 }
 
-/** Piecewise linear interpolation across the ramp. `t` outside the unit interval is clamped. */
-export function overlayColor(t: number): string {
+/** Linear interpolation between the two ends of the ramp. `t` outside the unit interval is clamped. */
+export function overlayColor(t: number, ramp: Ramp = DEFAULT_RAMP): string {
   if (!Number.isFinite(t)) {
     return NEUTRAL_COLOR;
   }
-  const clamped = Math.min(1, Math.max(0, t));
-  const lastIndex = RAMP.length - 1;
-  const scaled = clamped * lastIndex;
-  const lower = Math.min(lastIndex, Math.floor(scaled));
-  const upper = Math.min(lastIndex, lower + 1);
-  const fromHex = RAMP[lower];
-  const toHexStop = RAMP[upper];
-  if (fromHex === undefined || toHexStop === undefined) {
-    return NEUTRAL_COLOR;
-  }
-  const mix = scaled - lower;
-  const from = parseHex(fromHex);
-  const to = parseHex(toHexStop);
+  const mix = Math.min(1, Math.max(0, t));
+  const from = parseHex(ramp.from);
+  const to = parseHex(ramp.to);
   return `#${toHex(from[0] + (to[0] - from[0]) * mix)}${toHex(
     from[1] + (to[1] - from[1]) * mix,
   )}${toHex(from[2] + (to[2] - from[2]) * mix)}`;
@@ -118,12 +119,20 @@ export interface LegendStop {
 }
 
 /** Evenly spaced stops for the legend, always including both ends of the measured range. */
-export function overlayLegend(scale: OverlayScale, steps = 5): readonly LegendStop[] {
+export function overlayLegend(
+  scale: OverlayScale,
+  steps = 5,
+  ramp: Ramp = DEFAULT_RAMP,
+): readonly LegendStop[] {
   const count = Math.max(2, steps);
   const stops: LegendStop[] = [];
   for (let i = 0; i < count; i += 1) {
     const t = i / (count - 1);
-    stops.push({ t, value: scale.min + (scale.max - scale.min) * t, color: overlayColor(t) });
+    stops.push({
+      t,
+      value: scale.min + (scale.max - scale.min) * t,
+      color: overlayColor(t, ramp),
+    });
   }
   return stops;
 }
@@ -131,17 +140,22 @@ export function overlayLegend(scale: OverlayScale, steps = 5): readonly LegendSt
 export interface OverlayPaint {
   readonly color: string;
   readonly size: number;
+  /** Null when this component carries no measurement, which is not a measurement of nothing. */
   readonly value: number | null;
 }
 
-export function paintComponent(scale: OverlayScale | null, componentId: string): OverlayPaint {
+export function paintComponent(
+  scale: OverlayScale | null,
+  componentId: string,
+  ramp: Ramp = DEFAULT_RAMP,
+): OverlayPaint {
   if (scale === null) {
-    return { color: overlayColor(0.45), size: overlayNodeSize(0.35), value: null };
+    return { color: overlayColor(0.45, ramp), size: overlayNodeSize(0.35), value: null };
   }
   const value = scale.values.get(componentId);
   if (value === undefined) {
     return { color: NEUTRAL_COLOR, size: MIN_NODE_SIZE, value: null };
   }
   const t = normaliseValue(value, scale.min, scale.max);
-  return { color: overlayColor(t), size: overlayNodeSize(t), value };
+  return { color: overlayColor(t, ramp), size: overlayNodeSize(t), value };
 }

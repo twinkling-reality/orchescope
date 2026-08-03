@@ -1,10 +1,15 @@
 /**
  * The details panel for one component: what it is, where it was found, what it is connected to, what it
  * cost, what it is allowed to do and what the report says about it.
+ *
+ * The first thing it states is whether the component ran, drawn with the same filled and hollow marks
+ * the delta bar and the components table use, because that is the question the rest of the panel is
+ * evidence for.
  */
 
 import type { Component, Edge, EdgePolicy } from '@orchescope/schema';
 import {
+  formatConfidence,
   formatDuration,
   formatInteger,
   formatSourceLocation,
@@ -13,19 +18,20 @@ import {
 } from '../format.ts';
 import type { GraphIndex } from '../graph-index.ts';
 import { useApp } from '../store.tsx';
+import { OpenLocationAction } from './evidence-list.tsx';
+import { PresenceMark, presenceOf } from './presence.tsx';
 import {
-  BasisBadge,
-  Callout,
-  Chip,
-  Confidence,
+  BasisChip,
+  Data,
   DefinitionList,
   type DefinitionRow,
+  Eyebrow,
+  Meta,
   OptionalNumber,
-  SafeLink,
-  SectionHeading,
-  SeverityBadge,
-} from './atoms.tsx';
-import { OpenLocationAction } from './evidence-list.tsx';
+  RefusalPanel,
+  SeverityMark,
+} from './primitives.tsx';
+import { SafeLink } from './safe-link.tsx';
 
 function describePolicy(policy: EdgePolicy | undefined): string {
   if (policy === undefined) {
@@ -64,8 +70,7 @@ function EdgeRow(props: {
   const observation = props.edge.observation;
   return (
     <li class="edge-row">
-      <div class="edge-head">
-        <Chip label={humanise(props.edge.kind)} title={`Relation kind: ${props.edge.kind}`} />
+      <p class="edge-head">
         <span aria-hidden="true">{props.direction === 'out' ? '→' : '←'}</span>
         <button
           type="button"
@@ -76,21 +81,25 @@ function EdgeRow(props: {
         >
           {other?.displayName ?? props.otherId}
         </button>
-        <BasisBadge basis={props.edge.basis} />
-        {props.edge.runtimeOnly ? (
-          <Chip
-            label="runtime only"
-            tone="warn"
-            title="This relation appears only in traces and is absent from the static model."
-          />
-        ) : null}
-      </div>
-      <p class="muted">{describePolicy(props.edge.policy)}</p>
+      </p>
+      <Meta>
+        <span>{humanise(props.edge.kind)}</span>
+        <BasisChip basis={props.edge.basis} />
+        {props.edge.runtimeOnly ? <span>observed only, absent from the static model</span> : null}
+      </Meta>
+      <p class="note">{describePolicy(props.edge.policy)}</p>
       {observation === undefined ? (
-        <p class="muted">Never observed in a run.</p>
+        <p class="note">Never observed in a run.</p>
       ) : (
-        <p class="muted">
-          {`${formatInteger(observation.executionCount)} executions, ${formatInteger(observation.errorCount)} errors, ${formatInteger(observation.retryCount)} retries, ${formatDuration(observation.totalDurationMs)} total`}
+        <p class="note">
+          <Data>{formatInteger(observation.executionCount)}</Data>
+          {' executions, '}
+          <Data>{formatInteger(observation.errorCount)}</Data>
+          {' errors, '}
+          <Data>{formatInteger(observation.retryCount)}</Data>
+          {' retries, '}
+          <Data>{formatDuration(observation.totalDurationMs)}</Data>
+          {' total'}
         </p>
       )}
     </li>
@@ -131,8 +140,8 @@ function DetailFields(props: { readonly component: Component }) {
     return null;
   }
   return (
-    <section>
-      <SectionHeading title={`${humanise(props.component.kind)} configuration`} />
+    <section class="group">
+      <Eyebrow level={4}>{`${humanise(props.component.kind)} configuration`}</Eyebrow>
       <DefinitionList rows={rows} />
     </section>
   );
@@ -141,12 +150,12 @@ function DetailFields(props: { readonly component: Component }) {
 function Locations(props: { readonly component: Component }) {
   const { sourceLocations, configLocations } = props.component;
   return (
-    <section>
-      <SectionHeading title="Where it was found" />
+    <section class="group">
+      <Eyebrow level={4}>Where it was found</Eyebrow>
       {sourceLocations.length === 0 && configLocations.length === 0 ? (
-        <p class="muted">No source or configuration location was recorded for this component.</p>
+        <p class="note">No source or configuration location was recorded for this component.</p>
       ) : null}
-      <ul class="plain">
+      <ul class="plain small">
         {sourceLocations.map((location) => (
           <li class="location" key={`${location.file}:${location.startLine}`}>
             <span class="mono">
@@ -172,22 +181,21 @@ function Locations(props: { readonly component: Component }) {
 
 function Permissions(props: { readonly component: Component }) {
   return (
-    <section>
-      <SectionHeading title="Permissions" count={props.component.permissions.length} />
+    <section class="group">
+      <Eyebrow level={4} count={props.component.permissions.length}>
+        Permissions
+      </Eyebrow>
       {props.component.permissions.length === 0 ? (
-        <p class="muted">
+        <p class="note">
           No permission was discovered for this component. That is not proof it has none.
         </p>
       ) : (
-        <ul class="plain">
+        <ul class="plain small">
           {props.component.permissions.map((permission) => (
             <li key={`${permission.kind}:${permission.scope}:${permission.mode}`}>
-              <Chip label={humanise(permission.kind)} />
-              <span class="mono">{permission.scope}</span>
-              <Chip
-                label={permission.mode}
-                tone={permission.mode === 'read' ? 'neutral' : 'warn'}
-              />
+              <span>{humanise(permission.kind)}</span>
+              <span class="mono">{` ${permission.scope} `}</span>
+              <span class="muted">{permission.mode}</span>
             </li>
           ))}
         </ul>
@@ -200,36 +208,37 @@ function Metrics(props: { readonly componentId: string; readonly index: GraphInd
   const metrics = props.index.metricsByComponent.get(props.componentId);
   if (metrics === undefined) {
     return (
-      <section>
-        <SectionHeading title="Measured cost" />
-        <p class="muted">
+      <section class="group">
+        <Eyebrow level={4}>Measured cost</Eyebrow>
+        <p class="note">
           {props.index.hasRuntimeEvidence
-            ? 'This component produced no runtime measurements in the ingested runs.'
+            ? 'This component produced no runtime measurements in the ingested runs. That is an absence of measurement rather than a measurement of nothing.'
             : 'This report contains no runs, so nothing about this component was measured.'}
         </p>
       </section>
     );
   }
   return (
-    <section>
-      <SectionHeading title="Measured cost" note="Observed in the runs folded into this report." />
+    <section class="group">
+      <Eyebrow level={4}>Measured cost</Eyebrow>
+      <p class="note">Observed in the runs folded into this report.</p>
       <DefinitionList
         rows={[
-          { label: 'Executions', value: formatInteger(metrics.executionCount) },
-          { label: 'Self time', value: formatDuration(metrics.selfDurationMs) },
-          { label: 'Total time', value: formatDuration(metrics.totalDurationMs) },
+          { label: 'Executions', value: <Data>{formatInteger(metrics.executionCount)}</Data> },
+          { label: 'Self time', value: <Data>{formatDuration(metrics.selfDurationMs)}</Data> },
+          { label: 'Total time', value: <Data>{formatDuration(metrics.totalDurationMs)}</Data> },
           {
             label: 'p95 duration',
             value: <OptionalNumber value={metrics.p95DurationMs ?? null} render={formatDuration} />,
           },
-          { label: 'Input tokens', value: formatInteger(metrics.inputTokens) },
-          { label: 'Output tokens', value: formatInteger(metrics.outputTokens) },
+          { label: 'Input tokens', value: <Data>{formatInteger(metrics.inputTokens)}</Data> },
+          { label: 'Output tokens', value: <Data>{formatInteger(metrics.outputTokens)}</Data> },
           {
             label: 'Cost',
             value: <OptionalNumber value={metrics.costUsd ?? null} render={formatUsd} />,
           },
-          { label: 'Errors', value: formatInteger(metrics.errorCount) },
-          { label: 'Retries', value: formatInteger(metrics.retryCount) },
+          { label: 'Errors', value: <Data>{formatInteger(metrics.errorCount)}</Data> },
+          { label: 'Retries', value: <Data>{formatInteger(metrics.retryCount)}</Data> },
         ]}
       />
     </section>
@@ -240,15 +249,17 @@ function RelatedFindings(props: { readonly componentId: string; readonly index: 
   const app = useApp();
   const findings = props.index.findingsByComponent.get(props.componentId) ?? [];
   return (
-    <section>
-      <SectionHeading title="Findings naming this component" count={findings.length} />
+    <section class="group">
+      <Eyebrow level={4} count={findings.length}>
+        Findings naming this component
+      </Eyebrow>
       {findings.length === 0 ? (
-        <p class="muted">No finding names this component.</p>
+        <p class="note">No finding names this component.</p>
       ) : (
-        <ul class="plain">
+        <ul class="plain small">
           {findings.map((finding) => (
             <li class="finding-link" key={finding.id}>
-              <SeverityBadge severity={finding.severity} />
+              <SeverityMark severity={finding.severity} />
               <button
                 type="button"
                 class="link-button"
@@ -256,30 +267,12 @@ function RelatedFindings(props: { readonly componentId: string; readonly index: 
                   app.navigate('findings', { finding: finding.id });
                 }}
               >
-                {`${finding.id} ${finding.title}`}
+                {finding.title}
               </button>
             </li>
           ))}
         </ul>
       )}
-      {findings.some((finding) => finding.suggestedExperiment !== undefined) ? (
-        <div class="experiments">
-          <SectionHeading title="Experiments those findings suggest" />
-          <ul class="plain">
-            {findings
-              .filter((finding) => finding.suggestedExperiment !== undefined)
-              .map((finding) => (
-                <li key={finding.id}>
-                  <p>{finding.suggestedExperiment?.description}</p>
-                  <pre class="command">
-                    {(finding.suggestedExperiment?.command ?? []).join(' ')}
-                  </pre>
-                  <p class="muted">{`Expected signal: ${finding.suggestedExperiment?.expectedSignal ?? ''}`}</p>
-                </li>
-              ))}
-          </ul>
-        </div>
-      ) : null}
     </section>
   );
 }
@@ -287,16 +280,15 @@ function RelatedFindings(props: { readonly componentId: string; readonly index: 
 function Scenarios(props: { readonly componentId: string; readonly index: GraphIndex }) {
   const ids = props.index.scenarioIdsByComponent.get(props.componentId) ?? [];
   return (
-    <section>
-      <SectionHeading
-        title="Scenarios it appeared in"
-        count={ids.length}
-        note="Derived from the runs whose evidence names this component."
-      />
+    <section class="group">
+      <Eyebrow level={4} count={ids.length}>
+        Scenarios it appeared in
+      </Eyebrow>
+      <p class="note">Derived from the runs whose evidence names this component.</p>
       {ids.length === 0 ? (
-        <p class="muted">No ingested run produced evidence naming this component.</p>
+        <p class="note">No ingested run produced evidence naming this component.</p>
       ) : (
-        <ul class="plain">
+        <ul class="plain small">
           {ids.map((id) => (
             <li key={id}>
               <span class="mono">{id}</span>{' '}
@@ -318,9 +310,9 @@ export function ComponentDetails(props: {
   const component = props.index.componentsById.get(props.componentId);
   if (component === undefined) {
     return (
-      <Callout tone="warn" title="That component is not in this report.">
+      <RefusalPanel title="That component is not in this report.">
         <p class="mono">{props.componentId}</p>
-      </Callout>
+      </RefusalPanel>
     );
   }
   const outgoing = props.index.outgoing.get(component.id) ?? [];
@@ -328,33 +320,18 @@ export function ComponentDetails(props: {
 
   return (
     <div class="details fade-in">
-      <header class="details-head">
-        <h2>{component.displayName}</h2>
-        <div class="details-tags">
-          <Chip label={humanise(component.kind)} title={`Component kind: ${component.kind}`} />
-          <BasisBadge basis={component.basis} />
-          <Confidence value={component.confidence} />
-          {props.index.runtimeOnly.has(component.id) ? (
-            <Chip
-              label="runtime only"
-              tone="warn"
-              title="Observed in a trace and absent from the static model."
-            />
-          ) : null}
-          {props.index.neverExercised.has(component.id) ? (
-            <Chip
-              label="never exercised"
-              tone="warn"
-              title="Declared in the repository and not seen in any ingested run."
-            />
-          ) : null}
-        </div>
-        <p class="mono muted">{component.id}</p>
-      </header>
+      <h4>{component.displayName}</h4>
+      <p class="note">
+        <PresenceMark presence={presenceOf(props.index, component)} />
+      </p>
+      <Meta>
+        <span>{humanise(component.kind)}</span>
+        <BasisChip basis={component.basis} />
+        <span>{`confidence ${formatConfidence(component.confidence)}`}</span>
+        <span>{component.id}</span>
+      </Meta>
 
-      {component.description === undefined ? null : (
-        <p class="details-description">{component.description}</p>
-      )}
+      {component.description === undefined ? null : <p class="small">{component.description}</p>}
 
       <DefinitionList
         rows={[
@@ -364,12 +341,12 @@ export function ComponentDetails(props: {
             code: true,
           },
           {
-            label: 'Presence',
+            label: 'Declared in',
             value:
               [
-                component.presence.static ? 'in source or configuration' : null,
-                component.presence.manifest ? 'in a manifest' : null,
-                component.presence.runtime ? 'in a runtime trace' : null,
+                component.presence.static ? 'source or configuration' : null,
+                component.presence.manifest ? 'a manifest' : null,
+                component.presence.runtime ? 'a runtime trace' : null,
               ]
                 .filter((part) => part !== null)
                 .join(', ') || 'not recorded',
@@ -406,10 +383,12 @@ export function ComponentDetails(props: {
       <DetailFields component={component} />
       <Locations component={component} />
 
-      <section>
-        <SectionHeading title="Outgoing relations" count={outgoing.length} />
+      <section class="group">
+        <Eyebrow level={4} count={outgoing.length}>
+          Outgoing relations
+        </Eyebrow>
         {outgoing.length === 0 ? (
-          <p class="muted">This component calls nothing that the report could see.</p>
+          <p class="note">This component calls nothing that the report could see.</p>
         ) : (
           <ul class="plain">
             {outgoing.map((edge) => (
@@ -425,10 +404,12 @@ export function ComponentDetails(props: {
         )}
       </section>
 
-      <section>
-        <SectionHeading title="Incoming relations" count={incoming.length} />
+      <section class="group">
+        <Eyebrow level={4} count={incoming.length}>
+          Incoming relations
+        </Eyebrow>
         {incoming.length === 0 ? (
-          <p class="muted">Nothing the report could see calls this component.</p>
+          <p class="note">Nothing the report could see calls this component.</p>
         ) : (
           <ul class="plain">
             {incoming.map((edge) => (

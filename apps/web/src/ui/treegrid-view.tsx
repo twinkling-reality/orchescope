@@ -11,7 +11,7 @@
  */
 
 import type { Component } from '@orchescope/schema';
-import type { JSX } from 'preact';
+import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { describeBasis } from '../basis.ts';
 import { formatConfidence, formatDuration, formatInteger, humanise, UNKNOWN } from '../format.ts';
@@ -30,6 +30,7 @@ import {
   visibleRows,
 } from '../treegrid.ts';
 import { computeWindow, scrollToRow, shouldVirtualise } from '../window.ts';
+import { type Presence, PresenceMark, presenceOf } from './presence.tsx';
 
 const ROW_HEIGHT = 28;
 const VIEWPORT_HEIGHT = 420;
@@ -38,6 +39,8 @@ const COLUMNS = [
   'Component',
   'Kind',
   'Presence',
+  'Relations',
+  'Depth',
   'Evidence class',
   'Confidence',
   'Executions',
@@ -47,7 +50,21 @@ const COLUMNS = [
 interface RowCells {
   readonly name: string;
   readonly kind: string;
-  readonly presence: string;
+  /** Null on a group row, which aggregates components whose presence differs. */
+  readonly presence: Presence | null;
+  /**
+   * How many relations touch this component. The map puts the busiest at its centre and is hidden from
+   * assistive technology, so without this column "which thing does everything hang off" is answerable
+   * only by looking at a picture. It is also what says a component is not on the map at all: a nought.
+   */
+  readonly relations: string;
+  /**
+   * How many relations from an entry point this component sits, which is the coordinate a directional
+   * arrangement draws as position. The canvas cannot be read by a screen reader, so what it says about
+   * the order of a flow has to be readable here or it is not readable at all. Empty on a bundle that
+   * carries no directional arrangement, and on a group row, which aggregates depths that differ.
+   */
+  readonly depth: string;
   readonly basis: string;
   readonly confidence: string;
   readonly executions: string;
@@ -55,31 +72,33 @@ interface RowCells {
   readonly note: string | null;
 }
 
-function presenceOf(component: Component): string {
-  const parts: string[] = [];
-  if (component.presence.static) {
-    parts.push('source');
-  }
-  if (component.presence.manifest) {
-    parts.push('manifest');
-  }
-  if (component.presence.runtime) {
-    parts.push('runtime');
-  }
-  return parts.length === 0 ? 'not recorded' : parts.join(' + ');
-}
-
 function missingComponentCells(componentId: string, findingCount: number): RowCells {
   return {
     name: componentId,
     kind: 'unknown',
-    presence: 'not recorded',
+    presence: null,
+    relations: UNKNOWN,
+    depth: UNKNOWN,
     basis: 'unknown',
     confidence: UNKNOWN,
     executions: UNKNOWN,
     findings: formatInteger(findingCount),
     note: 'referenced but absent from the graph',
   };
+}
+
+/**
+ * A component's place in the order of the flow, said in words where it has none.
+ *
+ * A bundle written before the directional arrangements existed carries no depth at all, and an empty
+ * cell is the honest answer there: the report does not know, rather than the component being nowhere.
+ */
+function depthOf(index: GraphIndex, componentId: string): string {
+  if (index.layout.ranks.size === 0) {
+    return '';
+  }
+  const rank = index.layout.ranks.get(componentId);
+  return rank === undefined ? 'not drawn' : formatInteger(rank);
 }
 
 function componentCells(index: GraphIndex, componentId: string): RowCells {
@@ -89,17 +108,12 @@ function componentCells(index: GraphIndex, componentId: string): RowCells {
     return missingComponentCells(componentId, findings.length);
   }
   const metrics = index.metricsByComponent.get(componentId);
-  const notes: string[] = [];
-  if (index.runtimeOnly.has(componentId)) {
-    notes.push('runtime only');
-  }
-  if (index.neverExercised.has(componentId)) {
-    notes.push('never exercised');
-  }
   return {
     name: component.displayName,
     kind: humanise(component.kind),
-    presence: presenceOf(component),
+    presence: presenceOf(index, component),
+    relations: formatInteger(index.degreeByComponent.get(componentId) ?? 0),
+    depth: depthOf(index, componentId),
     basis: describeBasis(component.basis).label,
     confidence: formatConfidence(component.confidence),
     executions:
@@ -107,13 +121,14 @@ function componentCells(index: GraphIndex, componentId: string): RowCells {
         ? 'not measured'
         : `${formatInteger(metrics.executionCount)} (${formatDuration(metrics.selfDurationMs)} self)`,
     findings: formatInteger(findings.length),
-    note: notes.length === 0 ? null : notes.join(', '),
+    note: null,
   };
 }
 
 function groupCells(index: GraphIndex, group: TreeGridGroup): RowCells {
   let executions = 0;
   let findings = 0;
+  let relations = 0;
   let measured = false;
   for (const componentId of group.componentIds) {
     const metrics = index.metricsByComponent.get(componentId);
@@ -122,11 +137,14 @@ function groupCells(index: GraphIndex, group: TreeGridGroup): RowCells {
       measured = true;
     }
     findings += (index.findingsByComponent.get(componentId) ?? []).length;
+    relations += index.degreeByComponent.get(componentId) ?? 0;
   }
   return {
     name: group.label,
     kind: `${formatInteger(group.componentIds.length)} components`,
-    presence: '',
+    presence: null,
+    relations: formatInteger(relations),
+    depth: '',
     basis: '',
     confidence: '',
     executions: measured ? formatInteger(executions) : 'not measured',
@@ -137,13 +155,15 @@ function groupCells(index: GraphIndex, group: TreeGridGroup): RowCells {
 
 function TailCells(props: { readonly cells: RowCells }) {
   const { cells } = props;
-  const rest = [
+  const rest: readonly ComponentChildren[] = [
     cells.kind,
-    cells.presence,
+    cells.presence === null ? '' : <PresenceMark presence={cells.presence} />,
+    <span class="data">{cells.relations}</span>,
+    <span class="data">{cells.depth}</span>,
     cells.basis,
-    cells.confidence,
-    cells.executions,
-    cells.findings,
+    <span class="data">{cells.confidence}</span>,
+    <span class="data">{cells.executions}</span>,
+    <span class="data">{cells.findings}</span>,
   ];
   return (
     <>

@@ -59,13 +59,18 @@ export function TokenFilter(props: {
   );
 }
 
+/**
+ * The plural is given rather than derived. Suffixing `es` produced "11 findinges shown" and "33
+ * componentes shown" in a shipped report, which is what happens when English is treated as a rule.
+ */
 export function SearchField(props: {
   readonly label: string;
   readonly value: string;
   readonly placeholder?: string;
   readonly onChange: (value: string) => void;
   readonly resultCount?: number;
-  readonly resultNoun?: string;
+  readonly resultNoun: string;
+  readonly resultPlural: string;
 }) {
   const id = useId();
   const statusId = `${id}-status`;
@@ -85,10 +90,10 @@ export function SearchField(props: {
           props.onChange((event.currentTarget as HTMLInputElement).value);
         }}
       />
-      <p class="search-status muted" id={statusId} aria-live="polite">
+      <p class="search-status" id={statusId} aria-live="polite">
         {props.resultCount === undefined
           ? ''
-          : `${pluralise(props.resultCount, props.resultNoun ?? 'match', `${props.resultNoun ?? 'match'}es`)} shown`}
+          : `${pluralise(props.resultCount, props.resultNoun, props.resultPlural)} shown`}
       </p>
     </div>
   );

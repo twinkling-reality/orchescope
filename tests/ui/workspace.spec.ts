@@ -37,8 +37,21 @@ test('renders the overview with the project it audited', async ({ page }) => {
   // The project name is the directory name, and the workspace is a copy under a temporary path.
   await expect(page.locator('h1')).toHaveText(/^orchescope-ui-/);
   await expect(page.getByRole('navigation', { name: 'Report sections' })).toBeVisible();
-  await expect(page.getByText(/Report rpt_[0-9a-f]{16}/)).toBeVisible();
   await expect(page.getByText(/Declared against exercised/)).toBeVisible();
+
+  // Which report this is moved from a mono line across the top of every screen into a menu behind one
+  // icon. It is still on every screen and still one interaction away, which is what this holds: the
+  // identifier is in the document, and the control that reveals it does.
+  const details = page.locator('details.chrome-menu');
+  await expect(details.getByText(/rpt_[0-9a-f]{16}/)).toBeAttached();
+  await details.locator('summary').click();
+  await expect(details.getByText(/rpt_[0-9a-f]{16}/)).toBeVisible();
+  // The revision, said either way: a temporary workspace has no git repository, and saying so is the
+  // point. What must never happen is the row being absent, because then nothing says whether the
+  // graph matches a commit anyone else can check out.
+  await expect(
+    details.getByText(/working tree (clean|dirty)|no git revision recorded/),
+  ).toBeVisible();
 });
 
 test('every section is reachable and names itself', async ({ page }) => {
@@ -98,18 +111,68 @@ test('the map filters narrow both the canvas and the table', async ({ page }) =>
     .toBeLessThan(before);
 });
 
+/**
+ * A second arrangement of the same graph is a control, so what it must not change is what it draws. The
+ * census beside the canvas counts the components on the map and says it once; if switching arrangement
+ * moved that number the sentence would be about a control it does not mention.
+ */
+test('changing the arrangement redraws the map without changing what is on it', async ({
+  page,
+}) => {
+  await page.getByRole('link', { name: /System map/ }).click();
+  const grid = page.getByRole('treegrid');
+  await expect(grid).toBeVisible();
+  const picker = page.getByLabel('Arrangement');
+  await expect(picker).toBeVisible();
+  await expect(picker.locator('option')).toHaveText(['Concentric', 'Top down', 'Left to right']);
+
+  const census = page.locator('p.lede').first();
+  const before = await census.textContent();
+  const rows = await grid.getByRole('row').count();
+
+  for (const arrangement of ['Top down', 'Left to right', 'Concentric']) {
+    await picker.selectOption({ label: arrangement });
+    await expect(census).toHaveText(before ?? '');
+    expect(await grid.getByRole('row').count()).toBe(rows);
+  }
+});
+
+/**
+ * What the directional arrangements draw as position, the table has to carry as a value, because the
+ * canvas is hidden from assistive technology and a fact that is only a picture is unreachable.
+ */
+test('the components table carries the depth the directional arrangements draw', async ({
+  page,
+}) => {
+  await page.getByRole('link', { name: /System map/ }).click();
+  const grid = page.getByRole('treegrid');
+  await expect(grid.getByRole('columnheader', { name: 'Depth' })).toBeVisible();
+  // A group row aggregates depths that differ, so its cell is deliberately empty; a component row
+  // carries how many relations from an entry point it sits.
+  const depths = grid.locator('tr.tg-row td:nth-child(5) .data');
+  await expect
+    .poll(
+      async () => (await depths.allTextContents()).filter((value) => /^\d+$/.test(value)).length,
+    )
+    .toBeGreaterThan(0);
+});
+
 test('a finding shows its basis, its evidence and where it came from', async ({ page }) => {
   await page.getByRole('link', { name: /Findings/ }).click();
   const first = page.locator('article.finding').first();
   await expect(first).toBeVisible();
   await expect(first).toHaveAttribute('id', /^finding-OSC-/);
-  // The basis is a badge rather than prose, because a reader scanning a list needs it without reading a paragraph.
+  // A finding is one line that expands, so what a reader scanning the list decides on has to be on the
+  // line itself rather than behind the click: the evidence class and how many records stand behind it.
+  // The chip has no inner label element any more, so this reads `.basis` where it used to read
+  // `.badge-label`, and it is scoped to the summary so it cannot pass on a chip inside the closed body.
+  const summary = first.locator('summary');
   await expect(
-    first
-      .locator('.badge-label')
+    summary
+      .locator('.basis')
       .filter({ hasText: /observed|discovered|inferred|simulated|estimated/i }),
   ).toBeVisible();
-  await expect(first.getByText(/evidence/i).first()).toBeVisible();
+  await expect(summary).toContainText(/evidence/i);
 });
 
 test('an action that cannot run explains itself instead of failing silently', async ({ page }) => {
@@ -141,12 +204,29 @@ test('the keyboard shortcut panel opens and closes with the keyboard', async ({ 
   await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeHidden();
 });
 
-test('the theme control follows the document', async ({ page }) => {
-  const root = page.locator('html');
-  await page.getByLabel('Theme').selectOption('dark');
-  await expect(root).toHaveAttribute('data-theme', 'dark');
-  await page.getByLabel('Theme').selectOption('light');
-  await expect(root).toHaveAttribute('data-theme', 'light');
+/**
+ * This replaced `the theme control follows the document`, deliberately, because the control is gone.
+ *
+ * What it used to hold was that a reader could change the palette. What has to hold now is the
+ * opposite and it is the stronger promise: a tile's ground is fixed by its role, so the composition is
+ * the same document wherever it is opened. The case this exists for is a reader whose operating system
+ * is dark, which is where every themed palette collapsed into one grey rectangle.
+ */
+test('the composition does not follow the operating system', async ({ page }) => {
+  const asLight = await groundsOf(page);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.reload({ waitUntil: 'networkidle' });
+  const asDark = await groundsOf(page);
+
+  expect(asDark.anchor?.colour, 'the anchor followed the operating system').toBe(
+    asLight.anchor?.colour,
+  );
+  expect(asDark.band?.colour, 'the band followed the operating system').toBe(asLight.band?.colour);
+  expect(asDark.field?.colour, 'the field followed the operating system').toBe(
+    asLight.field?.colour,
+  );
+  // And nothing offers a palette it cannot then deliver.
+  await expect(page.getByLabel('Theme')).toHaveCount(0);
 });
 
 test('the document structure is navigable by landmarks and headings', async ({ page }) => {
@@ -175,4 +255,130 @@ test('the document structure is navigable by landmarks and headings', async ({ p
       .map((element) => element.outerHTML.slice(0, 80));
   });
   expect(unnamed, 'a focusable control has no accessible name').toEqual([]);
+});
+
+/**
+ * The three promises the interface makes to a reader who is not using a mouse, a reader who has asked
+ * their system to stop moving things, and a reader on a phone. Each one is invisible until it is
+ * broken, which is why none of them survived a redesign before without being held.
+ */
+test('keyboard focus is visible on every control it can reach', async ({ page }) => {
+  // The overview no longer carries a `select`, because the theme control that used to be on every
+  // screen is gone. The map does, so the four kinds of control are covered across two screens rather
+  // than by dropping one of them from the list.
+  const controls: readonly { readonly selector: string; readonly section: string | null }[] = [
+    { selector: '.nav-link', section: null },
+    { selector: 'button', section: null },
+    { selector: 'summary', section: null },
+    { selector: 'select', section: 'System map' },
+  ];
+  const outlines: { name: string; width: number }[] = [];
+  for (const { selector, section } of controls) {
+    if (section !== null) {
+      await page.getByRole('link', { name: new RegExp(section) }).click();
+    }
+    const control = page.locator(selector).first();
+    await expect(control).toBeAttached();
+    await control.focus();
+    outlines.push({
+      name: selector,
+      width: await control.evaluate((element) =>
+        Number.parseFloat(getComputedStyle(element).outlineWidth || '0'),
+      ),
+    });
+  }
+  for (const outline of outlines) {
+    expect(outline.width, `${outline.name} has no visible focus ring`).toBeGreaterThan(0);
+  }
+});
+
+test('reduced motion stops the page moving', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.reload({ waitUntil: 'networkidle' });
+  const moving = await page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>('*')]
+      .filter((element) => {
+        const style = getComputedStyle(element);
+        const animated = style.animationName !== 'none' && style.animationDuration !== '0s';
+        const transitioned = style.transitionDuration
+          .split(',')
+          .some((duration) => Number.parseFloat(duration) > 0);
+        return animated || transitioned;
+      })
+      .map((element) => `${element.tagName.toLowerCase()}.${element.className}`),
+  );
+  expect(moving, 'something still animates when reduced motion is asked for').toEqual([]);
+});
+
+test('the page fits a phone without scrolling sideways', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const sections = [
+    'Overview',
+    'System map',
+    'Findings',
+    'Performance',
+    'Resilience',
+    'Scenarios',
+    'Comparisons',
+    'Goals',
+  ];
+  for (const section of sections) {
+    await page.getByRole('link', { name: new RegExp(section) }).click();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, `${section} scrolls sideways at 390px`).toBeLessThanOrEqual(0);
+  }
+});
+
+/**
+ * The rule the bento rests on, and it is invisible until it is broken.
+ *
+ * A tile owns its ground and the ground is fixed by the tile's role: the band is light on top, the
+ * anchor is black, the field is light. What this stops is the failure every themed version had, where
+ * the page, the lifted surface and the accent band landed within 1.19:1 of each other on a dark
+ * machine and read as one grey rectangle.
+ */
+function groundsOf(page: import('@playwright/test').Page) {
+  return page.evaluate(() => {
+    const luminance = (colour: string): number => {
+      const [red = 0, green = 0, blue = 0] = (colour.match(/\d+(\.\d+)?/g) ?? []).map(Number);
+      const channel = (value: number) => {
+        const scaled = value / 255;
+        return scaled <= 0.04045 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * channel(red) + 0.7152 * channel(green) + 0.0722 * channel(blue);
+    };
+    const read = (selector: string) => {
+      const element = document.querySelector(selector);
+      if (element === null) {
+        return null;
+      }
+      const colour = getComputedStyle(element).backgroundColor;
+      return { colour, luminance: luminance(colour) };
+    };
+    return {
+      anchor: read('.tile.is-anchor'),
+      band: read('.tile.is-band'),
+      field: read('.tile:not(.is-anchor):not(.is-band)'),
+    };
+  });
+}
+
+test('a tile owns its ground, and the ground is fixed by its role', async ({ page }) => {
+  const grounds = await groundsOf(page);
+  expect(grounds.anchor, 'the screen has no anchor tile').not.toBeNull();
+  expect(grounds.band, 'the screen has no band tile').not.toBeNull();
+  expect(grounds.field, 'the screen has no field tile').not.toBeNull();
+
+  // Black in the corner, light on top, light everywhere else. The order is the composition.
+  expect(grounds.anchor?.luminance, 'the anchor is not the darkest ground').toBeLessThan(
+    grounds.band?.luminance ?? 0,
+  );
+  expect(grounds.band?.luminance, 'the band is not below the field').toBeLessThan(
+    grounds.field?.luminance ?? 0,
+  );
+  // The anchor is a black tile rather than a dark one, and the field is paper rather than off white.
+  expect(grounds.anchor?.luminance ?? 1).toBeLessThan(0.01);
+  expect(grounds.field?.luminance ?? 0).toBeGreaterThan(0.9);
 });

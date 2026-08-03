@@ -1,215 +1,253 @@
+/*! Manrope, copyright 2018 The Manrope Project Authors, and JetBrains Mono, copyright 2020 The
+    JetBrains Mono Project Authors, are both licensed under the SIL Open Font License 1.1. The full
+    licence text is beside the faces in fonts/ and at https://openfontlicense.org */
 /*
  * Orchescope report styling.
  *
- * Dense, restrained, one accent colour, a 4px spacing rhythm and a small type scale. Severity and
- * evidence class are never carried by hue alone: every badge also has a text label and a shape marker,
- * and badge text is always the ordinary foreground colour so its contrast does not depend on the tint.
+ * One idea holds the whole system together: FILL MEANS EVIDENCE. A filled shape was measured in a
+ * run. A hollow outline was only declared. That rule holds on the delta bar, the map nodes, the
+ * components table and the severity marker, and it is the visual form of the rule this repository
+ * already states, that an inference is never presented as an observation. Because it is carried by
+ * form and never by hue it survives greyscale, a colour vision deficiency and a printed page.
  *
- * There are no remote assets of any kind, no inline styles other than custom properties set from
- * script, and no animation beyond a 120ms panel fade, which is disabled when reduced motion is asked
- * for. The page is designed to run under a policy with no `unsafe-inline`.
+ * Hue appears on a severity marker and the word beside it, and on the chrome. Nowhere else, ever.
+ * Everything that used to be tinted says itself in words instead: `not satisfied`, `regressed`,
+ * `absent`, `failed`. A state that is genuinely an alert is already a finding carrying a severity, and
+ * severity is where the two alert hues live. The one accent marks what has focus, what is selected and
+ * what is a link, none of which is a measurement, and it never reaches a bar cell, a map node, a
+ * presence mark, a severity marker or a number.
+ *
+ * A screen is a bento and a tile owns its ground: the neutrals are redefined inside the tile, so every
+ * rule that draws from them comes across intact and fill still means evidence on the other ground.
+ * Three grounds, each fixed by the tile's role and not by any theme, because a themed palette cannot
+ * hold three grounds apart in the dark and every version that tried collapsed into one grey rectangle.
+ *
+ * Weight is a function of size, which is two rules rather than thirteen exceptions: sans 200 only at
+ * 24px and above, 300 from 16 to 23, 400 for body, 500 for headings; mono 300 at 16px and above, 400
+ * below. Thin type below 24px stops reading, and on the black tile it stops sooner.
+ *
+ * There are no remote assets of any kind: both faces are vendored beside this file and the build
+ * emits them as real files for the served report and as data URIs for the single file export. No
+ * inline style carries anything but a custom property, and the only motion is a 120ms disclosure
+ * rotation and a panel fade, both disabled when reduced motion is asked for.
  */
 
+@font-face {
+  font-family: "Manrope";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("./fonts/manrope-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 300 500;
+  font-display: swap;
+  src: url("./fonts/jetbrains-mono-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ══ tokens ═══════════════════════════════════════════════════════════════════════════════════ */
+
 :root {
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono:
-    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  /* The fallbacks are chosen so a face that fails to load changes the texture and not the layout.
+     `ui-monospace` resolves to SF Mono on macOS and Cascadia on Windows, both of which have tabular
+     figures, which is what every number on this page depends on. */
+  --sans:
+    "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  --mono:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+
+  /*
+   * The field ground: the tile most of the report is written on, and the root's own ground so that a
+   * sliver of overscroll reads as a tile continuing rather than as a page appearing.
+   *
+   * There is no page ground in this stylesheet. Every pixel of the viewport belongs to a tile, and a
+   * tile owns its ground: see `the three grounds` below.
+   */
+  --paper: #ffffff;
+  --sheet: #fbfcfe;
+  --rule: #e3e6ec;
+  --rule-soft: #eff1f5;
+  /* The outline that means "declared but never measured". It has to be as legible as the fill it
+     contrasts with, so it is its own token and never the hairline used for layout rules. */
+  --outline: #aeb5c1;
+  --ink: #12151c;
+  --muted: #5d6674;
+  --faint: #9aa1af;
+
+  --high: #b42318;
+  --medium: #b54708;
+
+  /*
+   * One accent, and it lives on the chrome and never on the data.
+   *
+   * It marks where you are, what has focus, what is selected and what is a link: facts about the
+   * interface, none of which is a measurement. It is never a bar cell, a map node, a presence mark, a
+   * severity marker or a number, because fill means evidence and severity owns the alert hues, and an
+   * accent that reached the data would let a reader infer a verdict the report does not carry.
+   *
+   * Blue rather than green: green reads as pass, and beside `satisfied` and `not satisfied` criteria a
+   * reader would take it for one. Blue rather than violet: violet sits between the two alert hues and
+   * is the hardest of the four to tell from amber in greyscale.
+   */
+  --accent: #1a56db;
 
   --s1: 4px;
   --s2: 8px;
   --s3: 12px;
   --s4: 16px;
   --s5: 24px;
-  --s6: 32px;
+  --s6: 40px;
+  --s7: 64px;
 
-  --t-xs: 12px;
-  --t-sm: 13px;
-  --t-md: 15px;
-  --t-lg: 18px;
-  --t-xl: 22px;
-  --t-xxl: 28px;
+  --radius: 2px;
+  --measure: 68ch;
+  /* A filter rail. Wide enough for the longest legend and two token filters on a line. */
+  --sidebar: 264px;
+  /* What a bento row is worth on a laptop: enough that the summary row and the band together fill a
+     900px viewport under the chrome, and no more, because a tile that opens its detail grows past it. */
+  --row: 300px;
 
-  --radius: 3px;
-  --border-width: 1px;
-
-  --bg: #ffffff;
-  --bg-sunken: #f4f5f7;
-  --bg-panel: #ffffff;
-  --bg-raised: #eceef2;
-  --fg: #1c2028;
-  --fg-muted: #545b66;
-  --border: #c9ced8;
-  --border-strong: #9aa2b0;
-  --accent: #1a56b0;
-  --accent-fg: #ffffff;
-  --focus: #1a56b0;
-
-  --critical: #a01b1b;
-  --high: #8f4300;
-  --medium: #6a5200;
-  --low: #16604a;
-  --info: #3b4453;
-
-  --good: #16604a;
-  --warn: #8f4300;
-  --bad: #a01b1b;
-
-  --basis-observed: #16604a;
-  --basis-discovered: #1a56b0;
-  --basis-inferred: #5b4bab;
-  --basis-estimated: #6a5200;
-  --basis-simulated: #8f4300;
-  --basis-model-interpreted: #8a2b6d;
-
-  --neutral-swatch: #8b8f9a;
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #12151a;
-    --bg-sunken: #0d1014;
-    --bg-panel: #191d24;
-    --bg-raised: #232932;
-    --fg: #e7eaf0;
-    --fg-muted: #a6adb9;
-    --border: #333a45;
-    --border-strong: #4d566380;
-    --accent: #82b4ff;
-    --accent-fg: #10131a;
-    --focus: #82b4ff;
+/* ══ the three grounds ════════════════════════════════════════════════════════════════════════ */
 
-    --critical: #ff9c94;
-    --high: #ffc384;
-    --medium: #e3d071;
-    --low: #7ddab8;
-    --info: #bac2cf;
+/*
+ * A tile owns its ground, and it gets there by swapping the neutrals inside itself rather than by
+ * restating any rule that uses them. Everything in this stylesheet already draws from `--ink`,
+ * `--outline`, `--sheet` and the two alert hues, so a local redefinition carries the whole system
+ * across intact: a filled bar cell is still that tile's ink, a hollow one is still its outline, and
+ * fill still means evidence on the other ground. The canvas comes too, because `readPalette` in
+ * ui/graph-canvas.tsx reads the same four properties off its own element.
+ *
+ * There are three grounds and each is fixed by the role of the tile that carries it, not by the
+ * theme. The band is light on top, the anchor is black in the corner, the field is light everywhere
+ * else, and that is true wherever the report is opened.
+ *
+ * | | against the field |
+ * | anchor | 19.43:1 |
+ * | band | 1.43:1 |
+ *
+ * **There is no theme, and the arithmetic is why.** A themed palette has to hold these three apart in
+ * a dark one as well, and it cannot: to reach even 3:1 against a near black anchor the lighter ground
+ * has to arrive at about #5c626e, which is a mid grey and not a dark theme at all. Every dark palette
+ * that stayed dark put the page, the lifted surface and the accent band inside 1.19:1 of each other,
+ * and they read as one grey rectangle with nothing on screen to say another reading existed.
+ *
+ * Once a tile owns its ground there is no page background left to theme, so there was nothing for the
+ * control to act on. It is gone rather than left doing nothing, which is the same rule this repository
+ * applies to every other control: absent, or disabled with its reason, never a button that fails when
+ * pressed.
+ */
 
-    --good: #7ddab8;
-    --warn: #ffc384;
-    --bad: #ff9c94;
-
-    --basis-observed: #7ddab8;
-    --basis-discovered: #82b4ff;
-    --basis-inferred: #b9a8ff;
-    --basis-estimated: #e3d071;
-    --basis-simulated: #ffc384;
-    --basis-model-interpreted: #f0a0d4;
-
-    --neutral-swatch: #7f8593;
-  }
+/* The tile a bento row is built around. Black here, black anywhere. */
+.tile.is-anchor,
+.tile.is-dark {
+  --paper: #0b0d12;
+  --sheet: #151a24;
+  --rule: #262d3b;
+  --rule-soft: #1a202b;
+  --outline: #6e7a8f;
+  --ink: #f5f7fb;
+  --muted: #a2acbc;
+  --faint: #788395;
+  /* Restated because #b42318 on a near black ground is a smudge. The same two hues, lit to carry. */
+  --high: #f97066;
+  --medium: #f79009;
+  --accent: #7ea6ff;
 }
 
-:root[data-theme="light"] {
-  --bg: #ffffff;
-  --bg-sunken: #f4f5f7;
-  --bg-panel: #ffffff;
-  --bg-raised: #eceef2;
-  --fg: #1c2028;
-  --fg-muted: #545b66;
-  --border: #c9ced8;
-  --border-strong: #9aa2b0;
-  --accent: #1a56b0;
-  --accent-fg: #ffffff;
-  --focus: #1a56b0;
-  --critical: #a01b1b;
-  --high: #8f4300;
-  --medium: #6a5200;
-  --low: #16604a;
-  --info: #3b4453;
-  --good: #16604a;
-  --warn: #8f4300;
-  --bad: #a01b1b;
-  --basis-observed: #16604a;
-  --basis-discovered: #1a56b0;
-  --basis-inferred: #5b4bab;
-  --basis-estimated: #6a5200;
-  --basis-simulated: #8f4300;
-  --basis-model-interpreted: #8a2b6d;
-  --neutral-swatch: #8b8f9a;
+/*
+ * The band is the one ground the accent is a surface on. Nothing drawn on it means anything by being
+ * on it, so fill still means evidence and severity still owns the two alert hues.
+ *
+ * Both alert hues are darkened here rather than reused. On this ground the field's amber reaches only
+ * 3.8:1, and a severity word is set at 10px, so it would fail the contrast the rest of the page holds.
+ * They are the same two hues at a different lightness, not two new ones.
+ */
+.tile.is-band {
+  --paper: #cbd8f7;
+  --sheet: #dde5fa;
+  --rule: #a9bdee;
+  --rule-soft: #bcccf3;
+  --outline: #8093c7;
+  --ink: #12151c;
+  --muted: #3f4a63;
+  --faint: #5a688a;
+  --high: #9f1f15;
+  --medium: #8a3607;
+  --accent: #123fa8;
 }
 
-:root[data-theme="dark"] {
-  --bg: #12151a;
-  --bg-sunken: #0d1014;
-  --bg-panel: #191d24;
-  --bg-raised: #232932;
-  --fg: #e7eaf0;
-  --fg-muted: #a6adb9;
-  --border: #333a45;
-  --border-strong: #4d5663;
-  --accent: #82b4ff;
-  --accent-fg: #10131a;
-  --focus: #82b4ff;
-  --critical: #ff9c94;
-  --high: #ffc384;
-  --medium: #e3d071;
-  --low: #7ddab8;
-  --info: #bac2cf;
-  --good: #7ddab8;
-  --warn: #ffc384;
-  --bad: #ff9c94;
-  --basis-observed: #7ddab8;
-  --basis-discovered: #82b4ff;
-  --basis-inferred: #b9a8ff;
-  --basis-estimated: #e3d071;
-  --basis-simulated: #ffc384;
-  --basis-model-interpreted: #f0a0d4;
-  --neutral-swatch: #7f8593;
-}
+/* ══ base ═════════════════════════════════════════════════════════════════════════════════════ */
 
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html {
-  color-scheme: light dark;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  margin: 0;
-  background: var(--bg-sunken);
-  color: var(--fg);
-  font-family: var(--font-sans);
-  font-size: var(--t-md);
-  line-height: 1.45;
-  -webkit-text-size-adjust: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 h1,
 h2,
 h3,
 h4 {
-  margin: 0;
-  font-weight: 600;
-  line-height: 1.25;
-}
-
-h1 {
-  font-size: var(--t-xxl);
-}
-
-h2 {
-  font-size: var(--t-xl);
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
 }
 
 h3 {
-  font-size: var(--t-lg);
+  font-size: 15px;
+}
+
+h4 {
+  font-size: 13.5px;
 }
 
 p {
-  margin: 0;
+  max-width: var(--measure);
 }
 
-ul,
-ol,
-dl {
-  margin: 0;
-  padding: 0;
+a {
+  color: inherit;
 }
 
-/* ---------- utilities ---------- */
+/* Focus, selection and where-you-are are facts about the interface, so they carry the accent. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+
+/* ══ utilities ════════════════════════════════════════════════════════════════════════════════ */
 
 .visually-hidden {
   position: absolute;
@@ -223,32 +261,26 @@ dl {
   border: 0;
 }
 
-.offscreen {
-  position: fixed;
-  top: -1000px;
-  left: -1000px;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-}
-
 .muted {
-  color: var(--fg-muted);
+  color: var(--muted);
 }
 
-.mono,
-.code,
-.command {
-  font-family: var(--font-mono);
-  font-size: var(--t-xs);
+.small {
+  font-size: 12.5px;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 0.95em;
+  font-variant-numeric: tabular-nums;
 }
 
 .plain {
   list-style: none;
 }
 
-.plain > li {
-  padding: var(--s1) 0;
+.plain > li + li {
+  margin-top: var(--s2);
 }
 
 .inline-list {
@@ -257,8 +289,38 @@ dl {
   gap: var(--s2) var(--s4);
 }
 
+.inline-list > li + li {
+  margin-top: 0;
+}
+
 .scroll-x {
   overflow-x: auto;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/*
+ * A meta line: the identifier, the kind, the evidence class and the confidence of whatever is above
+ * it, set small and quiet and separated by a middle dot. This is what replaced every tinted chip in
+ * the report, because a word states a state and a colour only hints at one.
+ */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s2);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+  max-width: none;
+}
+
+.meta > * + *::before {
+  content: "·";
+  margin-right: var(--s2);
+  color: var(--rule);
 }
 
 .fade-in {
@@ -269,7 +331,6 @@ dl {
   from {
     opacity: 0;
   }
-
   to {
     opacity: 1;
   }
@@ -281,449 +342,1072 @@ dl {
   }
 }
 
-:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+/* ══ the ten primitives ═══════════════════════════════════════════════════════════════════════ */
+
+/* 1. Eyebrow. Names a block. The only all caps in the system, and never a value. */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+  line-height: 1.6;
 }
 
-/* ---------- shell ---------- */
-
-.shell {
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: 0 var(--s4) var(--s6);
+/* A name that came out of the analysed repository sits under its eyebrow, in the case it was written
+   in. The eyebrow above it names the kind of block, which is this repository's own vocabulary. */
+.eyebrow + h3 {
+  margin-top: 2px;
 }
 
-.skip-link {
-  position: absolute;
-  left: var(--s2);
-  top: -100px;
-  z-index: 10;
-  padding: var(--s2) var(--s3);
-  background: var(--accent);
-  color: var(--accent-fg);
-  border-radius: var(--radius);
-  text-decoration: none;
+.eyebrow .count {
+  margin-left: var(--s2);
+  color: var(--muted);
 }
 
-.skip-link:focus {
-  top: var(--s2);
+/* 2. Display. Extra light, large only. Never below 24px, where thin stops reading. */
+.display {
+  font-size: 34px;
+  font-weight: 200;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  max-width: 24ch;
+  margin-top: var(--s2);
 }
 
-.header {
+/* 3. Figure. The one number a screen leads with, and its mono qualifier. */
+.readout {
   display: flex;
+  align-items: baseline;
   flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--s4);
-  padding: var(--s5) 0 var(--s3);
+  gap: var(--s3);
+  margin-top: var(--s5);
+  max-width: none;
 }
 
-.product {
-  font-size: var(--t-xs);
+.figure {
+  font-size: 56px;
+  font-weight: 200;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.figure.nil {
+  color: var(--faint);
+}
+
+.readout .of {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* 4. Data. Every number on the page is set in this, tabular so a figure that changes between two
+      reports does not shift the layout. */
+.data {
+  font-family: var(--mono);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.data.nil {
+  color: var(--faint);
+}
+
+/* A numeral inside the display line: still mono and still tabular, one step heavier because 200 at
+   34px in a mono face is thinner than the sans beside it. */
+.display .data {
+  font-size: 0.92em;
+  font-weight: 300;
+}
+
+/* 5. Basis chip. The evidence class of a value. No hue and no marker: the word is the signal. */
+.basis {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+/* 6. Severity marker. A square and a word. The only two hues in the system live here. */
+.sev {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--fg-muted);
+  white-space: nowrap;
 }
 
-.header-controls {
+.sev-mark {
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  background: currentColor;
+  flex: none;
+}
+
+.sev-mark + .sev-mark {
+  margin-left: -3px;
+}
+
+.sev.is-critical,
+.sev.is-high {
+  color: var(--high);
+}
+
+.sev.is-medium {
+  color: var(--medium);
+}
+
+.sev.is-low,
+.sev.is-info,
+.sev.is-unranked {
+  color: var(--faint);
+}
+
+/* Two hues cover five severities, so the mark carries the rank as well: doubled, filled, filled and
+   halved, hollow, hollow and halved. All five are distinct in greyscale and more ink means worse. */
+.sev.mark-filled_half .sev-mark {
+  height: 3px;
+}
+
+.sev.mark-hollow .sev-mark,
+.sev.mark-hollow_half .sev-mark,
+.sev.mark-unranked .sev-mark {
+  background: transparent;
+  border: 1px solid currentColor;
+}
+
+.sev.mark-hollow_half .sev-mark {
+  height: 4px;
+}
+
+.sev.mark-unranked .sev-mark {
+  border-radius: 50%;
+}
+
+/* 7. Bar cell. One declared component, or one bucket of them when the ceiling is reached. */
+
+/* The bar and its caption share a box that hugs the cells, so `Outside` sits over the cells it names
+   rather than at the far edge of a column the bar never reached. A dense bar fills the width already. */
+.bar-block {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.bar-block.dense {
+  width: 100%;
+}
+
+.bar {
   display: flex;
-  align-items: center;
-  gap: var(--s2);
+  align-items: stretch;
+  gap: 3px;
+  height: 44px;
+  margin-top: var(--s4);
 }
 
-.nav {
-  border-top: var(--border-width) solid var(--border);
-  border-bottom: var(--border-width) solid var(--border);
-  padding: var(--s1) 0;
-  position: sticky;
-  top: 0;
-  background: var(--bg-sunken);
-  z-index: 5;
+/* The width is stated as well as flexed. A flex basis is not an intrinsic contribution, so a cell with
+   no content in it measures zero when the bar is asked how wide it wants to be, and the whole bar
+   collapses to its own minimum. */
+.bar .cell {
+  flex: 0 1 24px;
+  width: 24px;
+  min-width: 3px;
+  border-radius: var(--radius);
+  display: block;
 }
 
-.nav-list {
+.bar.dense {
+  gap: 1px;
+}
+
+.bar.dense .cell {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 2px;
+}
+
+.cell.met {
+  background: var(--ink);
+}
+
+.cell.unmet {
+  border: 1px solid var(--outline);
+  background: transparent;
+}
+
+/* The component that ran and was never declared sits past this boundary rather than being tinted a
+   third colour, because it is not a third kind of evidence, it is outside the declared set. */
+/* The gap shrinks before the cells do. On a 390px screen a bar of 120 dense cells has 358px to live
+   in and a fixed 40px boundary is 11 per cent of it. */
+.bar .edge {
+  flex: 0 1 var(--s6);
+  width: var(--s6);
+  min-width: var(--s3);
+  position: relative;
+}
+
+.bar .edge::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  bottom: -4px;
+  border-left: 1px dashed var(--rule);
+}
+
+.bar-caption {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--s2);
+  gap: var(--s4);
+}
+
+.bar-caption span {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.key {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s1);
+  gap: var(--s3) var(--s5);
+  margin-top: var(--s4);
   list-style: none;
 }
 
+ul.key li {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.key i {
+  width: 11px;
+  height: 11px;
+  border-radius: var(--radius);
+  flex: none;
+}
+
+/* 8. Ruled stat. Supporting numbers are one ruled row, not five boxes.
+      240px rather than 150: a tile five of twelve wide fitted four of them at 155px each and then had
+      nothing under them, which put the emptiness inside the tile, where a reader takes it for a fault.
+      At 240 the same four wrap to two by two in a tile and stay on one line across a band. */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--s5) var(--s5);
+  margin-top: var(--s5);
+}
+
+/* The rule sits above a stat rather than beside it. A rule to the left is a rule the first item of a
+   wrapped row would draw as well, and a grid cannot be asked which of its children start a line. */
+.stat {
+  border-top: 1px solid var(--rule-soft);
+  padding-top: var(--s2);
+  padding-right: var(--s4);
+}
+
+.stat .v {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.stat .v.nil {
+  color: var(--faint);
+}
+
+.stat .k {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 2px;
+  max-width: 24ch;
+}
+
+.stat .basis {
+  display: block;
+  margin-top: var(--s2);
+}
+
+/* 9. Disclosure row. One line, expanding to its evidence. Built on `details` so it works before the
+      script runs, is in the tab order without a `tabindex`, and is found by in page search. */
+details.row {
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+details.row > summary {
+  list-style: none;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) auto;
+  gap: var(--s4);
+  padding: var(--s3) 0;
+  align-items: baseline;
+}
+
+details.row > summary::-webkit-details-marker {
+  display: none;
+}
+
+.row-title {
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+}
+
+details.row > summary:hover .row-title {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+details.row.is-plain > summary {
+  grid-template-columns: minmax(0, 1fr);
+  padding: var(--s2) 0;
+}
+
+details.row.is-plain {
+  --row-indent: 0px;
+}
+
+details.row.is-plain .row-title {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+details.row.is-plain[open] .row-title {
+  color: var(--ink);
+}
+
+.row-count {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+  margin-left: var(--s2);
+}
+
+.row-meta {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.chev {
+  display: inline-block;
+  width: 9px;
+  margin-left: var(--s2);
+  color: var(--faint);
+  transition: transform 120ms ease;
+}
+
+details.row[open] .chev {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chev {
+    transition: none;
+  }
+}
+
+.row-body {
+  padding: 0 0 var(--s4) var(--row-indent, calc(84px + var(--s4)));
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.row-body > p {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* 10. Refusal panel. The empty and the refusal state of every screen: what is missing, why that
+       matters, and the command that produces it. Never an empty chart. */
+/* A refusal draws no frame of its own. It is always inside a tile, and the tile is the panel: a box
+   drawn inside a box is two panels saying one thing. */
+.refusal {
+  margin-top: var(--s3);
+}
+
+.refusal .t {
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.refusal p {
+  color: var(--muted);
+  font-size: 12.5px;
+  margin-top: var(--s1);
+}
+
+.refusal .plain {
+  margin-top: var(--s2);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* ══ layout ═══════════════════════════════════════════════════════════════════════════════════ */
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ══ the bento ════════════════════════════════════════════════════════════════════════════════ */
+
+/*
+ * A screen is a bento rather than panels on a background. There is no main background colour: the
+ * viewport is filled by tiles that tile it, and every seam between two of them is one hairline rather
+ * than a gutter of page showing through.
+ *
+ * The grid is twelve columns and the tiles are unequal, because a bento is not a uniform grid. A row
+ * is an anchor of four, a stage of five and a stack of three, and the stack holds one tile or two or
+ * three without leaving a hole where a fixed second row would. A tile with no place modifier spans the
+ * row, which is what the band and an evidence table are.
+ *
+ * `gap` is zero and the hairline is drawn by the tile on its right and bottom edges only, so two
+ * neighbours share one line rather than drawing two. The last tile in a row and the last row draw
+ * against the viewport edge, which is why the seam count is the same whatever a screen holds.
+ */
+.bento {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.tile {
+  grid-column: span 12;
+  background: var(--paper);
+  color: var(--ink);
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  padding: var(--s5) clamp(var(--s5), 2vw, var(--s6));
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+/* The anchor is the tile a row is built around, and in this system it is the dark one. Coupling the
+   place to the ground is the composition rule: a black tile does not appear in the middle of a row. */
+.tile.is-anchor {
+  grid-column: span 4;
+  grid-row: span 2;
+}
+
+.tile.is-stage {
+  grid-column: span 5;
+  grid-row: span 2;
+}
+
+/* The right hand column of a row. It is a tile holder rather than a tile: its children own the ground
+   and draw the hairlines, and however many there are they share the height of the anchor beside them. */
+.tile-stack {
+  grid-column: span 3;
+  grid-row: span 2;
+  display: grid;
+  grid-auto-rows: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.tile-stack > .tile {
+  grid-column: auto;
+}
+
+/* A bento row is worth a screenful and no more. A tile that opens its detail grows past this, which is
+   what tells a reader which one they opened. */
+.tile.is-anchor,
+.tile.is-stage,
+.tile-stack {
+  min-height: var(--row);
+}
+
+.tile-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.tile-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tile-body > .lede:first-child,
+.tile-body > .stat-row:first-child,
+.tile-body > .key:first-child {
+  margin-top: 0;
+}
+
+/*
+ * The detail of a tile, behind the three dots. A `details` element rather than a button and a state
+ * hook, for the same reasons the disclosure row is one: it works before the script runs, it is in the
+ * tab order without a `tabindex`, it announces its own expanded state, and the browser's own in page
+ * search finds what is inside it while it is closed.
+ */
+details.tile-more {
+  margin-top: auto;
+}
+
+details.tile-more > summary {
+  list-style: none;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  color: var(--faint);
+  padding: 2px var(--s2);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  align-self: flex-start;
+}
+
+details.tile-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.tile-more > summary:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+details.tile-more[open] > summary {
+  color: var(--accent);
+  border-color: var(--rule);
+}
+
+.tile-more-body {
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--rule-soft);
+}
+
+/* A disclosure row inside a tile is one column. The three column rhythm needs 84px of lead plus a
+   title plus a right hand column, and a stack tile is 3 of 12, which turned every title into four
+   lines. */
+.tile-more-body details.row > summary {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s1);
+}
+
+.tile-more-body .row-meta {
+  text-align: left;
+}
+
+.tile-more-body details.row {
+  --row-indent: 0px;
+}
+
+/*
+ * A tile's list: one line each, the whole line a target, and no rule between them heavier than the
+ * tile already is. It is not a `DisclosureRow`, because what is behind these lines is a screen rather
+ * than a paragraph, so the row navigates instead of expanding.
+ */
+.stack {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--s3);
+}
+
+.stack > li + li {
+  border-top: 1px solid var(--rule-soft);
+}
+
+.stack-row {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--s2);
+  width: 100%;
+  padding: var(--s2) 0;
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stack-row.is-static {
+  grid-template-columns: minmax(0, 1fr);
+  cursor: default;
+}
+
+.stack-title {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.stack-meta {
+  grid-column: 2;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+}
+
+.stack-row.is-static .stack-meta {
+  grid-column: 1;
+}
+
+button.stack-row:hover .stack-title {
+  color: var(--accent);
+}
+
+/*
+ * The head of a band: the sentence the data makes on the left, and everything that measures it on the
+ * right. The sentence is 24 characters to a line by design and the bar wants every pixel it can get,
+ * so setting them beside each other spends the width on the two things that can use it.
+ */
+.lead-head {
+  display: grid;
+  grid-template-columns: minmax(0, 26ch) minmax(0, 1fr);
+  gap: var(--s5) var(--s7);
+  align-items: start;
+  margin-top: var(--s3);
+}
+
+/* The same two columns where the left one is a paragraph rather than a display sentence. A band whose
+   statement is prose stops at the measure and would otherwise leave the rest of the band empty, which
+   is the emptiness a reader takes for a fault because it is inside the tile rather than around it. */
+.lead-head.is-prose {
+  grid-template-columns: minmax(0, var(--measure)) minmax(0, 1fr);
+}
+
+.lead-head .display {
+  margin-top: 0;
+}
+
+.lead-measure {
+  min-width: 0;
+}
+
+.lead-measure .readout {
+  margin-top: 0;
+}
+
+.lead-measure .bar {
+  margin-top: var(--s5);
+}
+
+/*
+ * The top chrome. Three zones on one row: the mark and the repository on the left, the eight screens
+ * centred on the page, two icons on the right. It is sticky, so the navigation is reachable from the
+ * bottom of a report with 1727 components in it.
+ *
+ * The outer tracks are `minmax(0, 1fr)` each, which is what centres the navigation on the page rather
+ * than between two zones of unequal width. Three tracks of `auto 1fr auto` put it 128px off the middle
+ * on the demonstration and somewhere else again on every other report, which is why it used to take a
+ * row of its own. It does not need one now: the provenance folded into an icon and the right zone went
+ * from 331px to 84px.
+ */
+.chrome {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s3) var(--s5);
+  /* The same inset a tile takes, so the mark lines up with the first tile's own content. */
+  padding: var(--s3) clamp(var(--s5), 2vw, var(--s6));
+}
+
+.chrome-identity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.chrome-nav {
+  min-width: 0;
+}
+
+.chrome-tools {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s2);
+}
+
+/*
+ * The mark. Two rings and a centre, which is the arrangement the map draws, on a plate of ink.
+ *
+ * It is the one shape in this document drawn for its own sake rather than to carry a measurement, so
+ * it is hidden from assistive technology and the product name beside it is what is read instead.
+ */
+.chrome .mark {
+  display: inline-flex;
+  flex: none;
+}
+
+.mark-plate {
+  fill: var(--ink);
+}
+
+.mark-ring {
+  fill: none;
+  stroke: var(--paper);
+  stroke-width: 1.5;
+}
+
+.mark-core {
+  fill: var(--paper);
+}
+
+/* The separator between the product and the repository it is reporting on. */
+.chrome .slash {
+  color: var(--faint);
+  font-size: 18px;
+  font-weight: 200;
+  line-height: 1;
+}
+
+.chrome .project {
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  /* A name longer than the corpus has wraps rather than taking the whole bar. Every project name in
+     the corpus fits on one line: the longest is 21 characters. `min-width` is what lets it wrap at
+     all: a flex item's floor is its content, so without it `pydantic-ai-exercised` pushed the two
+     icons 26px off the right edge of a 390px screen. */
+  min-width: 0;
+  max-width: 34ch;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * A square icon, the same size as every other one, in a row that lines up on its right edge.
+ *
+ * A `summary` is one of these as well as a `button`, so the two controls in the chrome are the same
+ * object whether they open a menu or toggle a panel.
+ */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  cursor: pointer;
+  list-style: none;
+}
+
+.icon-button::-webkit-details-marker {
+  display: none;
+}
+
+.icon-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.glyph-stroke {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+}
+
+/*
+ * The report's own provenance, behind the first icon.
+ *
+ * A `details` element for the same reasons every other disclosure here is one: it works before the
+ * script runs, it is in the tab order without a `tabindex`, it announces its own expanded state, and
+ * the browser's own in page search finds what is inside it while it is closed.
+ */
+.chrome-menu {
+  position: relative;
+}
+
+.chrome-menu-body {
+  position: absolute;
+  top: calc(100% + var(--s2));
+  right: 0;
+  z-index: 25;
+  min-width: 380px;
+  max-width: min(480px, calc(100vw - var(--s5) * 2));
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-top: 2px solid var(--accent);
+  border-radius: var(--radius);
+  padding: var(--s4);
+  box-shadow: 0 8px 24px rgb(18 21 28 / 12%);
+}
+
+.chrome-menu-body .definitions {
+  max-width: none;
+  grid-template-columns: 116px minmax(0, 1fr);
+}
+
+.nav-list {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s1);
+}
+
+/*
+ * Where you are is a filled pill rather than a rule under a word.
+ *
+ * The rule was the quietest marker available on the busiest line of the document, and beside seven
+ * other labels it read as an underlined link. The pill changes the ground and not the type, so it
+ * keeps the property the rule was chosen for: no label moves sideways when a reader changes section.
+ */
 .nav-link {
   display: inline-flex;
   align-items: baseline;
   gap: var(--s2);
-  padding: var(--s2) var(--s3);
-  color: var(--fg);
   text-decoration: none;
+  color: var(--muted);
+  font-size: 13.5px;
+  padding: 7px var(--s3);
   border-radius: var(--radius);
-  font-size: var(--t-sm);
+  white-space: nowrap;
 }
 
 .nav-link:hover {
-  background: var(--bg-raised);
+  color: var(--ink);
+  background: var(--rule-soft);
 }
 
-.nav-link.current {
-  background: var(--accent);
-  color: var(--accent-fg);
-  font-weight: 600;
+.nav-link.current,
+.nav-link.current:hover {
+  background: var(--ink);
+  color: var(--paper);
 }
 
-.nav-index {
-  font-family: var(--font-mono);
-  font-size: var(--t-xs);
-  opacity: 0.75;
+.nav-count {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+
+.nav-link.current .nav-count {
+  color: var(--paper);
+  opacity: 0.65;
 }
 
 .main {
-  padding-top: var(--s4);
+  padding: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
 }
 
+/*
+ * Controls beside what they control rather than stacked above it.
+ *
+ * A filter bar across the top of the map put eleven component kinds, eleven relation kinds, a search
+ * field and two selects in the first screenful, and pushed the thing being filtered below the fold on
+ * every repository in the corpus. In a column they are a tool rail and the graph is the screen.
+ *
+ * The rail is a tile like everything else, so the seam between it and the work is the same hairline
+ * every other seam is, and neither of them floats on anything.
+ */
+.workbench {
+  display: grid;
+  grid-template-columns: var(--sidebar) minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.workbench-controls,
+.workbench-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.workbench-controls > .tile {
+  flex: 1 1 auto;
+}
+
+/*
+ * The refusal is two columns: what is missing on the left, the commands that produce it on the right.
+ * Thirteen of the sixteen cached reports have no run in them and open on this panel, so it is the most
+ * looked at composition in the workspace. Stacked, it was a paragraph of 520px and three command boxes
+ * of 1070px holding fifty characters each.
+ *
+ * The two columns are pushed apart rather than packed left, so on a wide viewport the statement sits
+ * at the start of the band and the commands sit at its end instead of leaving the ground beyond them
+ * empty.
+ */
+.refusal {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s4) var(--s7);
+  align-items: start;
+}
+
+.refusal-commands {
+  min-width: 0;
+}
+
+.refusal-commands .command-block:first-child {
+  margin-top: 0;
+}
+
+.tile > .refusal.has-commands {
+  grid-template-columns: minmax(0, var(--measure)) minmax(0, 36rem);
+  justify-content: space-between;
+}
+
+/* A tile that spans three of twelve has no room for two columns of anything. */
+.tile-stack .refusal.has-commands,
+.tile.is-anchor > .refusal.has-commands {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/*
+ * A group inside a tile: what follows from the tile's own statement, separated by air and a hairline
+ * lighter than the one between tiles, so a reader can tell a seam in the composition from a seam in
+ * an argument.
+ */
+.group {
+  margin-top: var(--s5);
+}
+
+.group + .group {
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--rule-soft);
+}
+
+/* A linked finding or goal has to clear the chrome it would otherwise open underneath. */
+.finding,
+section[id] {
+  scroll-margin-top: 120px;
+}
+
+.lede {
+  margin-top: var(--s3);
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.note {
+  margin-top: var(--s1);
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.more {
+  margin-top: var(--s4);
+  font-size: 12.5px;
+}
+
+/*
+ * The provenance is a tile too, so the document ends on a ground rather than on a page.
+ *
+ * It is also the tile that takes up the slack. On a report shorter than the window something has to
+ * reach the bottom, and it should not be the screen's own tiles: a refusal band stretched to 600px is
+ * a screen that reads as unfinished, where the same band at its own height above a field tile reads
+ * as a band. There is no page ground for the difference to fall through to.
+ */
 .footer {
-  margin-top: var(--s6);
-  padding-top: var(--s3);
-  border-top: var(--border-width) solid var(--border);
-  font-size: var(--t-xs);
+  flex: 1 1 auto;
+  padding-top: var(--s4);
+  padding-bottom: var(--s4);
+  gap: var(--s1);
+  justify-content: flex-start;
+}
+
+.footer p {
+  font-size: 11.5px;
+  color: var(--faint);
+  max-width: none;
 }
 
 .live-region {
   position: absolute;
   width: 1px;
   height: 1px;
+  margin: -1px;
   overflow: hidden;
   clip-path: inset(50%);
+  white-space: nowrap;
 }
 
-.standalone {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: var(--s6) var(--s4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-}
-
-/* ---------- progress ---------- */
-
-.progress-block {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  padding-top: var(--s2);
-}
-
-.progress {
-  flex: 1 1 200px;
-  height: 6px;
-  background: var(--bg-raised);
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.progress-fill {
-  display: block;
-  height: 100%;
-  width: var(--progress-share, 8%);
-  background: var(--accent);
-}
-
-.progress-label {
-  font-size: var(--t-xs);
-  color: var(--fg-muted);
-}
-
-/* ---------- panels ---------- */
-
-.section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s4);
-}
-
-.panel {
-  background: var(--bg-panel);
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--s4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-}
-
-.panel.highlighted {
-  border-color: var(--accent);
-  border-left-width: 3px;
-}
-
-.subpanel {
-  border-top: var(--border-width) solid var(--border);
-  padding-top: var(--s3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-}
-
-.section-heading {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-}
-
-.section-heading h3 {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s2);
-}
-
-.heading-count {
-  font-family: var(--font-mono);
-  font-size: var(--t-xs);
-  font-weight: 400;
-  color: var(--fg-muted);
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius);
-  padding: 0 var(--s1);
-}
-
-.heading-note {
-  font-size: var(--t-sm);
-}
-
-/* ---------- stats ---------- */
-
-.stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: var(--s2);
-}
-
-.stat {
-  border: var(--border-width) solid var(--border);
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--sheet);
+  color: var(--accent);
+  border: 1px solid var(--accent);
   border-radius: var(--radius);
   padding: var(--s2) var(--s3);
-  background: var(--bg-sunken);
+  z-index: 30;
+  font-size: 12.5px;
 }
 
-.stat-value {
-  font-size: var(--t-xl);
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
+.skip-link:focus {
+  left: var(--s3);
+  top: var(--s3);
 }
 
-.stat-label {
-  font-size: var(--t-xs);
-  color: var(--fg-muted);
-}
-
-.stat-note {
-  font-size: var(--t-xs);
-}
-
-/* ---------- definitions and tables ---------- */
-
-.definitions {
-  display: grid;
-  grid-template-columns: minmax(140px, max-content) 1fr;
-  gap: var(--s1) var(--s3);
-}
-
-.definitions.tight {
-  font-size: var(--t-sm);
-}
-
-.definition {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
-}
-
-.definition dt {
-  color: var(--fg-muted);
-  font-size: var(--t-sm);
-}
-
-.definition dd {
-  margin: 0;
-}
-
-.table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: var(--t-sm);
-}
-
-.table caption {
-  text-align: left;
-}
-
-.table th,
-.table td {
-  border-bottom: var(--border-width) solid var(--border);
-  padding: var(--s1) var(--s2);
-  text-align: left;
-  vertical-align: top;
-}
-
-.table thead th {
-  border-bottom: 2px solid var(--border-strong);
-  font-size: var(--t-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--fg-muted);
-  white-space: nowrap;
-}
-
-.table tbody tr:hover {
-  background: var(--bg-sunken);
-}
-
-.table td {
-  font-variant-numeric: tabular-nums;
-}
-
-.sort-button {
-  background: none;
-  border: 0;
-  padding: 0;
-  font: inherit;
-  color: inherit;
-  text-transform: inherit;
-  letter-spacing: inherit;
-  cursor: pointer;
-}
-
-.sort-button:hover {
-  color: var(--accent);
-}
-
-/* ---------- badges and chips ---------- */
-
-.badge {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--s1);
-  padding: 0 var(--s1);
-  border: var(--border-width) solid var(--badge-color, var(--border));
-  border-radius: var(--radius);
-  font-size: var(--t-xs);
-  color: var(--fg);
-  white-space: nowrap;
-}
-
-.badge-marker {
-  color: var(--badge-color, var(--fg-muted));
-  font-weight: 700;
-}
-
-.severity-critical {
-  --badge-color: var(--critical);
-}
-
-.severity-high {
-  --badge-color: var(--high);
-}
-
-.severity-medium {
-  --badge-color: var(--medium);
-}
-
-.severity-low {
-  --badge-color: var(--low);
-}
-
-.severity-info {
-  --badge-color: var(--info);
-}
-
-.basis-observed {
-  --badge-color: var(--basis-observed);
-}
-
-.basis-discovered {
-  --badge-color: var(--basis-discovered);
-}
-
-.basis-inferred {
-  --badge-color: var(--basis-inferred);
-}
-
-.basis-estimated {
-  --badge-color: var(--basis-estimated);
-}
-
-.basis-simulated {
-  --badge-color: var(--basis-simulated);
-}
-
-.basis-model_interpreted {
-  --badge-color: var(--basis-model-interpreted);
-}
-
-.chip {
-  display: inline-flex;
-  align-items: baseline;
-  padding: 0 var(--s1);
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-raised);
-  font-size: var(--t-xs);
-  white-space: nowrap;
-}
-
-.chip-good {
-  border-color: var(--good);
-}
-
-.chip-warn {
-  border-color: var(--warn);
-}
-
-.chip-bad {
-  border-color: var(--bad);
-}
-
-.chip-row {
+/* The loading, the failure and the no-report pages, which render before there is a rail to sit in. */
+.standalone {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: var(--s7) var(--s5);
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2);
+  flex-direction: column;
+  gap: var(--s3);
 }
 
-.confidence {
-  font-size: var(--t-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.bool {
-  white-space: nowrap;
-}
-
-.bool-true {
-  color: var(--good);
-}
-
-.bool-false {
-  color: var(--fg-muted);
-}
-
-.kind {
-  font-size: var(--t-xs);
-  color: var(--fg-muted);
-}
-
-/* ---------- controls ---------- */
+/* ══ controls ═════════════════════════════════════════════════════════════════════════════════ */
 
 .button {
-  font: inherit;
-  font-size: var(--t-sm);
-  padding: var(--s1) var(--s3);
-  border: var(--border-width) solid var(--border-strong);
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.4;
+  padding: 5px var(--s3);
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--rule);
   border-radius: var(--radius);
-  background: var(--bg-raised);
-  color: var(--fg);
   cursor: pointer;
+  text-align: left;
 }
 
 .button:hover:not(:disabled) {
@@ -732,123 +1416,157 @@ dl {
 }
 
 .button:disabled {
+  color: var(--faint);
+  border-color: var(--rule-soft);
   cursor: not-allowed;
-  color: var(--fg-muted);
-  border-style: dashed;
-  background: var(--bg-sunken);
 }
 
 .button.subtle {
-  background: none;
-  border-style: dashed;
+  border-color: transparent;
+  padding-left: 0;
+  padding-right: 0;
+  color: var(--muted);
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+}
+
+.button.subtle:hover:not(:disabled) {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 .link,
 .link-button {
-  color: var(--accent);
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
   background: none;
   border: 0;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
   padding: 0;
-  font: inherit;
-  text-align: left;
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-align: left;
+  text-decoration: none;
+}
+
+.link:hover,
+.link-button:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 .unsafe-link {
-  text-decoration: underline dotted;
-  color: var(--fg-muted);
+  border-bottom: 1px dashed var(--outline);
+  color: var(--muted);
 }
 
 .input {
-  font: inherit;
-  font-size: var(--t-sm);
-  padding: var(--s1) var(--s2);
-  border: var(--border-width) solid var(--border-strong);
+  font-family: inherit;
+  font-size: 12.5px;
+  padding: 5px var(--s2);
+  background: var(--sheet);
+  color: var(--ink);
+  border: 1px solid var(--rule);
   border-radius: var(--radius);
-  background: var(--bg);
-  color: var(--fg);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .field-label {
-  font-size: var(--t-xs);
-  color: var(--fg-muted);
   display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: var(--s1);
 }
 
 .filter-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s4);
+  gap: var(--s4) var(--s5);
+  margin-top: var(--s3);
   align-items: flex-start;
 }
 
 .filter-group {
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--s1) var(--s2) var(--s2);
-  margin: 0;
+  border: 0;
+  min-width: 0;
 }
 
 .filter-group legend {
-  font-size: var(--t-xs);
-  color: var(--fg-muted);
-  padding: 0 var(--s1);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: var(--s1);
 }
 
 .filter-options {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s1) var(--s2);
-  max-width: 520px;
 }
 
 .filter-option {
   display: inline-flex;
   align-items: center;
   gap: var(--s1);
-  font-size: var(--t-xs);
-  border: var(--border-width) solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px solid var(--rule);
   border-radius: var(--radius);
-  padding: 0 var(--s1);
+  padding: 2px var(--s2);
   cursor: pointer;
 }
 
-.filter-option.checked {
+.filter-option:hover {
   border-color: var(--accent);
-  color: var(--accent);
+}
+
+.filter-option.checked {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+
+.filter-option input {
+  accent-color: var(--accent);
+  margin: 0;
 }
 
 .filter-count {
-  font-family: var(--font-mono);
-  color: var(--fg-muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
 }
 
 .search-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-  min-width: 260px;
+  min-width: 220px;
 }
 
 .search-status {
-  font-size: var(--t-xs);
-  min-height: 1em;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+  margin-top: var(--s1);
 }
 
-.overlay-select {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
+.match-count {
+  margin-top: var(--s3);
+  font-size: 12.5px;
+  color: var(--muted);
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s3);
+  margin-top: var(--s3);
   align-items: flex-start;
-  padding-top: var(--s2);
 }
 
 .action {
@@ -858,377 +1576,536 @@ dl {
   max-width: 320px;
 }
 
-.action-reason {
-  font-size: var(--t-xs);
-  color: var(--fg-muted);
-  border-left: 2px solid var(--warn);
-  padding-left: var(--s2);
-}
-
+.action-reason,
 .action-result {
-  font-size: var(--t-xs);
-}
-
-.action-result.good {
-  color: var(--good);
-}
-
-.action-result.bad {
-  color: var(--bad);
-}
-
-/* ---------- callouts and empty states ---------- */
-
-.callout {
-  border: var(--border-width) solid var(--callout-color, var(--border));
-  border-left-width: 3px;
-  border-radius: var(--radius);
-  padding: var(--s2) var(--s3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-  background: var(--bg-sunken);
-}
-
-.callout-info {
-  --callout-color: var(--accent);
-}
-
-.callout-warn {
-  --callout-color: var(--warn);
-}
-
-.callout-bad {
-  --callout-color: var(--bad);
-}
-
-.callout-good {
-  --callout-color: var(--good);
-}
-
-.callout-title {
-  font-weight: 600;
-  font-size: var(--t-sm);
-  display: flex;
-  gap: var(--s2);
-  align-items: baseline;
-}
-
-.callout-marker {
-  color: var(--callout-color, var(--fg-muted));
-  font-weight: 700;
-  font-family: var(--font-mono);
-}
-
-.callout-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  font-size: var(--t-sm);
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  border: var(--border-width) dashed var(--border-strong);
-  border-radius: var(--radius);
-  padding: var(--s4);
-}
-
-.problems {
-  font-size: var(--t-sm);
-  color: var(--bad);
+  font-size: 11.5px;
+  color: var(--muted);
 }
 
 .command-block {
+  margin-top: var(--s3);
+}
+
+.command-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: var(--s1);
+}
+
+.command {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 400;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  color: var(--ink);
+  white-space: pre;
+  min-width: 0;
+}
+
+/* A determinate count only, never an invented percentage: the total is the requests actually made. */
+.progress-block {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  padding: var(--s1) var(--s3);
+}
+
+.progress {
+  height: 2px;
+  background: var(--rule-soft);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  display: block;
+  height: 100%;
+  width: var(--progress-share, 8%);
+  background: var(--ink);
+}
+
+.progress-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+  margin-top: 2px;
+}
+
+/* A tile like everything else, marked at its top edge by the accent, because a shortcut panel is a
+   fact about the interface and never about the report. */
+.help-panel {
+  border-top: 2px solid var(--accent);
+}
+
+.help-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-bottom: var(--s3);
+}
+
+/* ══ definitions and tables ═══════════════════════════════════════════════════════════════════ */
+
+/* The value column is prose, so it stops at the measure like every other run of prose. Without the cap
+   a definition list in a full width band set `deterministic and offline` across 1240 pixels. */
+.definitions {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: var(--s2) var(--s4);
+  font-size: 12.5px;
+  margin-top: var(--s3);
+  max-width: calc(150px + var(--s4) + var(--measure));
+}
+
+.definition {
+  display: contents;
+}
+
+.definition dt {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding-top: 2px;
+}
+
+.definition dd {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  margin-top: var(--s3);
+}
+
+.table caption {
+  text-align: left;
+  color: var(--muted);
+  font-size: 12px;
+  padding-bottom: var(--s2);
+}
+
+.table th,
+.table td {
+  text-align: left;
+  vertical-align: baseline;
+  padding: var(--s2) var(--s3) var(--s2) 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.table thead th {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+
+.table tbody th {
+  font-weight: 500;
+}
+
+.table td {
+  color: var(--muted);
+}
+
+.table .num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sort-button {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.sort-button:hover {
+  color: var(--accent);
+}
+
+/* ══ findings ═════════════════════════════════════════════════════════════════════════════════ */
+
+.finding {
+  display: block;
+}
+
+.finding-list {
+  margin-top: var(--s3);
+}
+
+.evidence-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin-top: var(--s2);
+  list-style: none;
+}
+
+.evidence {
+  border-left: 1px solid var(--rule);
+  padding-left: var(--s3);
+}
+
+/* Evidence that is referenced and absent is outlined rather than tinted: the dash is the signal. */
+.evidence.missing {
+  border-left-style: dashed;
+  border-left-color: var(--outline);
+}
+
+.evidence-headline {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+  margin-top: var(--s1);
+  max-width: none;
+}
+
+.steps {
+  padding-left: var(--s4);
+  font-size: 12.5px;
+  color: var(--muted);
   display: flex;
   flex-direction: column;
   gap: var(--s1);
 }
 
-.command-label {
-  font-size: var(--t-xs);
-  color: var(--fg-muted);
-}
-
-.command {
-  margin: 0;
-  padding: var(--s2);
-  background: var(--bg-sunken);
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius);
-  overflow-x: auto;
-  white-space: pre;
-}
-
-/* ---------- map ---------- */
-
-.map-layout {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--s4);
-}
-
-@media (min-width: 1200px) {
-  .map-layout {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-.canvas-block {
+.location {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: baseline;
   gap: var(--s2);
 }
+
+/* ══ map ══════════════════════════════════════════════════════════════════════════════════════ */
 
 .canvas-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s2);
+  margin-top: var(--s3);
 }
 
 .canvas-hint {
-  font-size: var(--t-xs);
-  flex: 1 1 240px;
+  font-size: 11.5px;
+  color: var(--faint);
+  flex: 1 1 200px;
+  min-width: 0;
 }
 
+/* A concentric layout is square, so a shallow band wasted more than half the column and forced the
+   camera to shrink everything into the middle of it. */
 .canvas {
-  height: var(--canvas-height, 420px);
-  border: var(--border-width) solid var(--border);
+  height: var(--canvas-height, 640px);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid var(--rule);
   border-radius: var(--radius);
-  background: var(--bg-sunken);
+  margin-top: var(--s3);
+  background: var(--sheet);
 }
 
 .legend {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--s2);
-  font-size: var(--t-xs);
-}
-
-.legend-title {
-  font-weight: 600;
-  font-size: var(--t-sm);
+  margin-top: var(--s3);
 }
 
 .legend-stops {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s1) var(--s3);
+  gap: var(--s2) var(--s4);
   list-style: none;
+  margin-top: var(--s2);
 }
 
 .legend-stop {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s1);
-}
-
-.legend-swatch {
-  width: 12px;
-  height: 12px;
-  border: var(--border-width) solid var(--border-strong);
-  border-radius: 2px;
-  background: var(--swatch, var(--neutral-swatch));
-  display: inline-block;
-}
-
-.legend-neutral {
-  --swatch: var(--neutral-swatch);
-}
-
-.legend-value {
-  font-family: var(--font-mono);
-}
-
-.legend-caveat {
-  color: var(--warn);
-}
-
-/* ---------- treegrid ---------- */
-
-.treegrid-wrap {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: var(--s2);
 }
 
-.treegrid-scroll {
-  border: var(--border-width) solid var(--border);
+.legend-swatch {
+  width: 11px;
+  height: 11px;
   border-radius: var(--radius);
-  overflow-x: auto;
+  background: var(--swatch, var(--ink));
+  flex: none;
+}
+
+.legend-swatch.legend-neutral {
+  background: transparent;
+  border: 1px solid var(--outline);
+}
+
+.legend-value {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* ══ treegrid ═════════════════════════════════════════════════════════════════════════════════ */
+
+.treegrid-scroll {
+  overflow: auto;
+  min-width: 0;
+  max-height: var(--viewport-height, 420px);
+  margin-top: var(--s3);
+  border-top: 1px solid var(--rule);
 }
 
 .tg-table {
-  border-collapse: collapse;
-  table-layout: fixed;
   width: 100%;
-  min-width: 720px;
-  font-size: var(--t-sm);
+  border-collapse: collapse;
+  font-size: 12px;
 }
 
 .tg-table th,
 .tg-table td {
   text-align: left;
-  font-weight: 400;
-}
-
-.tg-table th:first-child {
-  width: 28%;
+  padding: var(--s1) var(--s3) var(--s1) 0;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--rule-soft);
 }
 
 .tg-row {
   height: var(--tg-row-height, 28px);
-  border-bottom: var(--border-width) solid var(--border);
-}
-
-.tg-head {
-  background: var(--bg-raised);
-  font-size: var(--t-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--fg-muted);
 }
 
 .tg-cell {
-  padding: 0 var(--s2);
-  height: var(--tg-row-height, 28px);
-  line-height: calc(var(--tg-row-height, 28px) - 2px);
+  color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  box-sizing: border-box;
-}
-
-.tg-name {
-  font-variant-numeric: normal;
+  max-width: 240px;
 }
 
 .tg-head .tg-cell {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
   position: sticky;
   top: 0;
-  z-index: 1;
-  background: var(--bg-raised);
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
 }
 
-.tg-level-1 {
-  background: var(--bg-sunken);
-  cursor: pointer;
+.tg-name {
+  color: var(--ink);
+  font-weight: 400;
 }
 
 .tg-level-1 .tg-name {
-  font-weight: 600;
-}
-
-.tg-level-2 {
-  cursor: pointer;
+  font-weight: 500;
 }
 
 .tg-level-2:hover {
-  background: var(--bg-sunken);
+  background: var(--rule-soft);
 }
 
 .tg-row.selected {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-  background: var(--bg-raised);
+  background: var(--rule-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
-.tg-spacer {
-  height: var(--spacer-height, 0);
+.tg-twisty {
+  display: inline-block;
+  width: 14px;
+  color: var(--faint);
+}
+
+.tg-indent {
+  display: inline-block;
+  width: 14px;
+}
+
+/* The fill rule, in the components table. A filled square ran; a hollow one was only declared. */
+.presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.presence i {
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  flex: none;
+}
+
+.presence.is-met i {
+  background: var(--ink);
+}
+
+.presence.is-unmet i {
+  border: 1px solid var(--outline);
+}
+
+.presence.is-unknown i {
+  border: 1px dashed var(--outline);
+}
+
+/* A component referenced by a finding and absent from the graph, which is a defect worth naming. */
+.tg-note {
+  margin-left: var(--s2);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  border-bottom: 1px dashed var(--outline);
 }
 
 .tg-spacer td {
+  height: var(--spacer-height, 0);
   padding: 0;
   border: 0;
 }
 
-.tg-twisty {
-  font-family: var(--font-mono);
-  display: inline-block;
-  width: 1em;
-}
+/* ══ blocks assembled from the primitives ═════════════════════════════════════════════════════ */
 
-.tg-indent {
-  width: var(--s4);
-  display: inline-block;
-}
-
-.tg-note {
-  font-size: var(--t-xs);
-  color: var(--warn);
-  border: var(--border-width) solid var(--warn);
-  border-radius: var(--radius);
-  padding: 0 var(--s1);
-}
-
-/* ---------- windowed lists ---------- */
-
-.virtual {
+.details {
   display: flex;
   flex-direction: column;
-  gap: var(--s1);
+  gap: var(--s2);
+  margin-top: var(--s3);
 }
 
-.virtual-note {
-  font-size: var(--t-xs);
+.edge-row {
+  border-left: 1px solid var(--rule);
+  padding-left: var(--s3);
 }
+
+.edge-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s2);
+  font-size: 13px;
+}
+
+.finding-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.run-card {
+  border-top: 1px dashed var(--rule);
+  padding-top: var(--s3);
+  margin-top: var(--s3);
+}
+
+/* Three verdicts, three words. A colour would have to read as good or bad, and skipped is neither. */
+.evaluator {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s2);
+}
+
+.verdict {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  min-width: 7ch;
+}
+
+.withheld {
+  margin-top: var(--s3);
+}
+
+/* The two selects in the filter bar. One width so they read as one row of controls. */
+.field-select {
+  min-width: 180px;
+}
+
+/* Stacked in a tool rail, the filter groups are one per row rather than a wrapped bar. */
+.workbench-controls .filter-bar {
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.workbench-controls .search-field,
+.workbench-controls .field-select {
+  min-width: 0;
+  width: 100%;
+}
+
+.workbench-controls .input {
+  width: 100%;
+}
+
+.canvas-block {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ══ windowed lists ═══════════════════════════════════════════════════════════════════════════ */
 
 .virtual-viewport {
-  height: var(--viewport-height, 480px);
   overflow-y: auto;
+  max-height: var(--viewport-height, 420px);
 }
 
 .virtual-spacer {
   height: var(--spacer-height, 0);
 }
 
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
+.virtual-note {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+  margin-top: var(--s2);
 }
 
-/* ---------- bars ---------- */
+/* ══ measurement bars ═════════════════════════════════════════════════════════════════════════ */
 
 .bar-row {
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) minmax(80px, 3fr) minmax(80px, auto);
+  grid-template-columns: minmax(0, 160px) minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--s2);
-  font-size: var(--t-sm);
-}
-
-.bar {
-  display: block;
-  height: 10px;
-  background: var(--bg-raised);
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.bar-fill {
-  display: block;
-  height: 100%;
-  width: var(--bar-share, 0%);
-  background: var(--accent);
-}
-
-.bar-warn .bar-fill {
-  background: var(--warn);
-}
-
-.bar-value {
-  font-family: var(--font-mono);
-  font-size: var(--t-xs);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
+  gap: var(--s3);
+  height: 26px;
+  font-size: 12px;
 }
 
 .bar-label {
@@ -1237,291 +2114,195 @@ dl {
   white-space: nowrap;
 }
 
-/* ---------- findings ---------- */
-
-.finding {
-  border: var(--border-width) solid var(--border);
-  border-left-width: 3px;
-  border-radius: var(--radius);
-  padding: var(--s3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  background: var(--bg-panel);
+.measure-bar {
+  height: 6px;
+  background: var(--rule-soft);
+  border-radius: 1px;
+  overflow: hidden;
 }
 
-.finding-risk {
-  border-left-color: var(--bad);
+.measure-fill {
+  display: block;
+  height: 100%;
+  width: var(--bar-share, 0%);
+  background: var(--ink);
 }
 
-.finding-strength {
-  border-left-color: var(--good);
+.bar-value {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
-.finding-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
+/* ══ narrow ═══════════════════════════════════════════════════════════════════════════════════ */
+
+/*
+ * Below this a row of three tiles gives each of them under 400px, which is less than the narrowest
+ * thing any of them holds. The bento becomes two tracks: the anchor and the stage share a row and the
+ * stack takes the next one. The tiles still tile, because the hairline is the only separator either
+ * way and none of these rules restores a gutter.
+ */
+/*
+ * Two rows below this. Measured, the eight pills are 861px, the mark and the longest project name in
+ * the corpus are 269px, and the two icons are 84px; the outer tracks have to be equal for the
+ * navigation to sit on the middle of the page, so one row needs 861 + 269 * 2, which is 1399.
+ */
+@media (max-width: 1400px) {
+  .chrome {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .chrome-nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .nav-list {
+    justify-content: flex-start;
+  }
 }
 
-.finding-title {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s2);
+@media (max-width: 1180px) {
+  .tile.is-anchor,
+  .tile.is-stage {
+    grid-column: span 6;
+    grid-row: span 1;
+  }
+
+  .tile-stack {
+    grid-column: span 12;
+    grid-row: span 1;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-rows: auto;
+  }
+
+  .workbench {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workbench-controls .filter-bar {
+    flex-direction: row;
+    gap: var(--s4) var(--s5);
+  }
+
+  .workbench-controls .search-field,
+  .workbench-controls .field-select {
+    width: auto;
+    min-width: 220px;
+  }
+
+  /* `.is-prose` is named as well as `.lead-head`, because its own two column rule is the more
+     specific one and would otherwise survive this override and take 68ch of a 390px screen. */
+  .lead-head,
+  .lead-head.is-prose {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s4);
+  }
+
+  .tile > .refusal.has-commands {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
-.finding-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2);
-  font-size: var(--t-xs);
-}
+@media (max-width: 880px) {
+  /* A phone has no room for a sticky bar: it would take a fifth of the screen and never give it back. */
+  .chrome {
+    position: static;
+    padding: var(--s4);
+  }
 
-.finding-explanation,
-.finding-impact {
-  font-size: var(--t-sm);
-  max-width: 76ch;
-}
+  .nav-list {
+    justify-content: flex-start;
+  }
 
-.finding-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-  border-top: var(--border-width) solid var(--border);
-  padding-top: var(--s3);
-}
+  .chrome-menu-body {
+    min-width: 0;
+    width: calc(100vw - var(--s4) * 2);
+    right: auto;
+    left: 0;
+  }
 
-.finding-link {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s2);
-}
+  /* One tile to a row, still edge to edge, still one hairline between them. */
+  .tile,
+  .tile.is-anchor,
+  .tile.is-stage,
+  .tile-stack {
+    grid-column: span 12;
+    grid-row: span 1;
+    min-height: 0;
+  }
 
-.steps {
-  padding-left: var(--s5);
-  font-size: var(--t-sm);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-}
+  .tile {
+    padding: var(--s4);
+  }
 
-.severity-counts {
-  font-size: var(--t-sm);
-}
+  .tile-stack {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+  }
 
-/* ---------- overview: identity, risks, next steps ---------- */
+  .lead-head,
+  .lead-head.is-prose {
+    grid-template-columns: minmax(0, 1fr);
+  }
 
-.report-meta {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-  font-size: var(--t-sm);
-}
+  .lead-head .readout {
+    justify-content: flex-start;
+  }
 
-.risk-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-}
+  .finding,
+  section[id] {
+    scroll-margin-top: var(--s3);
+  }
 
-.risk {
-  border-left: 3px solid var(--border-strong);
-  padding-left: var(--s3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-}
+  .canvas-hint {
+    flex: 1 1 100%;
+  }
 
-.risk-head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s2);
-  flex-wrap: wrap;
-}
+  .canvas {
+    --canvas-height: 420px;
+  }
+  /* 120 cells, 119 gaps and a boundary have to fit 358px, so a cell is a hairline of its own. The
+     proportion is still the proportion; what a phone loses is the ability to count the cells, which
+     the caption and the key beside the bar carry as numbers anyway. */
+  .bar.dense .cell {
+    min-width: 1px;
+  }
 
-.risk-title {
-  font-size: var(--t-md);
-  font-weight: 600;
-  text-align: left;
-}
+  .display {
+    font-size: 26px;
+  }
 
-.risk-impact {
-  font-size: var(--t-sm);
-}
+  .figure {
+    font-size: 40px;
+  }
 
-.next-actions {
-  list-style: decimal;
-  padding-left: var(--s5);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s4);
-}
+  .stat-row {
+    gap: var(--s4);
+  }
 
-.next-action {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-}
+  details.row > summary {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
 
-.next-action-title {
-  font-weight: 600;
-}
+  .row-meta {
+    display: none;
+  }
 
-/* ---------- disclosure ---------- */
+  details.row {
+    --row-indent: 0px;
+  }
 
-.disclosure {
-  border-top: var(--border-width) solid var(--border);
-  padding-top: var(--s2);
-}
+  .definitions {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px var(--s3);
+  }
 
-/* The native marker is kept: it is the affordance a reader already recognises, and `details` announces its
-   own expanded state, so a decorative glyph would only add noise for a screen reader. */
-.disclosure-summary {
-  cursor: pointer;
-  font-size: var(--t-sm);
-  color: var(--fg-muted);
-}
-
-.disclosure-summary .heading-count {
-  margin-left: var(--s2);
-}
-
-.disclosure-summary:hover {
-  color: var(--fg);
-}
-
-.disclosure-summary:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
-
-.disclosure-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  padding-top: var(--s2);
-}
-
-/* ---------- evidence ---------- */
-
-.evidence-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-}
-
-.evidence {
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--s2);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-  background: var(--bg-sunken);
-}
-
-.evidence.missing {
-  border-color: var(--warn);
-  border-style: dashed;
-}
-
-.evidence-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2);
-  font-size: var(--t-xs);
-}
-
-.evidence-headline {
-  font-size: var(--t-sm);
-  font-family: var(--font-mono);
-  overflow-wrap: anywhere;
-}
-
-/* ---------- details panel ---------- */
-
-.details {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-}
-
-.details-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-}
-
-.details-tags {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2);
-}
-
-.details-description {
-  font-size: var(--t-sm);
-  max-width: 76ch;
-}
-
-.edge-row {
-  border-left: 2px solid var(--border);
-  padding-left: var(--s2);
-}
-
-.edge-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--s2);
-}
-
-.location {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2);
-}
-
-.experiments {
-  padding-top: var(--s2);
-}
-
-.run-card {
-  border-top: var(--border-width) dashed var(--border);
-  padding-top: var(--s2);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-}
-
-.verdict-reason {
-  font-size: var(--t-sm);
-  max-width: 76ch;
-}
-
-.withheld {
-  font-size: var(--t-xs);
-}
-
-/* ---------- help panel ---------- */
-
-.help-panel {
-  border: var(--border-width) solid var(--accent);
-  border-radius: var(--radius);
-  padding: var(--s4);
-  background: var(--bg-panel);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-  margin-top: var(--s3);
-}
-
-.help-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s3);
+  .definition dd {
+    margin-bottom: var(--s2);
+  }
 }

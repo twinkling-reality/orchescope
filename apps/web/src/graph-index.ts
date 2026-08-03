@@ -39,6 +39,14 @@ export interface GraphIndex {
   readonly scenarioIdsByComponent: ReadonlyMap<string, readonly string[]>;
   readonly runtimeOnly: ReadonlySet<string>;
   readonly neverExercised: ReadonlySet<string>;
+  /**
+   * How many relations touch each component, counting both directions.
+   *
+   * The map draws the busiest component at its centre, and the canvas is hidden from assistive
+   * technology, so the same ordering has to be reachable from the components table. Without it "which
+   * thing does everything hang off" is answerable only by looking at a picture.
+   */
+  readonly degreeByComponent: ReadonlyMap<string, number>;
   /** True when the report has runs, so absence of runtime evidence carries meaning. */
   readonly hasRuntimeEvidence: boolean;
   readonly componentKinds: readonly string[];
@@ -206,6 +214,13 @@ export function buildGraphIndex(bundle: ReportBundle): GraphIndex {
     push(incoming, edge.to, edge);
   }
 
+  const degreeByComponent = new Map<string, number>();
+  const count = (id: string) => degreeByComponent.set(id, (degreeByComponent.get(id) ?? 0) + 1);
+  for (const edge of edges) {
+    count(edge.from);
+    if (edge.to !== edge.from) count(edge.to);
+  }
+
   const findingsByComponent = new Map<string, Finding[]>();
   for (const finding of bundle.findings) {
     for (const componentId of finding.components) {
@@ -250,6 +265,7 @@ export function buildGraphIndex(bundle: ReportBundle): GraphIndex {
     scenarioIdsByComponent,
     runtimeOnly,
     neverExercised,
+    degreeByComponent,
     hasRuntimeEvidence,
     componentKinds: sortedUnique(components.map((component) => component.kind)),
     edgeKinds: sortedUnique(edges.map((edge) => edge.kind)),

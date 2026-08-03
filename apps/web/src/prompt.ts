@@ -28,8 +28,11 @@ export function describeAcceptanceCheck(check: Check): string {
       return `metric ${check.metric} no worse than baseline within ${check.tolerance}`;
     case 'scenario_passes':
       return `scenario ${check.scenarioId} passes`;
+    // Not the identifier the check carries: a finding identifier is renumbered by any rescan that
+    // changes the finding set, so quoting it here would send a reader, or the agent handed this
+    // prompt, to whichever finding had since inherited the number.
     case 'finding_resolved':
-      return `finding ${check.findingId} no longer reported`;
+      return 'the finding this goal was created from is no longer reported';
     case 'command_succeeds':
       return `command succeeds: ${formatArgv(check.command)}`;
     case 'manual_review':

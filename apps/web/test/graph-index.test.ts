@@ -9,7 +9,7 @@ import {
   describeComponent,
   resolveEvidence,
 } from '../src/graph-index.ts';
-import { LAYOUT_X_KEY, LAYOUT_Y_KEY } from '../src/layout.ts';
+import { MAP_LAYOUT_KEYS, positionsFor } from '../src/layout.ts';
 import { bundle, component, finding, metrics } from './fixture.ts';
 
 function edge(overrides: Partial<Edge> & Pick<Edge, 'id' | 'from' | 'to'>): Edge {
@@ -309,20 +309,55 @@ describe('buildGraphIndex', () => {
   });
 
   it('reads stored layout coordinates and reports the ones it had to place itself', () => {
+    const ringKeys = MAP_LAYOUT_KEYS[0];
+    assert.ok(ringKeys !== undefined);
     const base = bundle();
     const index = buildGraphIndex(
       withGraph({
         graph: {
           ...base.graph,
           components: [
-            component({ id: 'agent:a', metadata: { [LAYOUT_X_KEY]: 1, [LAYOUT_Y_KEY]: 2 } }),
+            component({
+              id: 'agent:a',
+              metadata: { [ringKeys.x]: 1, [ringKeys.y]: 2 },
+            }),
             component({ id: 'agent:b' }),
           ],
         },
       }),
     );
-    assert.deepEqual(index.layout.positions.get('agent:a'), { x: 1, y: 2 });
-    assert.deepEqual(index.layout.fallbackIds, ['agent:b']);
+    assert.deepEqual(positionsFor(index.layout, 'concentric').get('agent:a'), { x: 1, y: 2 });
+    assert.deepEqual(index.layout.unplacedIds, ['agent:b']);
+    assert.equal(index.layout.placedIds.has('agent:b'), false);
+  });
+
+  /**
+   * The map draws the busiest component at its centre and is hidden from assistive technology, so the
+   * same ordering has to be answerable from the components table. A self relation counts once, because
+   * it is one relation.
+   */
+  it('counts how many relations touch each component, in both directions', () => {
+    const base = bundle();
+    const index = buildGraphIndex(
+      withGraph({
+        graph: {
+          ...base.graph,
+          components: [
+            component({ id: 'agent:hub' }),
+            component({ id: 'tool:one' }),
+            component({ id: 'tool:two' }),
+          ],
+          edges: [
+            edge({ id: 'edge:1', from: 'agent:hub', to: 'tool:one' }),
+            edge({ id: 'edge:2', from: 'agent:hub', to: 'tool:two' }),
+            edge({ id: 'edge:3', from: 'agent:hub', to: 'agent:hub' }),
+          ],
+        },
+      }),
+    );
+    assert.equal(index.degreeByComponent.get('agent:hub'), 3);
+    assert.equal(index.degreeByComponent.get('tool:one'), 1);
+    assert.equal(index.degreeByComponent.get('tool:two'), 1);
   });
 });
 

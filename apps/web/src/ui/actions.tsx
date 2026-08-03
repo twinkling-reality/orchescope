@@ -67,9 +67,7 @@ export function CapabilityAction(props: {
           {state.reason}
         </p>
       )}
-      {outcome === null ? null : (
-        <p class={outcome.ok ? 'action-result good' : 'action-result bad'}>{outcome.message}</p>
-      )}
+      {outcome === null ? null : <p class="action-result">{outcome.message}</p>}
       {props.children}
     </div>
   );
@@ -104,7 +102,7 @@ export function CopyButton(props: {
         {props.label}
       </button>
       {state === 'idle' ? null : (
-        <p class={state === 'copied' ? 'action-result good' : 'action-result bad'}>
+        <p class="action-result">
           {state === 'copied'
             ? 'Copied.'
             : 'The clipboard is not available here. Select the text and copy it manually.'}

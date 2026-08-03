@@ -11,7 +11,7 @@ import { formatInteger } from '../format.ts';
 import type { GraphIndex } from '../graph-index.ts';
 import { useApp } from '../store.tsx';
 import { CapabilityAction } from './actions.tsx';
-import { BasisBadge, Callout, Chip } from './atoms.tsx';
+import { BasisChip, DefinitionList, Meta, RefusalPanel } from './primitives.tsx';
 
 const OPEN_LOCATION: CapabilityName = 'open_source_location';
 
@@ -53,7 +53,7 @@ export function EvidenceRecord(props: { readonly evidenceId: string; readonly in
   if (record === undefined) {
     return (
       <li class="evidence missing">
-        <p>
+        <p class="small">
           {`Evidence ${props.evidenceId} is referenced but is not included in this report bundle.`}
         </p>
       </li>
@@ -63,21 +63,20 @@ export function EvidenceRecord(props: { readonly evidenceId: string; readonly in
   const location = evidenceLocation(record);
   return (
     <li class="evidence">
-      <div class="evidence-head">
-        <Chip label={view.kindLabel} title={`Evidence kind: ${view.kind}`} />
-        <BasisBadge basis={view.basis} />
-        <span class="mono muted">{view.id}</span>
-        <span class="muted">{`produced by ${view.producer}`}</span>
-      </div>
+      <Meta>
+        <span>{view.kindLabel}</span>
+        <BasisChip basis={view.basis} />
+        <span>{view.id}</span>
+        <span>{`produced by ${view.producer}`}</span>
+      </Meta>
       <p class="evidence-headline">{view.headline}</p>
-      <dl class="definitions tight">
-        {view.fields.map((field) => (
-          <div class="definition" key={field.label}>
-            <dt>{field.label}</dt>
-            <dd class={field.code === true ? 'mono' : undefined}>{field.value}</dd>
-          </div>
-        ))}
-      </dl>
+      <DefinitionList
+        rows={view.fields.map((field) => ({
+          label: field.label,
+          value: field.value,
+          ...(field.code === true ? { code: true } : {}),
+        }))}
+      />
       {location === null ? null : <OpenLocationAction file={location.file} line={location.line} />}
     </li>
   );
@@ -88,22 +87,30 @@ export function EvidenceList(props: {
   readonly index: GraphIndex;
 }) {
   if (props.evidenceIds.length === 0) {
-    return <Callout tone="warn" title="This claim carries no evidence references." />;
+    return (
+      <RefusalPanel title="This claim carries no evidence references.">
+        <p>
+          A finding without evidence is an assertion. This one reached the report anyway so that the
+          gap is visible rather than silently absent.
+        </p>
+      </RefusalPanel>
+    );
   }
   const missing = props.evidenceIds.filter((id) => !props.index.evidenceById.has(id));
   return (
-    <div class="evidence-list">
+    <>
       {missing.length === 0 ? null : (
-        <Callout
-          tone="warn"
-          title={`${formatInteger(missing.length)} evidence records are referenced but absent from this bundle.`}
-        />
+        <RefusalPanel
+          title={`${formatInteger(missing.length)} evidence records are referenced and absent from this bundle.`}
+        >
+          <p>They are listed below by identifier, so nothing is quietly dropped.</p>
+        </RefusalPanel>
       )}
-      <ul class="plain">
+      <ul class="evidence-list">
         {props.evidenceIds.map((id) => (
           <EvidenceRecord key={id} evidenceId={id} index={props.index} />
         ))}
       </ul>
-    </div>
+    </>
   );
 }

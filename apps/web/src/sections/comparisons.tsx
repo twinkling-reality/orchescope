@@ -1,6 +1,13 @@
 /**
  * Baseline against candidate. Sample sizes are shown on both sides of every delta and the caveat is
  * shown next to it, because a percentage computed from three runs against two is not a comparison.
+ *
+ * One comparison is one bento. The band is the verdict and the reason for it. The anchor is what the
+ * comparison does not establish, because the limitation is the part a reader skips and the part that
+ * decides whether the verdict means anything: a verdict of unchanged from one run against one is a
+ * refusal, not a result, and it belongs on the ground the eye goes to first. The stage carries the
+ * two sides and the acceptance criteria, the stack the graph and finding deltas, and the table of
+ * metric deltas is an evidence tile below with nothing folded away.
  */
 
 import type { Comparison, ComparisonSide } from '@orchescope/schema';
@@ -15,13 +22,14 @@ import {
 } from '../format.ts';
 import { useApp } from '../store.tsx';
 import {
-  BooleanValue,
-  Callout,
-  Chip,
   DefinitionList,
-  EmptyState,
-  SectionHeading,
-} from '../ui/atoms.tsx';
+  Eyebrow,
+  Meta,
+  RefusalPanel,
+  RuledStat,
+  State,
+  StatRow,
+} from '../ui/primitives.tsx';
 
 function describeSide(side: ComparisonSide): string {
   const git =
@@ -32,36 +40,10 @@ function describeSide(side: ComparisonSide): string {
   return `${side.label}: ${humanise(side.kind)} ${side.reference}${git}, ${runs}`;
 }
 
-function verdictTone(verdict: Comparison['verdict']): 'good' | 'bad' | 'warn' | 'neutral' {
-  if (verdict === 'improved') {
-    return 'good';
-  }
-  if (verdict === 'regressed') {
-    return 'bad';
-  }
-  if (verdict === 'insufficient_evidence') {
-    return 'warn';
-  }
-  return 'neutral';
-}
-
-function directionTone(direction: string): 'good' | 'bad' | 'warn' | 'neutral' {
-  if (direction === 'improved') {
-    return 'good';
-  }
-  if (direction === 'regressed') {
-    return 'bad';
-  }
-  if (direction === 'indeterminate') {
-    return 'warn';
-  }
-  return 'neutral';
-}
-
 function MetricDeltas(props: { readonly comparison: Comparison }) {
   const { metricDeltas } = props.comparison;
   if (metricDeltas.length === 0) {
-    return <p class="muted">No metric was compared.</p>;
+    return <p class="note">No metric was compared.</p>;
   }
   return (
     <div class="scroll-x">
@@ -86,39 +68,37 @@ function MetricDeltas(props: { readonly comparison: Comparison }) {
                 {delta.metric}
                 <span class="muted">{` (${delta.unit})`}</span>
               </th>
-              <td>
+              <td class="num">
                 {delta.baseline === undefined ? (
                   <span class="muted">not measured</span>
                 ) : (
                   formatNumber(delta.baseline)
                 )}
               </td>
-              <td>
+              <td class="num">
                 {delta.candidate === undefined ? (
                   <span class="muted">not measured</span>
                 ) : (
                   formatNumber(delta.candidate)
                 )}
               </td>
-              <td>
+              <td class="num">
                 {delta.absoluteChange === undefined ? (
                   <span class="muted">{UNKNOWN}</span>
                 ) : (
                   formatNumber(delta.absoluteChange)
                 )}
               </td>
-              <td>
+              <td class="num">
                 {delta.relativeChange === undefined ? (
                   <span class="muted">{UNKNOWN}</span>
                 ) : (
                   formatPercent(delta.relativeChange)
                 )}
               </td>
-              <td>{formatInteger(delta.baselineSamples)}</td>
-              <td>{formatInteger(delta.candidateSamples)}</td>
-              <td>
-                <Chip label={humanise(delta.direction)} tone={directionTone(delta.direction)} />
-              </td>
+              <td class="num">{formatInteger(delta.baselineSamples)}</td>
+              <td class="num">{formatInteger(delta.candidateSamples)}</td>
+              <td>{humanise(delta.direction)}</td>
               <td>{delta.caveat ?? <span class="muted">none recorded</span>}</td>
             </tr>
           ))}
@@ -133,9 +113,8 @@ function GraphDeltaBlock(props: { readonly comparison: Comparison }) {
   const delta = props.comparison.graphDelta;
   if (delta === undefined) {
     return (
-      <div class="subpanel">
-        <SectionHeading title="Graph delta" />
-        <p class="muted">This comparison did not compare the graphs.</p>
+      <div class="tile-body">
+        <p class="note">This comparison did not compare the graphs.</p>
       </div>
     );
   }
@@ -146,8 +125,7 @@ function GraphDeltaBlock(props: { readonly comparison: Comparison }) {
     { label: 'Relations removed', ids: delta.removedEdges },
   ];
   return (
-    <div class="subpanel">
-      <SectionHeading title="Graph delta" />
+    <div class="tile-body">
       <DefinitionList
         rows={rows.map((row) => ({
           label: row.label,
@@ -159,7 +137,7 @@ function GraphDeltaBlock(props: { readonly comparison: Comparison }) {
         }))}
       />
       {delta.renamedComponents.length === 0 ? null : (
-        <ul class="plain">
+        <ul class="plain small">
           {delta.renamedComponents.map((rename) => (
             <li key={`${rename.from}->${rename.to}`} class="mono">
               {`${rename.from} → ${rename.to}`}
@@ -168,7 +146,7 @@ function GraphDeltaBlock(props: { readonly comparison: Comparison }) {
         </ul>
       )}
       {delta.changedComponents.length === 0 ? null : (
-        <ul class="plain">
+        <ul class="plain small">
           {delta.changedComponents.map((changed) => (
             <li key={changed.componentId}>
               <button
@@ -195,110 +173,170 @@ export function ComparisonsSection() {
 
   if (comparisons.length === 0) {
     return (
-      <div class="section">
-        <section class="panel">
-          <EmptyState
-            title="No comparison has been made"
-            body="A comparison measures a candidate against a baseline and refuses to call the result an improvement unless the success rate holds and the sample sizes support it."
+      <div class="bento">
+        <section class="tile is-band">
+          <Eyebrow level={3}>Comparisons</Eyebrow>
+          <RefusalPanel
+            title="No comparison has been made, so nothing here has been shown to improve."
             commands={[compareCommand()]}
-          />
+          >
+            <p>
+              A comparison measures a candidate against a baseline and refuses to call the result an
+              improvement unless the success rate holds and the sample sizes support it. That
+              refusal is the point: a change that cannot be measured has not been verified.
+            </p>
+          </RefusalPanel>
         </section>
       </div>
     );
   }
 
   return (
-    <div class="section">
+    <>
       {comparisons.map((comparison) => (
-        <section class="panel" key={comparison.id}>
-          <SectionHeading
-            title={`Comparison ${comparison.id}`}
-            note={formatTimestamp(comparison.createdAt)}
-          />
-          <div class="chip-row">
-            <Chip label={humanise(comparison.verdict)} tone={verdictTone(comparison.verdict)} />
-            {comparison.goalId === undefined ? null : <Chip label={`goal ${comparison.goalId}`} />}
-          </div>
-          <p class="verdict-reason">{comparison.verdictReason}</p>
-          <DefinitionList
-            rows={[
-              { label: 'Baseline', value: describeSide(comparison.baseline) },
-              { label: 'Candidate', value: describeSide(comparison.candidate) },
-            ]}
-          />
-
-          <div class="subpanel">
-            <SectionHeading title="Metric deltas" count={comparison.metricDeltas.length} />
-            <MetricDeltas comparison={comparison} />
-          </div>
-
-          <div class="subpanel">
-            <SectionHeading
-              title="Acceptance criteria"
-              count={comparison.acceptanceResults.length}
-            />
-            {comparison.acceptanceResults.length === 0 ? (
-              <p class="muted">This comparison did not evaluate acceptance criteria.</p>
-            ) : (
-              <ul class="plain">
-                {comparison.acceptanceResults.map((result) => (
-                  <li key={result.criterion}>
-                    <BooleanValue
-                      value={result.satisfied}
-                      trueLabel="satisfied"
-                      falseLabel="not satisfied"
-                    />
-                    <strong>{` ${result.criterion}`}</strong>
-                    <p class="muted">{result.detail}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <GraphDeltaBlock comparison={comparison} />
-
-          {comparison.findingDelta === undefined ? null : (
-            <div class="subpanel">
-              <SectionHeading title="Finding delta" />
-              <DefinitionList
-                rows={[
-                  {
-                    label: 'Resolved',
-                    value: comparison.findingDelta.resolved.join(', ') || 'none',
-                    code: comparison.findingDelta.resolved.length > 0,
-                  },
-                  {
-                    label: 'Introduced',
-                    value: comparison.findingDelta.introduced.join(', ') || 'none',
-                    code: comparison.findingDelta.introduced.length > 0,
-                  },
-                  {
-                    label: 'Unchanged',
-                    value: comparison.findingDelta.unchanged.join(', ') || 'none',
-                    code: comparison.findingDelta.unchanged.length > 0,
-                  },
-                ]}
-              />
+        <div class="bento" key={comparison.id}>
+          <section class="tile is-band">
+            <Eyebrow>Comparison</Eyebrow>
+            <h3 class="mono">{comparison.id}</h3>
+            <div class="lead-head">
+              <p class="display">{comparison.verdictReason}</p>
+              <div class="lead-measure">
+                <Meta>
+                  <span>{humanise(comparison.verdict)}</span>
+                  <span>{formatTimestamp(comparison.createdAt)}</span>
+                  {comparison.goalId === undefined ? null : (
+                    <span>{`goal ${comparison.goalId}`}</span>
+                  )}
+                </Meta>
+                <StatRow>
+                  <RuledStat
+                    value={formatInteger(comparison.baseline.runIds.length)}
+                    label="Baseline runs"
+                    basis="observed"
+                    nil={comparison.baseline.runIds.length === 0}
+                  />
+                  <RuledStat
+                    value={formatInteger(comparison.candidate.runIds.length)}
+                    label="Candidate runs"
+                    basis="observed"
+                    nil={comparison.candidate.runIds.length === 0}
+                  />
+                  <RuledStat
+                    value={formatInteger(comparison.metricDeltas.length)}
+                    label="Metrics compared"
+                    basis="observed"
+                    nil={comparison.metricDeltas.length === 0}
+                  />
+                </StatRow>
+              </div>
             </div>
-          )}
+          </section>
 
-          <div class="subpanel">
-            <SectionHeading title="Limitations" count={comparison.limitations.length} />
-            {comparison.limitations.length === 0 ? (
-              <p class="muted">No limitation was recorded, which is itself worth checking.</p>
-            ) : (
-              <Callout tone="warn" title="What this comparison does not establish">
-                <ul class="plain">
+          <section class="tile is-anchor">
+            <div class="tile-head">
+              <Eyebrow level={3} count={comparison.limitations.length}>
+                What this does not establish
+              </Eyebrow>
+            </div>
+            <div class="tile-body">
+              {comparison.limitations.length === 0 ? (
+                <p class="lede">
+                  No limitation was recorded, which is itself worth checking: every comparison has
+                  at least the limits of its own sample.
+                </p>
+              ) : (
+                <ul class="plain small">
                   {comparison.limitations.map((limitation) => (
                     <li key={limitation}>{limitation}</li>
                   ))}
                 </ul>
-              </Callout>
-            )}
+              )}
+            </div>
+          </section>
+
+          <section class="tile is-stage">
+            <div class="tile-head">
+              <Eyebrow level={3} count={comparison.acceptanceResults.length}>
+                Acceptance criteria
+              </Eyebrow>
+            </div>
+            <div class="tile-body">
+              <DefinitionList
+                rows={[
+                  { label: 'Baseline', value: describeSide(comparison.baseline) },
+                  { label: 'Candidate', value: describeSide(comparison.candidate) },
+                ]}
+              />
+              {comparison.acceptanceResults.length === 0 ? (
+                <p class="note">This comparison did not evaluate acceptance criteria.</p>
+              ) : (
+                <ul class="plain small">
+                  {comparison.acceptanceResults.map((result) => (
+                    <li key={result.criterion}>
+                      <State
+                        value={result.satisfied}
+                        trueLabel="satisfied"
+                        falseLabel="not satisfied"
+                      />
+                      <span>{`: ${result.criterion}`}</span>
+                      <p class="muted">{result.detail}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+
+          <div class="tile-stack">
+            <section class="tile">
+              <div class="tile-head">
+                <Eyebrow level={3}>Graph delta</Eyebrow>
+              </div>
+              <GraphDeltaBlock comparison={comparison} />
+            </section>
+            <section class="tile">
+              <div class="tile-head">
+                <Eyebrow level={3}>Finding delta</Eyebrow>
+              </div>
+              <div class="tile-body">
+                {comparison.findingDelta === undefined ? (
+                  <p class="note">This comparison did not compare the findings.</p>
+                ) : (
+                  <DefinitionList
+                    rows={[
+                      {
+                        label: 'Resolved',
+                        value: comparison.findingDelta.resolved.join(', ') || 'none',
+                        code: comparison.findingDelta.resolved.length > 0,
+                      },
+                      {
+                        label: 'Introduced',
+                        value: comparison.findingDelta.introduced.join(', ') || 'none',
+                        code: comparison.findingDelta.introduced.length > 0,
+                      },
+                      {
+                        label: 'Unchanged',
+                        value: comparison.findingDelta.unchanged.join(', ') || 'none',
+                        code: comparison.findingDelta.unchanged.length > 0,
+                      },
+                    ]}
+                  />
+                )}
+              </div>
+            </section>
           </div>
-        </section>
+
+          <section class="tile">
+            <Eyebrow level={3} count={comparison.metricDeltas.length}>
+              Metric deltas
+            </Eyebrow>
+            <p class="lede">
+              {`${formatInteger(comparison.baseline.runIds.length)} baseline runs against ${formatInteger(comparison.candidate.runIds.length)} candidate runs. Every row carries the sample size on both sides and the caveat beside it.`}
+            </p>
+            <MetricDeltas comparison={comparison} />
+          </section>
+        </div>
       ))}
-    </div>
+    </>
   );
 }
