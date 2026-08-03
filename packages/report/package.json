@@ -9,7 +9,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@dagrejs/dagre": "3.0.0",
     "@orchescope/domain": "workspace:*",
     "@orchescope/redaction": "workspace:*",
     "@orchescope/schema": "workspace:*"

@@ -9,6 +9,7 @@ import type {
   Evidence,
   Finding,
   Goal,
+  GoalValidationSummary,
   ReconciliationDelta,
   ReportBundle,
   ReportCapability,
@@ -19,6 +20,7 @@ import type {
   Timestamp,
 } from '@orchescope/schema';
 import { layoutGraph } from './layout.ts';
+import { bakeLayouts, LAYOUT_RANK_KEY, MAP_LAYOUT_KEYS, MAP_LAYOUTS_KEY } from './layouts.ts';
 import { buildOverlays } from './overlays.ts';
 
 /**
@@ -55,6 +57,8 @@ export type BuildBundleInput = {
   readonly chaosReports: readonly ChaosReport[];
   readonly comparisons: readonly Comparison[];
   readonly goals: readonly Goal[];
+  /** What each goal's acceptance criteria decided, judged by the caller against the same store. */
+  readonly goalValidations: readonly GoalValidationSummary[];
   readonly reconciliation: ReconciliationDelta | undefined;
   readonly capabilities: CapabilityInput;
   readonly generatedAt: Timestamp;
@@ -81,24 +85,40 @@ const capabilityList = (input: CapabilityInput): readonly ReportCapability[] => 
   }));
 };
 
+/**
+ * Bakes every offered layout into the graph.
+ *
+ * One extra layout costs about 37 bytes for each component it positions: two keys and two coordinates.
+ * At `pydantic-ai-exercised`, which positions 679 of its 1953 components, the two directional layouts
+ * together are 51 KB on a 5.2 MB bundle, which is under one percent. Only positioned components pay, so
+ * the reports that carry the most components are not the ones that pay the most.
+ */
 const withLayout = (graph: SystemGraph): SystemGraph => {
-  const layout = layoutGraph(graph);
+  const concentric = layoutGraph(graph);
+  const baked = bakeLayouts(graph);
   return {
     ...graph,
     components: graph.components.map((component) => {
-      const position = layout.positions.get(component.id);
-      return position === undefined
-        ? component
-        : {
-            ...component,
-            metadata: { ...component.metadata, layoutX: position.x, layoutY: position.y },
-          };
+      const metadata = { ...component.metadata };
+      let placed = false;
+      for (const layout of baked) {
+        const keys = MAP_LAYOUT_KEYS.find((candidate) => candidate.kind === layout.kind);
+        const position = layout.positions.get(component.id);
+        if (keys === undefined || position === undefined) continue;
+        metadata[keys.x] = position.x;
+        metadata[keys.y] = position.y;
+        placed = true;
+        const rank = layout.ranks?.get(component.id);
+        if (rank !== undefined) metadata[LAYOUT_RANK_KEY] = rank;
+      }
+      return placed ? { ...component, metadata } : component;
     }),
     metadata: {
       ...graph.metadata,
-      layoutWidth: layout.width,
-      layoutHeight: layout.height,
-      layoutFallback: layout.fallback,
+      layoutWidth: concentric.width,
+      layoutHeight: concentric.height,
+      layoutFallback: concentric.fallback,
+      [MAP_LAYOUTS_KEY]: baked.map((layout) => layout.kind),
     },
   };
 };
@@ -159,6 +179,7 @@ export const buildReportBundle = (input: BuildBundleInput): ReportBundle => {
     chaosReports: [...input.chaosReports],
     comparisons: [...input.comparisons],
     goals: [...input.goals],
+    goalValidations: [...input.goalValidations],
     capabilities: [...capabilityList(input.capabilities)],
     summary: {
       componentCount: graph.components.length,
