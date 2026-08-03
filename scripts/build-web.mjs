@@ -11,7 +11,7 @@
  * a string inside the report can never close the script element.
  */
 
-import { mkdir, readdir, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
@@ -58,27 +58,65 @@ async function buildScript() {
   });
 }
 
-async function buildStyles() {
+/**
+ * The stylesheet is built twice from the same source, and the only difference is how a font face
+ * arrives.
+ *
+ * The served report runs under `font-src 'self'`, so it wants the faces as real files beside the
+ * stylesheet. The single file export inlines everything into one document, where `'self'` resolves
+ * to nothing a `file:` page can fetch, so it wants them as `data:` URIs and its own policy names
+ * that scheme. Building twice rather than writing the `@font-face` rules twice keeps one source of
+ * truth for the faces, their weight axes and their unicode ranges.
+ *
+ * `assetNames` is fixed rather than hashed because the report server serves a closed list of paths:
+ * a content hash in the filename would mean the server could not name what it is allowed to serve.
+ */
+async function buildStyles(loader, outfile) {
   await build({
     entryPoints: [join(srcDir, 'styles.css')],
-    outfile: join(outDir, 'app.css'),
+    outfile: join(outDir, outfile),
     bundle: true,
     minify: true,
     sourcemap: 'external',
-    loader: { '.css': 'css' },
+    loader: { '.css': 'css', '.woff2': loader },
+    assetNames: 'fonts/[name]',
     logLevel: 'warning',
   });
 }
 
-async function report() {
-  const names = (await readdir(outDir)).sort();
+/**
+ * The licence text travels with the faces.
+ *
+ * The SIL Open Font License permits redistribution inside a larger work and requires the notice to
+ * travel with it, so these two files are part of the publishable artifact rather than of the source
+ * tree only. The single file export has nowhere to put a file, which is why the same notice is also a
+ * legal comment at the top of the stylesheet, where esbuild's minifier keeps it.
+ */
+const FONT_LICENCES = ['OFL-Manrope.txt', 'OFL-JetBrainsMono.txt'];
+
+async function copyFontLicences() {
+  await mkdir(join(outDir, 'fonts'), { recursive: true });
+  for (const name of FONT_LICENCES) {
+    await copyFile(join(srcDir, 'fonts', name), join(outDir, 'fonts', name));
+  }
+}
+
+async function listing(directory, prefix = '') {
   const rows = [];
-  for (const name of names) {
-    const info = await stat(join(outDir, name));
-    if (info.isFile()) {
-      rows.push({ name, bytes: info.size });
+  for (const name of (await readdir(directory)).sort()) {
+    const full = join(directory, name);
+    const info = await stat(full);
+    if (info.isDirectory()) {
+      rows.push(...(await listing(full, `${prefix}${name}/`)));
+    } else if (info.isFile()) {
+      rows.push({ name: `${prefix}${name}`, bytes: info.size });
     }
   }
+  return rows;
+}
+
+async function report() {
+  const rows = await listing(outDir);
   const width = rows.reduce((longest, row) => Math.max(longest, row.name.length), 0);
   console.log(`Wrote ${relative(root, outDir)}`);
   for (const row of rows) {
@@ -92,7 +130,9 @@ async function report() {
 async function main() {
   await mkdir(outDir, { recursive: true });
   await buildScript();
-  await buildStyles();
+  await buildStyles('file', 'app.css');
+  await buildStyles('dataurl', 'app.standalone.css');
+  await copyFontLicences();
   await writeFile(join(outDir, 'index.html'), INDEX_HTML, 'utf8');
   await report();
 }

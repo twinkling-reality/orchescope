@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,6 +17,9 @@ import { type ReportServerHandle, startReportServer } from '../src/server.ts';
  */
 
 const SECRET_IN_ASSET = 'const marker = "asset served";';
+
+/** `wOF2` and its version, then a byte that is not valid UTF-8 on its own. */
+const WOFF2_BYTES = Buffer.from([0x77, 0x4f, 0x46, 0x32, 0x00, 0x01, 0x00, 0x00, 0xff, 0xfe, 0x00]);
 
 let root: string;
 let server: ReportServerHandle;
@@ -36,6 +39,12 @@ before(async () => {
   writeFileSync(join(root, 'index.html'), '<!doctype html><title>Report</title>');
   writeFileSync(join(root, 'app.js'), SECRET_IN_ASSET);
   writeFileSync(join(root, 'app.css'), ':root { color: black }');
+  mkdirSync(join(root, 'fonts'), { recursive: true });
+  // A real woff2 signature followed by a byte no UTF-8 decoder can round trip. Reading a font as text
+  // and re-encoding it corrupts it silently: the request succeeds, the length is plausible, and the
+  // browser rejects the face without saying why.
+  writeFileSync(join(root, 'fonts', 'manrope-latin.woff2'), WOFF2_BYTES);
+  writeFileSync(join(root, 'fonts', 'jetbrains-mono-latin.woff2'), WOFF2_BYTES);
   writeFileSync(join(root, 'private.txt'), 'not an asset of the report');
   server = await startReportServer({
     host: '127.0.0.1',
@@ -217,11 +226,31 @@ describe('response headers', () => {
 });
 
 describe('the route and asset allow lists', () => {
-  it('serve the three assets the page needs', async () => {
+  it('serve the assets the page needs', async () => {
     for (const path of ['/', '/index.html', '/app.js', '/app.css']) {
       const response = await get(path, authorised());
       assert.equal(response.status, 200, `${path} was not served`);
     }
+  });
+
+  /**
+   * The two faces are served from this origin rather than inlined, which is what lets the served
+   * policy keep `font-src 'self'`. The bytes have to arrive unchanged: a font read as UTF-8 and
+   * re-encoded is a request that succeeds and a face the browser silently refuses.
+   */
+  it('serve both faces as bytes, with the font media type', async () => {
+    for (const path of ['/fonts/manrope-latin.woff2', '/fonts/jetbrains-mono-latin.woff2']) {
+      const response = await get(path, authorised());
+      assert.equal(response.status, 200, `${path} was not served`);
+      assert.equal(response.headers.get('content-type'), 'font/woff2');
+      const body = Buffer.from(await response.arrayBuffer());
+      assert.deepEqual(body, WOFF2_BYTES, `${path} did not arrive byte for byte`);
+    }
+  });
+
+  it('keep the policy that makes serving the faces from this origin the point', async () => {
+    const response = await get('/app.css', authorised());
+    assert.match(response.headers.get('content-security-policy') ?? '', /font-src 'self'/);
   });
 
   it('refuse a file in the asset directory that is not one of them', async () => {

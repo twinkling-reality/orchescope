@@ -65,17 +65,29 @@ export type ReportServerHandle = {
   readonly close: () => Promise<void>;
 };
 
+/**
+ * The closed list of files this server will read.
+ *
+ * The two faces are served from this origin rather than inlined, because the policy this server
+ * sends carries `font-src 'self'` and widening it for the served page would buy nothing: the files
+ * are already beside the stylesheet. The single file export is the case that needs `data:`, and it
+ * carries its own policy.
+ */
 const ASSETS: Readonly<Record<string, string>> = {
   '/': 'index.html',
   '/index.html': 'index.html',
   '/app.js': 'app.js',
   '/app.css': 'app.css',
+  '/fonts/manrope-latin.woff2': 'fonts/manrope-latin.woff2',
+  '/fonts/jetbrains-mono-latin.woff2': 'fonts/jetbrains-mono-latin.woff2',
 };
 
 const CONTENT_TYPES: Readonly<Record<string, string>> = {
   'index.html': 'text/html; charset=utf-8',
   'app.js': 'text/javascript; charset=utf-8',
   'app.css': 'text/css; charset=utf-8',
+  'fonts/manrope-latin.woff2': 'font/woff2',
+  'fonts/jetbrains-mono-latin.woff2': 'font/woff2',
 };
 
 const readJsonBody = async (
@@ -166,14 +178,29 @@ const ACTION_ROUTES: Readonly<
   },
 };
 
-/** The bundle is substituted into the JSON island so the page has its data before the first paint. */
+/**
+ * The bundle is substituted into the JSON island so the page has its data before the first paint.
+ *
+ * A font is read as bytes rather than as text, because decoding a woff2 as UTF-8 and re-encoding it
+ * corrupts it silently: the request succeeds, the length is plausible and the browser rejects the
+ * face without saying why.
+ */
 const renderAsset = (
   options: ReportServerOptions,
   asset: string,
-): { readonly body: string; readonly contentType: string } | undefined => {
+): { readonly body: string | Buffer; readonly contentType: string } | undefined => {
+  const contentType = CONTENT_TYPES[asset] ?? 'application/octet-stream';
+  const path = join(options.assetDirectory, asset);
+  if (!contentType.startsWith('text/') && !contentType.includes('charset')) {
+    try {
+      return { body: readFileSync(path), contentType };
+    } catch {
+      return undefined;
+    }
+  }
   let contents: string;
   try {
-    contents = readFileSync(join(options.assetDirectory, asset), 'utf8');
+    contents = readFileSync(path, 'utf8');
   } catch {
     return undefined;
   }
@@ -184,7 +211,7 @@ const renderAsset = (
           JSON.stringify(options.bundle()).replace(/<\//g, '<\\/'),
         )
       : contents;
-  return { body, contentType: CONTENT_TYPES[asset] ?? 'application/octet-stream' };
+  return { body, contentType };
 };
 
 /** Everything a request handler needs, gathered once so the handlers can live outside the factory. */

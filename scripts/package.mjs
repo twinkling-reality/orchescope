@@ -139,7 +139,10 @@ const listing = run('tar', ['-tzf', tarballPath])
   .filter((line) => line.length > 0)
   .map((line) => line.replace(/^package\//, ''));
 // `dist/ui/index.html` is required, not optional: without it `audit --open`, `open` and the html export are
-// controls that fail when pressed.
+// controls that fail when pressed. `app.standalone.css` is the stylesheet with the two faces inlined, which is
+// the only thing the html export can use, and the two woff2 files are what the served report asks its own
+// origin for. A release that shipped the served half and not the exported one would fail at the moment someone
+// tried to send a report to a colleague, which is the worst possible time to find out.
 const required = [
   'package.json',
   'dist/orchescope.mjs',
@@ -147,6 +150,11 @@ const required = [
   'dist/ui/index.html',
   'dist/ui/app.js',
   'dist/ui/app.css',
+  'dist/ui/app.standalone.css',
+  'dist/ui/fonts/manrope-latin.woff2',
+  'dist/ui/fonts/jetbrains-mono-latin.woff2',
+  'dist/ui/fonts/OFL-Manrope.txt',
+  'dist/ui/fonts/OFL-JetBrainsMono.txt',
 ];
 const missing = required.filter((entry) => !listing.includes(entry));
 const hasUi = listing.some((entry) => entry.startsWith('dist/ui/'));
