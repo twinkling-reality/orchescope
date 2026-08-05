@@ -211,7 +211,7 @@ The repository contains a small multi agent system that runs offline with no cre
 deliberate weaknesses, including a retry around a refund whose idempotency is not established.
 
 ```
-git clone https://github.com/athledev-labs/orchescope
+git clone https://github.com/twinkling-reality/orchescope
 cd orchescope
 pnpm install
 pnpm orchescope --cwd apps/demo test --scenario support-desk
