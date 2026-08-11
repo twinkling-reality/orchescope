@@ -2,23 +2,23 @@
  * What the audit found: one heading sentence, a bounded list, and what the list left out.
  *
  * This is the one region that answers "what did you find". The default surface is for a human glance:
- * severity, the problem in words, and the evidence basis. Finding identifiers stay off that surface
- * because they are arguments for agents and for `goal create`, not nouns a reader needs to scan. Under
- * `--verbose`, and on the `run` line when a goal is the next step, the identifier is still available.
+ * severity weight first, then the problem in words, then the evidence basis. Finding identifiers stay
+ * off that surface because they are arguments for agents and for `goal create`, not nouns a reader
+ * needs to scan. Under `--verbose`, and on the `run` line when a goal is the next step, the identifier
+ * is still available.
  *
- * No rule is suppressed here. A finding whose rule fired is a finding, and a renderer that decided some
- * of them were not worth a row would be the renderer analysing, which is the one thing a presentation
- * module may not do. The list is bounded by a ceiling and by nothing else: in particular it is not
- * filtered by whether a finding can become an automated goal, because that flag means a person is
- * needed, and hiding those from the person is the exact inversion of what it is for.
+ * Severity that matters is shouted: `HIGH` / `MEDIUM` in uppercase, and on a colour TTY inside a
+ * background chip. `low` and `info` stay quiet. An optional unit meter under the heading draws one
+ * letter per risk so the mix is visible without inventing a score. No rule is suppressed here.
  */
 
 import { formatCount } from '@orchescope/domain';
 import { ZERO_RISK_CAVEAT } from '@orchescope/report';
 import type { Finding, Severity } from '@orchescope/schema';
-import { visibleWidth } from './display-width.ts';
-import type { Region, Row } from './document-grid.ts';
+import { padTo, visibleWidth } from './display-width.ts';
+import { STATE_WIDTH, type Region, type Row } from './document-grid.ts';
 import { createStyle, type Style } from './style.ts';
+import { severityUnitMeter } from './unit-meter.ts';
 
 /**
  * Six rows.
@@ -31,6 +31,15 @@ import { createStyle, type Style } from './style.ts';
 const ROW_CEILING = 6;
 
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info'] as const;
+
+/** Loud severities keep uppercase under `NO_COLOR` so weight is not colour alone. */
+const severityWord = (severity: Severity): string =>
+  severity === 'critical' || severity === 'high' || severity === 'medium'
+    ? severity.toUpperCase()
+    : severity;
+
+const headingSeverity = (severity: Severity, count: number): string =>
+  `${count} ${severityWord(severity)}`;
 
 /**
  * The counts, in one sentence, one line above the rows they describe.
@@ -48,12 +57,20 @@ const headingSentence = (risks: readonly Finding[], strengths: number): string =
   const only = present.length === 1 ? present[0] : undefined;
   const riskPart =
     only === undefined
-      ? `${formatCount(risks.length, 'risk')}: ${present.map(([severity, count]) => `${count} ${severity}`).join(', ')}`
+      ? `${formatCount(risks.length, 'risk')}: ${present.map(([severity, count]) => headingSeverity(severity, count)).join(', ')}`
       : risks.length === 1
-        ? `1 risk, ${only[0]}`
-        : `${risks.length} risks, all ${only[0]}`;
+        ? `1 risk, ${severityWord(only[0])}`
+        : `${risks.length} risks, all ${severityWord(only[0])}`;
   return `${riskPart}; ${strengthPart}`;
 };
+
+const severityBuckets = (risks: readonly Finding[]) => ({
+  critical: risks.filter((finding) => finding.severity === 'critical').length,
+  high: risks.filter((finding) => finding.severity === 'high').length,
+  medium: risks.filter((finding) => finding.severity === 'medium').length,
+  low: risks.filter((finding) => finding.severity === 'low').length,
+  info: risks.filter((finding) => finding.severity === 'info').length,
+});
 
 /**
  * The right aligned field: how many evidence records stand behind the row, and how they were
@@ -62,24 +79,25 @@ const headingSentence = (risks: readonly Finding[], strengths: number): string =
  * A finding title is itself a numeric claim, and a metric without a sample size is not reported. So the
  * sample size travels with the row rather than with the report, and it travels beside the word that
  * says what kind of evidence was counted, because a bare integer at the right edge of a row is a number
- * with no basis. The pair is one field with one anchor: two right aligned fields would be two anchors,
- * and this region is allowed exactly one.
- *
- * The field is as wide as the widest pair among the rows actually listed, and those columns come out of
- * the title budget: at eighty columns the widest pair in the corpus is `20 discovered`, which leaves
- * thirty six columns for a title against the thirty nine a bare basis word would have left. That is the
- * trade named. Two of a title's words buy the sample size of every row.
+ * with no basis.
  */
 const basisField = (finding: Finding): string => `${finding.evidence.length} ${finding.basis}`;
 
 /**
- * Colour reinforces the symbol and word already on the row. Under plain style every painter is identity,
- * so NO_COLOR and pipes keep the same glyphs.
+ * Severity chip: symbol + word always; background fill only when colour is on.
+ *
+ * The padded field is painted as one chip so the background reads as a block behind `! HIGH`, not as
+ * coloured letters floating in the state column. Under plain style the same glyphs remain.
  */
 const paintSeverity = (style: Style, severity: Severity): string => {
-  const label = `! ${severity}`;
-  if (severity === 'critical' || severity === 'high') return style.bad(label);
-  if (severity === 'medium') return style.warn(label);
+  const label = `! ${severityWord(severity)}`;
+  if (style.mode === 'plain') {
+    if (severity === 'low' || severity === 'info') return style.dim(label);
+    return label;
+  }
+  const chip = padTo(label, STATE_WIDTH);
+  if (severity === 'critical' || severity === 'high') return style.chipBad(chip);
+  if (severity === 'medium') return style.chipWarn(chip);
   return style.dim(label);
 };
 
@@ -132,12 +150,14 @@ export const findingRegion = (input: FindingInput): Region => {
   const rows: Row[] = [
     { kind: 'keyed', key: 'findings', text: headingSentence(input.risks, input.strengths.length) },
   ];
+  const mix = severityUnitMeter(severityBuckets(input.risks));
+  if (mix !== undefined) {
+    rows.push({ kind: 'keyed', key: 'findings', text: mix });
+  }
   /*
    * A caveat renders at column one, full width, ignoring the key anchor, because it qualifies the whole
-   * region rather than any row in it. It is seventy nine characters and has never rendered on the
-   * corpus only because the one repository with no risk finding also has no agent system, so it drew no
-   * frame; inside the frame it would not have fitted. It is never shortened: what it guards against is a
-   * reader taking an empty list for a clean bill of health.
+   * region rather than any row in it. It is never shortened: what it guards against is a reader taking
+   * an empty list for a clean bill of health.
    */
   if (input.risks.length === 0) rows.push({ kind: 'caveat', text: ZERO_RISK_CAVEAT });
   for (const finding of shownRisks) {
@@ -149,10 +169,8 @@ export const findingRegion = (input: FindingInput): Region => {
     rows.push(verboseDetail(finding));
   }
   /*
-   * One overflow line, never more. It names the remainder and where the rest of them are, and it does
-   * not restate the strength count: that is in the heading sentence, one line above, and stating it
-   * twice is how the count came to be stated three times before. Agents read the full set from
-   * `--json` or MCP; the terminal does not pretend to be that list.
+   * One overflow line, never more. Agents read the full set from `--json` or MCP; the terminal does not
+   * pretend to be that list.
    */
   const remaining = input.risks.length - shownRisks.length;
   if (remaining > 0) {

@@ -17,6 +17,13 @@ export type Style = {
   readonly bad: (text: string) => string;
   readonly accent: (text: string) => string;
   readonly link: (text: string) => string;
+  /**
+   * Background chip for a high/critical severity label. The text inside still carries `!` and the
+   * severity word so a pipe or `NO_COLOR` reader who never saw the chip loses nothing essential.
+   */
+  readonly chipBad: (text: string) => string;
+  /** Background chip for a medium severity label. Same contract as `chipBad`. */
+  readonly chipWarn: (text: string) => string;
 };
 
 const CODES = {
@@ -28,6 +35,10 @@ const CODES = {
   red: '[31m',
   cyan: '[36m',
   underline: '[4m',
+  /** Red background, bright white, bold: a high severity chip. */
+  chipBad: '[41;97;1m',
+  /** Yellow background, black, bold: a medium severity chip. */
+  chipWarn: '[43;30;1m',
 } as const;
 
 /**
@@ -62,6 +73,8 @@ export const createStyle = (mode: StyleMode): Style => {
       bad: identity,
       accent: identity,
       link: identity,
+      chipBad: identity,
+      chipWarn: identity,
     };
   }
   const wrap = (code: string) => (text: string) => `${code}${text}${CODES.reset}`;
@@ -74,6 +87,8 @@ export const createStyle = (mode: StyleMode): Style => {
     bad: wrap(CODES.red),
     accent: wrap(CODES.cyan),
     link: wrap(CODES.underline),
+    chipBad: wrap(CODES.chipBad),
+    chipWarn: wrap(CODES.chipWarn),
   };
 };
 

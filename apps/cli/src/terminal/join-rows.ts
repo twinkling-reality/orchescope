@@ -11,6 +11,7 @@
 import { formatCount } from '@orchescope/domain';
 import type { AuditResult } from '@orchescope/usecases';
 import type { Region, Row } from './document-grid.ts';
+import { unitMeter } from './unit-meter.ts';
 
 type Reconciliation = NonNullable<AuditResult['reconciliation']>;
 
@@ -19,22 +20,28 @@ type Reconciliation = NonNullable<AuditResult['reconciliation']>;
  *
  * Undeclared components sit in the four deltas, not in this denominator. No percentage is printed
  * beside the fraction: a rate next to a fraction is the same measurement twice, and a rate printed
- * only when it flatters is worse than either.
+ * only when it flatters is worse than either. When the declared count fits a unit meter, a second row
+ * draws one cell per declared component so the glance weighs filled against empty without a score.
  */
-const fractionRow = (delta: Reconciliation): Row => ({
-  kind: 'keyed',
-  key: 'system',
-  text: `${delta.coverage.exercisedComponents} of ${delta.coverage.declaredComponents} declared components exercised`,
-});
+const fractionRows = (delta: Reconciliation): readonly Row[] => {
+  const exercised = delta.coverage.exercisedComponents;
+  const declared = delta.coverage.declaredComponents;
+  const rows: Row[] = [
+    {
+      kind: 'keyed',
+      key: 'system',
+      text: `${exercised} of ${declared} declared components exercised`,
+    },
+  ];
+  const meter = unitMeter(exercised, declared);
+  if (meter !== undefined) {
+    rows.push({ kind: 'keyed', key: 'system', text: meter });
+  }
+  return rows;
+};
 
 /**
  * One row per delta, each keeping the noun the product uses for it everywhere else.
- *
- * Packing the four phrases onto fewer lines forced shortened nouns (`declared never exercised`) that
- * no longer matched finding text and MCP delta summaries. Full nouns on four rows win: a reader who
- * has just been told what was found should meet the same words in the join. Eighty columns still
- * hold each row for ordinary counts; when a count grows past that, the grid cuts the line rather than
- * the product renaming the delta.
  *
  * A delta of zero renders. A zero here is as much news as a one: it is the difference between a
  * contradiction nobody found and a contradiction nobody looked for, and the reader can tell which
@@ -49,11 +56,12 @@ const deltaRows = (delta: Reconciliation): readonly Row[] =>
   ].map((text) => ({ kind: 'keyed', key: 'system', text }) as const);
 
 /**
- * Five lines, fixed, or none.
+ * Fraction, optional unit meter, four deltas; or none.
  *
- * One for the fraction and one for each of the four deltas. None at all when no run has been recorded,
- * and that absence is not a silent one: the MEASURE step states it, and an empty region may not stand
- * in for a refusal.
+ * None at all when no run has been recorded, and that absence is not a silent one: the MEASURE step
+ * states it, and an empty region may not stand in for a refusal.
  */
 export const joinRegion = (reconciliation: AuditResult['reconciliation']): Region =>
-  reconciliation === undefined ? [] : [fractionRow(reconciliation), ...deltaRows(reconciliation)];
+  reconciliation === undefined
+    ? []
+    : [...fractionRows(reconciliation), ...deltaRows(reconciliation)];

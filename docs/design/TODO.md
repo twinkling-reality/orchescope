@@ -55,8 +55,10 @@ that shortens them. The surface key is `system` (the subject), not `join` (the e
 
 The default terminal document is for a human glance: `problem` / `ok` rows with severity and title,
 not finding identifiers. Identifiers stay available on the `run` line when a goal is next, under
-`--verbose`, and always in `audit --json` / MCP. Colour may reinforce `!` / `+` / severity words; it
-never carries meaning alone. No interactive tabs, chords, bars, or invented percentages.
+`--verbose`, and always in `audit --json` / MCP. Loud severities use uppercase and, on a colour TTY,
+a background chip; `NO_COLOR` still reads `! HIGH`. Honest unit meters are allowed only for known
+totals (one cell per risk in the mix, one cell per declared component on system). No scores, no
+invented percentages, no interactive tabs or chords.
 
 ## Implementation sequence
 

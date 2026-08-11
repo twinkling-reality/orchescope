@@ -37,16 +37,21 @@ describe('the fraction', () => {
     );
   });
 
+  it('draws one cell per declared component when the total fits', () => {
+    assert.equal(render(reconciliation({}))[1], 'system          [##############.......] 14/21');
+  });
+
   /*
    * A rate printed only when it flatters is worse than no rate. Three of nine hundred and fifty three
    * rounds to zero per cent, and the version that suppressed the rate there printed one everywhere
-   * else, so the reader saw a number exactly when it was comfortable.
+   * else, so the reader saw a number exactly when it was comfortable. A total that wide also refuses
+   * a unit meter, rather than scaling into an approximate picture.
    */
   it('states the same form when the fraction rounds below one per cent', () => {
     const tiny = render(reconciliation({ exercised: 3, declared: 953 }));
     assert.equal(tiny[0], 'system          3 of 953 declared components exercised');
     assert.equal(
-      tiny.some((line) => line.includes('percent')),
+      tiny.some((line) => line.includes('percent') || line.includes('[')),
       false,
     );
   });
@@ -58,7 +63,7 @@ describe('the fraction', () => {
 
 describe('the four deltas', () => {
   it('keeps the noun the product uses for each one everywhere else', () => {
-    assert.deepEqual(render(reconciliation({})).slice(1), [
+    assert.deepEqual(render(reconciliation({})).slice(2), [
       'system          7 declared components never exercised',
       'system          1 exercised component never declared',
       'system          0 contradicted declarations',
@@ -75,8 +80,8 @@ describe('the four deltas', () => {
     const none = render(
       reconciliation({ notExercised: 0, notDeclared: 0, contradictions: 0, duplicates: 0 }),
     );
-    assert.equal(none.length, 5);
-    assert.deepEqual(none.slice(1), [
+    assert.equal(none.length, 6);
+    assert.deepEqual(none.slice(2), [
       'system          0 declared components never exercised',
       'system          0 exercised components never declared',
       'system          0 contradicted declarations',

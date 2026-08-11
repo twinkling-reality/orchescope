@@ -36,16 +36,18 @@ demo            33 components, 32 edges, 23 of 23 files read
                              8 faults injected, 1 broke the task
 5 did it help   ! undecided  unchanged: no metric moved enough to call
 
-findings        20 risks: 3 high, 6 medium, 11 low; 2 strengths
-problem         ! high       tool_timeout on issue_refund: a side…   1 simulated
-problem         ! high       Retry around issue_refund can repeat…  2 discovered
-problem         ! high       refund happened 2 times in one run      11 observed
-problem         ! medium     Model call to demo-small declares no…  4 discovered
-problem         ! medium     2 consequential operations have no a…  6 discovered
-problem         ! medium     metering_record_usage runs without b…    5 observed
+findings        20 risks: 3 HIGH, 6 MEDIUM, 11 low; 2 strengths
+findings        |HHHMMMMMMLLLLLLLLLLL| 20
+problem         ! HIGH       tool_timeout on issue_refund: a side…   1 simulated
+problem         ! HIGH       Retry around issue_refund can repeat…  2 discovered
+problem         ! HIGH       refund happened 2 times in one run      11 observed
+problem         ! MEDIUM     Model call to demo-small declares no…  4 discovered
+problem         ! MEDIUM     2 consequential operations have no a…  6 discovered
+problem         ! MEDIUM     metering_record_usage runs without b…    5 observed
 findings        14 more risks; full list: orchescope audit --json
 
 system          14 of 21 declared components exercised
+system          [##############.......] 14/21
 system          7 declared components never exercised
 system          1 exercised component never declared
 system          0 contradicted declarations

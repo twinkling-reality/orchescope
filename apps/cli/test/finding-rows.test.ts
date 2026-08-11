@@ -38,19 +38,32 @@ describe('the heading sentence', () => {
     ];
     assert.equal(
       render({ risks: mixed, strengths: risks(2), verbose: false })[0],
-      'findings        19 risks: 3 high, 6 medium, 10 low; 2 strengths',
+      'findings        19 risks: 3 HIGH, 6 MEDIUM, 10 low; 2 strengths',
     );
   });
 
   it('says so plainly when every risk is the same severity', () => {
     assert.equal(
       render({ risks: risks(4), strengths: risks(1), verbose: false })[0],
-      'findings        4 risks, all medium; 1 strength',
+      'findings        4 risks, all MEDIUM; 1 strength',
     );
     assert.equal(
       render({ risks: risks(1), strengths: [], verbose: false })[0],
-      'findings        1 risk, medium; no strengths',
+      'findings        1 risk, MEDIUM; no strengths',
     );
+  });
+
+  it('draws one letter per risk under the heading when the mix fits', () => {
+    const rendered = render({
+      risks: [
+        ...risks(3, { severity: 'high' }),
+        ...risks(2, { severity: 'medium' }),
+        ...risks(1, { severity: 'low' }),
+      ],
+      strengths: [],
+      verbose: false,
+    });
+    assert.equal(rendered[1], 'findings        |HHHMML| 6');
   });
 
   it('states the strength count exactly once', () => {
@@ -84,6 +97,7 @@ describe('the rows', () => {
   it('lists six problems and then names the remainder in one line', () => {
     const rendered = render({ risks: risks(19), strengths: risks(2), verbose: false });
     assert.equal(problemRows(rendered).length, 6);
+    assert.ok(rendered.some((line) => line.includes('|') && line.includes('19')));
     assert.equal(
       rendered.at(-1),
       'findings        13 more risks; full list: orchescope audit --json',
@@ -100,7 +114,7 @@ describe('the rows', () => {
 
   it('lists everything and names no remainder when the list is complete', () => {
     const rendered = render({ risks: risks(4), strengths: [], verbose: false });
-    assert.equal(rendered.length, 5);
+    assert.equal(problemRows(rendered).length, 4);
     assert.equal(
       rendered.some((line) => line.includes('more risks')),
       false,
@@ -157,7 +171,7 @@ describe('the rows', () => {
 
   it('cuts the title and never the field beside it', () => {
     const long = finding({ title: 'x'.repeat(139), evidence: Array(20).fill('e') });
-    const row = render({ risks: [long], strengths: [], verbose: false })[1] ?? '';
+    const row = problemRows(render({ risks: [long], strengths: [], verbose: false }))[0] ?? '';
     assert.equal(visibleWidth(row), 80);
     assert.ok(row.endsWith('20 discovered'));
     assert.match(row, /x+…/);
