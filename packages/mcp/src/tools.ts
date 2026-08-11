@@ -58,7 +58,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: 'scan_agent_system',
     description:
-      'Analyse the repository statically and return what was discovered: component and relation counts by kind, adapter coverage, and what could not be inspected. Does not execute anything and does not need credentials.',
+      'Analyse the repository statically and return what was discovered: component and edge counts by kind, adapter coverage, and what could not be inspected. Does not execute anything and does not need credentials.',
     input: Type.Object(
       { runLimit: Type.Optional(Type.Integer({ minimum: 0, maximum: 50 })) },
       { additionalProperties: false },
@@ -83,7 +83,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: 'get_system_map',
     description:
-      'Return components and relations from the latest scan, filtered by kind and paginated. Use this to look at a part of the graph rather than all of it.',
+      'Return components and edges from the latest scan, filtered by kind and paginated. Use this to look at a part of the graph rather than all of it.',
     input: Type.Object(
       {
         kinds: Type.Optional(Type.Array(Type.String(), { maxItems: 20 })),

@@ -20,19 +20,25 @@ const lines = (result: Parameters<typeof sourceRegion>[0], columns: number): rea
 };
 
 describe('the count tail', () => {
-  it('states components, relations and the files read when there is room', () => {
+  it('states components, edges and the files read when there is room', () => {
     assert.deepEqual(lines(auditResult({}), 80), [
-      'demo            33 components, 32 relations, 23 of 23 files read',
+      'demo            33 components, 32 edges, 23 of 23 files read',
     ]);
   });
 
-  it('sheds the tail rather than truncating it when there is not', () => {
-    assert.deepEqual(lines(auditResult({}), 60), ['demo            33 components, 32 relations']);
+  /*
+   * `edge` is shorter than the old inventory noun `relation`, so the full demo line now fits the
+   * sixty column floor. A fatter edge count is what forces the files-read clause off first.
+   */
+  it('sheds the files-read clause before it drops a count', () => {
+    assert.deepEqual(lines(auditResult({ edgeCount: 3200 }), 60), [
+      'demo            33 components, 3200 edges',
+    ]);
   });
 
   it('sheds again, keeping the count that identifies the repository', () => {
-    const wide = auditResult({ projectName: 'a-very-long-repository-name-indeed' });
-    assert.deepEqual(lines(wide, 60), ['a-very-long-repository-name-indeed  33 components']);
+    const wide = auditResult({ projectName: 'a-very-long-repository-name-here-now' });
+    assert.deepEqual(lines(wide, 60), ['a-very-long-repository-name-here-now  33 components']);
   });
 
   /*
@@ -79,7 +85,7 @@ describe('the count tail', () => {
     });
     assert.equal(
       lines(empty, 80)[0],
-      'orchescope-discovery  0 components, 0 relations, 23 of 23 files read',
+      'orchescope-discovery  0 components, 0 edges, 23 of 23 files read',
     );
   });
 

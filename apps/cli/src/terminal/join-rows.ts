@@ -27,33 +27,32 @@ const fractionRow = (delta: Reconciliation): Row => ({
 });
 
 /**
- * The four deltas packed onto two lines, each keeping the noun the product uses for it everywhere else.
+ * One row per delta, each keeping the noun the product uses for it everywhere else.
  *
- * Pairing declared-against-exercised on one line and contradiction-against-duplicate on the next keeps
- * the region short without inventing a percentage or dropping a zero. A zero here is as much news as a
- * one: it is the difference between a contradiction nobody found and a contradiction nobody looked for,
- * and the reader can tell which because the region only renders when a run was reconciled.
+ * Packing the four phrases onto fewer lines forced shortened nouns (`declared never exercised`) that
+ * no longer matched finding text and MCP delta summaries. Full nouns on four rows win: a reader who
+ * has just been told what was found should meet the same words in the join. Eighty columns still
+ * hold each row for ordinary counts; when a count grows past that, the grid cuts the line rather than
+ * the product renaming the delta.
  *
- * Two lines rather than one: four counts with their nouns do not fit eighty columns once any of them
- * reaches four figures, and truncating a packed single line would strip the trailing nouns first.
+ * A delta of zero renders. A zero here is as much news as a one: it is the difference between a
+ * contradiction nobody found and a contradiction nobody looked for, and the reader can tell which
+ * because the region only renders when a run was reconciled.
  */
-const deltaRows = (delta: Reconciliation): readonly Row[] => {
-  const notExercised = delta.declaredNotExercised.components.length;
-  const notDeclared = delta.exercisedNotDeclared.components.length;
-  const contradictions = delta.contradictions.length;
-  const duplicates = delta.duplicateSideEffects.length;
-  return [
-    `${notExercised} declared never exercised · ${notDeclared} exercised never declared`,
-    `${contradictions} contradicted · ${formatCount(duplicates, 'duplicated external effect')}`,
+const deltaRows = (delta: Reconciliation): readonly Row[] =>
+  [
+    `${formatCount(delta.declaredNotExercised.components.length, 'declared component')} never exercised`,
+    `${formatCount(delta.exercisedNotDeclared.components.length, 'exercised component')} never declared`,
+    formatCount(delta.contradictions.length, 'contradicted declaration'),
+    formatCount(delta.duplicateSideEffects.length, 'duplicated external effect'),
   ].map((text) => ({ kind: 'keyed', key: 'join', text }) as const);
-};
 
 /**
- * Three lines, fixed, or none.
+ * Five lines, fixed, or none.
  *
- * One for the fraction and two for the four deltas. None at all when no run has been recorded, and that
- * absence is not a silent one: the MEASURE step states it, and an empty region may not stand in for a
- * refusal.
+ * One for the fraction and one for each of the four deltas. None at all when no run has been recorded,
+ * and that absence is not a silent one: the MEASURE step states it, and an empty region may not stand
+ * in for a refusal.
  */
 export const joinRegion = (reconciliation: AuditResult['reconciliation']): Region =>
   reconciliation === undefined ? [] : [fractionRow(reconciliation), ...deltaRows(reconciliation)];

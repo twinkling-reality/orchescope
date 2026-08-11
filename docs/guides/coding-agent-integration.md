@@ -36,7 +36,7 @@ Seventeen, and the read only ones are annotated as such so a client can decide w
 
 | Tool | Returns |
 | --- | --- |
-| `get_system_map` | A page of components and adjacent relations, filterable by kind, unexercised or undeclared |
+| `get_system_map` | A page of components and adjacent edges, filterable by kind, unexercised or undeclared |
 | `get_reconciliation_delta` | The four deltas and the coverage rates |
 | `get_findings` | A page of findings, filterable by severity, category, polarity, component, or goal eligibility |
 | `get_finding` | One finding with its evidence records |

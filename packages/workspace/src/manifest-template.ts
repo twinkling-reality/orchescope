@@ -55,7 +55,7 @@ export const manifestTemplate = (): string =>
     '# An edge endpoint is the `name` of a component, either declared below or discovered from source.',
     '#',
     ...commentedList('component kinds', COMPONENT_KINDS),
-    ...commentedList('relation kinds', EDGE_KINDS),
+    ...commentedList('edge kinds', EDGE_KINDS),
     ...commentedList('side effect classes', SIDE_EFFECT_CLASSES),
     '#',
     '# Uncomment the example, replace it with your system, then run: orchescope audit',

@@ -55,7 +55,7 @@ describe('a repository with a system, a run and two problems', () => {
     assert.equal(
       render(detected),
       [
-        'demo            33 components, 32 relations, 23 of 23 files read',
+        'demo            33 components, 32 edges, 23 of 23 files read',
         '',
         '1 audit         + done       no check had anything to look at',
         '2 goal          . not yet    nothing handed off yet',
@@ -68,8 +68,10 @@ describe('a repository with a system, a run and two problems', () => {
         'OSC-SEC-0001    ! medium     a model is called with no timeout de…    1 inferred',
         '',
         'join            14 of 21 declared components exercised',
-        'join            7 declared never exercised · 1 exercised never declared',
-        'join            0 contradicted · 1 duplicated external effect',
+        'join            7 declared components never exercised',
+        'join            1 exercised component never declared',
+        'join            0 contradicted declarations',
+        'join            1 duplicated external effect',
         '',
         'run             orchescope goal create OSC-REL-0001',
       ].join('\n'),
@@ -97,7 +99,7 @@ describe('a repository where nothing was detected', () => {
     assert.equal(
       render(undetected),
       [
-        'express         5 components, 3 relations, 141 of 141 files read',
+        'express         5 components, 3 edges, 141 of 141 files read',
         'No agent system was detected: nothing declared an agent, a tool or a model call.',
         'adapters        2 ran (effects, prompts), 1 found nothing to read',
         '',

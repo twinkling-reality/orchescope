@@ -32,10 +32,10 @@ const countVariants = (result: AuditResult): readonly string[] => {
   const coverage = result.graph.coverage;
   const supported = coverage.filesInSupportedLanguages ?? coverage.filesParsed;
   const components = formatCount(summary.componentCount, 'component');
-  const relations = formatCount(summary.edgeCount, 'relation');
+  const edges = formatCount(summary.edgeCount, 'edge');
   return [
-    `${components}, ${relations}, ${coverage.filesParsed} of ${formatCount(supported, 'file')} read`,
-    `${components}, ${relations}`,
+    `${components}, ${edges}, ${coverage.filesParsed} of ${formatCount(supported, 'file')} read`,
+    `${components}, ${edges}`,
     components,
   ];
 };

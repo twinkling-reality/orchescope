@@ -132,7 +132,7 @@ const scanAgentSystem = async (
     byKind.set(component.kind, (byKind.get(component.kind) ?? 0) + 1);
   }
   return {
-    text: `${formatCount(result.graph.components.length, 'component')} and ${formatCount(result.graph.edges.length, 'relation')} discovered across ${formatCount(result.graph.coverage.filesParsed, 'parsed file')}. Agent system detected: ${result.agentSystemDetected}.`,
+    text: `${formatCount(result.graph.components.length, 'component')} and ${formatCount(result.graph.edges.length, 'edge')} discovered across ${formatCount(result.graph.coverage.filesParsed, 'parsed file')}. Agent system detected: ${result.agentSystemDetected}.`,
     data: {
       scanId: result.scanId,
       agentSystemDetected: result.agentSystemDetected,
@@ -237,7 +237,7 @@ const getSystemMap = (context: HandlerContext, args: Record<string, unknown>): T
         .slice(0, limit * 4)
     : [];
   return {
-    text: `${page.length} of ${formatCount(components.length, 'matching component')}${includeEdges ? ` and ${formatCount(edges.length, 'adjacent relation')}` : ''}.`,
+    text: `${page.length} of ${formatCount(components.length, 'matching component')}${includeEdges ? ` and ${formatCount(edges.length, 'adjacent edge')}` : ''}.`,
     data: {
       scanId: scan.scanId,
       total: components.length,

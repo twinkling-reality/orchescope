@@ -340,7 +340,7 @@ export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
       ...(workspace.git === undefined ? {} : { git: workspace.git }),
     });
     discoverPhase.finish(
-      `${formatCount(scan.graph.components.length, 'component')}, ${formatCount(scan.graph.edges.length, 'relation')}, ${formatCount(scan.graph.coverage.filesParsed, 'file')} parsed`,
+      `${formatCount(scan.graph.components.length, 'component')}, ${formatCount(scan.graph.edges.length, 'edge')}, ${formatCount(scan.graph.coverage.filesParsed, 'file')} parsed`,
     );
 
     const evidence: Evidence[] = [...scan.evidence];

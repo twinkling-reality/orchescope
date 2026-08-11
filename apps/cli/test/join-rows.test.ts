@@ -56,10 +56,12 @@ describe('the fraction', () => {
 });
 
 describe('the four deltas', () => {
-  it('packs onto two lines without inventing a percentage', () => {
+  it('keeps the noun the product uses for each one everywhere else', () => {
     assert.deepEqual(render(reconciliation({})).slice(1), [
-      'join            7 declared never exercised · 1 exercised never declared',
-      'join            0 contradicted · 1 duplicated external effect',
+      'join            7 declared components never exercised',
+      'join            1 exercised component never declared',
+      'join            0 contradicted declarations',
+      'join            1 duplicated external effect',
     ]);
   });
 
@@ -72,10 +74,12 @@ describe('the four deltas', () => {
     const none = render(
       reconciliation({ notExercised: 0, notDeclared: 0, contradictions: 0, duplicates: 0 }),
     );
-    assert.equal(none.length, 3);
+    assert.equal(none.length, 5);
     assert.deepEqual(none.slice(1), [
-      'join            0 declared never exercised · 0 exercised never declared',
-      'join            0 contradicted · 0 duplicated external effects',
+      'join            0 declared components never exercised',
+      'join            0 exercised components never declared',
+      'join            0 contradicted declarations',
+      'join            0 duplicated external effects',
     ]);
   });
 

@@ -27,7 +27,7 @@ column says what kind of line it is, its second says what state that thing is in
 the one sentence about it, so `grep` and `awk` read it as well as a person does:
 
 ```
-demo            33 components, 32 relations, 23 of 23 files read
+demo            33 components, 32 edges, 23 of 23 files read
 
 1 audit         + done       21 of 21 checks ran
 2 goal          + done       2 jobs written up
@@ -46,14 +46,16 @@ OSC-ARCH-0001   ! medium     metering_record_usage runs without b…    5 observ
 findings        14 more risks, in the report
 
 join            14 of 21 declared components exercised
-join            7 declared never exercised · 1 exercised never declared
-join            0 contradicted · 1 duplicated external effect
+join            7 declared components never exercised
+join            1 exercised component never declared
+join            0 contradicted declarations
+join            1 duplicated external effect
 
 run             orchescope test --scenario support-desk --repeat 5
 ```
 
 Findings sit above the join so the worst problem is visible before the coverage rows. `join` is the
-reconciliation, and the two packed rows under the fraction are the four deltas this product exists to
+reconciliation, and the four rows under the fraction are the four deltas this product exists to
 compute. Every finding row ends with how many evidence records stand behind it and how they were
 established, because a title is itself a numeric claim. There is one `run` row: the command that
 advances the loop. A `next` row carries an instruction that names a file to edit, and is never a
@@ -66,7 +68,7 @@ nothing reported is not the same as nothing wrong, and one command that writes t
 run             orchescope init --manifest
 ```
 
-That writes `.orchescope/manifest.yaml` with the component kinds, relation kinds and side effect classes the validator
+That writes `.orchescope/manifest.yaml` with the component kinds, edge kinds and side effect classes the validator
 accepts, and declares nothing until you fill it in. A manifest the validator rejects is reported as a failed adapter with
 the field that failed, never ignored. See [adapter-development.md](adapter-development.md).
 

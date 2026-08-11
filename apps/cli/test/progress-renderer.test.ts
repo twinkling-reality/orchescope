@@ -121,7 +121,7 @@ describe('what a run that is not a terminal gets', () => {
       type: 'phase_finished',
       phase: 'discover',
       label: 'discovering',
-      summary: '987 components, 243 relations',
+      summary: '987 components, 243 edges',
       durationMs: 8400,
     });
     bench.renderer.sink({
@@ -134,7 +134,7 @@ describe('what a run that is not a terminal gets', () => {
       .joined()
       .split('\n')
       .filter((line) => line !== '');
-    assert.equal(lines[0], 'phase           discovering: 987 components, 243 relations  8.4s');
+    assert.equal(lines[0], 'phase           discovering: 987 components, 243 edges  8.4s');
     /*
      * A skipped phase says it was skipped and why, and the line is bounded like every other line built
      * from data this process did not write. A log is still output, and output is always bounded.

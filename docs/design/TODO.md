@@ -40,14 +40,16 @@ not quietly correct the fraction alone.
 
 Findings, goals, comparison, MCP summaries and the terminal speak the same nouns. Schema delta keys
 (`declaredNotExercised`, …) stay technical. Finding titles drop engine-only phrasing (`relation`,
-`run(s)`) where a human or agent reads them. Same-language pass, not a second rendering dictionary.
+`run(s)`) where a human or agent reads them. Graph inventory counts `edge`s, matching the schema,
+rather than renaming them to `relation` at the surface. Same-language pass, not a second rendering
+dictionary.
 
 ### Join stays its own region; zeros stay news
 
 Findings stay above join. The join region stays absent when there are no runs. Zero deltas still
 render when a run was reconciled: a zero is the difference between "looked and clear" and "never
-looked." Collapsing zeros is rejected. The four delta counts pack onto two lines under the fraction
-without dropping zeros or inventing a percentage.
+looked." Collapsing zeros is rejected. Full product nouns on four delta rows win over packing that
+shortens them: the join must speak the same words as findings and MCP delta summaries.
 
 ## Implementation sequence
 
@@ -56,7 +58,7 @@ without dropping zeros or inventing a percentage.
 | 1 | Baseline-before-goal; MCP `import_trace` + `run_traced` + loop-action mapping | done |
 | 2 | Coverage pair (declared-set) atomic across graph, finding, TUI, schema comments | done |
 | 3 | Vocabulary / grammar pass over findings, goals, comparison, MCP chrome | done |
-| optional | Join delta packing (keep zeros, shrink line count) | done |
+| optional | Join delta packing (keep zeros, shrink line count) | reverted: full nouns |
 
 ## Notes that remain true
 

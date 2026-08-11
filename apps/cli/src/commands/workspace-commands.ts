@@ -42,7 +42,7 @@ export const initCommand = (
     );
     context.stdout(
       context.style.dim(
-        '  It declares nothing yet. Declare the components and relations Orchescope could not read, then audit again.\n',
+        '  It declares nothing yet. Declare the components and edges Orchescope could not read, then audit again.\n',
       ),
     );
   }

@@ -50,7 +50,7 @@ export const reviewModelFinding = (input: ReviewInput): ReviewOutcome => {
     }
   }
   if (input.finding.components.length === 0 && input.finding.edges.length === 0) {
-    reasons.push('the finding names no component or relation');
+    reasons.push('the finding names no component or edge');
   }
 
   if (reasons.length > 0) return { verdict: 'unsupported', reasons };
