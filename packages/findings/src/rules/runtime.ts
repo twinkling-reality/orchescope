@@ -1,9 +1,4 @@
-import {
-  CONFIDENCE_BANDS,
-  derivedEvidence,
-  formatCount,
-  metricEvidence,
-} from '@orchescope/domain';
+import { CONFIDENCE_BANDS, derivedEvidence, formatCount, metricEvidence } from '@orchescope/domain';
 import type { ComponentId, Evidence, EvidenceId } from '@orchescope/schema';
 import {
   clear,
@@ -81,9 +76,7 @@ export const sequentialIndependentCallsRule: Rule = {
       .edgesOfKind('calls_tool')
       .filter((edge) => edge.observation !== undefined && edge.observation.executionCount > 0);
     if (toolEdges.length < 2) {
-      return notApplicable(
-        'fewer than two observed tool calls, so ordering cannot be compared',
-      );
+      return notApplicable('fewer than two observed tool calls, so ordering cannot be compared');
     }
 
     const bySource = new Map<string, typeof toolEdges>();
@@ -534,12 +527,10 @@ export const observabilityCoverageRule: Rule = {
           impact:
             'Reconciliation, latency, cost and resilience findings are all unavailable, and they are where most of the value is.',
           components: named,
-          evidence: named
-            .slice(0, 2)
-            .flatMap((componentId) => {
-              const component = context.graph.component(componentId);
-              return component === undefined ? [] : (component.evidence.slice(0, 1) as EvidenceId[]);
-            }),
+          evidence: named.slice(0, 2).flatMap((componentId) => {
+            const component = context.graph.component(componentId);
+            return component === undefined ? [] : (component.evidence.slice(0, 1) as EvidenceId[]);
+          }),
           recommendation: {
             summary: 'Record one run with orchescope trace.',
             steps: [

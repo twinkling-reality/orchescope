@@ -42,7 +42,9 @@ const deltaOf = (input: {
   readonly rate?: number;
 }): ReconciliationDelta => ({
   declaredNotExercised: {
-    components: [...input.notExercised] as ReconciliationDelta['declaredNotExercised']['components'],
+    components: [
+      ...input.notExercised,
+    ] as ReconciliationDelta['declaredNotExercised']['components'],
     edges: [],
     runIds: ['run_0000000000000001'],
   },
@@ -125,8 +127,9 @@ describe('observability-coverage', () => {
 
   it('fires a risk that survives the engine when most declared components were not exercised', () => {
     const graph = indexed();
-    const unexercisedId = graph.graph.components.find((component) => !component.presence.runtime)
-      ?.id;
+    const unexercisedId = graph.graph.components.find(
+      (component) => !component.presence.runtime,
+    )?.id;
     assert.ok(unexercisedId !== undefined);
     const result = evaluateRules({
       scanId: 'scan_0000000000000000',
