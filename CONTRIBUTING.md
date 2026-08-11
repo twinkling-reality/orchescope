@@ -18,13 +18,6 @@ pnpm verify
 
 That runs `check`, `test` and `test:e2e`, and it is the gate. Run it before you open a pull request, from a clean checkout.
 
-For the browser tests, install the browser once:
-
-```
-pnpm exec playwright install chromium
-pnpm test:ui
-```
-
 ## The commands
 
 | Command | What it does |
@@ -32,7 +25,6 @@ pnpm test:ui
 | `pnpm check` | Format, lint, types, dependency direction, unused code, schema drift |
 | `pnpm test` | Unit and integration tests |
 | `pnpm test:e2e` | The command line contract and the improvement loop, through the real binary |
-| `pnpm test:ui` | The browser workspace, in Chromium, against a real served report |
 | `pnpm test:coverage` | Coverage, for looking at rather than for a threshold |
 | `pnpm orchescope <args>` | Run the CLI from source |
 | `pnpm --silent orchescope <args>` | The same, with pnpm's own banner off, which is what `--json` capture needs |
@@ -55,25 +47,25 @@ is what makes the support claim in the README true. A bug fix needs the test tha
 
 **Evidence in the pull request.** State what you ran and what it printed. For anything touching discovery, run
 `pnpm --silent orchescope --cwd apps/demo audit --json` and read the coverage block, not just the exit code, then run
-`pnpm corpus` and say what moved across the pinned repositories. For anything touching the report, run `pnpm build:web`
-and look at the page.
+`pnpm corpus` and say what moved across the pinned repositories. For anything touching the terminal document, run
+`pnpm --silent orchescope --cwd apps/demo audit` under colour and `NO_COLOR`.
 
-**Honesty about what you did not do.** A pull request that says "tests pass" when `test:ui` was not run is worse than one
-that says the browser tests were not run.
+**Honesty about what you did not do.** A pull request that says "tests pass" when `pnpm verify` was not run is worse than
+one that says which gates were skipped.
 
 ## Boundaries the tooling enforces
 
 `pnpm deps` fails when a dependency points outward. The layering is in
 [docs/architecture/module-boundaries.md](docs/architecture/module-boundaries.md); the short version is that `schema` depends
 on nothing, `domain` depends only on `schema` and `node:crypto`, core packages never reach storage or assembly, no package
-imports an app, and `apps/web` sees only schema types.
+imports an app.
 
 `pnpm unused` fails on an unused file, export or dependency. Dead code is not left behind for later.
 
 Biome enforces formatting, complexity and function length. The complexity ceiling is 25 for most code and 30 in the modules
 whose job is recognising external shapes (source analysis, wire format decoding, framework adapters), where a flat sequence of
-branches is the clearest expression. The function length ceiling is 120 lines, off for test files and browser components,
-where one function is one suite or one render.
+branches is the clearest expression. The function length ceiling is 120 lines, off for test files, where one function is one
+suite.
 
 ## Conventions worth knowing before you write code
 

@@ -10,6 +10,9 @@ between what a repository **declares** and what a run **exercises**, and the loo
 goal whose outcome is verified by rerunning the same scenario. If a change does not serve that join or that loop, it
 probably belongs in a different tool.
 
+Coding agents are the primary operators. Humans install the CLI and read a calm terminal document. There is no browser
+workspace.
+
 ## Canonical commands
 
 ```
@@ -25,12 +28,9 @@ pnpm corpus:offline          # discovery measured against the corpus entries tha
 pnpm corpus                  # the same across every pinned repository, cloning what the cache is missing
 pnpm test                    # unit and integration tests
 pnpm test:e2e                # end to end tests against the bundled demonstration
-pnpm test:ui                 # Playwright browser tests
 pnpm build                   # bundle the publishable artifact into apps/cli/dist
-pnpm build:web               # build the browser workspace into apps/web/dist
-pnpm states                  # render every cached report as a page, into states/, with an index of what each shows
 pnpm package                 # pack a tarball, checksum it, install it and run it
-pnpm orchescope <args>    # run the CLI from source
+pnpm orchescope <args>       # run the CLI from source
 pnpm demo                    # run the bundled demonstration agent system
 ```
 
@@ -50,16 +50,15 @@ core          graph, traces, discovery, findings, scenarios, benchmark, chaos, c
               redaction, observability, source-analysis, runtime, artifacts
 adapters      persistence
 assembly      workspace, usecases
-edges         apps/cli, packages/mcp, packages/report-server, apps/web, apps/demo
+edges         apps/cli, packages/mcp, apps/demo
 ```
 
 Rules the tooling enforces:
 
 - `packages/schema` imports nothing from the workspace and no Node builtin.
 - `packages/domain` imports only `packages/schema` and `node:crypto`.
-- Core packages never import `persistence`, `workspace`, `usecases`, `mcp` or `report-server`.
+- Core packages never import `persistence`, `workspace`, `usecases` or `mcp`.
 - No package imports an app.
-- `apps/web` may import only `@orchescope/schema`, and only for types.
 - `apps/demo` imports nothing from the workspace: it is an audit target.
 - `apps/cli` reaches storage through `workspace` and `usecases`, never directly.
 
@@ -93,12 +92,10 @@ Rules the tooling enforces:
 
 ## Interface expectations
 
-- The CLI is a product surface. Animate only while work runs, show a determinate count only when the total is known,
-  never invent a percentage, respect `NO_COLOR`, and never print a secret.
+- The CLI terminal is the only human UI. Animate only while work runs, show a determinate count only when the total is
+  known, never invent a percentage, respect `NO_COLOR`, and never print a secret.
 - Every JSON output is a single document shaped `{ ok, command, version, data }`.
-- The browser workspace renders untrusted text as text. No `innerHTML`, no inline styles with dynamic content.
-- A control the current configuration cannot perform is disabled with its reason shown, or absent. Never a button
-  that fails when pressed.
+- MCP is the primary agent surface: bounded output, explicit schemas, the same use cases as the CLI.
 - Every displayed number carries its basis: observed, discovered, inferred, estimated, simulated or model
   interpreted.
 
@@ -113,6 +110,7 @@ Rules the tooling enforces:
 - Temporal comments: for now, later, currently, eventually, once we, after migration, old approach, new approach.
 - Em dash characters anywhere in the repository.
 - Co-authored-by lines, attribution trailers, generated-by statements or AI authorship notices.
+- A browser product surface, dashboard, or second UI that agents cannot invoke.
 
 ## Validation before you claim a change works
 
@@ -121,7 +119,6 @@ Rules the tooling enforces:
    block, not just the exit code, then run `pnpm corpus` and say what moved. A fixture written by the author of an
    adapter agrees with its author; the corpus does not.
 3. For anything touching runtime: `pnpm orchescope trace -- node apps/demo/src/main.ts` and confirm spans arrived.
-4. For anything touching the report: `pnpm build:web` then `pnpm orchescope audit --serve` and look at the page. Then
-   `pnpm states` and look at the reports the demonstration is not: the workspace renders 1128 states and the
-   demonstration is one of them. `docs/design/states/` says which report shows which.
+4. For anything touching the human document: run `pnpm --silent orchescope --cwd apps/demo audit` and
+   `pnpm --silent orchescope --cwd corpus/.cache/crewai audit` in a real terminal, under colour and `NO_COLOR`.
 5. State what you ran and what it printed. Do not report a check as passing unless it ran.

@@ -23,7 +23,7 @@ import { SCHEMA_VERSIONS, schemaId } from './version.ts';
 
 /**
  * The report bundle is the single document the browser workspace reads. It is self contained so a
- * standalone HTML export shows exactly what the served report shows.
+ * machine surfaces (`--json`, MCP) agree on the same facts.
  */
 
 export const ScenarioRunSummary = Type.Object(

@@ -74,11 +74,10 @@ the field that failed, never ignored. See [adapter-development.md](adapter-devel
 ## Open the report
 
 ```
-orchescope audit --open
+orchescope audit
 ```
 
-The report is served from loopback with a one time token in the URL and opened in your browser. Without `--open` it prints
-the URL and waits; `--serve` serves without opening anything.
+The terminal prints the findings and the next command. Agents should use `--json` or `orchescope mcp serve`.
 
 Eight sections: overview, system map, findings, performance, resilience, scenarios, comparisons, goals. The map has a
 keyboard navigable table beside it with the same components, so nothing is only available by pointing at a canvas.
@@ -129,7 +128,7 @@ that runs offline with no credentials. From a clone of this repository:
 ```
 pnpm install
 pnpm orchescope --cwd apps/demo test --scenario support-desk
-pnpm orchescope --cwd apps/demo audit --open
+pnpm orchescope --cwd apps/demo audit
 ```
 
 It has deliberate weaknesses, including a retry around a refund whose idempotency is not established, so the report has

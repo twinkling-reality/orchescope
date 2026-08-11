@@ -16,12 +16,11 @@ import {
   manifestCommand,
   scenarioRunCommand,
   traceCommand,
-} from '../../apps/web/src/presentation/commands.ts';
+} from '../../apps/cli/src/terminal/commands.ts';
 
 /**
- * The report prints command lines a reader is meant to run. A printed invocation the binary does not accept is
- * the same defect as a button that fails when pressed, and the browser workspace cannot import the command
- * line to check itself, so the check lives here.
+ * The terminal document prints command lines a reader (or agent) is meant to run. A printed invocation the
+ * binary does not accept is the same defect as a broken tool schema.
  *
  * Each command is verified two ways: the verb exists, and every flag it uses appears in that verb's own help.
  * Nothing is executed with real arguments, because several of these would start the audited system.

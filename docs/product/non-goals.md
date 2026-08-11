@@ -21,6 +21,13 @@ only trustworthy answer to "where does my code go" is "nowhere".
 
 This will not change. A future team feature would have to be an export you choose to send somewhere you run.
 
+## Not a browser product
+
+There is no report website, no local dashboard and no HTML workspace to maintain.
+
+Why: the primary operator is a coding agent over MCP or `--json`. Humans install the CLI and read a terminal document.
+A second UI agents cannot invoke is a burden without a closed loop.
+
 ## Not an evaluation framework
 
 Orchescope does not score answer quality, does not maintain golden answers, and does not judge whether an agent's output

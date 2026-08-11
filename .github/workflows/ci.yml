@@ -66,27 +66,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:e2e
 
-  browser:
-    name: browser workspace and accessibility
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build:web
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm test:ui
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-failures
-          path: test-results/
-          retention-days: 7
-
   demo:
     name: audit the demonstration system and generate a report
     runs-on: ubuntu-latest
@@ -162,7 +141,6 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build:web
       # Builds the bundle, packs a tarball, records its checksum, installs it into a temporary prefix and audits a project
       # with it. This is what catches a bundle that cannot resolve its own parsers once installed.
       - run: pnpm package

@@ -42,15 +42,6 @@ const run = (command, args, options = {}) =>
 rmSync(releaseDirectory, { recursive: true, force: true });
 mkdirSync(releaseDirectory, { recursive: true });
 
-// The browser workspace is built first, because the bundle copies it in and a release candidate without it
-// cannot serve or export a report. Building it here rather than warning about it keeps this one command
-// sufficient to produce a complete artifact.
-console.log('building the browser workspace');
-run('node', [join(root, 'scripts/build-web.mjs')], {
-  cwd: root,
-  stdio: ['ignore', 'inherit', 'inherit'],
-});
-
 console.log('building the publishable artifact');
 run('node', [join(root, 'scripts/build.mjs')], {
   cwd: root,
@@ -138,26 +129,8 @@ const listing = run('tar', ['-tzf', tarballPath])
   .split('\n')
   .filter((line) => line.length > 0)
   .map((line) => line.replace(/^package\//, ''));
-// `dist/ui/index.html` is required, not optional: without it `audit --open`, `open` and the html export are
-// controls that fail when pressed. `app.standalone.css` is the stylesheet with the two faces inlined, which is
-// the only thing the html export can use, and the two woff2 files are what the served report asks its own
-// origin for. A release that shipped the served half and not the exported one would fail at the moment someone
-// tried to send a report to a colleague, which is the worst possible time to find out.
-const required = [
-  'package.json',
-  'dist/orchescope.mjs',
-  'LICENSE',
-  'dist/ui/index.html',
-  'dist/ui/app.js',
-  'dist/ui/app.css',
-  'dist/ui/app.standalone.css',
-  'dist/ui/fonts/manrope-latin.woff2',
-  'dist/ui/fonts/jetbrains-mono-latin.woff2',
-  'dist/ui/fonts/OFL-Manrope.txt',
-  'dist/ui/fonts/OFL-JetBrainsMono.txt',
-];
+const required = ['package.json', 'dist/orchescope.mjs', 'LICENSE'];
 const missing = required.filter((entry) => !listing.includes(entry));
-const hasUi = listing.some((entry) => entry.startsWith('dist/ui/'));
 
 console.log('installing the tarball into a temporary prefix and auditing a project with it');
 /**
@@ -248,7 +221,6 @@ const summary = {
   bytes: bytes.length,
   sha256: digest,
   fileCount: listing.length,
-  includesBrowserWorkspace: hasUi,
   missingRequiredFiles: missing,
   installSmokeTest: smoke,
   published: false,
@@ -263,7 +235,6 @@ console.log(`tarball           ${tarballName}`);
 console.log(`size              ${(bytes.length / 1024).toFixed(0)} KiB`);
 console.log(`sha256            ${digest}`);
 console.log(`files             ${listing.length}`);
-console.log(`browser workspace ${hasUi ? 'included' : 'MISSING'}`);
 console.log(`dependencies      ${Object.keys(runtimeDependencies).join(', ')}`);
 console.log(`install smoke     ${smoke.ok ? 'passed' : `FAILED: ${smoke.detail}`}`);
 console.log(`publishable unit  ${publishableUnit}`);

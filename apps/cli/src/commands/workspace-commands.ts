@@ -1,23 +1,18 @@
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { writeFileSync } from 'node:fs';
 import { OrchescopeError, stableJson } from '@orchescope/domain';
-import { renderStandaloneHtml, toMermaid, toSarif } from '@orchescope/report';
-import { openInBrowser, startReportServer } from '@orchescope/report-server';
+import { toMermaid, toSarif } from '@orchescope/report';
 import type { ReportBundle } from '@orchescope/schema';
 import { runDoctor } from '@orchescope/usecases';
 import { initWorkspace } from '@orchescope/workspace';
-import { findAssetDirectory } from '../assets.ts';
 import type { CommandContext } from '../context.ts';
 import { EXIT_CODES } from '../exit.ts';
-import { serverActionsFor } from '../server-actions.ts';
-import { type BrowserOutcome, reportReady } from '../terminal/report-ready.ts';
 import { doctorSummary } from '../terminal/doctor-summary.ts';
 
 /**
- * Commands about the workspace itself: init, doctor, open and export.
+ * Commands about the workspace itself: init, doctor and export.
  *
- * `open` serves the report that already exists rather than producing a new one, so opening a report is never a
- * side effect that changes what it shows.
+ * There is no browser report. Humans read the terminal. Agents read `--json` or MCP. Export writes
+ * machine artifacts (JSON, Mermaid, SARIF) for CI and pull requests.
  */
 
 export const initCommand = (
@@ -75,63 +70,7 @@ export const doctorCommand = async (context: CommandContext): Promise<number> =>
   return result.ok ? EXIT_CODES.success : EXIT_CODES.environment;
 };
 
-export const openCommand = async (
-  context: CommandContext,
-  options: { readonly open?: boolean },
-): Promise<number> => {
-  const bundle = context.workspace.store.latestReport(context.workspace.projectId);
-  if (bundle === undefined) {
-    throw new OrchescopeError('NOT_FOUND', 'No report has been generated for this project yet.', {
-      remediation: 'Run: orchescope audit',
-    });
-  }
-  const assets = findAssetDirectory();
-  const server = await startReportServer({
-    host: context.workspace.config.report.host,
-    port: context.workspace.config.report.port,
-    assetDirectory: assets,
-    bundle: () => context.workspace.store.latestReport(context.workspace.projectId) ?? bundle,
-    actions: serverActionsFor(context),
-  });
-
-  if (context.json) {
-    context.stdout(
-      `${stableJson({
-        ok: true,
-        command: 'open',
-        version: context.version,
-        data: { url: server.url, reportId: bundle.reportId },
-      })}\n`,
-    );
-  }
-  // Attempted before the block is written, so the block reports what happened rather than predicting it.
-  let outcome: BrowserOutcome = { kind: 'not_requested' };
-  if (options.open === true || context.workspace.config.report.openByDefault) {
-    const attempt = await openInBrowser(server.url);
-    outcome = attempt.opened ? { kind: 'opened' } : { kind: 'failed', detail: attempt.detail };
-  }
-  if (!context.json) {
-    context.stdout(
-      reportReady({
-        style: context.style,
-        url: server.url,
-        outcome,
-        columns: process.stdout.columns ?? 80,
-        platform: process.platform,
-      }),
-    );
-  }
-  await new Promise<void>((resolve) => {
-    const stop = (): void => {
-      void server.close().then(() => resolve());
-    };
-    process.once('SIGINT', stop);
-    process.once('SIGTERM', stop);
-  });
-  return EXIT_CODES.success;
-};
-
-const EXPORT_FORMATS = ['json', 'mermaid', 'sarif', 'html'] as const;
+const EXPORT_FORMATS = ['json', 'mermaid', 'sarif'] as const;
 
 const renderExport = (
   context: CommandContext,
@@ -145,14 +84,6 @@ const renderExport = (
       return toMermaid(bundle.graph);
     case 'sarif':
       return `${stableJson(toSarif(bundle.findings, { toolVersion: context.version }))}\n`;
-    case 'html': {
-      const assets = findAssetDirectory();
-      return renderStandaloneHtml(bundle, {
-        javascript: readFileSync(join(assets, 'app.js'), 'utf8'),
-        css: readFileSync(join(assets, 'app.standalone.css'), 'utf8'),
-        title: `Orchescope report for ${bundle.projectName}`,
-      });
-    }
     default:
       return undefined;
   }
@@ -181,11 +112,9 @@ export const exportCommand = (
       remediation: `Pass one of: ${EXPORT_FORMATS.join(', ')}.`,
     });
   }
-
   if (options.out !== undefined) {
     writeFileSync(options.out, contents, { mode: 0o600 });
   }
-
   if (context.json) {
     context.stdout(
       `${stableJson({
@@ -194,22 +123,18 @@ export const exportCommand = (
         version: context.version,
         data: {
           format,
-          bytes: Buffer.byteLength(contents, 'utf8'),
           out: options.out ?? null,
-          reportId: bundle.reportId,
-          // The artifact travels in the document only when no file was named, so that `--out` keeps a large
-          // document out of the caller's buffer.
+          bytes: Buffer.byteLength(contents),
           content: options.out === undefined ? contents : null,
         },
       })}\n`,
     );
     return EXIT_CODES.success;
   }
-
   if (options.out === undefined) {
-    context.stdout(contents.endsWith('\n') ? contents : `${contents}\n`);
-    return EXIT_CODES.success;
+    context.stdout(contents);
+  } else {
+    context.stdout(`${context.style.good('+')} wrote ${options.out}\n`);
   }
-  context.stdout(`${context.style.good('+')} wrote ${options.out}\n`);
   return EXIT_CODES.success;
 };

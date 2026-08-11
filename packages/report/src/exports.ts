@@ -1,14 +1,10 @@
-import { sha256Hex } from '@orchescope/domain';
-import type { Finding, ReportBundle, SystemGraph } from '@orchescope/schema';
+import type { Finding, SystemGraph } from '@orchescope/schema';
 
 /**
- * Export formats.
+ * Export formats for agents and CI.
  *
- * Mermaid is an export, never the interactive view: its documented defaults cap a diagram at 500 edges and
- * 50,000 characters, and its renderer injects an inline style element with no nonce, which a strict content
- * security policy blocks. Diagrams are therefore sliced and the browser never runs Mermaid.
- *
- * SARIF 2.1.0 is emitted so findings flow into existing code scanning tools rather than only into this report.
+ * Mermaid is a static diagram artifact for pull requests and docs. SARIF 2.1.0 feeds existing code
+ * scanning tools. There is no HTML product surface: humans read the terminal, agents read JSON or MCP.
  */
 
 const MERMAID_MAX_EDGES = 400;
@@ -173,64 +169,3 @@ export const toSarif = (
     ],
   };
 };
-
-export type StandaloneAssets = {
-  readonly javascript: string;
-  readonly css: string;
-  readonly title: string;
-};
-
-const escapeForScriptTag = (json: string): string =>
-  // A JSON island inside a script element must not contain a sequence that can close the element early.
-  json.replace(/<\//g, '<\\/').replace(/<!--/g, '<\\!--');
-
-/**
- * Renders a single file report.
- *
- * The inline script and style are pinned by their own SHA-256 hashes in a meta content security policy, so the
- * file executes exactly what was built and nothing else. `default-src 'none'` means the page cannot reach the
- * network at all, which is what makes a standalone export safe to send to someone else.
- *
- * `font-src data:` rather than `'self'`, and the difference matters only here. This file has no origin worth
- * the name: opened from a disk it is a `file:` page, where `'self'` resolves to nothing it can fetch, so a
- * self hosted face is unreachable and the export would silently fall back to whatever the reader's machine
- * happens to have. The design carries meaning in the type, so that is a different document rather than a
- * plainer one. The widening cannot be abused: `default-src 'none'` still blocks every network destination, the
- * only `data:` scheme allowed is the font one, and a font is not executable. The served report keeps
- * `font-src 'self'` and serves the same two faces as real files.
- */
-export const renderStandaloneHtml = (bundle: ReportBundle, assets: StandaloneAssets): string => {
-  const data = escapeForScriptTag(JSON.stringify(bundle));
-  const scriptHash = sha256Base64(assets.javascript);
-  const styleHash = sha256Base64(assets.css);
-  const policy = [
-    "default-src 'none'",
-    `script-src 'sha256-${scriptHash}'`,
-    `style-src 'sha256-${styleHash}'`,
-    "img-src 'self' data:",
-    'font-src data:',
-    "base-uri 'none'",
-    "form-action 'none'",
-  ].join('; ');
-
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="${policy}">
-<meta name="referrer" content="no-referrer">
-<title>${assets.title.replace(/[<>&]/g, '')}</title>
-<style>${assets.css}</style>
-</head>
-<body>
-<div id="root"></div>
-<script type="application/json" id="orchescope-report">${data}</script>
-<script type="module">${assets.javascript}</script>
-</body>
-</html>
-`;
-};
-
-const sha256Base64 = (content: string): string =>
-  Buffer.from(sha256Hex(content), 'hex').toString('base64');

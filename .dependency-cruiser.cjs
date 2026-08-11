@@ -9,7 +9,7 @@
  *   core        graph, traces, discovery, findings, scenarios, benchmark, chaos, comparison, goals, report, ...
  *   adapters    persistence, artifacts, runtime, source-analysis, adapters, semantic-analysis
  *   assembly    workspace, usecases
- *   edges       apps/cli, packages/mcp, packages/report-server, apps/web, apps/demo
+ *   edges       apps/cli, packages/mcp, apps/demo
  *
  * A package may depend inward, never outward.
  */
@@ -35,7 +35,7 @@ const CORE = [
   'observability',
 ].join('|');
 
-const OUTWARD_FROM_CORE = 'workspace|usecases|mcp|report-server|persistence';
+const OUTWARD_FROM_CORE = 'workspace|usecases|mcp|persistence';
 
 module.exports = {
   forbidden: [
@@ -59,7 +59,6 @@ module.exports = {
           '^scripts/',
           '^packages/[^/]+/src/index\\.ts$',
           '^apps/[^/]+/src/main\\.ts$',
-          '^apps/web/',
         ],
       },
       to: {},
@@ -111,29 +110,6 @@ module.exports = {
       comment: 'Library packages must never import an application.',
       from: { path: '^packages/' },
       to: { path: '^apps/' },
-    },
-    {
-      name: 'web-only-sees-schema',
-      severity: 'error',
-      comment: 'The browser workspace may only share the versioned schema package with the CLI.',
-      from: { path: '^apps/web/src' },
-      to: { path: '^packages/', pathNot: '^packages/schema/' },
-    },
-    {
-      name: 'web-presentation-is-pure',
-      severity: 'error',
-      comment:
-        'Presentation binders decide what each slot holds and must not import the replaceable skin.',
-      from: { path: '^apps/web/src/presentation/' },
-      to: { path: '^apps/web/src/(ui|sections)/' },
-    },
-    {
-      name: 'web-ui-does-not-import-sections',
-      severity: 'error',
-      comment:
-        'UI primitives are shared across screens and must not depend on a section implementation.',
-      from: { path: '^apps/web/src/ui/' },
-      to: { path: '^apps/web/src/sections/' },
     },
     {
       name: 'cli-goes-through-usecases',

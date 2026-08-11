@@ -44,7 +44,6 @@ export type AuditRequest = {
   readonly runLimit?: number;
   readonly deadline?: Deadline;
   readonly cache?: FactCache;
-  readonly served?: boolean;
 };
 
 export type AuditResult = {
@@ -244,7 +243,6 @@ const assembleReport = (input: {
   readonly runsConsidered: readonly RunRecord[];
   readonly componentMetrics: readonly ComponentRunMetrics[];
   readonly reconciliation: ReconciliationDelta | undefined;
-  readonly served: boolean;
 }): ReportBundle => {
   const { workspace, graph, findings, runsConsidered } = input;
   const scenarios = workspace.store.listScenarios(workspace.projectId);
@@ -288,7 +286,6 @@ const assembleReport = (input: {
     reconciliation: input.reconciliation,
     capabilities: resolveCapabilities({
       workspace,
-      served: input.served,
       scenarioCount: scenarios.length,
       runCount: runsConsidered.length,
       hasEligibleFindings: findings.some((finding) => finding.goalReadiness.eligible),
@@ -406,7 +403,6 @@ export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
       runsConsidered,
       componentMetrics,
       reconciliation,
-      served: request.served ?? false,
     });
     const reportDigest = workspace.store.saveReport(bundle, workspace.projectId);
     reportPhase.finish(`report ${bundle.reportId}`);

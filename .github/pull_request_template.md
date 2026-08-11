@@ -20,7 +20,6 @@ pnpm test:e2e
 - [ ] `pnpm check` (format, lint, types, dependency direction, unused code, schema drift)
 - [ ] `pnpm test`
 - [ ] `pnpm test:e2e`
-- [ ] `pnpm test:ui` (needed for anything touching the browser workspace)
 
 For a change to discovery, paste the coverage block:
 
@@ -28,7 +27,8 @@ For a change to discovery, paste the coverage block:
 pnpm --silent orchescope --cwd apps/demo audit --json | node -e "..."
 ```
 
-For a change to the report, say that you built the workspace and looked at the page.
+For a change to the terminal document, say what `pnpm --silent orchescope --cwd apps/demo audit` printed under colour and
+`NO_COLOR`.
 
 ## Tests
 

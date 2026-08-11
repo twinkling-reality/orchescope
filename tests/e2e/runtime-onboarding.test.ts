@@ -142,6 +142,6 @@ if (!response.ok) throw new Error('the receiver refused the export: ' + response
     assert.equal(result.code, 0, result.stderr);
     assert.match(result.stdout, /1 span\(s\) from 1 service\(s\)/);
     assert.equal(result.stdout.includes('No spans arrived'), false);
-    assert.match(result.stdout, /next: orchescope audit --open/);
+    assert.match(result.stdout, /next: orchescope audit/);
   });
 });

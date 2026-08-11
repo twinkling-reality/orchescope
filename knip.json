@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.mjs", "playwright.config.ts", "tests/**/*.test.ts"],
+      "entry": ["scripts/*.mjs", "tests/**/*.test.ts"],
       "project": ["scripts/**/*.mjs", "tests/**/*.ts"]
     },
     "packages/*": {
@@ -17,14 +17,9 @@
     "apps/demo": {
       "entry": ["src/main.ts"],
       "project": ["src/**/*.ts"]
-    },
-    "apps/web": {
-      "entry": ["src/main.tsx"],
-      "project": ["src/**/*.{ts,tsx}"]
     }
   },
   "ignore": ["**/dist/**", "_rename-worktrees/**"],
-  "ignoreDependencies": ["@playwright/test"],
   "ignoreExportsUsedInFile": true,
   "includeEntryExports": false,
   "rules": {

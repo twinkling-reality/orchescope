@@ -102,7 +102,6 @@ describe('startup and discovery', () => {
       'compare',
       'goal',
       'export',
-      'open',
       'init',
       'doctor',
       'mcp',

@@ -6,7 +6,7 @@ Orchescope reads an agent system's source, ingests what it does when it runs, an
 It runs on your machine, writes only inside the repository you point it at, and sends nothing anywhere.
 
 ```
-orchescope audit --open
+orchescope audit
 ```
 
 ## What it does
@@ -47,7 +47,7 @@ Node.js 24 or newer is required. There is no compiler step and no native build o
 
 ```
 pnpm install
-pnpm package                       # builds the bundle and the browser workspace, packs, installs and audits with it
+pnpm package                       # builds the bundle, packs, installs and audits with it
 npm install -g release/orchescope-0.1.0.tgz
 ```
 
@@ -58,7 +58,7 @@ Once published, the intended distribution is the usual one, and every command in
 
 ```
 npm install -g orchescope
-npx orchescope audit --open
+npx orchescope audit
 ```
 
 Maintainers: the unit that gets published is `release/stage`, not `apps/cli`. See [docs/guides/release.md](docs/guides/release.md).
@@ -68,11 +68,11 @@ Maintainers: the unit that gets published is `release/stage`, not `apps/cli`. Se
 From the root of a repository that contains an agent system:
 
 ```
-orchescope audit --open
+orchescope audit
 ```
 
-That discovers the system, reconciles it against any runs already stored, writes a report, and serves it from loopback
-with a one time token in the URL. Nothing is opened in a browser unless you pass `--open`.
+That discovers the system, reconciles it against any runs already stored, and prints a terminal document: what was
+found, where you stand in the improvement loop, and what to run next. Agents use the same facts over `--json` or MCP.
 
 To get runtime evidence, run your system under `trace`. Your process reports spans to a loopback receiver that exists
 only for the duration of the run:
@@ -95,9 +95,8 @@ orchescope audit
 | `orchescope compare <baseline> <candidate>` | Compare two runs, scans or revisions |
 | `orchescope goal create <finding-id>` | Turn a finding into a bounded improvement goal |
 | `orchescope goal validate <goal-id>` | Judge a goal against measured evidence |
-| `orchescope open` | Serve the most recent report from loopback |
-| `orchescope export --format <json\|mermaid\|sarif\|html>` | Export the report |
-| `orchescope mcp serve` | Speak the Model Context Protocol on stdio |
+| `orchescope export --format <json\|mermaid\|sarif>` | Export the report |
+| `orchescope mcp serve` | Speak the Model Context Protocol on stdio (primary agent surface) |
 | `orchescope init` | Create `.orchescope` with a configuration file listing every default |
 | `orchescope init --manifest` | Also write a manifest template for a system no adapter can read from source |
 | `orchescope doctor` | Check that this machine can run every command this build offers |
@@ -215,12 +214,12 @@ git clone https://github.com/athledev-labs/orchescope
 cd orchescope
 pnpm install
 pnpm orchescope --cwd apps/demo test --scenario support-desk
-pnpm orchescope --cwd apps/demo audit --open
+pnpm orchescope --cwd apps/demo audit
 ```
 
 The audit reports the duplicated refund with the span that produced it, offers to turn it into a goal, and after the fix
 `orchescope compare` decides from measured runs whether the change worked. That loop is covered end to end by
-`tests/e2e/improvement-loop.test.ts`.
+`tests/e2e/improvement-loop.test.ts`. Coding agents should prefer `orchescope mcp serve` or `--json`.
 
 ## Contributing
 
@@ -231,7 +230,6 @@ pnpm install
 pnpm check      # format, lint, types, dependency direction, unused code, schema drift
 pnpm test       # unit and integration
 pnpm test:e2e   # the command line and the improvement loop
-pnpm test:ui    # the browser workspace, needs: pnpm exec playwright install chromium
 ```
 
 ## Licence

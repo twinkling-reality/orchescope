@@ -2,27 +2,27 @@
 
 ## The shape of it
 
-One command line application, one browser workspace, twenty two library packages, and a demonstration agent system that
-exists to be audited. Dependencies point inward and the direction is enforced by `pnpm deps`, not by convention.
+One command line application, one MCP server, library packages, and a demonstration agent system that exists to be
+audited. Dependencies point inward and the direction is enforced by `pnpm deps`, not by convention.
 
 ```
-                 apps/cli        packages/mcp      packages/report-server      apps/web
-                     |                 |                     |                   |
-                     +--------+--------+---------------------+                   |
-                              |                                                  |
-                       packages/usecases                                         |
-                              |                                                  |
-                      packages/workspace                                         |
-                              |                                                  |
-   +--------------+-----------+-----------+--------------+--------------+        |
- graph        discovery      traces     findings      scenarios      report      |
- comparison   goals          policy     benchmark     chaos          redaction   |
- observability             source-analysis          runtime        persistence   |
-   +--------------+-----------+-----------+--------------+--------------+        |
-                              |                                                  |
-                       packages/domain                                           |
-                              |                                                  |
-                       packages/schema  <-------------------------------------- types only
+                 apps/cli        packages/mcp
+                     |                 |
+                     +--------+--------+
+                              |
+                       packages/usecases
+                              |
+                      packages/workspace
+                              |
+   +--------------+-----------+-----------+--------------+--------------+
+ graph        discovery      traces     findings      scenarios      report
+ comparison   goals          policy     benchmark     chaos          redaction
+ observability             source-analysis          runtime        persistence
+   +--------------+-----------+-----------+--------------+--------------+
+                              |
+                       packages/domain
+                              |
+                       packages/schema
 ```
 
 `apps/demo` sits outside this graph entirely: it imports nothing from the workspace, because it is an audit target rather
@@ -102,14 +102,9 @@ meant to be committed; state is not.
 ## The edges
 
 - **Command line** (`apps/cli`): commander, a calm phase oriented progress display, stable exit codes, and a single JSON
-  document per command when `--json` is passed.
+  document per command when `--json` is passed. The terminal document is the only human UI.
 - **Agent interface** (`packages/mcp`): the same use cases over the Model Context Protocol, with bounded output, explicit
-  schemas, and read only tools annotated as such.
-- **Report server** (`packages/report-server`): loopback only, capability token exchanged for a same site cookie, a Host
-  allow list, Fetch metadata checks, and a strict content security policy with no inline script.
-- **Browser workspace** (`apps/web`): preact, sigma for the map, two self hosted type faces, and no dependency on any
-  Orchescope package other than the schema types. It reads a bundle; it cannot reach the store. What it is assembled from
-  is recorded in [../design/report-system.md](../design/report-system.md).
+  schemas, and read only tools annotated as such. This is the primary operator surface.
 
 ## Where to look next
 

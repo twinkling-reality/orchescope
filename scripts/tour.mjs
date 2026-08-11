@@ -2,15 +2,14 @@
  * The whole loop in one command, against the bundled demonstration system.
  *
  * The product's claim is the delta between what a repository declares and what a run exercises, and seeing it takes
- * four commands in a fixed order: build the browser workspace, map the system, run it once, map it again. Anyone
- * refining the interface runs that sequence dozens of times, and typing it out invites the two mistakes that waste a
- * cycle: forgetting to build the web bundle, and auditing on top of a previous run so the before state is already
- * gone.
+ * three commands in a fixed order: map the system, run it once, map it again. Anyone refining the terminal document
+ * runs that sequence dozens of times, and typing it out invites the mistake that wastes a cycle: auditing on top of a
+ * previous run so the before state is already gone.
  *
  * This script is framing and nothing else. The two audits print their own output because that output is the interface
- * under review, and a tour that reformatted it would be reviewing itself. What it does hide is the work either side of
- * them: bundling the browser workspace, and the demonstration system's own chatter while it runs. Those are captured
- * and reduced to one line each, and `--verbose` streams everything instead.
+ * under review, and a tour that reformatted it would be reviewing itself. What it does hide is the demonstration
+ * system's own chatter while it runs. That is captured and reduced to one line, and `--verbose` streams everything
+ * instead.
  */
 
 import { spawn } from 'node:child_process';
@@ -24,7 +23,6 @@ const cli = join(root, 'apps/cli/src/main.ts');
 
 const verbose = process.argv.includes('--verbose');
 const keep = process.argv.includes('--keep');
-const noOpen = process.argv.includes('--no-open');
 
 const colour = process.stdout.isTTY === true && process.env['NO_COLOR'] === undefined;
 const style = {
@@ -33,7 +31,7 @@ const style = {
   good: (text) => (colour ? `\x1b[32m${text}\x1b[0m` : text),
 };
 
-const TOTAL = 5;
+const TOTAL = 4;
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
 
 /**
@@ -104,20 +102,7 @@ process.stdout.write(
   `${style.dim('The declared against exercised loop, on the bundled demonstration system.')}\n`,
 );
 
-heading(1, 'Build the browser workspace', 'pnpm build:web');
-if (verbose) {
-  await streamed(process.execPath, [join(root, 'scripts/build-web.mjs')]);
-} else {
-  const out = await captured(
-    process.execPath,
-    [join(root, 'scripts/build-web.mjs')],
-    'bundling apps/web',
-  );
-  const files = out.split('\n').filter((line) => /^\s{2}\S+\s+\d+ B/.test(line)).length;
-  done(`${files} file(s) written to ${style.dim('apps/web/dist')}`);
-}
-
-heading(2, 'Start from no runs');
+heading(1, 'Start from no runs');
 if (keep) {
   done(`kept ${style.dim('apps/demo/.orchescope/state')}, so earlier runs still count`);
 } else {
@@ -126,11 +111,11 @@ if (keep) {
   done(`cleared ${style.dim('apps/demo/.orchescope/state')}`);
 }
 
-heading(3, 'Map it, with no run to compare against', typed('--cwd', here(demo), 'audit'));
+heading(2, 'Map it, with no run to compare against', typed('--cwd', here(demo), 'audit'));
 await streamed(...orchescope('--cwd', demo, 'audit'));
 
 heading(
-  4,
+  3,
   'Run it once and collect its spans',
   typed('--cwd', here(demo), 'trace', '--', 'node', here(join(demo, 'src/main.ts'))),
 );
@@ -147,18 +132,14 @@ if (verbose) {
   done(
     `${data.spanCount} span(s) from ${services} service(s), run ${style.dim(data.runId)}` +
       (data.spanCount === 0
-        ? '\n      the run produced no spans, so step 5 has nothing to join'
+        ? '\n      the run produced no spans, so the next audit has nothing to join'
         : ''),
   );
 }
 
-heading(
-  5,
-  'Map it again, now against that run',
-  typed('--cwd', here(demo), 'audit', ...(noOpen ? [] : ['--open'])),
-);
-await streamed(...orchescope('--cwd', demo, 'audit', ...(noOpen ? [] : ['--open'])));
+heading(4, 'Map it again, now against that run', typed('--cwd', here(demo), 'audit'));
+await streamed(...orchescope('--cwd', demo, 'audit'));
 
-if (noOpen && !verbose) {
+if (!verbose) {
   process.stdout.write(`\n${style.dim('Run with --verbose to see every command in full.')}\n`);
 }

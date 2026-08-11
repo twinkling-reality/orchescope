@@ -58,7 +58,7 @@ const writeTraceResult = (context: CommandContext, result: TraceResult): number 
     }
     context.stdout(
       context.style.dim(
-        `next: ${result.spanCount === 0 ? 'instrument the target, or declare it in .orchescope/manifest.yaml, then run orchescope audit' : 'orchescope audit --open'}\n`,
+        `next: ${result.spanCount === 0 ? 'instrument the target, or declare it in .orchescope/manifest.yaml, then run orchescope audit' : 'orchescope audit'}\n`,
       ),
     );
   }

@@ -27,15 +27,12 @@ updates:
           - '@sinclair/typebox'
           - commander
           - graphology
-          - preact
-          - sigma
           - smol-toml
           - yaml
       tooling:
         applies-to: version-updates
         patterns:
           - '@biomejs/biome'
-          - '@playwright/test'
           - '@types/node'
           - dependency-cruiser
           - esbuild

@@ -14,6 +14,7 @@
 
 import type { LoopProgress } from '@orchescope/report';
 import type { AuditResult } from '@orchescope/usecases';
+import { auditCommand, manifestCommand } from './commands.ts';
 import type { Region, Row } from './document-grid.ts';
 
 const MANIFEST_ADAPTER_ID = 'adapter:manifest';
@@ -63,7 +64,9 @@ export const runRegion = (input: RunInput): Region => {
    * about a graph that may be empty for that reason.
    */
   if (manifest?.status === 'failed') {
-    return [instruction('correct .orchescope/manifest.yaml, then run orchescope audit')];
+    return [
+      instruction(`correct .orchescope/manifest.yaml, then run ${formatArgv(auditCommand())}`),
+    ];
   }
   /*
    * The floor, and it is the thing that is true rather than a pointer to a report. On a repository that
@@ -73,9 +76,7 @@ export const runRegion = (input: RunInput): Region => {
    */
   if (!input.result.agentSystemDetected) {
     const declare = instruction('declare your components in .orchescope/manifest.yaml');
-    return manifest?.status === 'completed'
-      ? [declare]
-      : [command(['orchescope', 'init', '--manifest']), declare];
+    return manifest?.status === 'completed' ? [declare] : [command(manifestCommand()), declare];
   }
   return input.progress.steps
     .filter((step) => step.command !== null)

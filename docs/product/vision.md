@@ -37,12 +37,27 @@ be touched, and the command that decides whether it worked.
 
 ## Who it is for
 
-- **The engineer who owns an agent system** and needs to explain, before a release, what it will do when a dependency
-  fails.
-- **The reviewer of an agentic pull request** who wants to know whether a new tool is reachable, whether a retry is safe,
-  and what the change did to latency and cost.
-- **The coding agent** doing the work, which needs a bounded task with acceptance criteria and a command that verifies
-  the outcome, not a prose suggestion.
+Primary:
+
+- **The coding agent** doing the work. It needs a bounded task with acceptance criteria and a command that verifies the
+  outcome, not a prose suggestion. It invokes Orchescope over MCP or `--json`, reflects on the result, makes the change,
+  and asks again whether it helped.
+
+Secondary:
+
+- **The engineer who owns an agent system.** They install the CLI, glance at a calm terminal document while work runs,
+  and see the benefit when the loop closes. They do not maintain a website, and they do not live in a dashboard.
+
+## Surfaces
+
+| Surface | Audience | Job |
+| --- | --- | --- |
+| MCP | Coding agents | Run the loop: audit, goal, test, compare. Bounded output, explicit schemas. |
+| CLI `--json` | Agents and CI | Same facts as MCP, one document per command. |
+| CLI terminal | Humans | Install, run, watch progress, read a short document that says what was found and what to do next. |
+| SARIF / Mermaid | CI and pull requests | Optional artifacts, not a second product. |
+
+There is no browser workspace. A website is a burden humans do not want in this workflow, and agents cannot use it.
 
 ## Principles
 
@@ -58,8 +73,8 @@ reads as an absence of problems.
 byte for byte. A language model is optional, off by default, used only where a deterministic method cannot reach, and its
 output is reviewed against evidence before it becomes a finding.
 
-**Local by default.** No account, no telemetry, no gateway, no upload. Servers bind to loopback. State lives inside the
-repository being audited.
+**Local by default.** No account, no telemetry, no gateway, no upload. Servers bind to loopback when a receiver is
+needed. State lives inside the repository being audited.
 
 **Refuse rather than downgrade.** An operation the configuration has not granted is refused with the name of the setting
 that would grant it. Nothing quietly runs in a weaker mode and reports as though it ran in the stronger one.
@@ -67,10 +82,14 @@ that would grant it. Nothing quietly runs in a weaker mode and reports as though
 **A number without its uncertainty is a lie.** Sample sizes travel with every metric, quantiles are withheld below a
 threshold, and a latency improvement alongside a success decline is never reported as an improvement.
 
+**Humans feel productive in the terminal.** Progress animates only while work runs. Indentation, colour and a clear
+region model make the document readable. Colour carries nothing a symbol and a word do not already say, so the same
+document reads under `NO_COLOR` and in a pipe.
+
 ## How to tell whether it worked
 
-The product succeeds if a team can take a finding, hand it to a person or an agent with the goal document attached, make
-the change, run one command, and get an answer about whether the change helped that they are willing to act on.
+The product succeeds if an agent can take a finding, create a goal, make the change, run one command, and get an answer
+about whether the change helped that a person is willing to act on after a glance at the terminal or the CI log.
 
 That loop is covered end to end by `tests/e2e/improvement-loop.test.ts`, which discovers a duplicated refund in the
 demonstration system, creates the goal, applies the fix, reruns the same scenario with the same seed, and requires the

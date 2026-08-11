@@ -1,7 +1,7 @@
 /**
  * The layouts a report can carry, and where each one's coordinates are written.
  *
- * The browser cannot lay a graph out: `apps/web` may import only the schema package, and a layout engine
+ * Edges that export Mermaid cannot lay a graph out at render time without a second layout engine, and a layout engine
  * there would also cost the determinism the whole map depends on, because the same graph has to give the
  * same drawing on every machine. So every layout offered is computed here and baked into the bundle, and
  * the picker in the browser switches between sets of coordinates rather than running anything.

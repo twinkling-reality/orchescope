@@ -196,56 +196,6 @@ describe('the json contract on failure', () => {
   });
 });
 
-describe('serving the report', () => {
-  /**
-   * `--serve` holds the process open, so the document has to arrive before the wait rather than after it, and the
-   * URL has to be a field of the audit document rather than a second document printed later.
-   */
-  it('writes one document that carries the url, before it starts waiting', async () => {
-    const { spawn } = await import('node:child_process');
-    const child = spawn(process.execPath, [cliEntry, '--cwd', demo, 'audit', '--serve', '--json'], {
-      cwd: repositoryRoot,
-      env: { ...process.env, NO_COLOR: '1' },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    child.stdout.setEncoding('utf8');
-    // The document is pretty printed, so completion is "it parses", not "a newline arrived".
-    const document = await new Promise<Envelope>((resolve, reject) => {
-      let buffer = '';
-      const timer = setTimeout(() => {
-        child.kill('SIGKILL');
-        reject(new Error(`no document arrived while serving: ${buffer.slice(0, 200)}`));
-      }, 120_000);
-      child.stdout.on('data', (chunk: string) => {
-        buffer += chunk;
-        const text = buffer.trim();
-        if (!text.startsWith('{') || !text.endsWith('}')) return;
-        let parsed: Envelope;
-        try {
-          parsed = JSON.parse(text) as Envelope;
-        } catch {
-          return;
-        }
-        clearTimeout(timer);
-        child.kill('SIGINT');
-        resolve(parsed);
-      });
-    });
-    await new Promise<void>((resolve) => {
-      child.once('exit', () => resolve());
-    });
-
-    assert.equal(document.ok, true);
-    assert.equal(document.command, 'audit');
-    const data = document.data as { reportUrl: string | null };
-    assert.match(
-      data.reportUrl ?? '',
-      /^http:\/\/127\.0\.0\.1:\d+\/\?token=/,
-      'the served document did not carry the loopback url with its token',
-    );
-  });
-});
-
 describe('exporting as a document', () => {
   it('carries the artifact when there is no file to put it in', async () => {
     const result = await run(['--cwd', demo, 'export', '--format', 'mermaid', '--json']);

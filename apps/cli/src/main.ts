@@ -17,12 +17,7 @@ import {
   testCommand,
   traceCommand,
 } from './commands/run-commands.ts';
-import {
-  doctorCommand,
-  exportCommand,
-  initCommand,
-  openCommand,
-} from './commands/workspace-commands.ts';
+import { doctorCommand, exportCommand, initCommand } from './commands/workspace-commands.ts';
 import {
   type CommandContext,
   createContext,
@@ -102,10 +97,10 @@ program
     [
       '',
       'Start here, from the root of a repository that contains an agent system:',
-      '  orchescope audit --open              map it, reconcile it against any stored runs, open the report',
-      '  orchescope trace -- <your command>   run it once so the report has runtime evidence, then audit again',
-      '  orchescope init --manifest           declare a system this build cannot read from source',
-      '  orchescope doctor                    check this machine can run every command',
+      '  orchescope audit                     map it, reconcile it against stored runs, print findings',
+      '  orchescope trace -- <your command>   run it once so the next audit has runtime evidence',
+      '  orchescope mcp serve                 expose the same loop to a coding agent over MCP',
+      '  orchescope goal create <findingId>   turn a finding into a bounded task an agent can finish',
       '',
       'Every command accepts --json and then writes exactly one JSON document, including on failure.',
     ].join('\n'),
@@ -147,14 +142,11 @@ program
 program
   .command('audit')
   .description('discover the agent system, reconcile it against stored runs, and report findings')
-  .option('--open', 'serve the report and open it in a browser')
-  .option('--serve', 'serve the report without opening a browser')
   .option(
     '--runs <count>',
     'how many recent runs to reconcile against, zero for a static only audit',
   )
   .option('--fail-on <severity>', 'exit non zero when a risk at or above this severity is found')
-  .option('--export-html <path>', 'also write a single file report')
   .option('--export-json <path>', 'also write the report bundle as JSON')
   .option('--export-mermaid <path>', 'also write a Mermaid diagram')
   .option('--export-sarif <path>', 'also write findings as SARIF 2.1.0')
@@ -234,17 +226,9 @@ program
   });
 
 program
-  .command('open')
-  .description('serve the most recent report from loopback')
-  .option('--open', 'also open a browser')
-  .action(async (options: { open?: boolean }) => {
-    await withContext('open', globals(), (context) => openCommand(context, options));
-  });
-
-program
   .command('export')
-  .description('export the most recent report as json, mermaid, sarif or html')
-  .option('--format <format>', 'json, mermaid, sarif or html', 'json')
+  .description('export the most recent report as json, mermaid or sarif')
+  .option('--format <format>', 'json, mermaid or sarif', 'json')
   .option('--out <path>', 'write to a file instead of standard output')
   .action(async (options: { format?: string; out?: string }) => {
     await withContext('export', globals(), (context) => exportCommand(context, options));

@@ -5,14 +5,13 @@ import type { Workspace } from '@orchescope/workspace';
 /**
  * Capability resolution.
  *
- * The browser workspace never guesses whether an action is possible: it reads these flags and the reason behind
- * each one. That is what makes it possible to disable a control and say why, instead of showing a button that
- * fails when pressed.
+ * Capabilities describe what the CLI and MCP can do under the current policy. They travel in the
+ * report bundle so an agent (or a CI reader of `--json`) can see what is available without guessing.
+ * There is no browser workspace to drive these flags.
  */
 
 export type CapabilityContext = {
   readonly workspace: Workspace;
-  readonly served: boolean;
   readonly scenarioCount: number;
   readonly runCount: number;
   readonly hasEligibleFindings: boolean;
@@ -50,37 +49,30 @@ export const resolveCapabilities = (context: CapabilityContext): CapabilityInput
         ? 'no scenario is defined in this project'
         : !policy.allowProcessSpawn
           ? 'running a scenario needs policy.allowProcessSpawn'
-          : !context.served
-            ? 'a standalone export cannot run commands'
-            : 'a scenario can be rerun from this report',
+          : 'a scenario can be rerun with orchescope test, or over MCP',
     run_benchmark:
       context.scenarioCount === 0
         ? 'no scenario is defined in this project'
         : !policy.allowProcessSpawn
           ? 'running a benchmark needs policy.allowProcessSpawn'
-          : !context.served
-            ? 'a standalone export cannot run commands'
-            : 'a benchmark can be started from this report',
+          : 'a benchmark can be started with orchescope benchmark, or over MCP',
     run_chaos:
       context.scenarioCount === 0
         ? 'no scenario is defined in this project'
         : policy.allowedChaosEnvironments.length === 0
           ? 'no chaos environment is allowed by policy.allowedChaosEnvironments'
-          : !context.served
-            ? 'a standalone export cannot run commands'
-            : 'a chaos suite can be started from this report',
+          : 'a chaos suite can be started with orchescope chaos, or over MCP',
     compare_runs:
       context.runCount < 2
         ? 'at least two runs are needed before a comparison is meaningful'
-        : 'two runs can be compared from this report',
-    open_source_location: context.served
-      ? 'the served report can ask the local process to open an editor'
-      : 'a standalone export cannot open a local editor',
-    export_standalone: 'the report can be exported as a single self contained file',
+        : 'two runs can be compared with orchescope compare, or over MCP',
+    open_source_location:
+      'there is no browser report; open the path named on the finding in your own editor',
+    export_standalone: 'there is no standalone HTML report; export json, mermaid or sarif instead',
     cost_estimate: costReason(pricedModels, context.tokensObserved),
     /*
-     * Permanently unavailable, and answered rather than dropped: the workspace asks about every capability it
-     * knows, and a reader who has seen an older version of this product deserves the reason rather than silence.
+     * Permanently unavailable, and answered rather than dropped: a reader who has seen an older version of this
+     * product deserves the reason rather than silence.
      */
     model_interpretation:
       'analysis in this build is deterministic, so nothing in it interprets a repository with a model',
@@ -89,13 +81,12 @@ export const resolveCapabilities = (context: CapabilityContext): CapabilityInput
   return {
     costEstimateAvailable: pricedModels > 0 && context.tokensObserved,
     canCreateGoal: context.hasEligibleFindings,
-    canRerunScenario: context.served && context.scenarioCount > 0 && policy.allowProcessSpawn,
-    canRunBenchmark: context.served && context.scenarioCount > 0 && policy.allowProcessSpawn,
-    canRunChaos:
-      context.served && context.scenarioCount > 0 && policy.allowedChaosEnvironments.length > 0,
+    canRerunScenario: context.scenarioCount > 0 && policy.allowProcessSpawn,
+    canRunBenchmark: context.scenarioCount > 0 && policy.allowProcessSpawn,
+    canRunChaos: context.scenarioCount > 0 && policy.allowedChaosEnvironments.length > 0,
     canCompareRuns: context.runCount >= 2,
-    canOpenSourceLocation: context.served,
-    canExportStandalone: true,
+    canOpenSourceLocation: false,
+    canExportStandalone: false,
     modelInterpretationAvailable: false,
     reasons,
   };

@@ -7,7 +7,7 @@
  * the attribution travels with it.
  */
 
-import { cpSync, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
@@ -50,15 +50,6 @@ const result = await build({
   logLevel: 'warning',
 });
 
-const webDist = join(root, 'apps/web/dist');
-if (existsSync(join(webDist, 'index.html'))) {
-  cpSync(webDist, join(outputDirectory, 'ui'), { recursive: true });
-} else {
-  console.warn(
-    'the browser workspace has not been built, so dist/ui was not created. Run: pnpm build:web',
-  );
-}
-
 const bundleBytes = statSync(join(outputDirectory, 'orchescope.mjs')).size;
 const inputs = Object.keys(result.metafile.inputs).length;
 writeFileSync(
@@ -80,6 +71,3 @@ console.log(
   `bundled ${inputs} modules into apps/cli/dist/orchescope.mjs (${(bundleBytes / 1024).toFixed(0)} KiB)`,
 );
 console.log(`external at runtime: ${external.join(', ')}`);
-if (existsSync(join(outputDirectory, 'ui', 'index.html'))) {
-  console.log('copied the browser workspace into apps/cli/dist/ui');
-}

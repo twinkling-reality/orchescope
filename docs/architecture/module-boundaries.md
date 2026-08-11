@@ -12,7 +12,7 @@ points the wrong way, so this document describes rules that are enforced rather 
 | Core | `graph`, `discovery`, `traces`, `findings`, `scenarios`, `benchmark`, `chaos`, `comparison`, `goals`, `report`, `policy`, `redaction`, `observability`, `source-analysis`, `runtime` | `schema`, `domain`, other core packages |
 | Adapters | `persistence` | `schema`, `domain` |
 | Assembly | `workspace`, `usecases` | everything below |
-| Edges | `apps/cli`, `packages/mcp`, `packages/report-server`, `apps/web` | `usecases` and `workspace`; never storage directly |
+| Edges | `apps/cli`, `packages/mcp` | `usecases` and `workspace`; never storage directly |
 | Target | `apps/demo` | nothing in the workspace |
 
 ## What each package owns
@@ -73,10 +73,7 @@ verdict that refuses to call a latency win an improvement when success declined.
 **`goals`** A finding becomes a bounded goal: scope, acceptance criteria, validation commands, rollback. Also renders the
 prompt handed to an implementer and judges a goal against a comparison.
 
-**`report`** Assembling the report bundle, deterministic graph layout, overlays, and exports to Mermaid, SARIF and a
-standalone HTML file with a hash pinned content security policy.
-
-**`report-server`** The loopback server. Security controls, asset allow list, action routes and server sent progress.
+**`report`** Assembling the report bundle, deterministic graph layout, overlays, and exports to Mermaid and SARIF.
 
 **`workspace`** Resolving paths, loading and validating typed configuration, reading git facts, and constructing the
 store, the redactor, the logger and the progress reporter. The composition root.
@@ -93,9 +90,8 @@ advertises, and bounded output.
 
 - `packages/schema` imports nothing from the workspace and no platform API.
 - `packages/domain` imports only `packages/schema` and `node:crypto`.
-- No core package imports `persistence`, `workspace`, `usecases`, `mcp` or `report-server`.
+- No core package imports `persistence`, `workspace`, `usecases` or `mcp`.
 - No package imports an app.
-- `apps/web` may import only `@orchescope/schema`.
 - `apps/demo` imports nothing from the workspace.
 - `apps/cli` reaches storage through `workspace` and `usecases`, never directly.
 - No cycles anywhere.

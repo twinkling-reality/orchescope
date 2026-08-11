@@ -12,14 +12,13 @@ install.
 `pnpm package` stages the real thing in `release/stage`: the same manifest with the workspace ranges removed, the three
 dependencies that stay external at runtime kept, development dependencies and scripts dropped, and `dist` plus the
 licence and the readme beside it. That directory is what gets published, and the script refuses to produce it if a
-workspace range survived staging, if the declared binary is missing, or if the browser workspace is absent.
+workspace range survived staging, or if the declared binary is missing.
 
 ## Before publishing
 
 ```
 pnpm verify                  # check, unit and integration, end to end
-pnpm test:ui                 # the browser workspace, needs: pnpm exec playwright install chromium
-pnpm package                 # builds the workspace and the bundle, stages, packs, installs and audits
+pnpm package                 # builds the bundle, stages, packs, installs and audits
 ```
 
 `pnpm package` writes `release/release-summary.json`. Read it rather than trusting the exit code:
@@ -29,7 +28,6 @@ pnpm package                 # builds the workspace and the bundle, stages, pack
 | `publishableUnit` | `release/stage` |
 | `workspaceDependencies` | empty |
 | `missingRequiredFiles` | empty |
-| `includesBrowserWorkspace` | `true` |
 | `installSmokeTest.ok` | `true`, with a detail naming the components it discovered |
 | `publishedVersion` | the version being released |
 

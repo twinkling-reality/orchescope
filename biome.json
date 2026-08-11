@@ -199,19 +199,6 @@
       }
     },
     {
-      "includes": ["apps/web/src/**"],
-      "linter": {
-        "rules": {
-          "correctness": {
-            "useImportExtensions": "off"
-          },
-          "style": {
-            "useNamingConvention": "off"
-          }
-        }
-      }
-    },
-    {
       "includes": [
         "packages/source-analysis/src/**",
         "packages/traces/src/otlp.ts",
@@ -232,13 +219,7 @@
       }
     },
     {
-      "includes": [
-        "**/test/**",
-        "tests/**",
-        "apps/web/src/sections/**",
-        "apps/web/src/ui/**",
-        "apps/web/src/app.tsx"
-      ],
+      "includes": ["**/test/**", "tests/**"],
       "linter": {
         "rules": {
           "complexity": {
