@@ -1,10 +1,11 @@
 /**
  * The reconciliation: how much of the declared system a run has ever reached, and the four deltas.
  *
- * This is the join the product exists to compute, so it gets its own key and its own region rather than
- * being folded into a step's sentence. It renders only when a run has been recorded. When none has, the
- * MEASURE step already prices that absence, names how many checks it blocks and carries the command
- * that lifts it, so a second copy here would be one absence reported as two faults.
+ * This is the join the product exists to compute. The surface key is `system`, not `join`, so a human
+ * glance meets the thing being measured rather than the engine verb for measuring it. The region still
+ * renders only when a run has been recorded. When none has, the MEASURE step already prices that
+ * absence, names how many checks it blocks and carries the command that lifts it, so a second copy
+ * here would be one absence reported as two faults.
  */
 
 import { formatCount } from '@orchescope/domain';
@@ -22,7 +23,7 @@ type Reconciliation = NonNullable<AuditResult['reconciliation']>;
  */
 const fractionRow = (delta: Reconciliation): Row => ({
   kind: 'keyed',
-  key: 'join',
+  key: 'system',
   text: `${delta.coverage.exercisedComponents} of ${delta.coverage.declaredComponents} declared components exercised`,
 });
 
@@ -45,7 +46,7 @@ const deltaRows = (delta: Reconciliation): readonly Row[] =>
     `${formatCount(delta.exercisedNotDeclared.components.length, 'exercised component')} never declared`,
     formatCount(delta.contradictions.length, 'contradicted declaration'),
     formatCount(delta.duplicateSideEffects.length, 'duplicated external effect'),
-  ].map((text) => ({ kind: 'keyed', key: 'join', text }) as const);
+  ].map((text) => ({ kind: 'keyed', key: 'system', text }) as const);
 
 /**
  * Five lines, fixed, or none.

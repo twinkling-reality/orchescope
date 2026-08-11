@@ -20,10 +20,10 @@ import { cut, padLeftTo, padTo, sanitiseCell, visibleWidth } from './display-wid
 /**
  * Fourteen columns for the key.
  *
- * The two widest keys in the product are `5 did it help` at 13 and a finding id at 14, and a finding id
- * may never be truncated because it is the argument to `orchescope goal create`. A key longer than this
- * pushes its own row right rather than being cut, which happens on one thing only, a project name, and
- * a project name is the identity of the document.
+ * The widest ordinary key is `5 did it help` at 13. Finding identifiers are not keys on the default
+ * surface: they are arguments for agents and for `goal create`, and they appear on the `run` line or
+ * under `--verbose`. A key longer than this pushes its own row right rather than being cut, which
+ * happens on one thing only, a project name, and a project name is the identity of the document.
  */
 export const KEY_WIDTH = 14;
 

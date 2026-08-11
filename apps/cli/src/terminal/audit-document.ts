@@ -66,7 +66,7 @@ export const auditDocument = (input: AuditDocumentInput): string => {
         agentSystemDetected: result.agentSystemDetected,
         joinRenders: join.length > 0,
       }),
-      findingRegion({ risks, strengths, verbose: input.verbose }),
+      findingRegion({ risks, strengths, verbose: input.verbose, style: input.style }),
       join,
       gapRegion(result.graph.coverage, layout),
       /*

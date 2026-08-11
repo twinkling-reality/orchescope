@@ -12,6 +12,8 @@ import { finding } from './audit-fixture.ts';
  * finding title is itself a numeric claim and a metric without a sample size is not reported. And a
  * repository where nothing fired says so in a sentence rather than by leaving a gap, because an empty
  * list reads as a clean bill of health and this product is not a certification.
+ *
+ * Finding identifiers stay off the default surface. They are arguments, not headlines.
  */
 
 const risks = (count: number, over: Parameters<typeof finding>[0] = {}) =>
@@ -23,6 +25,9 @@ const render = (input: Parameters<typeof findingRegion>[0], columns = 80): reado
   const layout = layoutFor(columns);
   return findingRegion(input).map((row) => renderRow(row, layout));
 };
+
+const problemRows = (rendered: readonly string[]): readonly string[] =>
+  rendered.filter((line) => line.startsWith('problem'));
 
 describe('the heading sentence', () => {
   it('states the mix when more than one severity fired', () => {
@@ -76,10 +81,21 @@ describe('a repository where nothing fired', () => {
 });
 
 describe('the rows', () => {
-  it('lists six and then names the remainder in one line', () => {
+  it('lists six problems and then names the remainder in one line', () => {
     const rendered = render({ risks: risks(19), strengths: risks(2), verbose: false });
-    assert.equal(rendered.filter((line) => line.startsWith('OSC-')).length, 6);
-    assert.equal(rendered.at(-1), 'findings        13 more risks, in the report');
+    assert.equal(problemRows(rendered).length, 6);
+    assert.equal(
+      rendered.at(-1),
+      'findings        13 more risks; full list: orchescope audit --json',
+    );
+  });
+
+  it('keeps finding identifiers off the default surface', () => {
+    const rendered = render({ risks: risks(4), strengths: [], verbose: false });
+    assert.equal(
+      rendered.some((line) => line.includes('OSC-')),
+      false,
+    );
   });
 
   it('lists everything and names no remainder when the list is complete', () => {
@@ -100,6 +116,7 @@ describe('the rows', () => {
       risks: [
         finding({
           id: 'OSC-ARCH-0001',
+          title: 'an undeclared tool needs a person to decide',
           goalReadiness: {
             eligible: false,
             reason: 'this needs a person',
@@ -111,7 +128,11 @@ describe('the rows', () => {
       strengths: [],
       verbose: false,
     });
-    assert.ok(rendered.some((line) => line.startsWith('OSC-ARCH-0001')));
+    assert.ok(rendered.some((line) => line.includes('undeclared tool')));
+    assert.equal(
+      rendered.some((line) => line.includes('OSC-ARCH-0001')),
+      false,
+    );
   });
 
   it('carries the sample size and its class on every row, right aligned to one anchor', () => {
@@ -128,7 +149,7 @@ describe('the rows', () => {
       strengths: [],
       verbose: false,
     });
-    const rows = rendered.filter((line) => line.startsWith('OSC-'));
+    const rows = problemRows(rendered);
     assert.ok(rows[0]?.endsWith(' 1 simulated'));
     assert.ok(rows[1]?.endsWith('11 observed'));
     for (const row of rows) assert.equal(visibleWidth(row), 80);
@@ -147,24 +168,29 @@ describe('what verbose adds', () => {
   it('lists strengths only when asked, and never among the risks otherwise', () => {
     const quiet = render({
       risks: risks(1),
-      strengths: [finding({ id: 'OSC-STR-0001', polarity: 'strength' })],
+      strengths: [finding({ id: 'OSC-STR-0001', polarity: 'strength', title: 'a good shape' })],
       verbose: false,
     });
     assert.equal(
-      quiet.some((line) => line.startsWith('OSC-STR-0001')),
+      quiet.some((line) => line.includes('a good shape')),
       false,
     );
 
     const loud = render({
       risks: risks(1),
-      strengths: [finding({ id: 'OSC-STR-0001', polarity: 'strength' })],
+      strengths: [finding({ id: 'OSC-STR-0001', polarity: 'strength', title: 'a good shape' })],
       verbose: true,
     });
     assert.ok(loud.some((line) => line.includes('+ strength')));
+    assert.ok(loud.some((line) => line.includes('a good shape')));
   });
 
-  it('brings back the two fields a row cannot carry', () => {
-    const loud = render({ risks: [finding({ confidence: 0.75 })], strengths: [], verbose: true });
-    assert.ok(loud.some((line) => line.trim() === 'reliability, confidence 0.75'));
+  it('brings back the identifier and the two fields a row cannot carry', () => {
+    const loud = render({
+      risks: [finding({ id: 'OSC-REL-0003', confidence: 0.75 })],
+      strengths: [],
+      verbose: true,
+    });
+    assert.ok(loud.some((line) => line.trim() === 'OSC-REL-0003, reliability, confidence 0.75'));
   });
 });

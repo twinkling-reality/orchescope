@@ -46,10 +46,17 @@ dictionary.
 
 ### Join stays its own region; zeros stay news
 
-Findings stay above join. The join region stays absent when there are no runs. Zero deltas still
-render when a run was reconciled: a zero is the difference between "looked and clear" and "never
-looked." Collapsing zeros is rejected. Full product nouns on four delta rows win over packing that
-shortens them: the join must speak the same words as findings and MCP delta summaries.
+Findings stay above the reconciliation region. That region stays absent when there are no runs. Zero
+deltas still render when a run was reconciled: a zero is the difference between "looked and clear" and
+"never looked." Collapsing zeros is rejected. Full product nouns on four delta rows win over packing
+that shortens them. The surface key is `system` (the subject), not `join` (the engine verb).
+
+### Terminal glance hides engine chrome
+
+The default terminal document is for a human glance: `problem` / `ok` rows with severity and title,
+not finding identifiers. Identifiers stay available on the `run` line when a goal is next, under
+`--verbose`, and always in `audit --json` / MCP. Colour may reinforce `!` / `+` / severity words; it
+never carries meaning alone. No interactive tabs, chords, bars, or invented percentages.
 
 ## Implementation sequence
 

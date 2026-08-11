@@ -8,7 +8,8 @@ import { reconciliation } from './audit-fixture.ts';
  * The join, which is the thing no other tool computes.
  *
  * The two properties that matter are that the fraction is labelled for the declared set, and that the
- * region is absent rather than empty when no run has been recorded.
+ * region is absent rather than empty when no run has been recorded. The surface key is `system`, so a
+ * human meets the subject rather than the engine verb.
  */
 
 const render = (delta: Parameters<typeof joinRegion>[0]): readonly string[] => {
@@ -32,7 +33,7 @@ describe('the fraction', () => {
   it('is labelled for the declared set, and carries no percentage', () => {
     assert.equal(
       render(reconciliation({}))[0],
-      'join            14 of 21 declared components exercised',
+      'system          14 of 21 declared components exercised',
     );
   });
 
@@ -43,7 +44,7 @@ describe('the fraction', () => {
    */
   it('states the same form when the fraction rounds below one per cent', () => {
     const tiny = render(reconciliation({ exercised: 3, declared: 953 }));
-    assert.equal(tiny[0], 'join            3 of 953 declared components exercised');
+    assert.equal(tiny[0], 'system          3 of 953 declared components exercised');
     assert.equal(
       tiny.some((line) => line.includes('percent')),
       false,
@@ -58,10 +59,10 @@ describe('the fraction', () => {
 describe('the four deltas', () => {
   it('keeps the noun the product uses for each one everywhere else', () => {
     assert.deepEqual(render(reconciliation({})).slice(1), [
-      'join            7 declared components never exercised',
-      'join            1 exercised component never declared',
-      'join            0 contradicted declarations',
-      'join            1 duplicated external effect',
+      'system          7 declared components never exercised',
+      'system          1 exercised component never declared',
+      'system          0 contradicted declarations',
+      'system          1 duplicated external effect',
     ]);
   });
 
@@ -76,10 +77,10 @@ describe('the four deltas', () => {
     );
     assert.equal(none.length, 5);
     assert.deepEqual(none.slice(1), [
-      'join            0 declared components never exercised',
-      'join            0 exercised components never declared',
-      'join            0 contradicted declarations',
-      'join            0 duplicated external effects',
+      'system          0 declared components never exercised',
+      'system          0 exercised components never declared',
+      'system          0 contradicted declarations',
+      'system          0 duplicated external effects',
     ]);
   });
 

@@ -37,29 +37,30 @@ demo            33 components, 32 edges, 23 of 23 files read
 5 did it help   ! undecided  unchanged: no metric moved enough to call
 
 findings        20 risks: 3 high, 6 medium, 11 low; 2 strengths
-OSC-RES-0003    ! high       tool_timeout on issue_refund: a side…   1 simulated
-OSC-REL-0005    ! high       Retry around issue_refund can repeat…  2 discovered
-OSC-REL-0002    ! high       refund happened 2 times in one run      11 observed
-OSC-REL-0003    ! medium     Model call to demo-small declares no…  4 discovered
-OSC-SEC-0001    ! medium     2 consequential operations have no a…  6 discovered
-OSC-ARCH-0001   ! medium     metering_record_usage runs without b…    5 observed
-findings        14 more risks, in the report
+problem         ! high       tool_timeout on issue_refund: a side…   1 simulated
+problem         ! high       Retry around issue_refund can repeat…  2 discovered
+problem         ! high       refund happened 2 times in one run      11 observed
+problem         ! medium     Model call to demo-small declares no…  4 discovered
+problem         ! medium     2 consequential operations have no a…  6 discovered
+problem         ! medium     metering_record_usage runs without b…    5 observed
+findings        14 more risks; full list: orchescope audit --json
 
-join            14 of 21 declared components exercised
-join            7 declared components never exercised
-join            1 exercised component never declared
-join            0 contradicted declarations
-join            1 duplicated external effect
+system          14 of 21 declared components exercised
+system          7 declared components never exercised
+system          1 exercised component never declared
+system          0 contradicted declarations
+system          1 duplicated external effect
 
 run             orchescope test --scenario support-desk --repeat 5
 ```
 
-Findings sit above the join so the worst problem is visible before the coverage rows. `join` is the
-reconciliation, and the four rows under the fraction are the four deltas this product exists to
-compute. Every finding row ends with how many evidence records stand behind it and how they were
-established, because a title is itself a numeric claim. There is one `run` row: the command that
-advances the loop. A `next` row carries an instruction that names a file to edit, and is never a
-command.
+Findings sit above the system rows so the worst problem is visible before coverage. Finding identifiers
+stay off the default surface; they appear on the `run` line when a goal is next, under `--verbose`, or
+in `audit --json` / MCP for agents. `system` is the reconciliation: how much of the declared model a
+run reached, and the four deltas this product exists to compute. Every finding row ends with how many
+evidence records stand behind it and how they were established, because a title is itself a numeric
+claim. There is one `run` row: the command that advances the loop. A `next` row carries an instruction
+that names a file to edit, and is never a command.
 
 A repository where nothing was detected still gets the five step loop, the sentence saying that
 nothing reported is not the same as nothing wrong, and one command that writes the manifest template:

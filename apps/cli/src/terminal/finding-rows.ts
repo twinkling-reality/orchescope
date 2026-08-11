@@ -1,9 +1,10 @@
 /**
  * What the audit found: one heading sentence, a bounded list, and what the list left out.
  *
- * This is the one region that answers "what did you find". It used to be answered four times in one
- * report, by a phase line, by a step's supporting line, by a severity block and by the list itself, and
- * the four agreed only because they read the same integer.
+ * This is the one region that answers "what did you find". The default surface is for a human glance:
+ * severity, the problem in words, and the evidence basis. Finding identifiers stay off that surface
+ * because they are arguments for agents and for `goal create`, not nouns a reader needs to scan. Under
+ * `--verbose`, and on the `run` line when a goal is the next step, the identifier is still available.
  *
  * No rule is suppressed here. A finding whose rule fired is a finding, and a renderer that decided some
  * of them were not worth a row would be the renderer analysing, which is the one thing a presentation
@@ -14,9 +15,10 @@
 
 import { formatCount } from '@orchescope/domain';
 import { ZERO_RISK_CAVEAT } from '@orchescope/report';
-import type { Finding } from '@orchescope/schema';
+import type { Finding, Severity } from '@orchescope/schema';
 import { visibleWidth } from './display-width.ts';
 import type { Region, Row } from './document-grid.ts';
+import { createStyle, type Style } from './style.ts';
 
 /**
  * Six rows.
@@ -70,37 +72,55 @@ const headingSentence = (risks: readonly Finding[], strengths: number): string =
  */
 const basisField = (finding: Finding): string => `${finding.evidence.length} ${finding.basis}`;
 
-const riskRow = (finding: Finding, tailWidth: number): Row => ({
+/**
+ * Colour reinforces the symbol and word already on the row. Under plain style every painter is identity,
+ * so NO_COLOR and pipes keep the same glyphs.
+ */
+const paintSeverity = (style: Style, severity: Severity): string => {
+  const label = `! ${severity}`;
+  if (severity === 'critical' || severity === 'high') return style.bad(label);
+  if (severity === 'medium') return style.warn(label);
+  return style.dim(label);
+};
+
+const riskRow = (finding: Finding, tailWidth: number, style: Style): Row => ({
   kind: 'keyed',
-  key: finding.id,
-  state: `! ${finding.severity}`,
+  key: 'problem',
+  state: paintSeverity(style, finding.severity),
   text: finding.title,
   tail: basisField(finding),
   tailWidth,
 });
 
-const strengthRow = (finding: Finding, tailWidth: number): Row => ({
+const strengthRow = (finding: Finding, tailWidth: number, style: Style): Row => ({
   kind: 'keyed',
-  key: finding.id,
-  state: '+ strength',
+  key: 'ok',
+  state: style.good('+ strength'),
   text: finding.title,
   tail: basisField(finding),
   tailWidth,
 });
 
-/** Under verbose, the two fields a row cannot carry come back on a line of their own. */
+/**
+ * Under verbose, the identifier and the two fields a row cannot carry come back on a line of their own.
+ *
+ * The identifier is an argument, not a headline: agents take it from `--json` or MCP, and a human who
+ * asked for verbose is the one who wants to paste it.
+ */
 const verboseDetail = (finding: Finding): Row => ({
   kind: 'detail',
-  text: `${finding.category}, confidence ${finding.confidence.toFixed(2)}`,
+  text: `${finding.id}, ${finding.category}, confidence ${finding.confidence.toFixed(2)}`,
 });
 
 export interface FindingInput {
   readonly risks: readonly Finding[];
   readonly strengths: readonly Finding[];
   readonly verbose: boolean;
+  readonly style?: Style;
 }
 
 export const findingRegion = (input: FindingInput): Region => {
+  const style = input.style ?? createStyle('plain');
   const shownRisks = input.risks.slice(0, ROW_CEILING);
   const shownStrengths = input.verbose ? input.strengths.slice(0, ROW_CEILING) : [];
   const anchored = [...shownRisks, ...shownStrengths];
@@ -121,24 +141,25 @@ export const findingRegion = (input: FindingInput): Region => {
    */
   if (input.risks.length === 0) rows.push({ kind: 'caveat', text: ZERO_RISK_CAVEAT });
   for (const finding of shownRisks) {
-    rows.push(riskRow(finding, tailWidth));
+    rows.push(riskRow(finding, tailWidth, style));
     if (input.verbose) rows.push(verboseDetail(finding));
   }
   for (const finding of shownStrengths) {
-    rows.push(strengthRow(finding, tailWidth));
+    rows.push(strengthRow(finding, tailWidth, style));
     rows.push(verboseDetail(finding));
   }
   /*
    * One overflow line, never more. It names the remainder and where the rest of them are, and it does
    * not restate the strength count: that is in the heading sentence, one line above, and stating it
-   * twice is how the count came to be stated three times before.
+   * twice is how the count came to be stated three times before. Agents read the full set from
+   * `--json` or MCP; the terminal does not pretend to be that list.
    */
   const remaining = input.risks.length - shownRisks.length;
   if (remaining > 0) {
     rows.push({
       kind: 'keyed',
       key: 'findings',
-      text: `${formatCount(remaining, 'more risk')}, in the report`,
+      text: `${formatCount(remaining, 'more risk')}; full list: orchescope audit --json`,
     });
   }
   return rows;
