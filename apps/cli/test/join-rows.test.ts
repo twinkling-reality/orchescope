@@ -7,8 +7,8 @@ import { reconciliation } from './audit-fixture.ts';
 /**
  * The join, which is the thing no other tool computes.
  *
- * The two properties that matter are that the fraction is labelled for the set it actually counts, and
- * that the region is absent rather than empty when no run has been ingested.
+ * The two properties that matter are that the fraction is labelled for the declared set, and that the
+ * region is absent rather than empty when no run has been ingested.
  */
 
 const render = (delta: Parameters<typeof joinRegion>[0]): readonly string[] => {
@@ -29,8 +29,11 @@ describe('when no run has been ingested', () => {
 });
 
 describe('the fraction', () => {
-  it('is labelled for the set it counts, and carries no percentage', () => {
-    assert.equal(render(reconciliation({}))[0], 'join            15 of 22 parts a run could reach');
+  it('is labelled for the declared set, and carries no percentage', () => {
+    assert.equal(
+      render(reconciliation({}))[0],
+      'join            14 of 21 declared components exercised',
+    );
   });
 
   /*
@@ -40,15 +43,15 @@ describe('the fraction', () => {
    */
   it('states the same form when the fraction rounds below one per cent', () => {
     const tiny = render(reconciliation({ exercised: 3, declared: 953 }));
-    assert.equal(tiny[0], 'join            3 of 953 parts a run could reach');
+    assert.equal(tiny[0], 'join            3 of 953 declared components exercised');
     assert.equal(
       tiny.some((line) => line.includes('percent')),
       false,
     );
   });
 
-  it('states the pair uncorrected, so it agrees with the finding text that quotes it', () => {
-    assert.match(render(reconciliation({ exercised: 15, declared: 22 }))[0] ?? '', /15 of 22/);
+  it('states the same pair the finding text quotes', () => {
+    assert.match(render(reconciliation({ exercised: 14, declared: 21 }))[0] ?? '', /14 of 21/);
   });
 });
 

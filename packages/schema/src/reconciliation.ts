@@ -112,11 +112,16 @@ export const ReconciliationDelta = Type.Object(
     joins: JoinSummary,
     coverage: Type.Object(
       {
+        /**
+         * Observable components with a static declaration. Runtime-only (undeclared) components are
+         * not counted here; they appear only under `exercisedNotDeclared`.
+         */
         declaredComponents: NonNegativeInt,
+        /** Declared observable components that also appeared in at least one run. */
         exercisedComponents: NonNegativeInt,
         declaredEdges: NonNegativeInt,
         exercisedEdges: NonNegativeInt,
-        /** Fraction of declared components seen in at least one run, or undefined with no runs. */
+        /** `exercisedComponents / declaredComponents`, or undefined with no runs or nothing declared. */
         componentExerciseRate: Type.Optional(Type.Number({ minimum: 0, maximum: 1 })),
         edgeExerciseRate: Type.Optional(Type.Number({ minimum: 0, maximum: 1 })),
       },

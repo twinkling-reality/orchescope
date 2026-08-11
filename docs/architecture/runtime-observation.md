@@ -95,9 +95,10 @@ The join yields the output that nothing else produces:
 | **Contradicted declarations** | A declaration and the behaviour disagree: a retry declared idempotent that repeated an effect, a timeout declared and exceeded. |
 | **Duplicated side effects** | The same logical operation happened more than once inside one run, attributed to the operation that produced it. |
 
-Coverage is reported with them: how many declared components and relations exist, how many were exercised, and the rate,
-along with the revision the static side was read at and the runs the runtime side came from. A delta without those is not
-reproducible.
+Coverage is reported with them: how many declared components and relations exist, how many of those declared parts were
+exercised, and the rate, along with the revision the static side was read at and the runs the runtime side came from.
+Undeclared observations are counted only under exercised-and-never-declared, not in the coverage denominator. A delta
+without those anchors is not reproducible.
 
 Duplicate counting deserves one note, because it is easy to get wrong in a way that looks alarming. The count that means
 duplication is the maximum within a single run; the total across runs is reported separately as history. Repeating an

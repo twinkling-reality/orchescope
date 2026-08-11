@@ -1,5 +1,5 @@
 /**
- * The reconciliation: how much of the system a run has ever reached, and the four deltas.
+ * The reconciliation: how much of the declared system a run has ever reached, and the four deltas.
  *
  * This is the join the product exists to compute, so it gets its own key and its own region rather than
  * being folded into a step's sentence. It renders only when a run has been ingested. When none has, the
@@ -14,19 +14,16 @@ import type { Region, Row } from './document-grid.ts';
 type Reconciliation = NonNullable<AuditResult['reconciliation']>;
 
 /**
- * The fraction, labelled for the set it actually counts.
+ * The fraction, labelled for the declared set the coverage pair counts.
  *
- * `declaredComponents` counts every component a run could have reached, which on a repository with an
- * undeclared component includes one nothing declared. Calling that set the declared parts would be
- * false of it, and quietly correcting the pair to exclude it would contradict the finding whose own
- * explanation text states the uncorrected pair. So the number is printed for the set it counts and no
- * percentage is derived from it: a rate printed beside a fraction is the same measurement twice, and a
- * rate printed only when it flatters is worse than either.
+ * Undeclared components sit in the four deltas, not in this denominator. No percentage is printed
+ * beside the fraction: a rate next to a fraction is the same measurement twice, and a rate printed
+ * only when it flatters is worse than either.
  */
 const fractionRow = (delta: Reconciliation): Row => ({
   kind: 'keyed',
   key: 'join',
-  text: `${delta.coverage.exercisedComponents} of ${delta.coverage.declaredComponents} parts a run could reach`,
+  text: `${delta.coverage.exercisedComponents} of ${delta.coverage.declaredComponents} declared components exercised`,
 });
 
 /**

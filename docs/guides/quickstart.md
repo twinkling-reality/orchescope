@@ -45,7 +45,7 @@ OSC-SEC-0001    ! medium     2 consequential operations have no a…  6 discover
 OSC-ARCH-0001   ! medium     metering_record_usage runs without b…    5 observed
 findings        13 more risks, in the report
 
-join            15 of 22 parts a run could reach
+join            14 of 21 declared components exercised
 join            7 declared components never exercised
 join            1 exercised component never declared
 join            0 contradicted declarations

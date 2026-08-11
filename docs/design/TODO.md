@@ -54,7 +54,7 @@ lines without dropping zeros or inventing a percentage.
 | Tranche | Work | Status |
 | --- | --- | --- |
 | 1 | Baseline-before-goal; MCP `import_trace` + `run_traced` + loop-action mapping | done |
-| 2 | Coverage pair (declared-set) atomic across graph, finding, TUI, schema comments | open |
+| 2 | Coverage pair (declared-set) atomic across graph, finding, TUI, schema comments | done |
 | 3 | Vocabulary / grammar pass over findings, goals, comparison, MCP chrome | open |
 | optional | Join delta packing (keep zeros, shrink line count) | open |
 

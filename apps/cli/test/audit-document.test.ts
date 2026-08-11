@@ -67,7 +67,7 @@ describe('a repository with a system, a run and two problems', () => {
         'OSC-REL-0001    ! high       a model is called with no timeout de…  2 discovered',
         'OSC-SEC-0001    ! medium     a model is called with no timeout de…    1 inferred',
         '',
-        'join            15 of 22 parts a run could reach',
+        'join            14 of 21 declared components exercised',
         'join            7 declared components never exercised',
         'join            1 exercised component never declared',
         'join            0 contradicted declarations',

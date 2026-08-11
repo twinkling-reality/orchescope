@@ -352,6 +352,34 @@ describe('computeDelta', () => {
     const result = computeDelta({ graph, runs: [], spanToComponent: new Map() });
     assert.ok(result.delta.declaredNotExercised.components.includes('tool:issue_refund'));
   });
+
+  /*
+   * Coverage is the declared set. An undeclared observation belongs in exercisedNotDeclared, not in
+   * both halves of the fraction. The old pair counted every observable component a run could name,
+   * which made the demonstration system's "15 of 22" include one component nothing declared.
+   */
+  it('counts coverage over declared components only', () => {
+    const base = buildGraph([orchestrator, refund, inventory]);
+    const reconciled = reconcile(base, [
+      runtimeTopology({
+        components: [
+          observedComponent({ kind: 'agent', observedName: 'orchestrator' }),
+          observedComponent({ kind: 'tool', observedName: 'mystery_tool' }),
+        ],
+      }),
+    ]);
+    const result = computeDelta({
+      graph: reconciled.graph,
+      runs: [{ runId: `run_${'c'.repeat(16)}`, sideEffects: [] }],
+      spanToComponent: new Map(),
+      matches: reconciled.matches,
+      ambiguous: reconciled.ambiguous,
+    });
+    assert.equal(result.delta.coverage.declaredComponents, 3);
+    assert.equal(result.delta.coverage.exercisedComponents, 1);
+    assert.equal(result.delta.exercisedNotDeclared.components.length, 1);
+    assert.equal(result.delta.coverage.componentExerciseRate, 1 / 3);
+  });
 });
 
 describe('diffGraphs', () => {

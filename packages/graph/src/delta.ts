@@ -364,8 +364,19 @@ export const computeDelta = (input: DeltaInput): DeltaResult => {
     ...policyContradictions(input.graph, collect),
   ];
 
-  const declaredComponents = observableComponents(input.graph).length;
-  const exercisedComponents = observableComponents(input.graph).filter(
+  /*
+   * Coverage describes the declared set, not every observable component a run could name.
+   *
+   * Undeclared (runtime-only) components belong in `exercisedNotDeclared`, not in the fraction's
+   * denominator. Counting them on both sides of the pair made `15 of 22` on the demonstration
+   * system include one component nothing declared, which contradicted the field name, the schema
+   * comment and the four deltas. Edges already exclude `runtimeOnly` from their denominator.
+   */
+  const declaredObservable = observableComponents(input.graph).filter(
+    (component) => component.presence.static,
+  );
+  const declaredComponents = declaredObservable.length;
+  const exercisedComponents = declaredObservable.filter(
     (component) => component.presence.runtime,
   ).length;
   const declaredEdges = input.graph.edges.filter(

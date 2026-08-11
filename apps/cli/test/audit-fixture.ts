@@ -121,8 +121,8 @@ export const reconciliation = (over: {
 }): NonNullable<AuditResult['reconciliation']> =>
   ({
     coverage: {
-      exercisedComponents: over.exercised ?? 15,
-      declaredComponents: over.declared ?? 22,
+      exercisedComponents: over.exercised ?? 14,
+      declaredComponents: over.declared ?? 21,
     },
     declaredNotExercised: { components: Array.from({ length: over.notExercised ?? 7 }, () => 'c') },
     exercisedNotDeclared: { components: Array.from({ length: over.notDeclared ?? 1 }, () => 'c') },

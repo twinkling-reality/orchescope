@@ -28,7 +28,11 @@ const keyed = (over: Partial<Row> = {}): Row => ({
 });
 
 /** A row with no state at all, which starts its value at the value column instead. */
-const stateless: Row = { kind: 'keyed', key: 'join', text: '15 of 22 parts a run could reach' };
+const stateless: Row = {
+  kind: 'keyed',
+  key: 'join',
+  text: '14 of 21 declared components exercised',
+};
 
 const columnOf = (line: string, needle: string): number => line.indexOf(needle) + 1;
 
