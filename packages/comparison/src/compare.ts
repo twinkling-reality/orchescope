@@ -1,5 +1,6 @@
 import {
   differenceIsMeaningful,
+  formatCount,
   comparisonId as makeComparisonId,
   mean,
   relativeChange,
@@ -272,7 +273,7 @@ export const compare = (input: CompareInput): Comparison => {
   const limitations: string[] = [];
   if (input.baselineRuns.length < 5 || input.candidateRuns.length < 5) {
     limitations.push(
-      `sample sizes are ${input.baselineRuns.length} baseline and ${input.candidateRuns.length} candidate run(s); differences from fewer than five runs per side are not reported as directional unless the spread is very small`,
+      `sample sizes are ${formatCount(input.baselineRuns.length, 'baseline run')} and ${formatCount(input.candidateRuns.length, 'candidate run')}; differences from fewer than five runs per side are not reported as directional unless the spread is very small`,
     );
   }
   if (metricDeltas.some((delta) => delta.metric === 'costUsd')) {

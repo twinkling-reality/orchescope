@@ -113,6 +113,7 @@ meant to be committed; state is not.
 
 ## Where to look next
 
+- [product-flow.md](product-flow.md) for the five step loop and how each surface serves it.
 - [module-boundaries.md](module-boundaries.md) for what each package owns.
 - [discovery-lifecycle.md](discovery-lifecycle.md) for how a file becomes a component.
 - [finding-lifecycle.md](finding-lifecycle.md) for how a rule becomes a finding.

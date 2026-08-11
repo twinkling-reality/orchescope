@@ -11,7 +11,7 @@ import type { CommandContext } from '../context.ts';
 import { EXIT_CODES } from '../exit.ts';
 import { serverActionsFor } from '../server-actions.ts';
 import { type BrowserOutcome, reportReady } from '../terminal/report-ready.ts';
-import { doctorSummary } from '../terminal/summary.ts';
+import { doctorSummary } from '../terminal/doctor-summary.ts';
 
 /**
  * Commands about the workspace itself: init, doctor, open and export.

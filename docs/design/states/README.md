@@ -1,12 +1,11 @@
 # Every state the report workspace can be in
 
-The workspace does not render one page. Every screen picks a representation from what the report bundle
-can carry and says which one it picked, so "what does the Findings screen look like" has no single
-answer, and the demonstration is one point in a space of **1137**.
+The workspace renders one structural page per screen. Overview always carries delta, top actions, next
+commands and context. Every other screen always carries summary, primary and detail. What fills a slot
+depends on the report bundle, and missing evidence refuses in that slot instead of changing the tree.
 
-That is a hard place to design from, because the state you are about to change may not be the state you
-are looking at. This directory exists so you can see the range before you touch it. It has two halves
-and they answer different questions.
+This directory exists to compare those stable frames across real report regimes before changing them.
+It has two halves and they answer different questions.
 
 ## To look at a state: `pnpm states`
 
@@ -54,7 +53,12 @@ pnpm orchescope --cwd apps/demo export --format json --out corpus/.cache/bundles
 
 after the demonstration has runs in it. `pnpm tour --keep` keeps whatever is already there.
 
-## To know what states exist: the files beside this one
+## Historical decision inventory: the files beside this one
+
+The totals below count branches in the workspace before the fixed presentation contract. They document
+edge evidence and protocol vocabulary, but they are not the product's mode matrix and are not a target
+for completeness. Design work should concentrate on no run, run with findings and goals, then use the
+gallery to catch regressions in the other reports.
 
 | file | states | blocks | thresholds | reached by no report here |
 | --- | --- | --- | --- | --- |
@@ -80,8 +84,8 @@ change to either is a change to all eight screens at once.
 
 ## The part worth knowing before you start
 
-**465 of the 1137 states are reached by no report in the cache.** Nothing shows them to you, which means
-nothing has ever been looked at in them. They are not exotic: they include a severity of `critical`,
+**The historical inventory includes 465 branches reached by no report in the cache.** Nothing shows
+them to you. They are not exotic: they include a severity of `critical`,
 which the severity mark's only two element form exists for; the basis `model_interpreted`, which is the
 only two word chip label and the one that will wrap in a table cell; every branch of the currency
 formatter, because no run in any report has ever reported a cost; and a capability that is absent rather
@@ -108,15 +112,10 @@ The tables were derived by reading every branch in `apps/web` and the modules it
 this directory was added. The `file:line` references are the check: a claim you doubt is one file open
 away from settled, and a line that has moved is a sign the state may have moved with it.
 
-**Six of the ten files are now stale, and this is which.** The bento pass rebuilt the main area of
-Overview, Performance, Resilience, Scenarios, Comparisons and Goals, so
-[overview.md](overview.md), [performance.md](performance.md), [resilience.md](resilience.md),
-[scenarios.md](scenarios.md), [comparisons.md](comparisons.md) and [goals.md](goals.md) name blocks
-that no longer exist and miss ones that do: Performance alone gained four tiles with refusal states of
-their own. [system-map.md](system-map.md) and [findings.md](findings.md) kept their branches and
-changed only their frame. [shell.md](shell.md) and [vocabulary.md](vocabulary.md) are unaffected except
-that `.block`, `.deck` and `.card` are now `.tile`. Nobody has re-derived the six, so the totals in the
-table above are the old ones and should be read as a floor rather than a count.
+**All ten inventory files are historical.** The fixed skeleton changed every section frame, navigation
+now keeps zero counts visible, Overview has a new four-slot order, and several section files moved into
+responsibility-named directories. The predicates can still reveal an evidence edge worth testing, but
+their block names, line references and totals do not describe the presentation contract.
 
 The gallery is the empirical half and does not go stale in the same way, because it renders whatever the
 bundles and the current build actually produce. When the two disagree, the gallery is right.

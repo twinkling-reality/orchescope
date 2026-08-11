@@ -14,7 +14,9 @@ import {
 } from '@orchescope/usecases';
 import type { CommandContext } from '../context.ts';
 import { EXIT_CODES } from '../exit.ts';
-import { comparisonSummary, noSpansLines, scenarioSummary } from '../terminal/summary.ts';
+import { comparisonSummary } from '../terminal/comparison-summary.ts';
+import { noSpansLines } from '../terminal/no-spans.ts';
+import { scenarioSummary } from '../terminal/scenario-summary.ts';
 
 /**
  * Commands that execute the audited system: trace, test, benchmark, chaos and compare.

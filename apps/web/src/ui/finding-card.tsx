@@ -21,7 +21,7 @@ import {
   type RerunScenarioRequest,
 } from '../api.ts';
 import { postJson } from '../client.tsx';
-import { buildFindingText } from '../finding-text.ts';
+import { buildFindingText } from '../presentation/finding-text.ts';
 import {
   formatArgv,
   formatConfidence,
@@ -30,8 +30,8 @@ import {
   formatSourceLocation,
   formatTimestamp,
   humanise,
-} from '../format.ts';
-import { componentLabel, type GraphIndex } from '../graph-index.ts';
+} from '../presentation/format.ts';
+import { componentLabel, type GraphIndex } from '../presentation/graph-index.ts';
 import { useApp } from '../store.tsx';
 import { CapabilityAction, CopyButton } from './actions.tsx';
 import { EvidenceList, OpenLocationAction } from './evidence-list.tsx';
@@ -57,11 +57,11 @@ function Metrics(props: { readonly finding: Finding }) {
         <table class="table">
           <thead>
             <tr>
-              <th scope="col">Metric</th>
+              <th scope="col">What was measured</th>
               <th scope="col">Value</th>
               <th scope="col">Compared with</th>
-              <th scope="col">Sample size</th>
-              <th scope="col">Evidence class</th>
+              <th scope="col">How many samples</th>
+              <th scope="col">How it was established</th>
             </tr>
           </thead>
           <tbody>
@@ -95,7 +95,7 @@ function AffectedComponents(props: { readonly finding: Finding; readonly index: 
   return (
     <section>
       <Eyebrow level={4} count={props.finding.components.length}>
-        Affected components
+        Parts this is about
       </Eyebrow>
       <ul class="plain inline-list small">
         {props.finding.components.map((componentId) => (
@@ -124,7 +124,7 @@ function Recommendation(props: { readonly finding: Finding }) {
   }
   return (
     <section>
-      <Eyebrow level={4}>Recommendation</Eyebrow>
+      <Eyebrow level={4}>What to do about it</Eyebrow>
       <p>{recommendation.summary}</p>
       {recommendation.steps.length === 0 ? null : (
         <ol class="steps">
@@ -134,7 +134,7 @@ function Recommendation(props: { readonly finding: Finding }) {
         </ol>
       )}
       <p class="note">
-        {`Effort ${recommendation.effort} and change risk ${recommendation.risk}. Both are design judgements rather than measurements.`}
+        {`Effort ${recommendation.effort}, and changing it is ${recommendation.risk} risk. Both are judgements, not measurements.`}
       </p>
     </section>
   );
@@ -147,10 +147,10 @@ function Experiment(props: { readonly finding: Finding }) {
   }
   return (
     <section>
-      <Eyebrow level={4}>Suggested experiment</Eyebrow>
+      <Eyebrow level={4}>A way to find out more</Eyebrow>
       <p>{experiment.description}</p>
       <pre class="command">{formatArgv(experiment.command)}</pre>
-      <p class="note">{`Expected signal: ${experiment.expectedSignal}`}</p>
+      <p class="note">{`What you should see if it is right: ${experiment.expectedSignal}`}</p>
       {experiment.scenarioId === undefined ? null : (
         <Meta>
           <span>{`Scenario ${experiment.scenarioId}`}</span>
@@ -173,7 +173,7 @@ function Actions(props: { readonly finding: Finding; readonly index: GraphIndex 
   return (
     <div class="actions">
       <CopyButton
-        label="Copy finding"
+        label="Copy this"
         announcement={`finding ${props.finding.id}`}
         text={buildFindingText(props.finding, (componentId) =>
           componentLabel(props.index, componentId),
@@ -265,11 +265,16 @@ export function FindingCard(props: {
         title={finding.title}
         meta={
           <>
+            <span>{finding.goalReadiness.eligible ? 'Ready to hand off' : 'Not ready yet'}</span>
+            {' · '}
             <Data>{formatInteger(finding.evidence.length)}</Data>
             {' evidence · '}
             <BasisChip basis={finding.basis} />
-            {' · '}
-            <Data title="Confidence in this claim, from 0 to 1.">
+            {/* The confidence used to sit here as a bare `0.98` at the end of every row, with nothing
+                saying what the number was. It is a number, so it keeps the mono face, and now it says
+                what it is. */}
+            {' · confidence '}
+            <Data title="How sure the rule is of this claim, from 0 to 1.">
               {formatConfidence(finding.confidence)}
             </Data>
           </>
@@ -283,7 +288,7 @@ export function FindingCard(props: {
         <Meta>
           <span>{finding.id}</span>
           <span>{humanise(finding.category)}</span>
-          <span>{finding.polarity === 'strength' ? 'strength' : 'risk'}</span>
+          <span>{finding.polarity === 'strength' ? 'done well' : 'a problem'}</span>
           <span>{finding.ruleId}</span>
         </Meta>
 
@@ -293,7 +298,7 @@ export function FindingCard(props: {
         {finding.sourceLocations.length === 0 ? null : (
           <section>
             <Eyebrow level={4} count={finding.sourceLocations.length}>
-              Source locations
+              Where in the code
             </Eyebrow>
             <ul class="plain small">
               {finding.sourceLocations.map((location) => (
@@ -319,14 +324,14 @@ export function FindingCard(props: {
         <Experiment finding={finding} />
 
         <section>
-          <Eyebrow level={4}>Classification</Eyebrow>
+          <Eyebrow level={4}>How this is filed</Eyebrow>
           <DefinitionList
             rows={[
               {
-                label: 'Taxonomy',
+                label: 'Standard categories',
                 value:
                   finding.taxonomy.length === 0
-                    ? 'no unambiguous mapping'
+                    ? 'nothing it maps to unambiguously'
                     : finding.taxonomy.join(', '),
                 code: finding.taxonomy.length > 0,
               },
@@ -336,18 +341,18 @@ export function FindingCard(props: {
               },
               { label: 'Recorded', value: formatTimestamp(finding.createdAt) },
               {
-                label: 'Goal readiness',
-                value: `${finding.goalReadiness.eligible ? 'eligible' : 'not eligible'}: ${finding.goalReadiness.reason}`,
+                label: 'Can it be handed off',
+                value: `${finding.goalReadiness.eligible ? 'yes' : 'not yet'}: ${finding.goalReadiness.reason}`,
               },
             ]}
           />
           {finding.conflictsWith.length === 0 ? null : (
             <RefusalPanel
-              title={`This finding conflicts with ${finding.conflictsWith.join(', ')}, and both are kept.`}
+              title={`This disagrees with ${finding.conflictsWith.join(', ')}, and both are kept.`}
             >
               <p>
-                Two rules reached claims that cannot both be right. Neither is withdrawn, because
-                discarding one would be choosing between them without evidence.
+                Two rules reached claims that cannot both be right. Neither is dropped, because
+                dropping one would be choosing between them without evidence.
               </p>
             </RefusalPanel>
           )}

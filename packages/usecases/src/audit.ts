@@ -1,5 +1,5 @@
 import { discover } from '@orchescope/discovery';
-import { createDeadline, type Deadline } from '@orchescope/domain';
+import { createDeadline, type Deadline, formatCount } from '@orchescope/domain';
 import { evaluateRules, linkConflicts } from '@orchescope/findings';
 import { computeDelta, indexGraph, type RunSideEffects, reconcile } from '@orchescope/graph';
 import { buildReportBundle } from '@orchescope/report';
@@ -165,7 +165,7 @@ const reconcileStoredRuns = (input: {
   });
   evidence.push(...delta.evidence);
   ingestPhase.finish(
-    `${topologies.length} run(s) reconciled, ${attributed} component metric(s) attributed, ${delta.delta.exercisedNotDeclared.components.length} undeclared component(s), ${delta.delta.contradictions.length} contradiction(s)`,
+    `${formatCount(topologies.length, 'run')} reconciled, ${formatCount(attributed, 'component metric')} attributed, ${formatCount(delta.delta.exercisedNotDeclared.components.length, 'undeclared component')}, ${formatCount(delta.delta.contradictions.length, 'contradiction')}`,
   );
   return {
     graph: reconciled.graph,
@@ -314,6 +314,15 @@ export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
   try {
     const discoverPhase = workspace.progress.phase('discover', 'Discovering components');
     const scan = await discover({
+      /*
+       * Parsing is the longest thing this command does and it is synchronous throughout, so without
+       * this the phase reported nothing between starting and finishing and the spinner had no moment
+       * to advance in. The total is known once the walk is done, so this is a real count rather than
+       * an invented percentage.
+       */
+      onFileParsed: (completed, total) => {
+        discoverPhase.step(completed, undefined, total);
+      },
       root: workspace.paths.root,
       projectName: workspace.projectName,
       orchescopeVersion: request.orchescopeVersion,
@@ -374,7 +383,7 @@ export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
     const findings: readonly Finding[] = linkConflicts(evaluated.findingSet.findings);
     const findingSet: FindingSet = { ...evaluated.findingSet, findings: [...findings] };
     analysePhase.finish(
-      `${findings.filter((finding) => finding.polarity === 'risk').length} finding(s), ${findings.filter((finding) => finding.polarity === 'strength').length} strength(s)`,
+      `${formatCount(findings.filter((finding) => finding.polarity === 'risk').length, 'finding')}, ${formatCount(findings.filter((finding) => finding.polarity === 'strength').length, 'strength')}`,
     );
 
     const reportPhase = workspace.progress.phase('report', 'Generating report');

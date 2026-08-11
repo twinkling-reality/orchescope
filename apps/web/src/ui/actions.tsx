@@ -8,7 +8,7 @@
 
 import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
-import { type CapabilityName, capabilityState } from '../capabilities.ts';
+import { type CapabilityName, capabilityState } from '../presentation/capabilities.ts';
 import { copyText, downloadText } from '../client.tsx';
 import { useApp } from '../store.tsx';
 

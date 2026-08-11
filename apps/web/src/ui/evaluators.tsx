@@ -1,6 +1,6 @@
 /**
- * Evaluator results. A skipped evaluator is shown as skipped with its reason and never as a pass,
- * because an evaluator that did not run has not agreed with anything.
+ * What checked a run, and what each one decided. A check that was skipped says so with its reason and
+ * never says it passed, because a check that did not run has not agreed with anything.
  *
  * The three states are three words rather than three colours. A colour would have to be read as good
  * or bad, and skipped is neither.
@@ -25,8 +25,8 @@ function EvaluatorRow(props: { readonly result: EvaluatorResult }) {
 }
 
 /**
- * The heading is always drawn, including when nothing ran, because a tile whose whole subject is the
- * evaluators has to name itself before it says there were none. `level` is the caller's, since the
+ * The heading is always drawn, including when nothing ran, because a tile whose whole subject is what
+ * decided the outcome has to name itself before it says nothing did. `level` is the caller's, since the
  * same block is a tile of its own on the resilience screen and a group inside a run elsewhere.
  */
 export function EvaluatorResults(props: {
@@ -37,7 +37,7 @@ export function EvaluatorResults(props: {
   return (
     <div class="group">
       <Eyebrow level={props.level ?? 4} count={props.results.length}>
-        Evaluators
+        What decided this
       </Eyebrow>
       {props.results.length === 0 ? (
         <p class="note">{props.emptyMessage}</p>

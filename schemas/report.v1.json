@@ -7432,6 +7432,10 @@
           },
           "type": "object"
         },
+        "observableComponentCount": {
+          "minimum": 0,
+          "type": "integer"
+        },
         "observedComponentCount": {
           "minimum": 0,
           "type": "integer"

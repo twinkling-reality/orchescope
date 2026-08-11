@@ -7,7 +7,7 @@ import {
   describeAcceptanceCheck,
   goalToJson,
   goalToMarkdown,
-} from '../src/prompt.ts';
+} from '../src/presentation/prompt.ts';
 import { goal } from './fixture.ts';
 
 describe('describeAcceptanceCheck', () => {

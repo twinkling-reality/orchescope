@@ -8,8 +8,8 @@ import {
   componentLabel,
   describeComponent,
   resolveEvidence,
-} from '../src/graph-index.ts';
-import { MAP_LAYOUT_KEYS, positionsFor } from '../src/layout.ts';
+} from '../src/presentation/graph-index.ts';
+import { MAP_LAYOUT_KEYS, positionsFor } from '../src/presentation/layout.ts';
 import { bundle, component, finding, metrics } from './fixture.ts';
 
 function edge(overrides: Partial<Edge> & Pick<Edge, 'id' | 'from' | 'to'>): Edge {

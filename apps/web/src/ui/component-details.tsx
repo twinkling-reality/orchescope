@@ -15,11 +15,12 @@ import {
   formatSourceLocation,
   formatUsd,
   humanise,
-} from '../format.ts';
-import type { GraphIndex } from '../graph-index.ts';
+} from '../presentation/format.ts';
+import type { GraphIndex } from '../presentation/graph-index.ts';
 import { useApp } from '../store.tsx';
 import { OpenLocationAction } from './evidence-list.tsx';
-import { PresenceMark, presenceOf } from './presence.tsx';
+import { presenceOf } from '../presentation/component-presence.ts';
+import { PresenceMark } from './presence.tsx';
 import {
   BasisChip,
   Data,
@@ -141,7 +142,9 @@ function DetailFields(props: { readonly component: Component }) {
   }
   return (
     <section class="group">
-      <Eyebrow level={4}>{`${humanise(props.component.kind)} configuration`}</Eyebrow>
+      <Eyebrow
+        level={4}
+      >{`How this ${humanise(props.component.kind).toLowerCase()} is set up`}</Eyebrow>
       <DefinitionList rows={rows} />
     </section>
   );
@@ -153,7 +156,7 @@ function Locations(props: { readonly component: Component }) {
     <section class="group">
       <Eyebrow level={4}>Where it was found</Eyebrow>
       {sourceLocations.length === 0 && configLocations.length === 0 ? (
-        <p class="note">No source or configuration location was recorded for this component.</p>
+        <p class="note">Nothing recorded where in the code this came from.</p>
       ) : null}
       <ul class="plain small">
         {sourceLocations.map((location) => (
@@ -212,8 +215,8 @@ function Metrics(props: { readonly componentId: string; readonly index: GraphInd
         <Eyebrow level={4}>Measured cost</Eyebrow>
         <p class="note">
           {props.index.hasRuntimeEvidence
-            ? 'This component produced no runtime measurements in the ingested runs. That is an absence of measurement rather than a measurement of nothing.'
-            : 'This report contains no runs, so nothing about this component was measured.'}
+            ? 'No run measured anything about this. That is nothing measured, not something measured as zero.'
+            : 'Nothing has been run, so nothing about this was measured.'}
         </p>
       </section>
     );
@@ -254,7 +257,7 @@ function RelatedFindings(props: { readonly componentId: string; readonly index: 
         Findings naming this component
       </Eyebrow>
       {findings.length === 0 ? (
-        <p class="note">No finding names this component.</p>
+        <p class="note">Nothing this report found is about this.</p>
       ) : (
         <ul class="plain small">
           {findings.map((finding) => (
@@ -284,9 +287,9 @@ function Scenarios(props: { readonly componentId: string; readonly index: GraphI
       <Eyebrow level={4} count={ids.length}>
         Scenarios it appeared in
       </Eyebrow>
-      <p class="note">Derived from the runs whose evidence names this component.</p>
+      <p class="note">Worked out from the runs whose evidence names this.</p>
       {ids.length === 0 ? (
-        <p class="note">No ingested run produced evidence naming this component.</p>
+        <p class="note">No run has produced any evidence naming this.</p>
       ) : (
         <ul class="plain small">
           {ids.map((id) => (
@@ -310,7 +313,7 @@ export function ComponentDetails(props: {
   const component = props.index.componentsById.get(props.componentId);
   if (component === undefined) {
     return (
-      <RefusalPanel title="That component is not in this report.">
+      <RefusalPanel title="That is not in this report.">
         <p class="mono">{props.componentId}</p>
       </RefusalPanel>
     );
@@ -388,7 +391,7 @@ export function ComponentDetails(props: {
           Outgoing relations
         </Eyebrow>
         {outgoing.length === 0 ? (
-          <p class="note">This component calls nothing that the report could see.</p>
+          <p class="note">This calls nothing the report could see.</p>
         ) : (
           <ul class="plain">
             {outgoing.map((edge) => (
@@ -409,7 +412,7 @@ export function ComponentDetails(props: {
           Incoming relations
         </Eyebrow>
         {incoming.length === 0 ? (
-          <p class="note">Nothing the report could see calls this component.</p>
+          <p class="note">Nothing the report could see calls this.</p>
         ) : (
           <ul class="plain">
             {incoming.map((edge) => (

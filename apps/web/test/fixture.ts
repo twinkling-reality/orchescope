@@ -12,6 +12,7 @@ import type {
   Goal,
   Overlay,
   ReportBundle,
+  RunRecord,
 } from '@orchescope/schema';
 
 export function component(overrides: Partial<Component> & Pick<Component, 'id'>): Component {
@@ -91,6 +92,49 @@ export function metrics(
     retryCount: overrides.retryCount ?? 0,
     ...(overrides.p95DurationMs === undefined ? {} : { p95DurationMs: overrides.p95DurationMs }),
     ...(overrides.costUsd === undefined ? {} : { costUsd: overrides.costUsd }),
+  };
+}
+
+export function run(overrides: Partial<RunRecord> = {}): RunRecord {
+  return {
+    id: overrides.id ?? 'run_0123456789abcdef',
+    kind: overrides.kind ?? 'trace',
+    label: overrides.label ?? 'One recorded run',
+    status: overrides.status ?? 'completed',
+    startedAt: overrides.startedAt ?? '2026-01-01T00:00:00.000Z',
+    finishedAt: overrides.finishedAt ?? '2026-01-01T00:00:01.000Z',
+    environment: overrides.environment ?? {
+      orchescopeVersion: '0.1.0',
+      platform: 'linux',
+      arch: 'x64',
+      cpuCount: 1,
+      totalMemoryBytes: 0,
+      runtimeName: 'node',
+      runtimeVersion: '24.0.0',
+    },
+    metrics: overrides.metrics ?? {
+      durationMs: 1000,
+      modelCalls: 0,
+      toolCalls: 0,
+      agentSteps: 0,
+      handoffs: 0,
+      retrievalCalls: 0,
+      memoryOperations: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      errors: 0,
+      retries: 0,
+      recoveredErrors: 0,
+      duplicateSideEffects: 0,
+      prohibitedSideEffects: 0,
+      sideEffects: 0,
+      userInterventions: 0,
+      policyViolations: 0,
+      maxObservedConcurrency: 0,
+      loopIterations: 0,
+    },
+    componentMetrics: overrides.componentMetrics ?? [],
+    metadata: overrides.metadata ?? {},
   };
 }
 

@@ -8,16 +8,24 @@ using real numbers from `apps/demo` and is not a file that ships. This document 
 
 **Fill means evidence. A filled shape was measured in a run. A hollow outline was only declared.**
 
-That rule holds on the delta bar, on the map nodes, in the components table and on the severity
-marker. It is the visual form of the rule `AGENTS.md` already states, that an inference is never
-presented as an observation, and because it is carried by form rather than by hue it survives
-greyscale, a colour vision deficiency and a printed page.
+That rule holds on the rail, on the map nodes, in the table of parts and on the severity marker. It is
+the visual form of the rule `AGENTS.md` already states, that an inference is never presented as an
+observation, and because it is carried by form rather than by hue it survives greyscale, a colour
+vision deficiency and a printed page.
 
-There is a fourth state and it is the one that is easiest to report wrongly. A report with no run in
-it cannot say that a component was never exercised, only that there was nothing to exercise it. A
-hollow shape there would be an inference presented as an observation, so nothing is hollowed: the map
-draws every node filled and says why in its own legend, and the components table draws a dashed mark
-reading `no run to compare`.
+**Two states cannot be drawn either way, and both take the dashed mark.** A hollow shape says a run
+looked and did not find this, and neither of them can say that.
+
+The first is a report with no run in it, which cannot say a part was never reached, only that nothing
+has looked. Thirteen of the sixteen cached reports are in it.
+
+The second is a part of a kind no trace records: a prompt, a provider, an entry point, the project
+itself. A run records agents, models, tools, stores, queues and the effects they cause, and never a
+prompt, so no run can say whether one was used. The reconciliation already excludes those from its
+denominator; the map's own filter used to label them `Never exercised`, which is why the map reported
+eighteen never exercised on a report whose Overview reported seven. They read `Nothing a run records`
+now, and `component-presence.ts` gives the weaker answer on a report that never computed the join at
+all, because there is nothing there to tell the two apart with.
 
 **Hue appears on a severity marker and the word beside it, and on the chrome. Nowhere else, ever.**
 Everything that used to be tinted says itself in a word instead: `not satisfied`, `regressed`,
@@ -105,15 +113,21 @@ two reports does not shift the layout.
 Ten components in `apps/web/src/ui/primitives.tsx`. Every screen is assembled from these plus the
 existing controls, and no screen has a style that is not here.
 
+`Share` is the tenth and it earns the place because the Overview alone carries three of them: how many
+problems are ready to hand off, how much of the system a run reached, how much of what the scan opened
+it could read. Each is a whole of a counted total, which is the one shape that can be drawn honestly
+here, and a total of zero draws no bar at all: nought of nought has no share, and an empty track there
+would say a thing was measured and found wanting.
+
 | primitive | what it is for |
 | --- | --- |
 | `Eyebrow` | names a tile or a group inside one; the only all caps in the system, and never a value |
-| `Display` | the sentence a screen leads with, generated from the data by `headline.ts` |
 | `Figure` | one large number and the mono qualifier that says what it counted |
 | `Data` | every number, anywhere |
 | `BasisChip` | `Observed`, `Discovered`, `Inferred`, `Estimated`, `Simulated`; no hue, no marker |
 | `SeverityMark` | a square and a word; the two alert hues live here |
-| `BarCell` | one cell of the declaration bar |
+| `Meter` | the rail, in `ui/meter.tsx` with the module that builds it |
+| `Share` | a count of a known total: how far along, out of how many, and what is left |
 | `RuledStat` | a supporting number, ruled rather than boxed, always carrying its basis |
 | `DisclosureRow` | one line that expands to what is behind it |
 | `RefusalPanel` | the empty and refusal state of every screen |
@@ -149,8 +163,8 @@ read in its place. It replaced an all caps eyebrow reading `ORCHESCOPE` above th
 spent two lines on a fact that never changes.
 
 The right is two icons of the same size on the same baseline: report details, and keyboard shortcuts.
-A `summary` is one of them and a `button` is the other, so the two controls are the same object
-whether they open a menu or toggle a panel.
+Both use `ui/chrome-menu.tsx`: the same button, anchored dialog, close action, focus behavior and
+responsive position. Opening one closes the other. Neither replaces the report content with a panel.
 
 It used to be a rail of 216px down the left. Width is what the reports needed and height is what the
 chrome had spare: the rail spent about four hundred pixels of nothing between the navigation and the
@@ -179,7 +193,9 @@ label, so weight would move every other link sideways each time a reader changed
 changes the ground and leaves the type alone.
 
 The project name is the `h1`, because the document is a report about that repository. A section's
-label is a visually hidden `h2`, a tile's eyebrow is an `h3` and a group inside it is an `h4`.
+label is a visually hidden `h2`, a tile heading is an `h3` and a group inside it is an `h4`. Depth
+screens use an eyebrow when the heading names a protocol block. Overview uses plain headings that name
+the reader's decision directly.
 
 Below 880px the chrome stops being sticky and stacks: a sticky bar on a phone takes a fifth of the
 screen and never gives it back. Every grid track is written as `minmax(0, 1fr)` rather than `1fr`: a
@@ -246,6 +262,49 @@ Below 1180px the anchor and the stage take six each and the stack takes the next
 tiles across give each of them under 400px, which is less than the narrowest thing any of them holds.
 Below 880px it is one tile to a row. Neither breakpoint restores a gutter.
 
+### The fixed presentation contract
+
+The tiles sit inside slots whose names and order do not vary with the bundle. `ui/section-skeleton.tsx`
+owns the two structural contracts:
+
+- Overview is `headline`, `top-actions`, `next-commands`, `context`, `join`, in that order. The
+  headline is what this report found, split into problems and things done well, and it takes the full
+  twelve columns. Top actions ranks the problems that carry evidence, with the ones ready to hand off
+  first. Next commands is the visible handoff. Context says what the scan could read. Under the headline
+  those three take five, four and three columns, and the join is a full width tile below them.
+
+  **The headline used to be the join, and moving it is the largest decision on this screen.** `7 of 21
+  never ran` is a fact about the quality of our own measurement rather than a fact about the reader's
+  system, and no wording made it worth reading before the problems the report had found. What leads now
+  is a count of problems, which is about them, has a breakdown worth drawing and has a most serious
+  member worth naming. The join has not been demoted in the product: it is a full width tile under the
+  working set, still pinned to a revision, and every runtime claim on every other screen still rests on
+  it.
+  Above 1180px the second row stretches to whatever height the first leaves, so a wide viewport is
+  filled by tiles rather than by page under them; narrower screens return to normal document flow.
+- Every depth screen is `summary`, `primary`, `detail`, in that order. The primary evidence can be a
+  list, table or workbench, but the slot does not disappear when the evidence is absent.
+
+`overview-presentation.ts` and `section-presentation.ts` bind a `ReportBundle` to those slots. They are
+pure decision modules, and they select and order facts already in the bundle rather than analysing the
+system again. An unavailable slot carries a `PresentationRefusal` with a title, reason and the commands
+that would produce the evidence. That refusal is rendered in the slot, so an empty report and a rich
+report have the same outer tree.
+
+Section entry files compose the contract and do not own its decisions. A section that needs more than
+one concept gets a directory named for the section: Overview separates delta, action ranking, handoff
+and context; Performance separates summary, measured evidence and benchmarks; Goals separates the
+section frame from a goal contract card. This keeps presentation branching out of large render files
+and gives every new pure decision a direct test, including its refusal path.
+
+Section-specific styling follows the same boundary. `styles/overview-layout.css` owns the fixed frame,
+`styles/delta-meter.css` owns the rail, `styles/section-lead.css` owns the anatomy every depth screen
+opens with, and `styles/overview-actions.css` owns the lower decisions.
+`styles/tile-menu.css` owns tile-local overlays, and `styles/chrome-menu.css` owns the shared anchored
+chrome menu. `styles.css` is only the ordered import manifest. Foundations, primitives, layout, chrome,
+workspace, controls, tables, findings, map, composite blocks and responsive rules each live in a named
+file under `styles/`. No section component has to append exceptions to a general-purpose stylesheet.
+
 ### A tile owns its ground
 
 **A tile gets its ground by swapping the neutrals inside itself rather than by restating any rule that
@@ -261,11 +320,23 @@ ground is set anywhere, and that there are three of them rather than one panel o
 | ground | value | what it carries |
 | --- | --- | --- |
 | band | `#CBD8F7` | the screen's own statement, or its refusal. Light, and across the top |
+| band, deepened | `#A9BDEE` | the lower half of the Overview hero, and nowhere else |
 | anchor | `#0B0D12` | the tile a row is built around. Black, and in the corner |
 | field | `#FFFFFF` | everything else |
 
 The anchor is 19.43:1 against the field and the band is 1.43:1, and those are the only two numbers
 because there is only one palette.
+
+**The band has a second tone and no other ground does.** It exists for one composition: the Overview
+hero is two stacked grounds with the rail crossing the seam, and the lower one has to be deeper than
+the upper or the picture reads as the colour running out rather than as depth. The field was tried
+there first and was wrong twice over, because white is what every tile below the hero already is, so
+the hero's lower half read as a gap between two unrelated regions rather than as the second half of
+one. `#A9BDEE` is not a new colour: it is already the band's own hairline, used here as a surface,
+which is the same move the band itself makes with the accent. It is 1.31:1 against the band, a tone
+step and never a second hue, and the quietest line on the hero reads better on it than on the band
+above, 4.0:1 against 3.4:1. It carries `is-band` as well as `is-band-deep`, so every rule that asks
+which ground a tile owns gets the same answer.
 
 `--wash` is gone. The band is the accent as a ground, and it is the only place the accent is a surface.
 Nothing drawn on it means anything by being on it, so fill still means evidence and severity still owns
@@ -304,7 +375,8 @@ control.
 
 ## Detail behind a `···`, and the evidence screens that refuse it
 
-Each tile summarises and puts its detail behind a `···`, which is a `details` element for the same
+Each tile puts its **protocol depth** behind a `···`, and nothing else: the answer, the working set and
+the evidence behind one row of it are all on the page. It is a `details` element for the same
 reasons the disclosure row is one: it works before the script runs, it is in the tab order without a
 `tabindex`, it announces its own expanded state, and the browser's own in page search finds what is
 inside it while it is closed. Opening a tile grows that tile and nothing else, which is what tells a
@@ -324,15 +396,11 @@ band of anything, which is what wrapping nineteen expandable findings in the old
 it. So Findings leads with the counts by polarity and severity rather than with the list, and the
 map's canvas is a tile with the table beside it rather than inside it.
 
-**Every screen's refusal state is the band**, because when there is nothing to show the refusal is the
-statement, and thirteen of the sixteen cached reports have no run in them and open on exactly that.
-The refusal is two columns pushed to the two ends of the band, what is missing at the start and the
-commands that produce it at the end, because a command is forty characters and a paragraph is sixty
-eight and stacking them made the shorter thing the wider one.
-
-On Performance the commands are named once, on the band, rather than once on each of the three tiles
-that would otherwise repeat `orchescope trace`. Four copies of one command is a screen that reads as
-four faults instead of one absence. A tile whose command differs, which is Benchmarks, names its own.
+**Every missing evidence region refuses in its own fixed slot.** The summary band still states the
+screen-level absence, while primary and detail keep their places and either render an empty frame or a
+more specific refusal. Each refusal names the reason and a command that can produce the missing
+evidence. Repetition is avoided within a tile, but a slot does not disappear merely because another
+slot names the same absent run.
 
 ## Width is a bento, not a wider paragraph
 
@@ -357,35 +425,179 @@ Three rules keep it out of a tile:
   paragraph rather than with a display sentence, and stopping the paragraph at 68ch without putting
   anything beside it left 1000px of band empty.
 
-**The tile that takes up the slack is the provenance footer.** On a report shorter than the window
-something has to reach the bottom, and it should not be the screen's own tiles: a refusal band
-stretched to 600px reads as unfinished, where the same band at its own height above a field tile reads
-as a band. There is no page ground for the difference to fall through to, so the footer, which is a
-field tile, grows.
+**There is no filler tile.** Report identity, scan and revision live in the report-details menu. A
+second provenance paragraph repeated those facts, added a meaningless scroll target and made short
+screens look longer than their evidence. A short report now stops when its fixed slots stop.
 
-## The delta bar at real scale
+## Four ranks, and what each is allowed to hide
 
-`apps/web/src/delta-bar.ts`, with `apps/web/test/delta-bar.test.ts` beside it.
+Every screen carries the same four ranks, and one line keeps them apart: **a `···` may hold protocol
+depth and nothing else.**
 
-The demonstration declares 22 components and one cell is one component. `openai-agents-python`
-declares 917, where one cell per component is neither readable nor something to put in a document. So
-the bar has a ceiling of 120 cells. Below it a cell is a component. Above it the filled share is the
-measured rate rounded onto 120 cells, and the caption says which of the two a reader is looking at
-rather than leaving them the flattering reading.
+| rank | what it is | where it lives |
+| --- | --- | --- |
+| answer | one figure or one sentence stating what this screen concluded | top of the lead tile, largest type on the screen |
+| working set | the three to eight things a reader will inspect or act on | immediately under the answer, always on the page |
+| evidence | what backs one row of the working set | expands in place, inside that row |
+| protocol | complete tables, vocabulary, join method, capability matrix | a full width region, or a tile menu |
 
-A count that is not zero never rounds away to nothing. A single component that ran and was never
-declared is the whole reason the dashed boundary is drawn, and a bar that hid it because 1 of 917
-rounds to zero would be reporting the absence of the thing the delta exists to find.
+The composition this replaced had two ranks rather than four. A tile showed one line and put everything
+else behind the same `···` that held the evidence vocabulary, its own working set included: `Fix this
+first` showed one of three ranked risks and the other two were in the menu. So the tile bodies were
+mostly empty and the thing to act on was invisible, which is a choice between a headline and a modal
+rather than disclosure.
 
-The whole bar is one `role="img"` with an accessible name carrying the real counts, never the rounded
-ones, so up to two hundred and forty elements never reach the accessibility tree.
+A depth screen opens on the same three parts every time, in `styles/section-lead.css`: the question the
+screen answers, the answer, and the one measure or legend that belongs beside it. The visible all caps
+repeat of the tab name is gone from all seven. It sat ten pixels tall, forty pixels under the same word
+highlighted in the navigation, and the screen's own hidden `h2` already names it for assistive
+technology, so it was a repeat for sighted readers and a third mention for everyone else.
 
-The bar and its caption share one box that is as wide as the cells and no wider. A cell is a fixed 24px
-until there are enough of them to need the whole width, so on a report declaring twenty two components
-the bar stops well short of the column, and a caption stretched to the column printed the word
-`Outside` a third of the page away from the cell it names. The width of a cell is stated as well as
-flexed: a flex basis is not an intrinsic contribution, so a cell with no content in it measures zero
-when the box asks the bar how wide it wants to be, and the whole bar collapses to its own minimum.
+## The Overview headline
+
+`apps/web/src/finding-mix.ts`, with `apps/web/test/finding-mix.test.ts` beside it, drawn by
+`sections/overview/headline.tsx`.
+
+The anatomy is the reference's own: a control group on the left, a named number in the middle, a
+supporting line on the right, and a full bleed picture under all three crossing into the ground below.
+
+**The control is real and it changes the hero.** Good news and bad news are the bundle's own
+`polarity`, so pressing it swaps the count, the breakdown, the bar and the one named underneath. A side
+with nothing in it is disabled and carries its reason, which is the rule every other control here
+follows. This is the choice an earlier pass said the screen did not have; it was there in the schema
+the whole time.
+
+**The bar carries the rank in ink, not in hue.** One segment per severity, worst first, each as wide as
+its share. High is a solid block, medium is solid and half height, low is an outline, info is an outline
+and half height, and a severity this build does not rank is a dashed outline. More ink means worse,
+which is what the severity marker already does, so the bar and the mark under it say the same thing
+twice rather than asking a reader to learn a second vocabulary. A bar tinted by severity would make the
+bar the signal, and this one has to survive greyscale like everything else here.
+
+A severity nothing falls into is left out rather than drawn at zero width, and a severity this build
+does not rank is still counted, under its own name, at the end. The slices always add up to the number
+above them: a picture that quietly disagrees with its own caption is worse than no picture.
+
+## The join
+
+`apps/web/src/delta-meter.ts`, with `apps/web/test/delta-meter.test.ts` beside it, drawn by
+`ui/meter.tsx` and `sections/overview/join.tsx`.
+
+It is a full width tile under the working set rather than the top of the screen. Composed by
+`sections/overview/join.tsx` and laid out by `styles/delta-meter.css`.
+
+One rail. Filled where a run reached a part, outlined where it was only written down, and past a dashed
+boundary the parts that ran and are written down nowhere. The demonstration writes down 21 parts a run
+can reach and one cell is one part. `pydantic-ai` writes down 952, where one cell per part is neither
+readable nor something to put in a document, so the rail has a ceiling of 120 cells and the caption says
+which of the two readings a reader is looking at rather than leaving them the flattering one.
+
+### The gap leads, not the reach
+
+The screen used to open with what ran. On `pydantic-ai-exercised` that is `3`, which is true and
+backwards: what that report found is that 950 of 952 parts have never been seen running. Leading with
+the reach is the flattering read of the same measurement, so the figure is the gap and the reach is one
+of the sets beside it.
+
+### Every cell is the same size as every other cell
+
+That is the invariant, and it is the one thing about the rail that may never move: no unit of meaning
+draws with more ink than another unit of the same meaning.
+
+Two compositions broke it in turn. The first sized its cells from the height the viewport left over, so
+on `pydantic-ai-exercised` at 1920 by 1080 a cell standing for one part measured 24 by 312 pixels in one
+group and 24 by 38 in another, 8.2 times the ink for the same meaning on the same screen. The second
+fixed a cell at 34px, which held the invariant and broke the composition instead: measured on
+`demo-populated` at 1728 wide the rail was 891px of a 1728px band, 802px of the widest element on the
+page were empty, and the inked fraction fell from 69 per cent at 1280 to 46 at 1920. A wider window
+emptied the picture along the other axis.
+
+**So the rail takes the width it is given and divides it evenly.** It bleeds to both edges at every
+width, and it stops there: no whole cell is ever cut, because the cells are countable units and a sliced
+cell is a count a reader cannot take. `tests/ui/workspace.spec.ts` holds both halves, that every cell is
+one size and that the rail reaches both edges.
+
+### It is a rail and not a row of boxes
+
+The height is what decides which. At 68px a cell on a report of 21 parts measured about 80 by 68 with a
+2px radius and 3px of air around it, which is a near square card, and twenty one of them read as a row
+of objects rather than as one measurement divided up. The same cells at 34px are wide flat segments and
+the row reads as a meter again. The corners are square and the gaps are hairlines for the same reason:
+a radius and a wide gap are what make a division look like a thing.
+
+### It crosses the seam between two grounds
+
+The hero is two tiles, the band and the band deepened, and the rail hangs half its height below the
+upper one so the ground changes underneath it. The rail is a child of the band, so it keeps the band's `--ink` and
+`--outline` the whole way down and does not change appearance halfway: only what is behind it changes.
+
+Nothing is meant by which half of the rail sits on which ground. That is exactly why it is allowed: the
+join has no magnitude, no sequence and no trend, so a composition that added depth without adding a
+reading is the only kind this screen can carry.
+
+A cell that was never measured draws its own ground rather than letting what is behind it show through.
+Everywhere else that is the same pixel; on the rail it is the difference between one mark and a mark
+that is lavender in its top half and white in its bottom half.
+
+### Three rounding rules, and each exists because breaking it reports something untrue
+
+A non zero seen count never rounds away to nothing: two parts of 952 is a quarter of a cell, and the bar
+this replaced drew none of it while its own accessible name said two were reached.
+`docs/design/states/overview.md` recorded that as the most striking state on the screen and nothing had
+fixed it. A non zero never seen count never rounds away either, which is the mirror of the same rule.
+A non zero undeclared count never rounds away, because a single part that ran and is written down
+nowhere is the whole reason the boundary is drawn.
+
+The cell count is `min(declared, 120)` rather than `round(declared / componentsPerCell)`. The second
+form halved the rail between 120 and 121 parts, which was the sharpest discontinuity on the screen and
+meant nothing about the repository.
+
+### The four sets flank the answer, and they are what it is made of
+
+Each opens System map with that set already selected, because a number a reader cannot open is one they
+have to take on trust. The headline is a control too: it opens the gap it names.
+
+They do not redraw the hero, and nothing pretends they do. The reference this composition came from
+flanks its hero with controls that change what the chart is, weekly against monthly and this week
+against last. There is no such choice here: one join, over every run in the report, at one revision. A
+mode switch would change the picture without changing what is known, so what flanks the answer is what
+the answer is made of, and what the reference's controls do for a reader, saying what the number is of,
+is done by the sets and by the revision line under the rail.
+
+### The sets are derived, and the derivation is a correction
+
+`coverage.declaredComponents` is not the count of parts a repository declares. It is the count of parts
+a trace could record, and a part that ran without being declared anywhere is inside it. So the screen
+before this counted the same part three times, in the denominator, in the numerator and again past the
+dashed boundary, and it overstated in the flattering direction:
+
+| report | said | true |
+| --- | --- | --- |
+| `demo-populated` | 15 of 22 reached | 14 of 21 declared reached, +1 undeclared |
+| `pydantic-ai-exercised` | 3 of 953 | 2 of 952, +1 undeclared |
+| `vercel-ai-chatbot-exercised` | 3 of 19 | **1** of 17, +2 undeclared |
+
+`overview-presentation.ts` takes the never seen and the never declared out of
+`coverage.declaredComponents` and calls what is left `seen`, which makes the three measured sets a
+partition and makes them agree with the map's own filter. Verified against every exercised bundle in
+the corpus.
+
+### A report with no run draws the rail too
+
+Thirteen of the sixteen cached reports have none. The written down side of the join is fully known
+without a run, so the rail is drawn at its real length in the `no run to compare` state, dashed, and
+only the comparison refuses. Nothing there is hollow: a hollow cell would say a run looked and did not
+find it, and what is true is that nothing has looked.
+
+That rail counts a wider set than the measured one, because the kind classification lives in the
+analysis packages and this workspace may import types and nothing else. `crewai` writes down 987 parts
+and 273 of them are kinds a trace records, so the caption states which reading it is and that the rail
+narrows once a run arrives. [TODO.md](TODO.md) records what would make the two consistent.
+
+The whole rail is one `role="img"` with an accessible name carrying the real counts, never the rounded
+ones, so up to two hundred and forty elements never reach the accessibility tree. Its boundary labels
+are rendered by the screen rather than by the rail, below the seam and at the page's own inset, because
+anything inside the rail's own box would decide where the seam falls.
 
 ## The join summary
 
@@ -393,8 +605,10 @@ when the box asks the bar how wide it wants to be, and the whole bar collapses t
 rule and the rules are not equally strong: a match on a code location is the observation and the
 declaration pointing at the same line, and a match on kind and name alone is correct whenever a name
 means one thing in a repository and wrong when two modules use the same word, which has already
-happened here. The bar is only as good as its weakest join, so the count and the components joined
-that way are named beside it rather than buried in a disclosure.
+happened here. The rail is only as good as its weakest join, so the count and the components joined
+that way remain in the delta slot. They sit in its tile menu with the revision, contradictions and
+repeated side effects: protocol depth, available where the picture is qualified, and not tall enough to
+push the working set out of the first viewport.
 
 ## The fonts, and the standalone export
 
@@ -590,15 +804,15 @@ the order of the flow, and the order of the flow is a number: how many relations
 component sits. A reader who cannot see the drawing can sort on it, and the answer is the same one the
 picture gives.
 
-## Every screen has an empty state and a refusal state
+## Every screen refuses in place
 
-| screen | when it has nothing |
+| screen | what stays in its fixed slots when evidence is absent |
 | --- | --- |
-| Overview | no run: what the delta is and the three commands that produce one. Nothing declared: `init --manifest` |
-| System map | no components: what was looked for, and the manifest. Canvas failed: the reason, and that the table beside it is primary |
-| Findings | no findings: what that says about the rules rather than about the system. Filters match nothing: a control that clears them |
+| Overview | the rail is drawn from what the repository writes down whatever happened, and only the comparison refuses; action ranking refuses without implying safety; the handoff names trace, import or audit; context still reports what the scan could read |
+| System map | no parts: what was looked for, and the manifest. Canvas failed: the reason, and that the table beside it is primary |
+| Findings | no findings: what that says about the rules rather than about the system. Filters match nothing: a control that clears them. A readiness group nothing falls into is omitted rather than drawn empty |
 | Performance | no metrics, no runs, no benchmarks, an overlay with no values: each says which half is missing |
-| Resilience | no chaos run: what fault injection measures. Faults requested and not applied: the table, kept visible |
+| Resilience | no chaos run: what fault injection measures. Faults requested and not applied: the table, kept visible. Nothing incomplete: said as what these runs reached rather than as a guarantee |
 | Scenarios | none defined, and a scenario defined but never run, which are different states |
 | Comparisons | none made, and a verdict of insufficient evidence with its sample sizes |
 | Goals | none created, naming the first eligible finding. A goal never validated says undecided rather than unproven |

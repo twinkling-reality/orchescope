@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@orchescope/domain": "workspace:*",
+    "@orchescope/graph": "workspace:*",
     "@orchescope/redaction": "workspace:*",
     "@orchescope/schema": "workspace:*"
   },

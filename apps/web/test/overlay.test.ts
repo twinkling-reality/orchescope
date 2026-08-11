@@ -11,7 +11,7 @@ import {
   overlayLegend,
   overlayNodeSize,
   paintComponent,
-} from '../src/overlay.ts';
+} from '../src/presentation/overlay.ts';
 import { overlay } from './fixture.ts';
 
 describe('buildOverlayScale', () => {

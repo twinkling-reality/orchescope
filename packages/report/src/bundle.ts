@@ -1,4 +1,5 @@
 import { reportId as makeReportId } from '@orchescope/domain';
+import { isObservableKind } from '@orchescope/graph';
 import type { Redactor } from '@orchescope/redaction';
 import { redactDeep } from '@orchescope/redaction';
 import type {
@@ -187,6 +188,9 @@ export const buildReportBundle = (input: BuildBundleInput): ReportBundle => {
       observedComponentCount: observed.length,
       staticOnlyComponentCount: staticOnly.length,
       runtimeOnlyComponentCount: runtimeOnly.length,
+      observableComponentCount: graph.components.filter((component) =>
+        isObservableKind(component.kind),
+      ).length,
       findingCountBySeverity,
       strengthCount,
       runCount: input.runs.length,

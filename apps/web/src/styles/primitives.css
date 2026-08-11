@@ -1,0 +1,418 @@
+/* ══ the primitive set ══════════════════════════════════════════════════════════════════════ */
+
+/* 1. Eyebrow. Names a block. The only all caps in the system, and never a value. */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+  line-height: 1.6;
+}
+
+/* A name that came out of the analysed repository sits under its eyebrow, in the case it was written
+   in. The eyebrow above it names the kind of block, which is this repository's own vocabulary. */
+.eyebrow + h3 {
+  margin-top: 2px;
+}
+
+.eyebrow .count {
+  margin-left: var(--s2);
+  color: var(--muted);
+}
+
+/* 2. Figure. The one number a screen leads with, and its mono qualifier. */
+.readout {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  margin-top: var(--s5);
+  max-width: none;
+}
+
+.figure {
+  font-size: 56px;
+  font-weight: 200;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.figure.nil {
+  color: var(--faint);
+}
+
+.readout .of {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* 3. Data. Every number on the page is set in this, tabular so a figure that changes between two
+      reports does not shift the layout. */
+.data {
+  font-family: var(--mono);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.data.nil {
+  color: var(--faint);
+}
+
+/* 4. Basis chip. The evidence class of a value. No hue and no marker: the word is the signal. */
+.basis {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+/* 5. Severity marker. A square and a word. The only two hues in the system live here. */
+.sev {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sev-mark {
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  background: currentColor;
+  flex: none;
+}
+
+.sev-mark + .sev-mark {
+  margin-left: -3px;
+}
+
+.sev.is-critical,
+.sev.is-high {
+  color: var(--high);
+}
+
+.sev.is-medium {
+  color: var(--medium);
+}
+
+.sev.is-low,
+.sev.is-info,
+.sev.is-unranked {
+  color: var(--faint);
+}
+
+/* Two hues cover five severities, so the mark carries the rank as well: doubled, filled, filled and
+   halved, hollow, hollow and halved. All five are distinct in greyscale and more ink means worse. */
+.sev.mark-filled_half .sev-mark {
+  height: 3px;
+}
+
+.sev.mark-hollow .sev-mark,
+.sev.mark-hollow_half .sev-mark,
+.sev.mark-unranked .sev-mark {
+  background: transparent;
+  border: 1px solid currentColor;
+}
+
+.sev.mark-hollow_half .sev-mark {
+  height: 4px;
+}
+
+.sev.mark-unranked .sev-mark {
+  border-radius: 50%;
+}
+
+/* 6. Meter cell. One declared component, or one bucket of them when the ceiling is reached. The rail
+      it belongs to is in styles/delta-meter.css, and the map's own key draws from the same three
+      classes so there is one cell vocabulary rather than two that have to be kept in step. */
+
+/* 7. Share. A count of a known total: how far along, out of how many, and what is left.
+      The Overview carries three of these in one row and used to draw none of them, which is what made a
+      screen of real numbers read as a screen of prose. */
+/* The share is a bar and never a hue. The fill is the same ink every measured shape here uses and the
+   track is the same outline, so what it says in colour is what the rail says: this much of that much.
+   Nothing is red for bad or green for good, because a share is not a verdict.
+   Named `share` rather than `progress`, because `controls.css` already owns `.progress` for the strip
+   that counts requests in flight, and it is imported after this file. Nothing in the build checks that
+   two stylesheets do not claim the same class, so the collision showed up as a bar two pixels tall
+   filled to eight per cent, which is the other rule's height and the other rule's fallback. */
+.share {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.share-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  max-width: none;
+}
+
+.share-count .data {
+  font-size: 21px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+}
+
+.share-percent {
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A total of zero has no share. It says so in a word, at the size of a word, because a bar drawn at
+   empty there would say a thing was measured and found wanting. */
+.share-percent.is-nil {
+  font-size: 12px;
+  color: var(--faint);
+  letter-spacing: 0;
+}
+
+.share-track {
+  display: block;
+  height: 8px;
+  background: transparent;
+  border: 1px solid var(--outline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.share-fill {
+  display: block;
+  height: 100%;
+  width: var(--share, 0%);
+  background: var(--ink);
+}
+
+.share-legend {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  max-width: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* 8. Ruled stat. Supporting numbers are one ruled row, not five boxes.
+      240px rather than 150: a tile five of twelve wide fitted four of them at 155px each and then had
+      nothing under them, which put the emptiness inside the tile, where a reader takes it for a fault.
+      At 240 the same four wrap to two by two in a tile and stay on one line across a band. */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--s5) var(--s5);
+  margin-top: var(--s5);
+}
+
+/* The rule sits above a stat rather than beside it. A rule to the left is a rule the first item of a
+   wrapped row would draw as well, and a grid cannot be asked which of its children start a line. */
+.stat {
+  border-top: 1px solid var(--rule-soft);
+  padding-top: var(--s2);
+  padding-right: var(--s4);
+}
+
+.stat .v {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.stat .v.nil {
+  color: var(--faint);
+}
+
+.stat .k {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 2px;
+  max-width: 24ch;
+}
+
+.stat .basis {
+  display: block;
+  margin-top: var(--s2);
+}
+
+/* 9. Disclosure row. One line, expanding to its evidence. Built on `details` so it works before the
+      script runs, is in the tab order without a `tabindex`, and is found by in page search. */
+details.row {
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+/*
+ * The title column has a floor and the meta beside it may wrap.
+ *
+ * With `auto` on the right and `nowrap` on its contents the meta took whatever width its longest line
+ * wanted and the title got the remainder, which on the Overview's 600px tile left the title about fifty
+ * pixels and one word per line. The row is read title first, so the title is the column that keeps its
+ * width and the meta is the one that folds.
+ */
+details.row > summary {
+  list-style: none;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 84px minmax(16ch, 1fr) minmax(0, auto);
+  gap: var(--s4);
+  padding: var(--s3) 0;
+  align-items: baseline;
+}
+
+details.row > summary::-webkit-details-marker {
+  display: none;
+}
+
+.row-title {
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+}
+
+details.row > summary:hover .row-title {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+details.row.is-plain > summary {
+  grid-template-columns: minmax(0, 1fr);
+  padding: var(--s2) 0;
+}
+
+details.row.is-plain {
+  --row-indent: 0px;
+}
+
+details.row.is-plain .row-title {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+details.row.is-plain[open] .row-title {
+  color: var(--ink);
+}
+
+.row-count {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+  margin-left: var(--s2);
+}
+
+.row-meta {
+  text-align: right;
+  min-width: 0;
+  text-wrap: balance;
+}
+
+.chev {
+  display: inline-block;
+  width: 9px;
+  margin-left: var(--s2);
+  color: var(--faint);
+  transition: transform 120ms ease;
+}
+
+details.row[open] .chev {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chev {
+    transition: none;
+  }
+}
+
+.row-body {
+  padding: 0 0 var(--s4) var(--row-indent, calc(84px + var(--s4)));
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.row-body > p {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* 10. Refusal panel. The empty and the refusal state of every screen: what is missing, why that
+       matters, and the command that produces it. Never an empty chart. */
+/* A refusal draws no frame of its own. It is always inside a tile, and the tile is the panel: a box
+   drawn inside a box is two panels saying one thing. */
+.refusal {
+  margin-top: var(--s3);
+}
+
+.refusal .t {
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.refusal p {
+  color: var(--muted);
+  font-size: 12.5px;
+  margin-top: var(--s1);
+}
+
+.refusal .plain {
+  margin-top: var(--s2);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* Supporting: the runnable command. The command, whole, with the one thing a reader always does to it
+   beside it. It copies and never runs, because nothing in this report acts on the reader's behalf. */
+.runnable-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.runnable-row .command {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.runnable-copy {
+  flex: none;
+  align-self: stretch;
+  padding: 0 var(--s3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.runnable-copy:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}

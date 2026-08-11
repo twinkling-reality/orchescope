@@ -1,5 +1,5 @@
 /**
- * The primitive set. Every screen in this workspace is assembled from these ten and nothing else.
+ * The primitive set. Every screen in this workspace is assembled from these and nothing else.
  *
  * Two rules hold everywhere in this directory: text reaches the page as a text node and never as
  * markup, and an inline style is only ever a CSS custom property, so a policy with no `unsafe-inline`
@@ -12,10 +12,9 @@
  */
 
 import type { ComponentChildren, JSX } from 'preact';
-import { describeBasis, describeSeverity } from '../basis.ts';
-import type { DeltaBar } from '../delta-bar.ts';
-import { formatArgv } from '../format.ts';
-import type { HeadlineSegment } from '../headline.ts';
+import { describeBasis, describeSeverity } from '../presentation/basis.ts';
+import type { Fraction as FractionValue } from '../presentation/fraction.ts';
+import { RunnableCommand } from './runnable-command.tsx';
 
 /* ── 1. Eyebrow ───────────────────────────────────────────────────────────────────────────────── */
 
@@ -59,26 +58,7 @@ export function Eyebrow(props: {
   );
 }
 
-/* ── 2. Display ───────────────────────────────────────────────────────────────────────────────── */
-
-/** The sentence a screen leads with. Extra light, and never below 24px, where thin stops reading. */
-export function Display(props: { readonly segments: readonly HeadlineSegment[] }) {
-  return (
-    <p class="display">
-      {props.segments.map((segment, index) =>
-        segment.kind === 'count' ? (
-          <span class="data" key={index}>
-            {String(segment.value)}
-          </span>
-        ) : (
-          <span key={index}>{segment.text}</span>
-        ),
-      )}
-    </p>
-  );
-}
-
-/* ── 3. Figure ────────────────────────────────────────────────────────────────────────────────── */
+/* ── 2. Figure ────────────────────────────────────────────────────────────────────────────────── */
 
 /**
  * The one number a screen leads with, and the mono qualifier that says what it counted.
@@ -99,7 +79,7 @@ export function Figure(props: {
   );
 }
 
-/* ── 4. Data ──────────────────────────────────────────────────────────────────────────────────── */
+/* ── 3. Data ──────────────────────────────────────────────────────────────────────────────────── */
 
 /** Every number on the page. Tabular, so a figure that changes between reports does not move the layout. */
 export function Data(props: {
@@ -114,7 +94,7 @@ export function Data(props: {
   );
 }
 
-/* ── 5. Basis chip ────────────────────────────────────────────────────────────────────────────── */
+/* ── 4. Basis chip ────────────────────────────────────────────────────────────────────────────── */
 
 /**
  * The class of evidence a value rests on. No hue and no marker: the word is the signal, and there is
@@ -130,7 +110,7 @@ export function BasisChip(props: { readonly basis: string }) {
   );
 }
 
-/* ── 6. Severity marker ───────────────────────────────────────────────────────────────────────── */
+/* ── 5. Severity marker ───────────────────────────────────────────────────────────────────────── */
 
 /**
  * A square and a word. The two alert hues in this system live here and nowhere else.
@@ -152,76 +132,69 @@ export function SeverityMark(props: { readonly severity: string }) {
   );
 }
 
-/* ── 7. Bar cell ──────────────────────────────────────────────────────────────────────────────── */
+/* ── 6. Meter cell ───────────────────────────────────────────────────────────────────────────── */
 
-/** One cell of the declaration bar. Filled where a run reached it, outlined where it only ever existed. */
-export function BarCell(props: { readonly filled: boolean }) {
-  return <i class={props.filled ? 'cell met' : 'cell unmet'} />;
-}
+/*
+ * The cell itself lives in `ui/meter.tsx` with the rail it belongs to, because a cell alone is not a
+ * vocabulary item: what it means comes from the rail's caption and its accessible name, and a cell
+ * used away from those would be a mark with no stated basis.
+ */
+
+/* ── 7. Share ──────────────────────────────────────────────────────────────────────────────── */
 
 /**
- * The declaration bar itself.
+ * A count of a known total, said the way a person asks it: how far along, out of how many, and what is
+ * left. The tenth primitive, and it earns the place because the Overview alone carries five of these
+ * and used to draw none of them.
  *
- * The whole bar is one image with one accessible name carrying the real counts, rather than up to two
- * hundred and forty elements a screen reader would have to walk. What ran and was never declared sits
- * past a dashed boundary rather than being tinted a third colour, because it is not a third class of
- * evidence, it is outside the declared set.
+ * **The share is a bar and never a hue.** The filled length is the same `--ink` every measured shape in
+ * this system uses and the track is the same `--outline`, so what it says in colour is what the rail
+ * says: this much, out of that much. Nothing here is red for bad or green for good, because a share is
+ * not a verdict and this report does not have one to give.
  *
- * The bar and its caption share one box that is as wide as the cells and no wider. A cell is a fixed
- * 24px until there are enough of them to need the whole width, so on a report declaring twenty two
- * components the bar stops well short of the column, and a caption stretched to the column would print
- * the word `Outside` a third of the page away from the cell it names.
+ * **A total of zero draws no bar.** Nought of nought has no share, and an empty track there would say a
+ * thing was measured and found wanting. It says so in a word instead, which is the same rule the rest
+ * of the workspace follows for a measurement that was never taken.
  */
-export function DeclarationBar(props: { readonly bar: DeltaBar }) {
-  const { bar } = props;
-  const outside: null[] = Array.from({ length: bar.outside }, () => null);
-  return (
-    <>
-      <div class={bar.dense ? 'bar-block dense' : 'bar-block'}>
-        <div class={bar.dense ? 'bar dense' : 'bar'} role="img" aria-label={bar.label}>
-          {bar.cells.map((filled, index) => (
-            <BarCell filled={filled} key={index} />
-          ))}
-          {bar.outside === 0 ? null : <span class="edge" />}
-          {outside.map((_, index) => (
-            <BarCell filled={true} key={`outside-${index}`} />
-          ))}
-        </div>
-        {bar.outside === 0 ? null : (
-          <div class="bar-caption">
-            <span>Declared</span>
-            <span>Outside</span>
-          </div>
-        )}
-      </div>
-      <p class="lede">{bar.caption}</p>
-    </>
-  );
-}
-
-/** The key that teaches the fill rule, beside the bar that first uses it. */
-export function EvidenceKey(props: {
-  readonly exercised: number;
-  readonly neverExercised: number;
-  readonly neverDeclared: number;
+export function Share(props: {
+  readonly fraction: FractionValue;
+  readonly label: string;
+  readonly doneLabel: string;
+  readonly remainingLabel: string;
+  readonly basis: string;
+  readonly emptyLabel?: string;
 }) {
+  const { fraction } = props;
+  const style: JSX.CSSProperties = {
+    '--share': `${((fraction.share ?? 0) * 100).toFixed(1)}%`,
+  };
   return (
-    <ul class="key">
-      <li>
-        <i class="cell met" />
-        {`Exercised (${props.exercised})`}
-      </li>
-      <li>
-        <i class="cell unmet" />
-        {`Declared, never exercised (${props.neverExercised})`}
-      </li>
-      {props.neverDeclared === 0 ? null : (
-        <li>
-          <i class="cell met" />
-          {`Ran, never declared (${props.neverDeclared})`}
-        </li>
+    <div class="share">
+      <p class="share-head">
+        <span class="share-count">
+          <Data nil={fraction.total === 0}>{`${fraction.done} of ${fraction.total}`}</Data>
+        </span>
+        {fraction.percent === null ? (
+          <span class="share-percent is-nil">{props.emptyLabel ?? 'nothing to count'}</span>
+        ) : (
+          <span class="share-percent">{fraction.percent}</span>
+        )}
+      </p>
+      {fraction.percent === null ? null : (
+        <span class="share-track" aria-hidden="true">
+          <span class="share-fill" style={style} />
+        </span>
       )}
-    </ul>
+      <p class="share-legend">
+        <span>{props.label}</span>
+        <BasisChip basis={props.basis} />
+      </p>
+      <p class="visually-hidden">
+        {fraction.percent === null
+          ? `${props.label}: nothing to count.`
+          : `${props.label}: ${fraction.done} ${props.doneLabel}, ${fraction.remaining} ${props.remainingLabel}, ${fraction.percent}.`}
+      </p>
+    </div>
   );
 }
 
@@ -232,6 +205,12 @@ export function EvidenceKey(props: {
  * as the one the screen is about.
  *
  * Every one carries its basis, because a number without the class of evidence under it is a claim.
+ *
+ * **A stat with no number carries no basis.** The basis names how a measurement was established, so
+ * printing one under `not measured` asserts that something was observed which was not: Performance
+ * rendered `not measured` for Cost with `OBSERVED` beneath it, on every report in the corpus, because
+ * `costUsd` is never populated anywhere. The rule that every displayed number carries its basis is
+ * about numbers, and a false basis is worse than none.
  */
 export function RuledStat(props: {
   readonly value: string;
@@ -240,13 +219,16 @@ export function RuledStat(props: {
   readonly nil?: boolean;
 }) {
   const descriptor = describeBasis(props.basis);
+  const measured = props.nil !== true;
   return (
     <div class="stat">
-      <p class={props.nil === true ? 'v nil' : 'v'}>{props.value}</p>
+      <p class={measured ? 'v' : 'v nil'}>{props.value}</p>
       <p class="k">{props.label}</p>
-      <span class="basis" title={`${descriptor.label}. ${descriptor.meaning}`}>
-        {descriptor.label}
-      </span>
+      {measured ? (
+        <span class="basis" title={`${descriptor.label}. ${descriptor.meaning}`}>
+          {descriptor.label}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -317,10 +299,11 @@ export function RefusalPanel(props: {
       </div>
       {commands.length === 0 ? null : (
         <div class="refusal-commands">
+          {/* Every command this report prints is something a reader has to get into a terminal, and on
+              a report that refuses, these are the whole of what there is to do. So they are controls
+              rather than text to drag a selection across. */}
           {commands.map((argv) => (
-            <div class="command-block" key={argv.join(' ')}>
-              <pre class="command">{formatArgv(argv)}</pre>
-            </div>
+            <RunnableCommand argv={argv} key={argv.join(' ')} />
           ))}
         </div>
       )}
@@ -329,15 +312,6 @@ export function RefusalPanel(props: {
 }
 
 /* ── the supporting cast: layout and controls, no new vocabulary ──────────────────────────────── */
-
-export function CommandBlock(props: { readonly argv: readonly string[]; readonly label?: string }) {
-  return (
-    <div class="command-block">
-      {props.label === undefined ? null : <p class="command-label">{props.label}</p>}
-      <pre class="command">{formatArgv(props.argv)}</pre>
-    </div>
-  );
-}
 
 /** A quiet line of identifiers and classifications, the middle dots supplied by the stylesheet. */
 export function Meta(props: { readonly children: ComponentChildren }) {

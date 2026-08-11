@@ -1,0 +1,281 @@
+/*
+ * Overview is four ordered slots and it is allowed to continue past the fold.
+ *
+ * It used to be locked to `100dvh` with `overflow: hidden`, and that one rule caused both of the
+ * faults this replaced. Content that would not fit was moved into tile menus, which left every tile
+ * body holding a single line above a few hundred pixels of nothing; and the delta's marks were sized
+ * by the leftover height, so the picture drew the window rather than the repository.
+ *
+ * What matters is a strong first viewport, not the absence of scrolling. The delta fills it and the
+ * working set starts under it, which is a continuation a reader can see the top of.
+ */
+/* One slot, and it fills the screen. Overview is one answer now, so there is no second row for a
+   short report to stop above: the tile is the page, and the page does not scroll. */
+/*
+ * The answer across the top and three tiles under it, which is the reference's own anatomy: a band, and
+ * then a bento of unequal tiles on three grounds.
+ *
+ * Two versions of this screen were wrong in opposite directions. The first had four tiles and three of
+ * them answered `what do I do` differently, so the page scrolled and nothing rang out. The second
+ * deleted them all, which fixed the duplication and took the composition with it: one flat coloured
+ * rectangle with four hundred pixels of nothing under the fold. The tiles were never the fault. What
+ * they held was, so each of these three asks a question the answer above does not.
+ */
+.overview-skeleton {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.overview-skeleton > .report-slot {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  align-items: stretch;
+}
+
+/* The slot gives its tile the whole height, so the three in the row line up whatever they hold. */
+:where(.overview-skeleton > .report-slot) > .tile {
+  height: 100%;
+  min-height: 0;
+}
+
+.overview-skeleton > .is-headline {
+  grid-column: span 12;
+}
+
+/* Black in the corner, and the widest of the three, because it is the one with the most in it. */
+.overview-skeleton > .is-problems {
+  grid-column: span 4;
+}
+
+.overview-skeleton > .is-ran {
+  grid-column: span 5;
+}
+
+.overview-skeleton > .is-scan {
+  grid-column: span 3;
+}
+
+.overview-skeleton .tile {
+  gap: var(--s3);
+  overflow: visible;
+}
+
+/* The answer takes the top of the screen and the row takes what is left, so the page is filled by
+   tiles rather than by a band with nothing under it. */
+@media (min-width: 1181px) {
+  .overview-skeleton {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1180px) {
+  .overview-skeleton > .is-problems,
+  .overview-skeleton > .is-ran {
+    grid-column: span 6;
+  }
+
+  .overview-skeleton > .is-scan {
+    grid-column: span 12;
+  }
+}
+
+@media (max-width: 880px) {
+  .overview-skeleton > .report-slot {
+    grid-column: span 12;
+  }
+}
+
+.overview-panel-title {
+  padding-right: var(--s6);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.overview-panel-instruction {
+  max-width: 46ch;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* One number to a tile, well below the answer's size so the hierarchy is never in doubt. */
+.tile-figure {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  max-width: none;
+}
+
+.tile-figure-value {
+  font-family: var(--mono);
+  font-size: 34px;
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile-figure-label {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.overview-problems,
+.overview-ran,
+.overview-coverage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.overview-problems .more,
+.overview-ran .more {
+  margin-top: auto;
+  padding-top: var(--s3);
+}
+
+/*
+ * How bad the rest of them are, in one shape.
+ *
+ * One segment per severity, worst first, each as wide as its share, and the rank is ink rather than
+ * hue: solid for high, solid and half height for medium, an outline for low, dashed for a severity this
+ * build does not rank. More ink means worse, which is what the marker beside each count already says,
+ * so the bar and the key say the same thing twice rather than asking a reader to learn a second
+ * vocabulary. Hue stays on the marker, so the picture survives greyscale.
+ */
+.mix-bar {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  height: 10px;
+  gap: 2px;
+}
+
+.mix-slice {
+  flex: 0 0 var(--slice, 0%);
+  min-width: 2px;
+  align-self: stretch;
+  background: var(--ink);
+}
+
+.mix-slice.mark-filled_half,
+.mix-slice.mark-hollow_half {
+  align-self: flex-end;
+  height: 50%;
+}
+
+.mix-slice.mark-hollow,
+.mix-slice.mark-hollow_half,
+.mix-slice.mark-unranked {
+  background: transparent;
+  border: 1px solid var(--outline);
+}
+
+.mix-slice.mark-unranked {
+  border-style: dashed;
+}
+
+.mix-key {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s4);
+  margin-top: var(--s1);
+}
+
+.mix-key-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  white-space: nowrap;
+}
+
+.mix-key-count {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* The rail inside a tile is shorter than the one that used to cross the page: a cell here is thirty
+   pixels wide, and at thirty four tall it reads as a row of boxes rather than as one measurement
+   divided up. */
+.overview-ran .meter {
+  height: 22px;
+}
+
+/* One row rather than three lines. Stacked, the three sets cost a hundred pixels of a tile that has to
+   share a screen with the answer above it. */
+.more-row.is-stacked {
+  gap: var(--s2) var(--s5);
+  padding-top: var(--s3);
+  border-top: 0;
+}
+
+/* A tile menu holds protocol depth only, so it may take over its tile: nothing a reader needs in order
+   to act is inside one. */
+.overview-skeleton > :not(.is-join) .tile-menu-panel {
+  top: calc(var(--s6) + var(--s5));
+  right: clamp(var(--s5), 2vw, var(--s6));
+  bottom: auto;
+  left: auto;
+  width: min(520px, calc(100% - var(--s5) * 2));
+  max-height: min(62vh, 560px);
+  padding: var(--s4);
+}
+
+/*
+ * The rows are the document's own height and nothing is stretched to the viewport.
+ *
+ * The second row used to take whatever height the first left, on the argument that a short document
+ * stopping halfway down a wide screen reads as having failed rather than ended. It bought that at a
+ * price this system already names as the worse one: the emptiness moved inside the tiles, where a
+ * reader takes it for a fault. Measured on `demonstration-system` at 1728 by 950 it was two hundred
+ * pixels of empty black under three findings and four hundred under the handoff, and the shorter the
+ * hero got the more there was of it.
+ *
+ * What is under the last row is the root's own ground, which is the field, which is what a tile is
+ * made of. So the document ends on the same surface it is written on rather than on a page appearing.
+ */
+
+@media (max-width: 1180px) {
+  .overview-skeleton > .is-top-actions,
+  .overview-skeleton > .is-next-commands {
+    grid-column: span 6;
+  }
+
+  .overview-skeleton > .is-context {
+    grid-column: span 12;
+  }
+}
+
+@media (max-width: 880px) {
+  .overview-skeleton > .report-slot,
+  .overview-skeleton > .is-top-actions,
+  .overview-skeleton > .is-next-commands,
+  .overview-skeleton > .is-context {
+    grid-column: span 12;
+  }
+
+  .overview-skeleton > .is-headline .tile,
+  .overview-skeleton > .is-join .tile {
+    min-height: 0;
+  }
+}
+
+/* The headline and the join each carry two grounds inside one slot, so the slot's own tile rules have
+   nothing to act on. Each region is a tile and owns its ground in the usual way. */
+.overview-skeleton > .is-headline,
+.overview-skeleton > .is-join {
+  min-width: 0;
+  display: block;
+}
+
+.overview-skeleton > .is-join > .overview-hero {
+  min-width: 0;
+}

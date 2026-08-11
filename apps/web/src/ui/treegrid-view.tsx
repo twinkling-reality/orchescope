@@ -13,9 +13,15 @@
 import type { Component } from '@orchescope/schema';
 import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { describeBasis } from '../basis.ts';
-import { formatConfidence, formatDuration, formatInteger, humanise, UNKNOWN } from '../format.ts';
-import type { GraphIndex } from '../graph-index.ts';
+import { describeBasis } from '../presentation/basis.ts';
+import {
+  formatConfidence,
+  formatDuration,
+  formatInteger,
+  humanise,
+  UNKNOWN,
+} from '../presentation/format.ts';
+import type { GraphIndex } from '../presentation/graph-index.ts';
 import { useApp } from '../store.tsx';
 import {
   buildGroups,
@@ -28,23 +34,24 @@ import {
   toggleGroup,
   treeGridKey,
   visibleRows,
-} from '../treegrid.ts';
+} from '../presentation/treegrid.ts';
 import { computeWindow, scrollToRow, shouldVirtualise } from '../window.ts';
-import { type Presence, PresenceMark, presenceOf } from './presence.tsx';
+import { type Presence, presenceOf } from '../presentation/component-presence.ts';
+import { PresenceMark } from './presence.tsx';
 
 const ROW_HEIGHT = 28;
 const VIEWPORT_HEIGHT = 420;
 
 const COLUMNS = [
-  'Component',
+  'Part',
   'Kind',
-  'Presence',
-  'Relations',
-  'Depth',
-  'Evidence class',
+  'Has a run touched it',
+  'Connections',
+  'Steps from a start',
+  'How it was established',
   'Confidence',
-  'Executions',
-  'Findings',
+  'Times it ran',
+  'Problems',
 ] as const;
 
 interface RowCells {
@@ -141,7 +148,7 @@ function groupCells(index: GraphIndex, group: TreeGridGroup): RowCells {
   }
   return {
     name: group.label,
-    kind: `${formatInteger(group.componentIds.length)} components`,
+    kind: `${formatInteger(group.componentIds.length)} parts`,
     presence: null,
     relations: formatInteger(relations),
     depth: '',
@@ -401,7 +408,7 @@ export function TreeGridView(props: {
           class="tg-table"
           // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: the WAI-ARIA treegrid pattern is a composite widget with no plain HTML equivalent. A real table is used so that rows, row headers and column headers keep their native semantics and only the composite role has to be declared.
           role="treegrid"
-          aria-label="Components grouped by kind"
+          aria-label="Parts grouped by kind"
           aria-describedby="treegrid-help"
           aria-rowcount={rows.length + 1}
           aria-colcount={COLUMNS.length}
@@ -429,7 +436,7 @@ export function TreeGridView(props: {
           {`Showing rows ${formatInteger(range.start + 1)} to ${formatInteger(range.end)} of ${formatInteger(rows.length)}. Move with the arrow keys or scroll for the rest.`}
         </p>
       ) : null}
-      {rows.length === 0 ? <p class="muted">No component matches the current filters.</p> : null}
+      {rows.length === 0 ? <p class="muted">Nothing matches the current filters.</p> : null}
     </div>
   );
 }

@@ -12,11 +12,13 @@
 import type { ReportBundle } from '@orchescope/schema';
 import type { JSX } from 'preact';
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'preact/hooks';
+import { INITIAL_STATE, reduce } from './app-state.ts';
 import { REPORT_ELEMENT_ID, REPORT_ENDPOINT } from './bundle.ts';
-import { indexCapabilities } from './capabilities.ts';
-import { loadReport, type ReportSource } from './client.tsx';
-import { auditCommand } from './commands.ts';
-import { buildGraphIndex } from './graph-index.ts';
+import { indexCapabilities } from './presentation/capabilities.ts';
+import { loadReport } from './client.tsx';
+import { auditCommand } from './presentation/commands.ts';
+import { readGallery } from './presentation/gallery.ts';
+import { buildGraphIndex } from './presentation/graph-index.ts';
 import {
   formatHash,
   parseHash,
@@ -33,13 +35,7 @@ import { OverviewSection } from './sections/overview.tsx';
 import { PerformanceSection } from './sections/performance.tsx';
 import { ResilienceSection } from './sections/resilience.tsx';
 import { ScenariosSection } from './sections/scenarios.tsx';
-import {
-  type AppContextValue,
-  AppProvider,
-  INITIAL_STATE,
-  reduce,
-  type SelectOptions,
-} from './store.tsx';
+import { type AppContextValue, AppProvider, type SelectOptions } from './store.tsx';
 import { Eyebrow, RefusalPanel } from './ui/primitives.tsx';
 import { Shell } from './ui/shell.tsx';
 
@@ -60,7 +56,6 @@ type LoadPhase =
       readonly status: 'ready';
       readonly bundle: ReportBundle;
       readonly repaired: readonly string[];
-      readonly source: ReportSource;
     }
   | { readonly status: 'failed'; readonly problems: readonly string[] };
 
@@ -147,7 +142,6 @@ export function App() {
               status: 'ready',
               bundle: result.load.bundle,
               repaired: result.load.repaired,
-              source: result.source,
             }
           : { status: 'failed', problems: result.load.problems },
       );
@@ -162,7 +156,7 @@ export function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        dispatch({ type: 'help', open: false });
+        dispatch({ type: 'chrome', panel: null });
         return;
       }
       if (isTypingTarget(event.target)) {
@@ -170,7 +164,7 @@ export function App() {
       }
       if (event.key === '?') {
         event.preventDefault();
-        dispatch({ type: 'help', open: true });
+        dispatch({ type: 'chrome', panel: state.chromePanel === 'help' ? null : 'help' });
         return;
       }
       const target = sectionForShortcut(event);
@@ -184,7 +178,7 @@ export function App() {
     return () => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, []);
+  }, [state.chromePanel]);
 
   useEffect(() => {
     if (phase.status === 'ready') {
@@ -224,6 +218,8 @@ export function App() {
   const bundle = phase.status === 'ready' ? phase.bundle : null;
   const index = useMemo(() => (bundle === null ? null : buildGraphIndex(bundle)), [bundle]);
   const capabilities = useMemo(() => indexCapabilities(bundle?.capabilities ?? []), [bundle]);
+  // Read once: the list is written into the document by the generator and never changes after load.
+  const gallery = useMemo(() => readGallery(document), []);
 
   if (phase.status === 'loading') {
     return <LoadingPage />;
@@ -251,7 +247,7 @@ export function App() {
 
   return (
     <AppProvider value={value}>
-      <Shell repaired={phase.repaired} source={phase.source}>
+      <Shell repaired={phase.repaired} gallery={gallery}>
         <h2 class="visually-hidden">{sectionLabel(state.route.section)}</h2>
         <Section />
       </Shell>

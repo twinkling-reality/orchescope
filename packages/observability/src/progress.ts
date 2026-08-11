@@ -59,7 +59,13 @@ export type ProgressReporter = {
     label: string,
     total?: number,
   ) => {
-    readonly step: (completed: number, detail?: string) => void;
+    /**
+     * `total` is accepted here as well as on the phase, because a phase does not always know its own
+     * size when it starts. Discovery has to walk the tree before it knows how many files there are to
+     * parse, and a count with no denominator is the difference between a reader watching progress and
+     * a reader watching a number climb.
+     */
+    readonly step: (completed: number, detail?: string, total?: number) => void;
     readonly finish: (summary: string) => void;
     readonly skip: (reason: string) => void;
   };
@@ -86,13 +92,14 @@ export const createProgressReporter = (
       });
       let closed = false;
       return {
-        step: (completed, detail) => {
+        step: (completed, detail, stepTotal) => {
           if (closed) return;
+          const known = stepTotal ?? total;
           emit({
             type: 'phase_progress',
             phase,
             completed,
-            ...(total === undefined ? {} : { total }),
+            ...(known === undefined ? {} : { total: known }),
             ...(detail === undefined ? {} : { detail }),
           });
         },

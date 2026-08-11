@@ -681,7 +681,7 @@ export const safeRetryRule: Rule = {
   evaluate: (context) => {
     const safe = context.graph.graph.edges.filter((edge) => {
       const retry = edge.policy?.retry;
-      return retry !== undefined && retry.bounded && retry.idempotency === 'declared';
+      return retry?.bounded === true && retry.idempotency === 'declared';
     });
     if (safe.length === 0) {
       return context.graph.graph.edges.some((edge) => edge.policy?.retry !== undefined)

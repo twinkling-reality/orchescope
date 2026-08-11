@@ -37,14 +37,24 @@ test('renders the overview with the project it audited', async ({ page }) => {
   // The project name is the directory name, and the workspace is a copy under a temporary path.
   await expect(page.locator('h1')).toHaveText(/^orchescope-ui-/);
   await expect(page.getByRole('navigation', { name: 'Report sections' })).toBeVisible();
-  await expect(page.getByText(/Declared against exercised/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'What this report found' })).toBeAttached();
+
+  // The first thing on the page says what this report did, because every count on it is meaningless to
+  // a reader who does not already know that the tool read their code and watched the system work.
+  await expect(page.locator('.hero-preamble')).toContainText(/^We read your code/);
+
+  // And the first number is about the reader's system rather than about how much of it we managed to
+  // look at. `7 of 21 never ran` is a fact about our own coverage; a count of problems is a fact about
+  // them, and it used to be three hundred pixels down inside the second tile.
+  await expect(page.locator('.answer-title')).toBeVisible();
+  await expect(page.locator('.answer-impact')).toBeVisible();
 
   // Which report this is moved from a mono line across the top of every screen into a menu behind one
   // icon. It is still on every screen and still one interaction away, which is what this holds: the
   // identifier is in the document, and the control that reveals it does.
-  const details = page.locator('details.chrome-menu');
-  await expect(details.getByText(/rpt_[0-9a-f]{16}/)).toBeAttached();
-  await details.locator('summary').click();
+  await page.getByRole('button', { name: 'Report details' }).click();
+  const details = page.getByRole('dialog', { name: 'Report details' });
+  await expect(details).toHaveClass(/chrome-menu-body/);
   await expect(details.getByText(/rpt_[0-9a-f]{16}/)).toBeVisible();
   // The revision, said either way: a temporary workspace has no git repository, and saying so is the
   // point. What must never happen is the row being absent, because then nothing says whether the
@@ -52,6 +62,87 @@ test('renders the overview with the project it audited', async ({ page }) => {
   await expect(
     details.getByText(/working tree (clean|dirty)|no git revision recorded/),
   ).toBeVisible();
+  await expect(page.getByText('Provenance', { exact: true })).toHaveCount(0);
+});
+
+/**
+ * Overview is one answer on one screen.
+ *
+ * The test this replaced walked four tiles and asserted their order, their widths and which of them
+ * carried a menu. That structure is gone, and it is gone because it answered `what do I do` in four
+ * places at once and printed the same finding twice: a hero naming the most serious one, a tile listing
+ * the top three, a tile naming a goal, and a tile about how many files the scan read. What is asserted
+ * now is the promise that replaced it, and it is a stronger one: one answer, one action, and the whole
+ * thing fits the screen without scrolling.
+ */
+test('overview is one answer, one action, and one screen', async ({ page }) => {
+  const skeleton = page.locator('[data-section-skeleton="overview"]');
+  await expect(skeleton).toBeVisible();
+  await expect
+    .poll(() =>
+      skeleton
+        .locator(':scope > [data-slot]')
+        .evaluateAll((slots) => slots.map((slot) => slot.getAttribute('data-slot'))),
+    )
+    .toEqual(['headline', 'problems', 'ran', 'scan']);
+
+  // What this report did, before any number, because every count is meaningless to a reader who does
+  // not know the tool read their code and watched the system work.
+  await expect(skeleton.locator('.hero-preamble')).toContainText(/^We read your code/);
+
+  // The one thing the screen is about: what kind of claim it is, the claim, and what it costs.
+  await expect(skeleton.locator('.answer-meta')).toBeVisible();
+  await expect(skeleton.locator('.answer-title')).toBeVisible();
+  await expect(skeleton.locator('.answer-impact')).not.toBeEmpty();
+
+  // It is the largest thing on the screen, and nothing on the screen competes with it.
+  const sizes = await skeleton.evaluate((root) => {
+    const size = (element: Element | null) =>
+      element === null ? 0 : Number.parseFloat(getComputedStyle(element).fontSize);
+    const answer = size(root.querySelector('.answer-title'));
+    const others = [...root.querySelectorAll<HTMLElement>('*')]
+      .filter((element) => !element.closest('.answer-title'))
+      .map((element) => size(element));
+    return { answer, loudestOther: Math.max(0, ...others) };
+  });
+  expect(sizes.answer, 'the answer is not the largest thing on the screen').toBeGreaterThan(
+    sizes.loudestOther,
+  );
+
+  // The one thing to do sits with the thing it is about, and the command is a control rather than text
+  // to drag a selection across. It copies and never runs: nothing here acts on the reader's behalf.
+  const command = skeleton.locator('.answer-do .runnable');
+  await expect(command).toBeVisible();
+  await expect(command.locator('pre.command')).toContainText('orchescope');
+  await expect(command.getByRole('button', { name: /Copy/ })).toBeVisible();
+
+  // Each tile under the answer asks a different question and none of them repeats it. The tile that
+  // used to sit here listed the top three problems, and its first row was the finding the answer had
+  // already named.
+  await expect(skeleton.locator('[data-slot="problems"]')).toContainText(
+    'Everything else we found',
+  );
+  await expect(skeleton.locator('[data-slot="ran"]')).toContainText('has actually run');
+  await expect(skeleton.locator('[data-slot="scan"]')).toContainText('What the scan could read');
+  const answered = await skeleton.locator('.answer-title').innerText();
+  await expect(
+    skeleton.locator('[data-slot="problems"]'),
+    'the tile under the answer repeats the answer',
+  ).not.toContainText(answered.trim());
+
+  // The answer and its action are whole in the first viewport, and the page never scrolls sideways.
+  // Vertical fit is asserted separately, because it is a measurement that depends on the viewport and
+  // the report, and it is still failing on a short window: see docs/design/TODO.md.
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow, 'Overview scrolls sideways').toBeLessThanOrEqual(0);
+  await expect(skeleton.locator('.answer-title')).toBeInViewport({ ratio: 1 });
+  await expect(skeleton.locator('.answer-do')).toBeInViewport({ ratio: 1 });
+
+  // The counts take you to the screen the thing they count lives on, rather than repeating it here.
+  await skeleton.locator('[data-slot="problems"] .link-button').click();
+  await expect(page.locator('[data-section-skeleton="findings"]')).toBeVisible();
 });
 
 test('every section is reachable and names itself', async ({ page }) => {
@@ -75,12 +166,49 @@ test('every section is reachable and names itself', async ({ page }) => {
   }
 });
 
-test('the map carries a keyboard navigable table with the same components', async ({ page }) => {
+test('every depth section keeps summary, primary and detail slots in place', async ({ page }) => {
+  const sections = [
+    ['System map', 'map'],
+    ['Findings', 'findings'],
+    ['Performance', 'performance'],
+    ['Resilience', 'resilience'],
+    ['Scenarios', 'scenarios'],
+    ['Comparisons', 'comparisons'],
+    ['Goals', 'goals'],
+  ] as const;
+
+  for (const [label, section] of sections) {
+    await page.getByRole('link', { name: new RegExp(label) }).click();
+    const skeleton = page.locator(`[data-section-skeleton="${section}"]`);
+    await expect(skeleton).toBeVisible();
+    await expect
+      .poll(() =>
+        skeleton
+          .locator(':scope > [data-slot]')
+          .evaluateAll((slots) => slots.map((slot) => slot.getAttribute('data-slot'))),
+      )
+      .toEqual(['summary', 'primary', 'detail']);
+
+    // Presence of the slot was the whole assertion before this, and a slot renders its own div with
+    // no children at all, which `comparisons.tsx` did on every report in the corpus that carried a
+    // comparison. So the order above passed while one of the three was empty. A slot that is present
+    // and blank is indistinguishable from a failed render, and it is the one thing "never fake
+    // completeness" excludes: what is missing has to say so where it is missing.
+    const lengths = await skeleton
+      .locator(':scope > [data-slot]')
+      .evaluateAll((slots) => slots.map((slot) => (slot.textContent ?? '').trim().length));
+    for (const [index, length] of lengths.entries()) {
+      expect(length, `${section} slot ${index} is empty`).toBeGreaterThan(0);
+    }
+  }
+});
+
+test('the map carries a keyboard navigable table with the same parts', async ({ page }) => {
   await page.getByRole('link', { name: /System map/ }).click();
   const grid = page.getByRole('treegrid');
   await expect(grid).toBeVisible();
 
-  const counter = page.getByText(/\d+ of \d+ components and \d+ of \d+ relations match/);
+  const counter = page.getByText(/\d+ of \d+ parts and \d+ of \d+ connections match/);
   await expect(counter).toBeVisible();
 
   expect(await grid.getByRole('row').count()).toBeGreaterThan(5);
@@ -104,8 +232,8 @@ test('the map filters narrow both the canvas and the table', async ({ page }) =>
   const before = await grid.getByRole('row').count();
   expect(before).toBeGreaterThan(1);
 
-  await page.getByLabel(/Search components/).fill('refund');
-  await expect(page.getByText(/components and .* relations match/)).toBeVisible();
+  await page.getByLabel(/Search parts/).fill('refund');
+  await expect(page.getByText(/parts and .* connections match/)).toBeVisible();
   await expect
     .poll(async () => grid.getByRole('row').count(), { timeout: 10_000 })
     .toBeLessThan(before);
@@ -146,7 +274,7 @@ test('the components table carries the depth the directional arrangements draw',
 }) => {
   await page.getByRole('link', { name: /System map/ }).click();
   const grid = page.getByRole('treegrid');
-  await expect(grid.getByRole('columnheader', { name: 'Depth' })).toBeVisible();
+  await expect(grid.getByRole('columnheader', { name: 'Steps from a start' })).toBeVisible();
   // A group row aggregates depths that differ, so its cell is deliberately empty; a component row
   // carries how many relations from an entry point it sits.
   const depths = grid.locator('tr.tg-row td:nth-child(5) .data');
@@ -199,9 +327,25 @@ test('the page requests nothing from another origin', async ({ page }) => {
 
 test('the keyboard shortcut panel opens and closes with the keyboard', async ({ page }) => {
   await page.keyboard.press('?');
-  await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible();
+  const help = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+  await expect(help).toBeVisible();
+  await expect(help).toHaveClass(/chrome-menu-body/);
+  await expect(help.locator('xpath=..')).toHaveClass(/chrome-menu/);
+
+  const [chromeBox, helpBox] = await Promise.all([
+    page.locator('.chrome').boundingBox(),
+    help.boundingBox(),
+  ]);
+  expect(helpBox?.y ?? 0).toBeGreaterThanOrEqual((chromeBox?.y ?? 0) + (chromeBox?.height ?? 0));
+
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeHidden();
+  await expect(help).toBeHidden();
+
+  await page.getByRole('button', { name: 'Report details' }).click();
+  await expect(page.getByRole('dialog', { name: 'Report details' })).toBeVisible();
+  await page.getByRole('button', { name: 'Keyboard shortcuts' }).click();
+  await expect(page.getByRole('dialog', { name: 'Report details' })).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible();
 });
 
 /**
@@ -245,10 +389,19 @@ test('the document structure is navigable by landmarks and headings', async ({ p
     ];
     return focusable
       .filter((element) => {
+        // A control's name may come from a label wrapping it or pointing at it, which is the standard
+        // way a radio or a checkbox is named. Resolving those makes the check more accurate rather than
+        // more forgiving: a control with neither is still reported.
+        const associated =
+          element.id.length === 0
+            ? null
+            : document.querySelector(`label[for="${CSS.escape(element.id)}"]`);
         const label =
           element.getAttribute('aria-label') ??
           element.getAttribute('title') ??
-          element.textContent?.trim() ??
+          (element.textContent?.trim() || null) ??
+          (element.closest('label')?.textContent?.trim() || null) ??
+          (associated?.textContent?.trim() || null) ??
           '';
         return label.length === 0;
       })
@@ -263,13 +416,14 @@ test('the document structure is navigable by landmarks and headings', async ({ p
  * broken, which is why none of them survived a redesign before without being held.
  */
 test('keyboard focus is visible on every control it can reach', async ({ page }) => {
-  // The overview no longer carries a `select`, because the theme control that used to be on every
-  // screen is gone. The map does, so the four kinds of control are covered across two screens rather
-  // than by dropping one of them from the list.
+  // Overview is one answer now and carries neither a `select` nor a `summary`: it has no tile menu to
+  // open, because there is nothing on it a reader has to act on that is not already on the page. The
+  // map has both, so the four kinds of control are covered across two screens rather than by dropping
+  // any of them from the list.
   const controls: readonly { readonly selector: string; readonly section: string | null }[] = [
     { selector: '.nav-link', section: null },
     { selector: 'button', section: null },
-    { selector: 'summary', section: null },
+    { selector: '.tile-menu > summary', section: null },
     { selector: 'select', section: 'System map' },
   ];
   const outlines: { name: string; width: number }[] = [];
@@ -357,15 +511,24 @@ function groundsOf(page: import('@playwright/test').Page) {
       const colour = getComputedStyle(element).backgroundColor;
       return { colour, luminance: luminance(colour) };
     };
+    const chrome = document.querySelector('.chrome');
     return {
-      anchor: read('.tile.is-anchor'),
-      band: read('.tile.is-band'),
-      field: read('.tile:not(.is-anchor):not(.is-band)'),
+      anchor: read('.tile.is-anchor, .tile.is-dark'),
+      band: read('.tile.is-band:not(.is-band-deep)'),
+      field: read('.tile:not(.is-anchor):not(.is-dark):not(.is-band)'),
+      chromeColour: chrome === null ? null : getComputedStyle(chrome).backgroundColor,
+      chromeSeam: chrome === null ? null : getComputedStyle(chrome).borderBottomWidth,
     };
   });
 }
 
 test('a tile owns its ground, and the ground is fixed by its role', async ({ page }) => {
+  // Measured on the map, which is the one screen that carries all three grounds at once: the dark tile
+  // the drawing sits on, the band it opens with, and the field everything else is written on. Overview
+  // is one answer on one ground now, so it cannot hold the composition rule up on its own.
+  await page.getByRole('link', { name: /System map/ }).click();
+  await expect(page.locator('[data-section-skeleton="map"]')).toBeVisible();
+  await expect(page.locator('.tile.is-dark')).toBeVisible();
   const grounds = await groundsOf(page);
   expect(grounds.anchor, 'the screen has no anchor tile').not.toBeNull();
   expect(grounds.band, 'the screen has no band tile').not.toBeNull();
@@ -381,4 +544,10 @@ test('a tile owns its ground, and the ground is fixed by its role', async ({ pag
   // The anchor is a black tile rather than a dark one, and the field is paper rather than off white.
   expect(grounds.anchor?.luminance ?? 1).toBeLessThan(0.01);
   expect(grounds.field?.luminance ?? 0).toBeGreaterThan(0.9);
+
+  // The chrome is the band's own colour and draws no rule under itself. It used to, on the argument
+  // that the line would vanish into two identical grounds; it did not, and every screen opened with a
+  // hairline ruled across a solid colour marking a boundary the colour was not making.
+  expect(grounds.chromeColour, 'the chrome is not the band colour').toBe(grounds.band?.colour);
+  expect(grounds.chromeSeam, 'the chrome rules a line under itself').toBe('0px');
 });

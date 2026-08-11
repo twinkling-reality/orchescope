@@ -4,11 +4,11 @@
  */
 
 import { ENDPOINTS, type OpenLocationRequest, parseOpenLocation } from '../api.ts';
-import { type CapabilityName, capabilityState } from '../capabilities.ts';
+import { type CapabilityName, capabilityState } from '../presentation/capabilities.ts';
 import { postJson } from '../client.tsx';
-import { evidenceLocation, viewEvidence } from '../evidence-text.ts';
-import { formatInteger } from '../format.ts';
-import type { GraphIndex } from '../graph-index.ts';
+import { evidenceLocation, viewEvidence } from '../presentation/evidence-text.ts';
+import { formatInteger } from '../presentation/format.ts';
+import type { GraphIndex } from '../presentation/graph-index.ts';
 import { useApp } from '../store.tsx';
 import { CapabilityAction } from './actions.tsx';
 import { BasisChip, DefinitionList, Meta, RefusalPanel } from './primitives.tsx';

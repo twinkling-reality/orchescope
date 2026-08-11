@@ -10,14 +10,15 @@
  */
 
 import type { ChaosOutcome, ChaosReport } from '@orchescope/schema';
-import { chaosCommand } from '../commands.ts';
 import {
   formatDuration,
   formatInteger,
   formatNumber,
   formatTimestamp,
   humanise,
-} from '../format.ts';
+} from '../presentation/format.ts';
+import { summariseOutcomes } from '../presentation/resilience-outcomes.ts';
+import { buildSectionPresentations } from '../presentation/section-presentation.ts';
 import { useApp } from '../store.tsx';
 import { EvaluatorResults } from '../ui/evaluators.tsx';
 import {
@@ -31,6 +32,7 @@ import {
   RuledStat,
   StatRow,
 } from '../ui/primitives.tsx';
+import { SectionSkeleton } from '../ui/section-skeleton.tsx';
 
 function outcomeRows(outcome: ChaosOutcome): readonly DefinitionRow[] {
   return [
@@ -39,26 +41,29 @@ function outcomeRows(outcome: ChaosOutcome): readonly DefinitionRow[] {
       value: <OptionalNumber value={outcome.recoveryTimeMs ?? null} render={formatDuration} />,
     },
     {
-      label: 'Cost amplification',
+      label: 'Tokens it burned',
       value: (
         <OptionalNumber
           value={outcome.costAmplification ?? null}
-          render={(value) => `${formatNumber(value)} times the baseline token spend`}
+          render={(value) => `${formatNumber(value)} times what a normal run spends`}
         />
       ),
     },
     {
-      label: 'Retry amplification',
+      label: 'Retries it caused',
       value: (
         <OptionalNumber
           value={outcome.retryAmplification ?? null}
-          render={(value) => `${formatNumber(value)} times the baseline retries`}
+          render={(value) => `${formatNumber(value)} times a normal run`}
         />
       ),
     },
-    { label: 'User interventions', value: <Data>{formatInteger(outcome.userInterventions)}</Data> },
-    { label: 'Loop iterations', value: <Data>{formatInteger(outcome.loopIterations)}</Data> },
-    { label: 'Policy violations', value: <Data>{formatInteger(outcome.policyViolations)}</Data> },
+    {
+      label: 'Times a person stepped in',
+      value: <Data>{formatInteger(outcome.userInterventions)}</Data>,
+    },
+    { label: 'Times round the loop', value: <Data>{formatInteger(outcome.loopIterations)}</Data> },
+    { label: 'Rules it broke', value: <Data>{formatInteger(outcome.policyViolations)}</Data> },
   ];
 }
 
@@ -81,25 +86,29 @@ function FaultOutcome(props: { readonly outcome: ChaosOutcome }) {
         </div>
         <div class="tile-body">
           <p class="lede">
-            {`Applied ${formatInteger(outcome.appliedCount)} times in run ${outcome.runId}.`}
+            {`Broken ${formatInteger(outcome.appliedCount)} ${outcome.appliedCount === 1 ? 'time' : 'times'} during run ${outcome.runId}.`}
           </p>
           <Meta>
-            <span>{outcome.taskCompleted ? 'task completed' : 'task did not complete'}</span>
-            <span>{outcome.recovered ? 'recovered' : 'did not recover'}</span>
             <span>
-              {outcome.degradedGracefully ? 'degraded gracefully' : 'did not degrade gracefully'}
+              {outcome.taskCompleted ? 'the task still finished' : 'the task never finished'}
+            </span>
+            <span>{outcome.recovered ? 'it recovered' : 'it never recovered'}</span>
+            <span>
+              {outcome.degradedGracefully
+                ? 'it gave a worse answer rather than none'
+                : 'it did not fail cleanly'}
             </span>
           </Meta>
           {unsafeEffects ? (
-            <RefusalPanel title="Under this fault the system produced side effects it should not have.">
+            <RefusalPanel title="With this broken, the system did things to the outside world it should not have.">
               <p>
-                {`${formatInteger(outcome.duplicateSideEffects)} duplicate and ${formatInteger(outcome.prohibitedSideEffects)} prohibited. A duplicate is the same logical operation happening twice; a prohibited one is an effect the scenario declared out of bounds.`}
+                {`${formatInteger(outcome.duplicateSideEffects)} happened twice, and ${formatInteger(outcome.prohibitedSideEffects)} were things the scenario had put out of bounds. Happening twice means the same real operation, repeated inside one run.`}
               </p>
             </RefusalPanel>
           ) : (
             <p class="note">
-              No duplicate and no prohibited side effect was recorded under this fault. That is what
-              the run observed, and not a guarantee about every path through the system.
+              Nothing happened twice and nothing out of bounds happened. That is what this run saw,
+              and not a promise about every path through the system.
             </p>
           )}
         </div>
@@ -113,13 +122,13 @@ function FaultOutcome(props: { readonly outcome: ChaosOutcome }) {
           <StatRow>
             <RuledStat
               value={formatInteger(outcome.duplicateSideEffects)}
-              label="Duplicate side effects"
+              label="Happened twice"
               basis="observed"
               nil={outcome.duplicateSideEffects === 0}
             />
             <RuledStat
               value={formatInteger(outcome.prohibitedSideEffects)}
-              label="Prohibited side effects"
+              label="Out of bounds"
               basis="observed"
               nil={outcome.prohibitedSideEffects === 0}
             />
@@ -134,7 +143,7 @@ function FaultOutcome(props: { readonly outcome: ChaosOutcome }) {
             <EvaluatorResults
               level={3}
               results={outcome.evaluators}
-              emptyMessage="No evaluator ran for this outcome, so nothing decided whether it passed."
+              emptyMessage="Nothing checked this outcome, so nothing decided whether it passed."
             />
           </div>
         </section>
@@ -148,19 +157,19 @@ function NotApplied(props: { readonly report: ChaosReport }) {
   return (
     <section class="tile">
       <Eyebrow level={3} count={notApplied.length}>
-        Faults requested and not applied
+        Asked for and never broken
       </Eyebrow>
-      <p class="lede">Recorded so the suite cannot appear more thorough than it was.</p>
+      <p class="lede">Recorded so this cannot look more thorough than it was.</p>
       {notApplied.length === 0 ? (
-        <p class="note">Every requested fault was applied.</p>
+        <p class="note">Everything asked for was actually broken.</p>
       ) : (
         <div class="scroll-x">
           <table class="table">
             <thead>
               <tr>
-                <th scope="col">Fault</th>
-                <th scope="col">Target</th>
-                <th scope="col">Reason it was not applied</th>
+                <th scope="col">What was meant to break</th>
+                <th scope="col">Where</th>
+                <th scope="col">Why it did not</th>
               </tr>
             </thead>
             <tbody>
@@ -183,25 +192,29 @@ function ChaosRun(props: { readonly report: ChaosReport }) {
   const { report } = props;
   return (
     <div class="bento">
-      <section class="tile is-band">
-        <Eyebrow>Chaos run</Eyebrow>
+      <section class="tile">
+        <Eyebrow>Breaking things on purpose</Eyebrow>
         <h3 class="mono">{report.id}</h3>
         <div class="lead-head is-prose">
           <div>
             <p class="lede">
-              {`Scenario ${report.scenarioId} in the ${humanise(report.environment)} environment, against baseline run ${report.baselineRunId}.`}
+              {`Scenario ${report.scenarioId}, run in the ${humanise(report.environment).toLowerCase()} environment and compared against the normal run ${report.baselineRunId}.`}
             </p>
             <DefinitionList
               rows={[
                 { label: 'Started', value: formatTimestamp(report.startedAt) },
                 { label: 'Finished', value: formatTimestamp(report.finishedAt) },
-                { label: 'Baseline run', value: report.baselineRunId, code: true },
                 {
-                  label: 'Environment',
+                  label: 'The normal run it is compared with',
+                  value: report.baselineRunId,
+                  code: true,
+                },
+                {
+                  label: 'Where it ran',
                   value:
                     report.environment === 'local_deterministic'
-                      ? 'deterministic and offline'
-                      : 'beyond the deterministic local one, so the result carries the variance of whatever it touched',
+                      ? 'on this machine, offline, and it repeats exactly'
+                      : 'somewhere that reaches outside this machine, so the result carries whatever variation that brought with it',
                 },
               ]}
             />
@@ -210,13 +223,13 @@ function ChaosRun(props: { readonly report: ChaosReport }) {
             <StatRow>
               <RuledStat
                 value={formatInteger(report.outcomes.length)}
-                label="Faults applied"
+                label="Things broken on purpose"
                 basis="observed"
                 nil={report.outcomes.length === 0}
               />
               <RuledStat
                 value={formatInteger(report.notApplied.length)}
-                label="Faults requested and not applied"
+                label="Asked for, never broken"
                 basis="observed"
                 nil={report.notApplied.length === 0}
               />
@@ -227,10 +240,10 @@ function ChaosRun(props: { readonly report: ChaosReport }) {
 
       {report.outcomes.length === 0 ? (
         <section class="tile">
-          <RefusalPanel title="No fault was applied in this run.">
+          <RefusalPanel title="Nothing was actually broken in this run.">
             <p>
-              The run completed and injected nothing, so it measures the system under no fault at
-              all. The faults it intended are listed below with the reason each was not applied.
+              The run finished and broke nothing, so it measures the system with everything working.
+              What it meant to break is listed below, with the reason each one did not happen.
             </p>
           </RefusalPanel>
         </section>
@@ -242,7 +255,6 @@ function ChaosRun(props: { readonly report: ChaosReport }) {
           />
         ))
       )}
-      <NotApplied report={report} />
     </div>
   );
 }
@@ -250,33 +262,99 @@ function ChaosRun(props: { readonly report: ChaosReport }) {
 export function ResilienceSection() {
   const app = useApp();
   const { chaosReports } = app.bundle;
-  const firstScenario = app.bundle.scenarios[0]?.id ?? null;
-
-  if (chaosReports.length === 0) {
-    return (
-      <div class="bento">
-        <section class="tile is-band">
-          <Eyebrow level={3}>Resilience</Eyebrow>
-          <RefusalPanel
-            title="No fault injection has been run, so nothing here has been tested under failure."
-            commands={[chaosCommand(firstScenario)]}
-          >
-            <p>
-              Resilience is measured by injecting a fault into the running system and recording what
-              the agents did next: whether the task still completed, what recovery cost, and whether
-              a retry produced a second side effect. None of that can be inferred from source.
-            </p>
-          </RefusalPanel>
-        </section>
-      </div>
-    );
-  }
+  const presentation = buildSectionPresentations(app.bundle).resilience;
+  const notAppliedCount = chaosReports.reduce(
+    (count, report) => count + report.notApplied.length,
+    0,
+  );
+  const summary = summariseOutcomes(chaosReports.flatMap((report) => report.outcomes));
 
   return (
-    <>
-      {chaosReports.map((report) => (
-        <ChaosRun key={report.id} report={report} />
-      ))}
-    </>
+    <SectionSkeleton
+      section="resilience"
+      summary={
+        <section class="tile is-band section-lead">
+          <h3 class="section-lead-question">What broke when something was made to fail</h3>
+          {presentation.summaryRefusal === null ? (
+            <div class="section-lead-body">
+              {/* The lead is what did not survive, not how many faults were injected. An injected
+                  fault count is a fact about the experiment; an incomplete task is a fact about the
+                  system, and it is the one a reader is here for. */}
+              <p class="section-lead-answer">
+                <span class="section-lead-figure">{formatInteger(summary.incomplete)}</span>
+                <span>
+                  {summary.incomplete === 0
+                    ? ` of the ${formatInteger(summary.total)} ${summary.total === 1 ? 'thing' : 'things'} deliberately broken stopped the task finishing. That is what these runs reached, not a promise about anything nobody broke.`
+                    : ` of the ${formatInteger(summary.total)} ${summary.total === 1 ? 'thing' : 'things'} deliberately broken stopped the task finishing: ${summary.failingFaultKinds.map((kind) => humanise(kind).toLowerCase()).join(', ')}.`}
+                </span>
+              </p>
+              <div class="section-lead-aside">
+                <StatRow>
+                  <RuledStat
+                    value={formatInteger(summary.degraded)}
+                    label="Finished, but worse"
+                    basis="simulated"
+                    nil={summary.degraded === 0}
+                  />
+                  <RuledStat
+                    value={formatInteger(summary.withDuplicateSideEffects)}
+                    label="Did something twice"
+                    basis="observed"
+                    nil={summary.withDuplicateSideEffects === 0}
+                  />
+                  <RuledStat
+                    value={formatInteger(notAppliedCount)}
+                    label="Asked for, never broken"
+                    basis="observed"
+                    nil={notAppliedCount === 0}
+                  />
+                </StatRow>
+              </div>
+            </div>
+          ) : (
+            <RefusalPanel
+              title={presentation.summaryRefusal.title}
+              commands={presentation.summaryRefusal.commands}
+            >
+              <p>{presentation.summaryRefusal.reason}</p>
+            </RefusalPanel>
+          )}
+        </section>
+      }
+      primary={
+        presentation.primaryRefusal === null ? (
+          chaosReports.map((report) => <ChaosRun key={report.id} report={report} />)
+        ) : (
+          <section class="tile">
+            <Eyebrow level={3}>What happened when things broke</Eyebrow>
+            <RefusalPanel
+              title={presentation.primaryRefusal.title}
+              commands={presentation.primaryRefusal.commands}
+            >
+              <p>{presentation.primaryRefusal.reason}</p>
+            </RefusalPanel>
+          </section>
+        )
+      }
+      detail={
+        presentation.detailRefusal === null ? (
+          <div class="bento">
+            {chaosReports.map((report) => (
+              <NotApplied key={report.id} report={report} />
+            ))}
+          </div>
+        ) : (
+          <section class="tile">
+            <Eyebrow level={3}>What was never broken</Eyebrow>
+            <RefusalPanel
+              title={presentation.detailRefusal.title}
+              commands={presentation.detailRefusal.commands}
+            >
+              <p>{presentation.detailRefusal.reason}</p>
+            </RefusalPanel>
+          </section>
+        )
+      }
+    />
   );
 }

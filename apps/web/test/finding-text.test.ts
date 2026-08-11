@@ -2,8 +2,13 @@
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { basisDescriptors, describeBasis, describeSeverity, severityRank } from '../src/basis.ts';
-import { buildFindingText } from '../src/finding-text.ts';
+import {
+  basisDescriptors,
+  describeBasis,
+  describeSeverity,
+  severityRank,
+} from '../src/presentation/basis.ts';
+import { buildFindingText } from '../src/presentation/finding-text.ts';
 import { finding } from './fixture.ts';
 
 describe('buildFindingText', () => {

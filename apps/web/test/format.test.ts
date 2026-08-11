@@ -15,7 +15,7 @@ import {
   humanise,
   pluralise,
   quoteArg,
-} from '../src/format.ts';
+} from '../src/presentation/format.ts';
 
 describe('formatInteger and formatNumber', () => {
   it('groups thousands without depending on a locale', () => {
@@ -57,8 +57,23 @@ describe('formatMetricValue', () => {
     assert.equal(formatMetricValue(2048, 'bytes'), '2.0 KiB');
   });
 
-  it('appends any other unit verbatim', () => {
+  it('agrees a noun unit with the value in front of it', () => {
+    assert.equal(formatMetricValue(6, 'occurrence'), '6 occurrences');
+    assert.equal(formatMetricValue(1, 'occurrence'), '1 occurrence');
+    assert.equal(formatMetricValue(6, 'component'), '6 components');
+    assert.equal(formatMetricValue(2, 'tool'), '2 tools');
+    assert.equal(formatMetricValue(1, 'tokens'), '1 token');
+    assert.equal(formatMetricValue(3, 'runs'), '3 runs');
+  });
+
+  it('inflects only the last word of a unit that is already a phrase', () => {
     assert.equal(formatMetricValue(4, 'tool calls'), '4 tool calls');
+    assert.equal(formatMetricValue(1, 'tool calls'), '1 tool call');
+  });
+
+  it('drops a bare count, because the number has already said it', () => {
+    assert.equal(formatMetricValue(39, 'count'), '39');
+    assert.equal(formatMetricValue(1, 'count'), '1');
   });
 
   it('does not repeat a unit it has already rendered', () => {

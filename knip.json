@@ -23,7 +23,7 @@
       "project": ["src/**/*.{ts,tsx}"]
     }
   },
-  "ignore": ["**/dist/**"],
+  "ignore": ["**/dist/**", "_rename-worktrees/**"],
   "ignoreDependencies": ["@playwright/test"],
   "ignoreExportsUsedInFile": true,
   "includeEntryExports": false,

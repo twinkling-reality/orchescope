@@ -3,8 +3,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { AdapterRun, ReportBundle, Scenario } from '@orchescope/schema';
-import { failedAdapters, goalEligibleFindings, nextActions } from '../src/next-actions.ts';
-import { bundle, component, finding } from './fixture.ts';
+import {
+  failedAdapters,
+  goalEligibleFindings,
+  nextActions,
+} from '../src/presentation/next-actions.ts';
+import { bundle, component, finding, goal } from './fixture.ts';
 
 /**
  * The overview tells a reader what to do next, so the order has to hold: an input Orchescope could not read
@@ -67,14 +71,14 @@ describe('nextActions', () => {
       }),
     ]);
     const [first] = nextActions(report);
-    assert.equal(first?.title, 'Correct the input that could not be read');
+    assert.equal(first?.title, 'Fix the file that could not be read');
     assert.match(first?.reason ?? '', /manifest/);
   });
 
   it('points an undetected repository at the manifest, not at a trace', () => {
     const actions = nextActions(bundle());
     assert.equal(actions.length, 1);
-    assert.equal(actions[0]?.title, 'Declare the system in a manifest');
+    assert.equal(actions[0]?.title, 'Write your system down in a manifest');
     assert.deepEqual(actions[0]?.commands[0], ['orchescope', 'init', '--manifest']);
   });
 
@@ -82,12 +86,12 @@ describe('nextActions', () => {
     const actions = nextActions(
       withCoverage(bundle(), [adapter({ adapterId: 'adapter:manifest', status: 'completed' })]),
     );
-    assert.equal(actions[0]?.title, 'Declare your components in the manifest');
+    assert.equal(actions[0]?.title, 'Fill in the manifest');
   });
 
   it('asks for runtime evidence when a system was found and nothing has run', () => {
     const actions = nextActions(populated());
-    assert.equal(actions[0]?.title, 'Collect runtime evidence');
+    assert.equal(actions[0]?.title, 'Watch the system run once');
     assert.deepEqual(actions[0]?.commands[0]?.slice(0, 2), ['orchescope', 'trace']);
   });
 
@@ -130,12 +134,33 @@ describe('nextActions', () => {
     const actions = nextActions({ ...report, summary: { ...report.summary, runCount: 3 } });
     assert.deepEqual(actions, [
       {
-        title: 'Vary one dimension and compare',
+        title: 'Change one thing and measure it',
         reason:
-          'support-desk is available, and no finding is waiting for a goal. A benchmark is the next thing that produces new evidence.',
+          'support-desk is available and nothing is waiting to be handed off. Varying one thing against it is what produces new evidence next.',
         commands: [['orchescope', 'benchmark', '--scenario', 'support-desk', '--agents', '1,2,4']],
       },
     ]);
+  });
+
+  it('hands off and verifies an existing goal instead of offering another one', () => {
+    const report = populated({
+      findings: [finding({ id: 'OSC-REL-0001' })],
+      goals: [goal({ id: 'OSC-GOAL-0001' })],
+      scenarios: [scenario('support-desk')],
+    });
+    const actions = nextActions({ ...report, summary: { ...report.summary, runCount: 3 } });
+    assert.equal(actions[0]?.title, 'Hand off and verify OSC-GOAL-0001');
+    assert.deepEqual(actions[0]?.commands[0], [
+      'orchescope',
+      'goal',
+      'show',
+      'OSC-GOAL-0001',
+      '--prompt',
+    ]);
+    assert.equal(
+      actions.some((action) => action.title.startsWith('Turn ')),
+      false,
+    );
   });
 
   it('bounds itself to three steps', () => {

@@ -1,0 +1,252 @@
+/* ══ layout ═══════════════════════════════════════════════════════════════════════════════════ */
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ══ the bento ════════════════════════════════════════════════════════════════════════════════ */
+
+/*
+ * A screen is a bento rather than panels on a background. There is no main background colour: the
+ * viewport is filled by tiles that tile it, and every seam between two of them is one hairline rather
+ * than a gutter of page showing through.
+ *
+ * The grid is twelve columns and the tiles are unequal, because a bento is not a uniform grid. A row
+ * is an anchor of four, a stage of five and a stack of three, and the stack holds one tile or two or
+ * three without leaving a hole where a fixed second row would. A tile with no place modifier spans the
+ * row, which is what the band and an evidence table are.
+ *
+ * `gap` is zero and the hairline is drawn by the tile on its right and bottom edges only, so two
+ * neighbours share one line rather than drawing two. The last tile in a row and the last row draw
+ * against the viewport edge, which is why the seam count is the same whatever a screen holds.
+ */
+.bento {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+/* The seven depth screens keep these three wrappers even when their contents refuse. */
+.section-skeleton > .report-slot {
+  min-width: 0;
+}
+
+.tile {
+  grid-column: span 12;
+  background: var(--paper);
+  color: var(--ink);
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  padding: var(--s5) clamp(var(--s5), 2vw, var(--s6));
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+/* The anchor is the tile a row is built around, and in this system it is the dark one. Coupling the
+   place to the ground is the composition rule: a black tile does not appear in the middle of a row. */
+.tile.is-anchor {
+  grid-column: span 4;
+  grid-row: span 2;
+}
+
+.tile.is-stage {
+  grid-column: span 5;
+  grid-row: span 2;
+}
+
+/* The right hand column of a row. It is a tile holder rather than a tile: its children own the ground
+   and draw the hairlines, and however many there are they share the height of the anchor beside them. */
+.tile-stack {
+  grid-column: span 3;
+  grid-row: span 2;
+  display: grid;
+  grid-auto-rows: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.tile-stack > .tile {
+  grid-column: auto;
+}
+
+/* A bento row is worth a screenful and no more. A tile that opens its detail grows past this, which is
+   what tells a reader which one they opened. */
+.tile.is-anchor,
+.tile.is-stage,
+.tile-stack {
+  min-height: var(--row);
+}
+
+.tile-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.tile-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tile-body > .lede:first-child,
+.tile-body > .stat-row:first-child,
+.tile-body > .key:first-child {
+  margin-top: 0;
+}
+
+/*
+ * The detail of a tile, behind the three dots. A `details` element rather than a button and a state
+ * hook, for the same reasons the disclosure row is one: it works before the script runs, it is in the
+ * tab order without a `tabindex`, it announces its own expanded state, and the browser's own in page
+ * search finds what is inside it while it is closed.
+ */
+details.tile-more {
+  margin-top: auto;
+}
+
+details.tile-more > summary {
+  list-style: none;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  color: var(--faint);
+  padding: 2px var(--s2);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  align-self: flex-start;
+}
+
+details.tile-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.tile-more > summary:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+details.tile-more[open] > summary {
+  color: var(--accent);
+  border-color: var(--rule);
+}
+
+.tile-more-body {
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--rule-soft);
+}
+
+/* A disclosure row inside a tile is one column. The three column rhythm needs 84px of lead plus a
+   title plus a right hand column, and a stack tile is 3 of 12, which turned every title into four
+   lines. */
+.tile-more-body details.row > summary {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s1);
+}
+
+.tile-more-body .row-meta {
+  text-align: left;
+}
+
+.tile-more-body details.row {
+  --row-indent: 0px;
+}
+
+/*
+ * A tile's list: one line each, the whole line a target, and no rule between them heavier than the
+ * tile already is. It is not a `DisclosureRow`, because what is behind these lines is a screen rather
+ * than a paragraph, so the row navigates instead of expanding.
+ */
+.stack {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--s3);
+}
+
+.stack > li + li {
+  border-top: 1px solid var(--rule-soft);
+}
+
+.stack-row {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--s2);
+  width: 100%;
+  padding: var(--s2) 0;
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stack-row.is-static {
+  grid-template-columns: minmax(0, 1fr);
+  cursor: default;
+}
+
+.stack-title {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.stack-meta {
+  grid-column: 2;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+}
+
+.stack-row.is-static .stack-meta {
+  grid-column: 1;
+}
+
+button.stack-row:hover .stack-title {
+  color: var(--accent);
+}
+
+/*
+ * The head of a band: the sentence the data makes on the left, and everything that measures it on the
+ * right. The sentence is 24 characters to a line by design and the bar wants every pixel it can get,
+ * so setting them beside each other spends the width on the two things that can use it.
+ */
+.lead-head {
+  display: grid;
+  grid-template-columns: minmax(0, 26ch) minmax(0, 1fr);
+  gap: var(--s5) var(--s7);
+  align-items: start;
+  margin-top: var(--s3);
+}
+
+/* The same two columns where the left one is a paragraph rather than a display sentence. A band whose
+   statement is prose stops at the measure and would otherwise leave the rest of the band empty, which
+   is the emptiness a reader takes for a fault because it is inside the tile rather than around it. */
+.lead-head.is-prose {
+  grid-template-columns: minmax(0, var(--measure)) minmax(0, 1fr);
+}
+
+.lead-head .display {
+  margin-top: 0;
+}
+
+.lead-measure {
+  min-width: 0;
+}
+
+.lead-measure .readout {
+  margin-top: 0;
+}
+
+.lead-measure .bar {
+  margin-top: var(--s5);
+}

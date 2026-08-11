@@ -22,36 +22,49 @@ From the root of a repository containing an agent system:
 orchescope audit
 ```
 
-You get a summary that leads with the delta between what the repository declares and what any stored runs exercised, then
-findings by severity, then what could not be inspected:
+One document, on standard output, and nothing on standard error once the work is done. A line's first
+column says what kind of line it is, its second says what state that thing is in, and its third says
+the one sentence about it, so `grep` and `awk` read it as well as a person does:
 
 ```
-demo  scan_c0a73b3e48dfa164
-----------------------------------------------------------------------------
-* 32 components, 31 relations, 22 files parsed
+demo            33 components, 32 relations, 23 of 23 files read
 
-Declared against exercised
-  * exercised: 14 of 21 (67 percent)
-  ! declared and never exercised: 7
-  + exercised and never declared: 0
-  + declarations contradicted by behaviour: 0
-  + duplicated side effects: 0
+1 audit         + done       21 of 22 checks ran
+2 goal          + done       2 jobs written up
+3 rerun         + done       1 of 3 scenarios has been run
+4 measure       + done       10 runs recorded
+                             8 faults injected, 1 broke the task
+5 did it help   ! undecided  unchanged: no metric moved enough to call
 
-Findings
-  high     7 findings
-  medium   7 findings
-  low      8 findings
-  + 1 strength recorded
-  22 rules evaluated: 9 clear, 3 lacked evidence
+join            15 of 22 parts a run could reach
+join            7 declared components never exercised
+join            1 exercised component never declared
+join            0 contradicted declarations
+join            1 duplicated external effect
+
+findings        19 risks: 3 high, 6 medium, 10 low; 2 strengths
+OSC-RES-0003    ! high       tool_timeout on issue_refund: a side…   1 simulated
+OSC-REL-0005    ! high       Retry around issue_refund can repeat…  2 discovered
+OSC-REL-0002    ! high       refund happened 2 times in one run      11 observed
+OSC-REL-0003    ! medium     Model call to demo-small declares no…  4 discovered
+OSC-SEC-0001    ! medium     2 consequential operations have no a…  6 discovered
+OSC-ARCH-0001   ! medium     metering_record_usage runs without b…    5 observed
+findings        13 more risks, in the report
+
+run             orchescope test --scenario support-desk --repeat 5
 ```
 
-Read the last line before the findings. Nine rules ran and found nothing, three could not decide because they lacked
-evidence, and that is different from nine clear results.
+`join` is the reconciliation, and the four rows under the fraction are the four deltas this product
+exists to compute. Every finding row ends with how many evidence records stand behind it and how they
+were established, because a title is itself a numeric claim. `run` rows carry a command you can paste;
+a `next` row carries an instruction that names a file to edit, and is never a command.
 
-If nothing was detected, the output says what it looked for, what it could not inspect, and the next step:
+A repository where nothing was found still gets the five step loop, the sentence saying that nothing
+reported is not the same as nothing wrong, and the file to declare a system in:
 
 ```
-orchescope init --manifest
+run             orchescope init --manifest
+next            declare your components in .orchescope/manifest.yaml
 ```
 
 That writes `.orchescope/manifest.yaml` with the component kinds, relation kinds and side effect classes the validator

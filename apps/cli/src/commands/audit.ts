@@ -9,8 +9,9 @@ import { findAssetDirectory } from '../assets.ts';
 import type { CommandContext } from '../context.ts';
 import { EXIT_CODES } from '../exit.ts';
 import { serverActionsFor } from '../server-actions.ts';
+import { auditDocument } from '../terminal/audit-document.ts';
+import { layoutFor } from '../terminal/document-grid.ts';
 import { type BrowserOutcome, reportReady } from '../terminal/report-ready.ts';
-import { auditSummary, findingList, nextCommand } from '../terminal/summary.ts';
 
 /**
  * The audit command.
@@ -114,29 +115,28 @@ const writeAuditJson = (
   );
 };
 
+/**
+ * One document, composed once.
+ *
+ * The width comes from standard output, because standard output is where the document goes. When that
+ * stream is not a terminal it has no width, and the document is composed at eighty, so a pipe on one
+ * machine and a pipe on another produce the same bytes and a diff between two runs reports only what
+ * the audit found differently.
+ */
 const writeAuditText = (
   context: CommandContext,
   result: AuditResult,
-  parts: {
-    readonly risks: readonly Finding[];
-    readonly strengths: readonly Finding[];
-    readonly written: readonly string[];
-  },
+  written: readonly string[],
 ): void => {
-  context.stdout(`${auditSummary(context.style, result)}\n`);
-  if (parts.risks.length > 0) {
-    context.stdout(
-      `\n${context.style.bold('Top findings')}\n${findingList(context.style, parts.risks, 8)}\n`,
-    );
-  }
-  if (parts.strengths.length > 0 && context.verbose) {
-    context.stdout(
-      `\n${context.style.bold('Strengths')}\n${findingList(context.style, parts.strengths, 8)}\n`,
-    );
-  }
-  for (const path of parts.written) {
-    context.stdout(`${context.style.good('+')} wrote ${path}\n`);
-  }
+  context.stdout(
+    `${auditDocument({
+      result,
+      layout: layoutFor(process.stdout.columns),
+      style: context.style,
+      verbose: context.verbose,
+      written,
+    })}\n`,
+  );
 };
 
 type ServedReport = { readonly url: string; readonly close: () => Promise<void> };
@@ -205,7 +205,6 @@ export const auditCommand = async (
   });
 
   const risks = result.bundle.findings.filter((finding) => finding.polarity === 'risk');
-  const strengths = result.bundle.findings.filter((finding) => finding.polarity === 'strength');
   const failing = options.failOn === undefined ? [] : exceedsThreshold(risks, options.failOn);
   const written = writeExports(context, result.bundle, options);
 
@@ -215,13 +214,16 @@ export const auditCommand = async (
   if (context.json) {
     writeAuditJson(context, result, written, server?.url);
   } else {
-    writeAuditText(context, result, { risks, strengths, written });
+    writeAuditText(context, result, written);
   }
 
+  /*
+   * The document's last region already says what to run, derived from the loop, so there is no second
+   * line of advice under it. There was one, it came from a different policy, and on the bundled
+   * demonstration the two disagreed about which command to name.
+   */
   if (server !== undefined) {
     await serveUntilInterrupted(context, server, options);
-  } else if (!context.json) {
-    context.stdout(`\n${context.style.dim('next:')} ${nextCommand(result)}\n`);
   }
 
   return failing.length > 0 ? EXIT_CODES.findings : EXIT_CODES.success;

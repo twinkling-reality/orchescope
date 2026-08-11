@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { buildMapCensus } from '../src/map-census.ts';
+import { buildMapCensus } from '../src/presentation/map-census.ts';
 import { component } from './fixture.ts';
 
 const of = (id: string, kind: string) => component({ id, kind } as Parameters<typeof component>[0]);

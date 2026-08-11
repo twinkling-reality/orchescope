@@ -1,5 +1,5 @@
 /**
- * The page frame: the top chrome, the main column, the polite live region, the keyboard help panel and
+ * The page frame: the top chrome, its two anchored menus, the main column, the polite live region and
  * the request progress bar.
  *
  * The chrome carries what is true of the whole document rather than of any one screen, in three zones:
@@ -26,23 +26,25 @@
  */
 
 import type { ComponentChildren, JSX } from 'preact';
-import { useEffect, useRef } from 'preact/hooks';
-import { formatInteger, formatTimestamp } from '../format.ts';
+import { formatInteger, formatTimestamp } from '../presentation/format.ts';
+import type { GalleryEntry } from '../presentation/gallery.ts';
 import { formatHash, SECTIONS, type SectionId } from '../routes.ts';
 import { useApp } from '../store.tsx';
-import { DefinitionList, Eyebrow } from './primitives.tsx';
+import { ChromeMenu } from './chrome-menu.tsx';
+import { GalleryPicker } from './gallery-picker.tsx';
+import { DefinitionList } from './primitives.tsx';
 
 export const SHORTCUTS: readonly { readonly keys: string; readonly action: string }[] = [
   { keys: 'Alt and 1 to 8', action: 'Go to the nth section in the navigation' },
   { keys: 'Question mark', action: 'Open and close this help panel' },
   { keys: 'Escape', action: 'Close this help panel' },
   { keys: 'Tab and Shift Tab', action: 'Move between controls' },
-  { keys: 'Up and Down arrows', action: 'Move between rows in the components table' },
-  { keys: 'Right arrow', action: 'Open a component kind, or move to its first component' },
-  { keys: 'Left arrow', action: 'Close a component kind, or move to the kind above' },
-  { keys: 'Enter or Space', action: 'Select the focused component, or open and close a kind' },
-  { keys: 'Home and End', action: 'Move to the first or last row of the components table' },
-  { keys: 'Asterisk', action: 'Open every component kind in the components table' },
+  { keys: 'Up and Down arrows', action: 'Move between rows in the table of parts' },
+  { keys: 'Right arrow', action: 'Open a kind, or move to the first part inside it' },
+  { keys: 'Left arrow', action: 'Close a kind, or move to the kind above' },
+  { keys: 'Enter or Space', action: 'Pick the focused part, or open and close a kind' },
+  { keys: 'Home and End', action: 'Move to the first or last row of the table' },
+  { keys: 'Asterisk', action: 'Open every kind in the table' },
 ];
 
 const MIN_PROGRESS_SHARE = 0.08;
@@ -74,38 +76,24 @@ function ProgressBar() {
   );
 }
 
-function HelpPanel() {
+function ShortcutMenu() {
   const app = useApp();
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (app.state.helpOpen) {
-      panelRef.current?.focus();
-    }
-  }, [app.state.helpOpen]);
-
-  if (!app.state.helpOpen) {
-    return null;
-  }
   return (
-    <div
-      class="tile help-panel fade-in"
-      role="dialog"
-      aria-label="Keyboard shortcuts"
-      tabIndex={-1}
-      ref={panelRef}
+    <ChromeMenu
+      title="Keyboard shortcuts"
+      open={app.state.chromePanel === 'help'}
+      wide
+      onOpenChange={(open) => {
+        app.dispatch({ type: 'chrome', panel: open ? 'help' : null });
+      }}
+      icon={
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+          <rect class="glyph-stroke" x="1.25" y="3.75" width="13.5" height="8.5" rx="1.5" />
+          <path class="glyph-stroke" d="M5 9.75h6" />
+          <path class="glyph-stroke" d="M4 6.75h0.5M7 6.75h0.5M10 6.75h0.5" />
+        </svg>
+      }
     >
-      <div class="help-head">
-        <h2>Keyboard shortcuts</h2>
-        <button
-          type="button"
-          class="button"
-          onClick={() => {
-            app.dispatch({ type: 'help', open: false });
-          }}
-        >
-          Close
-        </button>
-      </div>
       <dl class="definitions">
         {SHORTCUTS.map((shortcut) => (
           <div class="definition" key={shortcut.keys}>
@@ -114,15 +102,15 @@ function HelpPanel() {
           </div>
         ))}
       </dl>
-    </div>
+    </ChromeMenu>
   );
 }
 
 /**
  * What a section holds, shown beside its name.
  *
- * A count of zero is omitted rather than shown, because a navigation of zeros reads as chrome while the
- * screen itself refuses in a sentence that says considerably more than a nought would.
+ * Every depth screen keeps its count, including zero, so the chrome has the same structure in every
+ * report. The screen itself still explains what the zero means and which evidence would change it.
  */
 function useSectionCount(): (section: SectionId) => number | undefined {
   const { bundle } = useApp();
@@ -137,8 +125,7 @@ function useSectionCount(): (section: SectionId) => number | undefined {
       comparisons: bundle.comparisons.length,
       goals: bundle.goals.length,
     };
-    const count = counts[section];
-    return count > 0 ? count : undefined;
+    return section === 'overview' ? undefined : counts[section];
   };
 }
 
@@ -203,49 +190,51 @@ function Mark() {
  * Which report this is, and the revision the scan read.
  *
  * It used to be three mono facts set across the top right of every screen, which is the widest thing
- * in the chrome and the least often read. It is a menu now, behind one icon: a `details` element for
- * the same reasons every other disclosure here is one, so it works before the script runs, is in the
- * tab order without a `tabindex` and announces its own expanded state.
+ * in the chrome and the least often read. It is a menu now, behind one icon and using the same
+ * controlled chrome menu as keyboard shortcuts.
  *
  * The revision is the one piece of provenance that decides whether the rest of the page can be
  * trusted, because a working tree that was dirty means the graph matches no commit anyone else can
  * check out. It is the first row rather than a footnote.
  */
 function ReportDetails() {
-  const { bundle } = useApp();
+  const app = useApp();
+  const { bundle } = app;
   const git = bundle.graph.provenance.git;
   const revision =
     git === undefined
       ? 'no git revision recorded'
       : `${git.ref ?? 'unknown ref'} ${(git.commit ?? '').slice(0, 7)}, working tree ${git.dirty ? 'dirty' : 'clean'}`;
   return (
-    <details class="chrome-menu">
-      <summary class="icon-button" title="Report details">
+    <ChromeMenu
+      title="Report details"
+      open={app.state.chromePanel === 'report'}
+      onOpenChange={(open) => {
+        app.dispatch({ type: 'chrome', panel: open ? 'report' : null });
+      }}
+      icon={
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
           <circle class="glyph-stroke" cx="8" cy="8" r="6.25" />
           <path class="glyph-stroke" d="M8 7.25v4" />
           <path class="glyph-stroke" d="M8 4.75v0.5" />
         </svg>
-        <span class="visually-hidden">Report details</span>
-      </summary>
-      <div class="chrome-menu-body">
-        <Eyebrow level={3}>Report details</Eyebrow>
-        <DefinitionList
-          rows={[
-            { label: 'Revision', value: revision, code: git !== undefined },
-            { label: 'Report', value: bundle.reportId, code: true },
-            { label: 'Generated', value: formatTimestamp(bundle.generatedAt) },
-            { label: 'Scan', value: bundle.graph.provenance.scanId, code: true },
-            { label: 'Schema version', value: String(bundle.schemaVersion) },
-            { label: 'Orchescope', value: bundle.graph.provenance.orchescopeVersion },
-          ]}
-        />
-      </div>
-    </details>
+      }
+    >
+      <DefinitionList
+        rows={[
+          { label: 'Revision', value: revision, code: git !== undefined },
+          { label: 'Report', value: bundle.reportId, code: true },
+          { label: 'Generated', value: formatTimestamp(bundle.generatedAt) },
+          { label: 'Scan', value: bundle.graph.provenance.scanId, code: true },
+          { label: 'Schema version', value: String(bundle.schemaVersion) },
+          { label: 'Orchescope', value: bundle.graph.provenance.orchescopeVersion },
+        ]}
+      />
+    </ChromeMenu>
   );
 }
 
-function Chrome() {
+function Chrome(props: { readonly gallery: readonly GalleryEntry[] }) {
   const app = useApp();
   const { bundle } = app;
   return (
@@ -261,23 +250,15 @@ function Chrome() {
       <Navigation />
 
       <div class="chrome-tools">
-        <ReportDetails />
-        <button
-          type="button"
-          class="icon-button"
-          title="Keyboard shortcuts"
-          aria-expanded={app.state.helpOpen}
-          onClick={() => {
-            app.dispatch({ type: 'help', open: !app.state.helpOpen });
+        <GalleryPicker
+          entries={props.gallery}
+          open={app.state.chromePanel === 'gallery'}
+          onOpenChange={(open) => {
+            app.dispatch({ type: 'chrome', panel: open ? 'gallery' : null });
           }}
-        >
-          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
-            <rect class="glyph-stroke" x="1.25" y="3.75" width="13.5" height="8.5" rx="1.5" />
-            <path class="glyph-stroke" d="M5 9.75h6" />
-            <path class="glyph-stroke" d="M4 6.75h0.5M7 6.75h0.5M10 6.75h0.5" />
-          </svg>
-          <span class="visually-hidden">Keyboard shortcuts</span>
-        </button>
+        />
+        <ReportDetails />
+        <ShortcutMenu />
       </div>
     </header>
   );
@@ -286,21 +267,24 @@ function Chrome() {
 export function Shell(props: {
   readonly children: ComponentChildren;
   readonly repaired: readonly string[];
-  readonly source: 'embedded' | 'server';
+  readonly gallery: readonly GalleryEntry[];
 }) {
   const app = useApp();
+  // Overview is the one screen whose lower row takes the height its content leaves, so it is named.
+  // It used to be excluded when the bundle carried a repair banner, because the screen was locked to
+  // the viewport and the banner would have overflowed it. Nothing is locked now, so nothing is excluded.
+  const isOverview = app.state.route.section === 'overview';
   return (
-    <div class="page">
+    <div class={isOverview ? 'page is-overview' : 'page'}>
       <a class="skip-link" href="#main">
         Skip to the report
       </a>
       <ProgressBar />
-      <Chrome />
+      <Chrome gallery={props.gallery} />
       <main class="main" id="main" tabIndex={-1}>
         <div class="live-region" role="status" aria-live="polite" aria-atomic="true">
           {app.state.announcement}
         </div>
-        <HelpPanel />
         {props.repaired.length === 0 ? null : (
           <section class="tile is-band">
             <div class="refusal" role="note">
@@ -312,14 +296,6 @@ export function Shell(props: {
           </section>
         )}
         {props.children}
-        {/* What the details menu does not carry: where this page read its report from, and the one
-            fact about the page itself rather than about the report. */}
-        <footer class="tile footer">
-          <Eyebrow>Provenance</Eyebrow>
-          <p>
-            {`Report read ${props.source === 'embedded' ? 'from the document itself' : 'from the local report server'}. This page makes no network request other than to its own origin. Which report, which scan and which revision are under report details in the bar above.`}
-          </p>
-        </footer>
       </main>
     </div>
   );

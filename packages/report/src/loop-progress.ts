@@ -1,0 +1,284 @@
+/**
+ * Where a repository stands in the five step loop this product exists to run.
+ *
+ * The loop is: audit finds a problem, a goal states what to change and what would prove it, a person
+ * or a coding agent makes the change, the same scenario runs again with the same seed, and a
+ * comparison says whether it helped. The audit is step one of five, and the value is in step five.
+ *
+ * The interfaces before this named themselves after pipeline stages, one surface per stage, which put
+ * five steps side by side as though all five had happened. On fifteen of the sixteen cached reports
+ * four of them never ran, so most of what a reader saw was scaffolding for work nobody had done. Here
+ * a step that has not happened is one line naming what would advance it, and a step that ran and came
+ * back undecided says so loudly, because that is the most useful sentence the product can print.
+ *
+ * This module selects and orders facts already in a bundle. It computes no finding, no metric and no
+ * verdict of its own: every verdict it reports was decided by `packages/comparison`, and every count
+ * it reports was decided by the engine that wrote the bundle.
+ */
+
+import type { FindingSet, ReportBundle } from '@orchescope/schema';
+
+export type LoopStepId = 'audit' | 'goal' | 'rerun' | 'measure' | 'verdict';
+
+/**
+ * Three states, and they are carried by a word rather than by a colour, because this output has to
+ * read the same in a pipe, in a log and under `NO_COLOR`.
+ *
+ * `blocked` and `failed` are kept apart on purpose. A step that never ran tells a reader to go and run
+ * something. A step that ran and could not decide tells them the run was not enough, which is a
+ * different instruction and the one this product is least able to afford losing.
+ */
+export type LoopStepState = 'done' | 'blocked' | 'failed';
+
+export interface LoopStep {
+  readonly id: LoopStepId;
+  readonly ordinal: number;
+  readonly title: string;
+  readonly state: LoopStepState;
+  /** One line. Always present, on every state. */
+  readonly summary: string;
+  /** Zero or more supporting lines, shown under the summary. */
+  readonly detail: readonly string[];
+  /** The command that advances this step, or null when nothing a reader types would. */
+  readonly command: readonly string[] | null;
+}
+
+/**
+ * How much of the check suite could run.
+ *
+ * `not_applicable` is left out of both halves. A rule that has nothing to say about this repository is
+ * not a check the reader is missing, and counting it as blocked would make every report look
+ * under-measured in a way no command could fix.
+ */
+export interface CheckCoverage {
+  readonly ran: number;
+  readonly blocked: number;
+  readonly total: number;
+}
+
+export interface LoopProgress {
+  readonly steps: readonly LoopStep[];
+  readonly coverage: CheckCoverage;
+  /** The first step that is not done. Null when the loop has closed. */
+  readonly standingAt: LoopStep | null;
+}
+
+type RulesEvaluated = FindingSet['rulesEvaluated'];
+
+const TRACE_COMMAND = [
+  'orchescope',
+  'trace',
+  '--',
+  '<the command that starts your system>',
+] as const;
+
+export function checkCoverage(rules: RulesEvaluated): CheckCoverage {
+  const ran = rules.filter((rule) => rule.status === 'fired' || rule.status === 'clear').length;
+  const blocked = rules.filter((rule) => rule.status === 'insufficient_evidence').length;
+  return { ran, blocked, total: ran + blocked };
+}
+
+/**
+ * How many areas a blocked step names before it stops counting.
+ *
+ * Seven of them ran to ninety characters on `crewai`, which pushed the frame past every terminal it
+ * was drawn in and dropped the whole block to unframed lines. Naming the three worst and counting the
+ * rest keeps the line bounded whatever the rule set grows to, and the reader loses nothing they could
+ * have acted on: the command that lifts all of them is the same one.
+ */
+const NAMED_AREAS = 3;
+
+/** Categories with a check that could not run, worst first by how many are blocked. */
+function blockedAreas(rules: RulesEvaluated): readonly string[] {
+  const counts = new Map<string, number>();
+  for (const rule of rules) {
+    if (rule.status !== 'insufficient_evidence') continue;
+    counts.set(rule.category, (counts.get(rule.category) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([category]) => category.replaceAll('_', ' '));
+}
+
+/**
+ * What an empty finding list does and does not mean.
+ *
+ * An audit that reports nothing means the rules that had enough evidence to fire did not fire. Left
+ * unsaid, a reader takes it for a clean bill of health, which is the one misreading this product cannot
+ * afford. It lives here rather than beside a renderer so that the terminal and the audit step state the
+ * same sentence rather than two copies that drift.
+ */
+export const ZERO_RISK_CAVEAT =
+  'nothing was reported as a problem, which is not the same as nothing being wrong';
+
+function auditStep(bundle: ReportBundle, rules: RulesEvaluated): LoopStep {
+  const coverage = checkCoverage(rules);
+  const risks = bundle.findings.filter((finding) => finding.polarity === 'risk').length;
+  return {
+    id: 'audit',
+    ordinal: 1,
+    title: 'Audit',
+    state: 'done',
+    summary:
+      coverage.total === 0
+        ? 'no check had anything to look at'
+        : `${coverage.ran} of ${coverage.total} checks ran`,
+    detail:
+      risks === 0 ? [ZERO_RISK_CAVEAT] : [`${risks} ${risks === 1 ? 'problem' : 'problems'} found`],
+    command: null,
+  };
+}
+
+function goalStep(bundle: ReportBundle): LoopStep {
+  if (bundle.goals.length > 0) {
+    const count = bundle.goals.length;
+    return {
+      id: 'goal',
+      ordinal: 2,
+      title: 'Goal',
+      state: 'done',
+      summary: `${count} ${count === 1 ? 'job' : 'jobs'} written up`,
+      detail: [],
+      command: null,
+    };
+  }
+  const eligible =
+    bundle.findings.find(
+      (finding) => finding.polarity === 'risk' && finding.goalReadiness.eligible,
+    ) ?? null;
+  return {
+    id: 'goal',
+    ordinal: 2,
+    title: 'Goal',
+    state: 'blocked',
+    summary: 'nothing handed off yet',
+    detail: [],
+    command: eligible === null ? null : ['orchescope', 'goal', 'create', eligible.id],
+  };
+}
+
+function rerunStep(bundle: ReportBundle): LoopStep {
+  if (bundle.scenarioRuns.length > 0) {
+    const ran = new Set(bundle.scenarioRuns.map((entry) => entry.scenarioId)).size;
+    return {
+      id: 'rerun',
+      ordinal: 3,
+      title: 'Rerun',
+      state: 'done',
+      summary: `${ran} of ${bundle.scenarios.length} scenarios has been run`,
+      detail: [],
+      command: null,
+    };
+  }
+  const first = bundle.scenarios[0]?.id ?? null;
+  return {
+    id: 'rerun',
+    ordinal: 3,
+    title: 'Rerun',
+    state: 'blocked',
+    summary:
+      bundle.scenarios.length === 0
+        ? 'no scenario to repeat'
+        : `${bundle.scenarios.length} written down, none has ever run`,
+    detail: [],
+    command: first === null ? null : ['orchescope', 'test', '--scenario', first],
+  };
+}
+
+function namedAreas(areas: readonly string[]): string {
+  if (areas.length <= NAMED_AREAS) return areas.join(', ');
+  const rest = areas.length - NAMED_AREAS;
+  return `${areas.slice(0, NAMED_AREAS).join(', ')} and ${rest} more`;
+}
+
+function measureStep(bundle: ReportBundle, rules: RulesEvaluated): LoopStep {
+  if (bundle.runs.length === 0) {
+    const areas = blockedAreas(rules);
+    const coverage = checkCoverage(rules);
+    return {
+      id: 'measure',
+      ordinal: 4,
+      title: 'Measure',
+      state: 'blocked',
+      summary:
+        coverage.blocked === 0
+          ? 'nothing has been run'
+          : `${coverage.blocked} ${coverage.blocked === 1 ? 'check is' : 'checks are'} blocked on a run`,
+      detail: areas.length === 0 ? [] : [namedAreas(areas)],
+      command: [...TRACE_COMMAND],
+    };
+  }
+  const detail: string[] = [];
+  const measured = new Set(bundle.componentMetrics.map((entry) => entry.componentId)).size;
+  if (measured > 0) {
+    detail.push(`${measured} ${measured === 1 ? 'part' : 'parts'} timed`);
+  }
+  const outcomes = bundle.chaosReports.flatMap((report) => report.outcomes);
+  if (outcomes.length > 0) {
+    const broke = outcomes.filter((outcome) => !outcome.taskCompleted).length;
+    detail.push(
+      `${outcomes.length} ${outcomes.length === 1 ? 'fault' : 'faults'} injected, ${broke} broke the task`,
+    );
+  }
+  return {
+    id: 'measure',
+    ordinal: 4,
+    title: 'Measure',
+    state: 'done',
+    summary: `${bundle.runs.length} ${bundle.runs.length === 1 ? 'run' : 'runs'} recorded`,
+    detail,
+    command: null,
+  };
+}
+
+/**
+ * The one step whose failure is worth more than its success.
+ *
+ * A comparison that returns `unchanged` on one run per side has not found that nothing changed. It has
+ * found that the evidence cannot tell, and the reason it carries names the sample size. That sentence
+ * is the product's whole argument for existing, and it used to sit three clicks deep on a screen with
+ * no controls on it.
+ */
+function verdictStep(bundle: ReportBundle): LoopStep {
+  const comparison = bundle.comparisons[0];
+  if (comparison === undefined) {
+    return {
+      id: 'verdict',
+      ordinal: 5,
+      title: 'Did it help',
+      state: 'blocked',
+      summary: 'needs a before and an after',
+      detail: [],
+      command: null,
+    };
+  }
+  const decided = comparison.verdict === 'improved' || comparison.verdict === 'regressed';
+  const scenario = bundle.scenarios[0]?.id ?? null;
+  return {
+    id: 'verdict',
+    ordinal: 5,
+    title: 'Did it help',
+    state: decided ? 'done' : 'failed',
+    summary: `${comparison.verdict.replaceAll('_', ' ')}: ${comparison.verdictReason}`,
+    detail: [],
+    command:
+      decided || scenario === null
+        ? null
+        : ['orchescope', 'test', '--scenario', scenario, '--repeat', '5'],
+  };
+}
+
+export function loopProgress(bundle: ReportBundle, rules: RulesEvaluated): LoopProgress {
+  const steps = [
+    auditStep(bundle, rules),
+    goalStep(bundle),
+    rerunStep(bundle),
+    measureStep(bundle, rules),
+    verdictStep(bundle),
+  ];
+  return {
+    steps,
+    coverage: checkCoverage(rules),
+    standingAt: steps.find((step) => step.state !== 'done') ?? null,
+  };
+}

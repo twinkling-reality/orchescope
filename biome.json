@@ -16,7 +16,8 @@
       "!schemas/**/*.json",
       "!corpus/.cache",
       "!corpus/expected/**/*.json",
-      "!**/*.mock.html"
+      "!**/*.mock.html",
+      "!_rename-worktrees"
     ]
   },
   "formatter": {

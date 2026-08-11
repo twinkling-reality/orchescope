@@ -130,6 +130,16 @@ export type AnalyzeOptions = {
   readonly deadline: Deadline;
   readonly concurrency: number;
   readonly cache?: FactCache;
+  /**
+   * Called once per parsed file, with how many are done and how many there are.
+   *
+   * Reading a file and parsing it are both synchronous, so this phase holds the event loop for as long
+   * as it runs and nothing on a timer can paint while it does: measured on `crewai`, 2.8 seconds of
+   * parsing drew two spinner frames. This is the only moment the work hands control back, which makes
+   * it the only place a caller can be told anything at all. The total is known here, so a caller can
+   * show a real count rather than inventing a percentage.
+   */
+  readonly onFileParsed?: (completed: number, total: number) => void;
 };
 
 /**
@@ -142,14 +152,18 @@ export const analyzeFileSet = async (
 ): Promise<AnalysisResult> => {
   const parseable = fileSet.files.filter((file) => isSupportedLanguage(file.language));
 
+  let parsed = 0;
   const settled = await settleWithConcurrency(
     parseable,
     { concurrency: options.concurrency, deadline: options.deadline, what: 'source analysis' },
     (file) => {
       const contents = readSource(file);
-      return isSkipped(contents)
-        ? Promise.resolve({ skipped: contents, facts: undefined, cached: false })
-        : Promise.resolve(analyzeOne(contents, options.cache));
+      const result = isSkipped(contents)
+        ? { skipped: contents, facts: undefined, cached: false }
+        : analyzeOne(contents, options.cache);
+      parsed += 1;
+      options.onFileParsed?.(parsed, parseable.length);
+      return Promise.resolve(result);
     },
   );
 

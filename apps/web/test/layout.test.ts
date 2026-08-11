@@ -9,7 +9,7 @@ import {
   positionsFor,
   readLayoutPoint,
   resolveLayout,
-} from '../src/layout.ts';
+} from '../src/presentation/layout.ts';
 
 const RING = MAP_LAYOUT_KEYS[0];
 const DOWN = MAP_LAYOUT_KEYS[1];

@@ -120,6 +120,22 @@ module.exports = {
       to: { path: '^packages/', pathNot: '^packages/schema/' },
     },
     {
+      name: 'web-presentation-is-pure',
+      severity: 'error',
+      comment:
+        'Presentation binders decide what each slot holds and must not import the replaceable skin.',
+      from: { path: '^apps/web/src/presentation/' },
+      to: { path: '^apps/web/src/(ui|sections)/' },
+    },
+    {
+      name: 'web-ui-does-not-import-sections',
+      severity: 'error',
+      comment:
+        'UI primitives are shared across screens and must not depend on a section implementation.',
+      from: { path: '^apps/web/src/ui/' },
+      to: { path: '^apps/web/src/sections/' },
+    },
+    {
       name: 'cli-goes-through-usecases',
       severity: 'error',
       comment:

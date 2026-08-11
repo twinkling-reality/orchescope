@@ -171,6 +171,13 @@ export const ReportBundle = Document(
         observedComponentCount: NonNegativeInt,
         staticOnlyComponentCount: NonNegativeInt,
         runtimeOnlyComponentCount: NonNegativeInt,
+        /**
+         * How many components are of a kind a trace can record. Optional because bundles written
+         * before this field existed carry none; a reader falls back to `componentCount` and must not
+         * invent the narrower set from the page. Computed in `packages/report` from the same
+         * observable-kind rule the reconciliation uses, so the workspace never re-analyses kinds.
+         */
+        observableComponentCount: Type.Optional(NonNegativeInt),
         findingCountBySeverity: Type.Record(Type.String(), NonNegativeInt),
         strengthCount: NonNegativeInt,
         runCount: NonNegativeInt,

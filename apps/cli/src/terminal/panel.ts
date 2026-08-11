@@ -1,3 +1,4 @@
+import { visibleWidth } from './display-width.ts';
 import type { Style } from './style.ts';
 
 /**
@@ -35,6 +36,15 @@ const BOTTOM_RIGHT = '╯';
 const HORIZONTAL = '─';
 const VERTICAL = '│';
 
+/*
+ * Every measurement in this file goes through the document's own width model.
+ *
+ * A line may arrive already styled, because part of it is painted and the rest is not, and `length` on
+ * that string counts the escape bytes and pads the row by however many it happens to carry. It also
+ * counted a Japanese component name at one column per glyph, which drew a border two columns short of
+ * where the eye puts it. There is one width model for this surface and this file is a user of it.
+ */
+
 const paintedOf = (line: PanelLine): string =>
   line.paint === undefined ? line.text : line.paint(line.text);
 
@@ -44,22 +54,34 @@ const plainLines = (style: Style, input: PanelInput): readonly string[] => [
 ];
 
 export const panel = (style: Style, input: PanelInput): readonly string[] => {
-  const longest = input.lines.reduce((width, line) => Math.max(width, line.text.length), 0);
+  const longest = input.lines.reduce((width, line) => Math.max(width, visibleWidth(line.text)), 0);
+  const edge = visibleWidth(input.title) + 3;
   /*
-   * The inner width holds the widest line with a space either side, and never less than the title row needs: one
-   * rule, a space, the title, a space. A title longer than every line would otherwise overrun the corner.
+   * The inner width holds the widest line with a space either side, and never less than the top rule
+   * needs: one rule, a space, the title and a space. A title longer than every line would otherwise
+   * overrun the corner.
    */
-  const inner = Math.max(longest + 2, input.title.length + 3);
+  const inner = Math.max(longest + 2, edge);
   if (inner + 2 > input.columns) return plainLines(style, input);
 
   const border = (text: string): string => style.dim(text);
-  const titleRun = inner - input.title.length - 3;
+  /*
+   * The top rule is `corner rule space title space run corner`, which is five columns of chrome plus
+   * the title, and `edge` is exactly those five minus the two corners. So the run is what the inner
+   * width has left after the edge. Getting this wrong by two put the top rule two columns past the rows
+   * under it, which reads as a broken box.
+   *
+   * A run of zero is legitimate and must stay legitimate: a title longer than every line sets the inner
+   * width itself, and there is then nothing left for the rule to fill.
+   */
+  const titleRun = inner - edge;
+  const top = `${border(`${TOP_LEFT}${HORIZONTAL} `)}${style.bold(input.title)}${border(` ${HORIZONTAL.repeat(titleRun)}${TOP_RIGHT}`)}`;
 
   return [
-    `${border(`${TOP_LEFT}${HORIZONTAL} `)}${style.bold(input.title)}${border(` ${HORIZONTAL.repeat(titleRun)}${TOP_RIGHT}`)}`,
+    top,
     ...input.lines.map(
       (line) =>
-        `${border(VERTICAL)} ${paintedOf(line)}${' '.repeat(inner - 1 - line.text.length)}${border(VERTICAL)}`,
+        `${border(VERTICAL)} ${paintedOf(line)}${' '.repeat(Math.max(0, inner - 1 - visibleWidth(line.text)))}${border(VERTICAL)}`,
     ),
     border(`${BOTTOM_LEFT}${HORIZONTAL.repeat(inner)}${BOTTOM_RIGHT}`),
   ];

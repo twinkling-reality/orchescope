@@ -183,14 +183,20 @@ describe('a manifest the validator rejects', () => {
     assert.match(adapter.detail ?? '', /sideEffect/);
   });
 
-  it('is named on the terminal, and the next step is to correct it', async () => {
+  /*
+   * The row is bounded like every other row, so a validator message longer than the sentence column
+   * continues on one further line. What may not be lost either way is the pointer into the document:
+   * it is the only thing in the whole report that says which line of their manifest to change.
+   */
+  it('is named on the terminal, with the field, and the next step is to correct it', async () => {
     const root = unparsedProject();
     writeManifest(root, invalid);
     const result = await run(['--cwd', root, 'audit']);
     assert.equal(result.code, 0);
-    assert.match(result.stdout, /Input problems/);
-    assert.match(result.stdout, /manifest: \.orchescope\/manifest\.yaml is not a valid manifest/);
-    assert.match(result.stdout, /next: correct \.orchescope\/manifest\.yaml/);
+    assert.match(result.stdout, /gap {13}x failed {5}manifest: \.orchescope\/manifest\.yaml/);
+    assert.match(result.stdout, /is not a valid/);
+    assert.match(result.stdout, /\/components\/0\/sideEffect/);
+    assert.match(result.stdout, /next {12}correct \.orchescope\/manifest\.yaml/);
   });
 });
 
@@ -200,8 +206,8 @@ describe('a repository no adapter can read', () => {
     const result = await run(['--cwd', root, 'audit']);
     assert.equal(result.code, 0);
     assert.match(result.stdout, /No agent system was detected/);
-    assert.match(result.stdout, /Not inspected/);
-    assert.match(result.stdout, /go source files \(1\)/);
-    assert.match(result.stdout, /next: orchescope init --manifest/);
+    assert.match(result.stdout, /^gap {13}\. unparsed {3}go source files \(1\)$/m);
+    assert.match(result.stdout, /^run {13}orchescope init --manifest$/m);
+    assert.match(result.stdout, /\.orchescope\/manifest\.yaml/);
   });
 });

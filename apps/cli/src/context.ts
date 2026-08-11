@@ -59,9 +59,15 @@ export const createContext = (options: GlobalOptions): CommandContext => {
 
   const renderer = createProgressRenderer({
     style,
-    // Animation is a terminal affordance: never in JSON mode, never when piped, never under CI.
-    animate: isTty && !json && !quiet && !isCiEnvironment(),
+    /*
+     * Animation is a terminal affordance: never in JSON mode, never when piped, never under CI. It is
+     * gated on standard error rather than on standard output, because that is the stream it writes to.
+     * `orchescope audit > report.txt` in a terminal leaves standard output with no width and no
+     * terminal, while standard error is still both.
+     */
+    animate: process.stderr.isTTY === true && !json && !quiet && !isCiEnvironment(),
     verbose,
+    columns: process.stderr.columns,
     write: (text) => {
       if (!json && !quiet) process.stderr.write(text);
     },
@@ -74,13 +80,19 @@ export const createContext = (options: GlobalOptions): CommandContext => {
       Number(process.hrtime.bigint() / 1_000_000n),
     ),
     logLevel: verbose ? 'debug' : 'warning',
+    /*
+     * Through the renderer, not around it. A log record is built from repository data, it is unbounded,
+     * and it used to be written straight to standard error while a transient line was half drawn, which
+     * produced a row that was part log and part spinner. The renderer erases first, bounds the line to
+     * the stream's width, strips what a repository put in it, and draws the transient line again.
+     */
     logSink: (record) => {
       if (json || quiet) return;
       const fields = Object.entries(record.fields)
         .map(([key, value]) => `${key}=${String(value)}`)
         .join(' ');
-      process.stderr.write(
-        `${record.level}: ${record.message}${fields.length > 0 ? ` ${fields}` : ''}\n`,
+      renderer.emitLine(
+        `${record.level}: ${record.message}${fields.length > 0 ? ` ${fields}` : ''}`,
       );
     },
   });

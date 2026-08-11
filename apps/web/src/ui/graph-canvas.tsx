@@ -22,9 +22,9 @@ import { MultiDirectedGraph } from 'graphology';
 import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import Sigma from 'sigma';
-import { formatInteger, formatNumber, humanise } from '../format.ts';
-import type { GraphIndex } from '../graph-index.ts';
-import { type MapLayoutKind, type Point, positionsFor } from '../layout.ts';
+import { formatInteger, formatNumber, humanise } from '../presentation/format.ts';
+import type { GraphIndex } from '../presentation/graph-index.ts';
+import { type MapLayoutKind, type Point, positionsFor } from '../presentation/layout.ts';
 import {
   clearNames,
   type DrawnName,
@@ -33,14 +33,14 @@ import {
   type NameRoom,
   nameRoom,
   zoomForNames,
-} from '../map-names.ts';
+} from '../presentation/map-names.ts';
 import {
   DEFAULT_RAMP,
   type OverlayScale,
   overlayLegend,
   paintComponent,
   type Ramp,
-} from '../overlay.ts';
+} from '../presentation/overlay.ts';
 import { drawHoverLabel } from './hover-label.ts';
 import { Eyebrow, Meta } from './primitives.tsx';
 
@@ -706,23 +706,14 @@ export function GraphCanvas(props: {
           type="button"
           class="button"
           onClick={fit}
-          title="Frame every component that the current filters leave visible"
+          title="Frame every part the current filters leave visible"
         >
           Zoom to fit
         </button>
         <p class="canvas-hint">
-          {`Drag to pan, scroll to zoom, click a node to select it. ${formatInteger(drawnCount)} components and ${formatInteger(props.visibleEdges.length)} of ${formatInteger(props.index.edgesById.size)} relations drawn.`}
+          {`Drag to pan, scroll to zoom, click something to select it. ${formatInteger(drawnCount)} parts and ${formatInteger(props.visibleEdges.length)} of ${formatInteger(props.index.edgesById.size)} connections drawn.`}
         </p>
       </div>
-      <NamingNote
-        drawnCount={drawnCount}
-        namedCount={naming.named.size}
-        some={naming.some}
-        every={naming.every}
-        magnification={magnification}
-      />
-
-      <div class="canvas-tail"></div>
       {failure === null ? null : (
         <div class="refusal" role="note">
           <p class="t">The canvas could not start.</p>
@@ -730,32 +721,44 @@ export function GraphCanvas(props: {
         </div>
       )}
       <div class="canvas" ref={containerRef} aria-hidden="true" role="presentation" />
-      {props.overlay === null ? (
-        <ul class="key">
-          {props.index.hasRuntimeEvidence ? (
-            <>
+      {/* The key and the note about which names survived sit under the drawing rather than over it.
+          Above it they were a four line paragraph and a legend between the reader and the thing they
+          opened this screen for, which put the graph itself past the fold on a laptop. */}
+      <div class="canvas-footnotes">
+        {props.overlay === null ? (
+          <ul class="key">
+            {props.index.hasRuntimeEvidence ? (
+              <>
+                <li>
+                  <i class="meter-cell is-exercised" />
+                  Exercised
+                </li>
+                <li>
+                  <i class="meter-cell is-declared_only" />
+                  Declared, never exercised
+                </li>
+              </>
+            ) : (
               <li>
-                <i class="cell met" />
-                Exercised
+                <i class="meter-cell is-unmeasured" />
+                No run has been ingested, so nothing here is drawn as unexercised
               </li>
-              <li>
-                <i class="cell unmet" />
-                Declared, never exercised
-              </li>
-            </>
-          ) : (
-            <li>
-              <i class="cell met" />
-              No run has been ingested, so nothing here is drawn as unexercised
-            </li>
-          )}
-        </ul>
-      ) : (
-        <OverlayLegend overlay={props.overlay} ramp={palette.ramp} />
-      )}
+            )}
+          </ul>
+        ) : (
+          <OverlayLegend overlay={props.overlay} ramp={palette.ramp} />
+        )}
+        <NamingNote
+          drawnCount={drawnCount}
+          namedCount={naming.named.size}
+          some={naming.some}
+          every={naming.every}
+          magnification={magnification}
+        />
+      </div>
       {built.danglingEdges.length === 0 ? null : (
         <p class="note">
-          {`${formatInteger(built.danglingEdges.length)} relations name a component that is not in this graph and are not drawn.`}
+          {`${formatInteger(built.danglingEdges.length)} connections point at a part this report does not carry, so they are not drawn.`}
         </p>
       )}
     </div>
@@ -787,13 +790,13 @@ function NamingNote(props: {
   if (props.some) {
     return (
       <p class="note">
-        {`There is room at this size for ${formatInteger(props.namedCount)} of these ${formatInteger(props.drawnCount)} names, so the busiest components keep theirs and the rest are left out rather than printed over each other.${closer} Select a component to name it and everything it touches.`}
+        {`There is room at this size for ${formatInteger(props.namedCount)} of these ${formatInteger(props.drawnCount)} names, so the busiest keep theirs and the rest are left out rather than printed over each other.${closer} Pick one to name it and everything it touches.`}
       </p>
     );
   }
   return (
     <p class="note">
-      {`There is not room to name ${formatInteger(props.drawnCount)} components at this size, so this is the shape of the system rather than an index of it.${closer} Select a component to name it and everything it touches, or narrow by kind above.`}
+      {`There is not room to name ${formatInteger(props.drawnCount)} parts at this size, so this is the shape of the system rather than a list of it.${closer} Pick one to name it and everything it touches, or narrow by kind above.`}
     </p>
   );
 }

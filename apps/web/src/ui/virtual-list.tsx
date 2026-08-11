@@ -5,7 +5,7 @@
 
 import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
-import { formatInteger } from '../format.ts';
+import { formatInteger } from '../presentation/format.ts';
 import { computeWindow, DEFAULT_ROW_HEIGHT, shouldVirtualise } from '../window.ts';
 
 export interface VirtualListProps<T> {

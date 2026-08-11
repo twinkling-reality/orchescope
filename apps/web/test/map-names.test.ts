@@ -7,7 +7,7 @@ import {
   namesFit,
   nameRoom,
   zoomForNames,
-} from '../src/map-names.ts';
+} from '../src/presentation/map-names.ts';
 
 /**
  * The map's naming rule.

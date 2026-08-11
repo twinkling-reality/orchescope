@@ -4,7 +4,7 @@
  */
 
 import { useId } from 'preact/hooks';
-import { pluralise } from '../format.ts';
+import { pluralise } from '../presentation/format.ts';
 import { useApp } from '../store.tsx';
 
 export interface FilterOption {

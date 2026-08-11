@@ -249,12 +249,10 @@ describe('a repository with no agent system', () => {
     assert.equal(coverage['filesParsed'], 1);
     assert.equal(coverage['filesInSupportedLanguages'], 1);
     assert.equal(coverage['filesDiscovered'], 2);
-    assert.match(
-      result.stdout,
-      /1 of 1 file in a language this build parses were read, 2 discovered/,
-    );
+    // The headline states the files read over the files this build claims to read, on line one.
+    assert.match(result.stdout, /1 of 1 file read/);
     assert.equal(
-      /of 2 files in a language this build parses/.test(result.stdout),
+      /of 2 files? read/.test(result.stdout),
       false,
       'the files walked were used as the denominator of the files this build parses',
     );

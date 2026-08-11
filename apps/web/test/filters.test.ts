@@ -15,8 +15,9 @@ import {
   groupByReason,
   matchesQuery,
   sortFindings,
+  sortFindingsForAction,
   sortMetricRows,
-} from '../src/filters.ts';
+} from '../src/presentation/filters.ts';
 import { component, finding, metrics } from './fixture.ts';
 
 describe('matchesQuery', () => {
@@ -76,6 +77,13 @@ describe('filterFindings', () => {
     assert.deepEqual(
       filterFindings(findings, { ...EMPTY_FINDING_FILTER, bases: ['inferred'] }).map((f) => f.id),
       ['OSC-RELY-0003'],
+    );
+    assert.deepEqual(
+      filterFindings(findings, {
+        ...EMPTY_FINDING_FILTER,
+        goalReadiness: ['eligible'],
+      }).map((f) => f.id),
+      findings.filter((entry) => entry.goalReadiness.eligible).map((entry) => entry.id),
     );
   });
 
@@ -142,6 +150,28 @@ describe('sortFindings', () => {
     assert.deepEqual(
       input.map((f) => f.id),
       snapshot,
+    );
+  });
+});
+
+describe('sortFindingsForAction', () => {
+  it('puts goal eligible work before a more severe finding that cannot be verified yet', () => {
+    const sorted = sortFindingsForAction([
+      finding({
+        id: 'OSC-AAA-0001',
+        severity: 'critical',
+        goalReadiness: {
+          eligible: false,
+          reason: 'needs a design decision',
+          requiresRuntimeEvidence: false,
+          requiresHumanReview: true,
+        },
+      }),
+      finding({ id: 'OSC-AAA-0002', severity: 'medium' }),
+    ]);
+    assert.deepEqual(
+      sorted.map((entry) => entry.id),
+      ['OSC-AAA-0002', 'OSC-AAA-0001'],
     );
   });
 });

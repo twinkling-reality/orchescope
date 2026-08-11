@@ -9,6 +9,7 @@
 
 export { canonicalJson, type JsonValue, stableJson } from './canonical-json.ts';
 export { type Clock, fixedClock, formatTimestamp } from './clock.ts';
+export { formatCount } from './counting.ts';
 export {
   type CostEstimate,
   estimateCost,

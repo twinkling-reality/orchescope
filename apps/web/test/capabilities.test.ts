@@ -7,7 +7,7 @@ import {
   capabilityState,
   indexCapabilities,
   orderedCapabilities,
-} from '../src/capabilities.ts';
+} from '../src/presentation/capabilities.ts';
 
 describe('capabilityState', () => {
   it('reports a declared available capability with its reason', () => {

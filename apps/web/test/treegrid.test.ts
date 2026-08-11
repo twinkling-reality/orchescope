@@ -14,7 +14,7 @@ import {
   toggleGroup,
   treeGridKey,
   visibleRows,
-} from '../src/treegrid.ts';
+} from '../src/presentation/treegrid.ts';
 
 const items: readonly TreeGridItem[] = [
   { id: 'tool:refund', groupKey: 'tool', groupLabel: 'Tool', label: 'refund' },

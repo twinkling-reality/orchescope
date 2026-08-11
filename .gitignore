@@ -24,3 +24,6 @@ release/
 
 # Third party corpus repositories, cloned at their pinned commit and never vendored
 corpus/.cache/
+
+# Local git worktrees used for renames and experiments; never part of the product
+_rename-worktrees/

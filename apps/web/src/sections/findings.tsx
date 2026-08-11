@@ -10,37 +10,50 @@
 
 import type { Finding } from '@orchescope/schema';
 import { useMemo, useState } from 'preact/hooks';
-import { BASIS_ORDER, describeBasis, SEVERITY_ORDER } from '../basis.ts';
-import { auditCommand } from '../commands.ts';
+import { BASIS_ORDER, describeBasis, SEVERITY_ORDER } from '../presentation/basis.ts';
+import { groupFindingsByReadiness } from '../presentation/finding-groups.ts';
 import {
   distinctValues,
   EMPTY_FINDING_FILTER,
   type FindingFilter,
   filterFindings,
-  sortFindings,
-} from '../filters.ts';
-import { formatInteger, humanise } from '../format.ts';
+  sortFindingsForAction,
+} from '../presentation/filters.ts';
+import { formatInteger, humanise } from '../presentation/format.ts';
+import type { PresentationRefusal } from '../presentation/presentation-refusal.ts';
+import { buildSectionPresentations } from '../presentation/section-presentation.ts';
 import { useApp } from '../store.tsx';
 import { SearchField, TokenFilter } from '../ui/filters.tsx';
 import { FindingCard } from '../ui/finding-card.tsx';
-import { Data, Eyebrow, Figure, RefusalPanel, SeverityMark } from '../ui/primitives.tsx';
+import { Data, Meta, RefusalPanel, SeverityMark } from '../ui/primitives.tsx';
+import { SectionSkeleton } from '../ui/section-skeleton.tsx';
 
+/**
+ * A list of findings, split at the line that decides what can be handed off.
+ *
+ * The split is drawn only where it means something. Strengths carry goal readiness too, but nobody
+ * hands off a strength, so they stay one list and the grouping is asked for rather than assumed.
+ */
 function FindingList(props: {
   readonly findings: readonly Finding[];
   readonly title: string;
   readonly emptyMessage: string;
   readonly openId: string | null;
   readonly filtered: boolean;
+  readonly grouped: boolean;
   readonly onClear: () => void;
+  readonly refusal: PresentationRefusal | null;
 }) {
   const app = useApp();
   if (props.findings.length === 0) {
     return (
       <section class="tile">
-        <Eyebrow level={3} count={0}>
-          {props.title}
-        </Eyebrow>
-        <RefusalPanel title={props.emptyMessage}>
+        <h3 class="section-title">{props.title}</h3>
+        <RefusalPanel
+          title={props.refusal?.title ?? props.emptyMessage}
+          commands={props.refusal?.commands ?? []}
+        >
+          {props.refusal === null ? null : <p>{props.refusal.reason}</p>}
           {props.filtered ? (
             <p class="more">
               <button type="button" class="link-button" onClick={props.onClear}>
@@ -52,21 +65,38 @@ function FindingList(props: {
       </section>
     );
   }
+  const cards = (findings: readonly Finding[]) => (
+    <div class="finding-list">
+      {findings.map((finding) => (
+        <FindingCard
+          key={finding.id}
+          finding={finding}
+          index={app.index}
+          open={finding.id === props.openId}
+        />
+      ))}
+    </div>
+  );
   return (
     <section class="tile">
-      <Eyebrow level={3} count={props.findings.length}>
+      <h3 class="section-title">
         {props.title}
-      </Eyebrow>
-      <div class="finding-list">
-        {props.findings.map((finding) => (
-          <FindingCard
-            key={finding.id}
-            finding={finding}
-            index={app.index}
-            open={finding.id === props.openId}
-          />
-        ))}
-      </div>
+        <Data>{` ${formatInteger(props.findings.length)}`}</Data>
+      </h3>
+      {props.grouped
+        ? groupFindingsByReadiness(props.findings).map((group) => (
+            <section class={`finding-group is-${group.id}`} key={group.id}>
+              <div class="finding-group-head">
+                <h4>
+                  {group.label}
+                  <Data>{` ${formatInteger(group.findings.length)}`}</Data>
+                </h4>
+                <p>{group.reason}</p>
+              </div>
+              {cards(group.findings)}
+            </section>
+          ))
+        : cards(props.findings)}
     </section>
   );
 }
@@ -100,7 +130,7 @@ export function FindingsSection() {
   );
 
   const matched = useMemo(
-    () => sortFindings(filterFindings(bundle.findings, filter)),
+    () => sortFindingsForAction(filterFindings(bundle.findings, filter)),
     [bundle.findings, filter],
   );
   const risks = matched.filter((finding) => finding.polarity === 'risk');
@@ -110,127 +140,33 @@ export function FindingsSection() {
     filter.severities.length > 0 ||
     filter.categories.length > 0 ||
     filter.polarities.length > 0 ||
-    filter.bases.length > 0;
+    filter.bases.length > 0 ||
+    filter.goalReadiness.length > 0;
   const clear = () => {
     setFilter(EMPTY_FINDING_FILTER);
     app.announce('Every finding filter cleared.');
   };
 
-  if (bundle.findings.length === 0) {
-    return (
-      <section class="tile is-band">
-        <Eyebrow level={3}>Findings</Eyebrow>
-        <RefusalPanel title="This report contains no findings." commands={[auditCommand()]}>
-          <p>
-            No rule produced a claim it could evidence. That is a statement about the rules that ran
-            and about the evidence available to them, and not a guarantee about the system. A report
-            with a run folded into it has more evidence for the same rules to work from.
-          </p>
-        </RefusalPanel>
-      </section>
-    );
-  }
+  const eligible = risks.filter((finding) => finding.goalReadiness.eligible).length;
+  const presentation = buildSectionPresentations(bundle).findings;
 
   return (
-    // Filters beside the findings rather than above them. Six filter groups across the top of a wide
-    // window pushed the first finding below the fold on every report in the corpus.
-    <div class="workbench">
-      <div class="workbench-controls">
-        <section class="tile">
-          <Eyebrow level={3}>Filters</Eyebrow>
-          <div class="filter-bar">
-            <SearchField
-              label="Search findings"
-              value={filter.query}
-              placeholder="title, explanation, component, tag"
-              onChange={(query) => {
-                setFilter({ ...filter, query });
-              }}
-              resultCount={matched.length}
-              resultNoun="finding"
-              resultPlural="findings"
-            />
-            <TokenFilter
-              legend="Severity"
-              selected={filter.severities}
-              onChange={(severities) => {
-                setFilter({ ...filter, severities });
-              }}
-              options={presentSeverities.map((severity) => ({
-                value: severity,
-                label: humanise(severity),
-                count: bundle.findings.filter((finding) => finding.severity === severity).length,
-              }))}
-            />
-            <TokenFilter
-              legend="Category"
-              selected={filter.categories}
-              onChange={(next) => {
-                setFilter({ ...filter, categories: next });
-              }}
-              options={categories.map((category) => ({
-                value: category,
-                label: humanise(category),
-                count: bundle.findings.filter((finding) => finding.category === category).length,
-              }))}
-            />
-            <TokenFilter
-              legend="Polarity"
-              selected={filter.polarities}
-              onChange={(polarities) => {
-                setFilter({ ...filter, polarities });
-              }}
-              options={[
-                {
-                  value: 'risk',
-                  label: 'Risk',
-                  count: bundle.findings.filter((finding) => finding.polarity === 'risk').length,
-                },
-                {
-                  value: 'strength',
-                  label: 'Strength',
-                  count: bundle.findings.filter((finding) => finding.polarity === 'strength')
-                    .length,
-                },
-              ]}
-            />
-            <TokenFilter
-              legend="Evidence class"
-              selected={filter.bases}
-              onChange={(bases) => {
-                setFilter({ ...filter, bases });
-              }}
-              options={presentBases.map((basis) => ({
-                value: basis,
-                label: describeBasis(basis).label,
-                count: bundle.findings.filter((finding) => finding.basis === basis).length,
-              }))}
-            />
-          </div>
-          <p class="match-count" aria-live="polite">
-            {`${formatInteger(matched.length)} of ${formatInteger(bundle.findings.length)} findings match: ${formatInteger(risks.length)} risks and ${formatInteger(strengths.length)} strengths.`}
-          </p>
-        </section>
-      </div>
-
-      <div class="workbench-main">
-        {/* The headline of the screen, and it is bounded on purpose. What the feature surface is for
-            is the one thing a reader looks at first, and a list of nineteen expandable rows is not
-            that: wrapped in it, the surface stopped being a feature and became the page. */}
-        <section class="tile is-band">
-          <Eyebrow level={3}>Findings</Eyebrow>
-          <div class="lead-head">
-            <p class="display">
-              <span class="data">{formatInteger(risks.length)}</span>
-              <span>{risks.length === 1 ? ' risk, ' : ' risks, '}</span>
-              <span class="data">{formatInteger(strengths.length)}</span>
-              <span>{strengths.length === 1 ? ' strength.' : ' strengths.'}</span>
+    <SectionSkeleton
+      section="findings"
+      summary={
+        <section class="tile is-band section-lead">
+          {/* The answer is what can be handed off, not how many rows the filter left. `21 of 21
+              findings shown` was the largest thing on this screen and it is a tautology until a
+              filter is set, so the count of shown findings appears only once one is. */}
+          <h3 class="section-lead-question">What to fix, and what is ready to hand off</h3>
+          <div class="section-lead-body">
+            <p class="section-lead-answer">
+              <span class="section-lead-figure">{formatInteger(eligible)}</span>
+              <span>
+                {` of ${formatInteger(risks.length)} ${risks.length === 1 ? 'problem' : 'problems'} ${eligible === 1 ? 'has' : 'have'} enough behind ${eligible === 1 ? 'it' : 'them'} to hand straight to somebody.`}
+              </span>
             </p>
-            <div class="lead-measure">
-              <Figure
-                value={formatInteger(matched.length)}
-                of={`of ${formatInteger(bundle.findings.length)} findings shown${filtered ? ', filtered' : ''}`}
-              />
+            <div class="section-lead-aside">
               {presentSeverities.length === 0 ? null : (
                 <ul class="key">
                   {presentSeverities.map((severity) => (
@@ -254,35 +190,154 @@ export function FindingsSection() {
                   ))}
                 </ul>
               )}
+              <Meta>
+                <span>{`${formatInteger(risks.length)} ${risks.length === 1 ? 'problem' : 'problems'}`}</span>
+                <span>{`${formatInteger(strengths.length)} done well`}</span>
+                {filtered ? (
+                  <span>{`${formatInteger(matched.length)} of ${formatInteger(bundle.findings.length)} shown`}</span>
+                ) : null}
+              </Meta>
             </div>
           </div>
         </section>
-
-        <FindingList
-          findings={risks}
-          title="Risks"
-          emptyMessage={
-            filtered
-              ? 'No risk matches the current filters.'
-              : 'No risk was reported. That is a statement about the rules that had enough evidence to fire, not a guarantee about the system.'
-          }
-          openId={openId}
-          filtered={filtered}
-          onClear={clear}
-        />
+      }
+      primary={
+        <div class="workbench">
+          <div class="workbench-controls">
+            <section class="tile">
+              <h3 class="rail-title">Filters</h3>
+              <div class="filter-bar">
+                <SearchField
+                  label="Search what was found"
+                  value={filter.query}
+                  placeholder="title, explanation, part, tag"
+                  onChange={(query) => {
+                    setFilter({ ...filter, query });
+                  }}
+                  resultCount={matched.length}
+                  resultNoun="result"
+                  resultPlural="results"
+                />
+                <TokenFilter
+                  legend="Ready to hand off"
+                  selected={filter.goalReadiness}
+                  onChange={(goalReadiness) => {
+                    setFilter({ ...filter, goalReadiness });
+                  }}
+                  options={[
+                    {
+                      value: 'eligible',
+                      label: 'Ready',
+                      count: bundle.findings.filter((finding) => finding.goalReadiness.eligible)
+                        .length,
+                    },
+                    {
+                      value: 'not_eligible',
+                      label: 'Needs more first',
+                      count: bundle.findings.filter((finding) => !finding.goalReadiness.eligible)
+                        .length,
+                    },
+                  ]}
+                />
+                <TokenFilter
+                  legend="Severity"
+                  selected={filter.severities}
+                  onChange={(severities) => {
+                    setFilter({ ...filter, severities });
+                  }}
+                  options={presentSeverities.map((severity) => ({
+                    value: severity,
+                    label: humanise(severity),
+                    count: bundle.findings.filter((finding) => finding.severity === severity)
+                      .length,
+                  }))}
+                />
+                <TokenFilter
+                  legend="What it is about"
+                  selected={filter.categories}
+                  onChange={(next) => {
+                    setFilter({ ...filter, categories: next });
+                  }}
+                  options={categories.map((category) => ({
+                    value: category,
+                    label: humanise(category),
+                    count: bundle.findings.filter((finding) => finding.category === category)
+                      .length,
+                  }))}
+                />
+                <TokenFilter
+                  legend="Good or bad news"
+                  selected={filter.polarities}
+                  onChange={(polarities) => {
+                    setFilter({ ...filter, polarities });
+                  }}
+                  options={[
+                    {
+                      value: 'risk',
+                      label: 'A problem',
+                      count: bundle.findings.filter((finding) => finding.polarity === 'risk')
+                        .length,
+                    },
+                    {
+                      value: 'strength',
+                      label: 'Done well',
+                      count: bundle.findings.filter((finding) => finding.polarity === 'strength')
+                        .length,
+                    },
+                  ]}
+                />
+                <TokenFilter
+                  legend="How it was established"
+                  selected={filter.bases}
+                  onChange={(bases) => {
+                    setFilter({ ...filter, bases });
+                  }}
+                  options={presentBases.map((basis) => ({
+                    value: basis,
+                    label: describeBasis(basis).label,
+                    count: bundle.findings.filter((finding) => finding.basis === basis).length,
+                  }))}
+                />
+              </div>
+              <p class="match-count" aria-live="polite">
+                {`${formatInteger(matched.length)} of ${formatInteger(bundle.findings.length)} match: ${formatInteger(risks.length)} ${risks.length === 1 ? 'problem' : 'problems'} and ${formatInteger(strengths.length)} done well.`}
+              </p>
+            </section>
+          </div>
+          <div class="workbench-main">
+            <FindingList
+              findings={risks}
+              title="Problems"
+              emptyMessage={
+                filtered
+                  ? 'Nothing matches the current filters.'
+                  : 'Nothing was reported as a problem. That says the rules with enough evidence to fire did not fire. It is not a guarantee about your system.'
+              }
+              openId={openId}
+              filtered={filtered}
+              grouped={true}
+              onClear={clear}
+              refusal={filtered ? null : presentation.primaryRefusal}
+            />
+          </div>
+        </div>
+      }
+      detail={
         <FindingList
           findings={strengths}
-          title="Strengths"
+          title="Things this system does well"
           emptyMessage={
             filtered
-              ? 'No strength matches the current filters.'
-              : 'No strength was reported. A strength needs the same evidence a risk does, and no rule found enough of it.'
+              ? 'Nothing matches the current filters.'
+              : 'Nothing was reported as done well. Saying so takes the same evidence a problem does, and no rule found enough of it.'
           }
           openId={openId}
           filtered={filtered}
+          grouped={false}
           onClear={clear}
+          refusal={filtered ? null : presentation.detailRefusal}
         />
-      </div>
-    </div>
+      }
+    />
   );
 }

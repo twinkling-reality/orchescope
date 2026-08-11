@@ -51,7 +51,7 @@ const { renderStandaloneHtml } = await import(join(root, 'packages/report/src/ex
 const { bakeLayouts, MAP_LAYOUT_KEYS, MAP_LAYOUTS_KEY } = await import(
   join(root, 'packages/report/src/layouts.ts')
 );
-const { CELL_LIMIT, DENSE_ABOVE } = await import(join(root, 'apps/web/src/delta-bar.ts'));
+const { CELL_LIMIT, DENSE_ABOVE } = await import(join(root, 'apps/web/src/delta-meter.ts'));
 const { MAP_LAYOUT_KEYS: WEB_LAYOUT_KEYS } = await import(join(root, 'apps/web/src/layout.ts'));
 const { nameRoom } = await import(join(root, 'apps/web/src/map-names.ts'));
 
@@ -179,9 +179,9 @@ const REACHES = [
   ['no components at all', (b) => b.graph.components.length === 0],
   ['a run to compare against', (b) => b.runs.length > 0],
   ['no run, so nothing is drawn as unexercised', (b) => b.runs.length === 0],
-  ['the delta bar as one cell per component', (b) => hasDelta(b) && declared(b) <= CELL_LIMIT],
-  ['the delta bar as a proportion', (b) => hasDelta(b) && declared(b) > CELL_LIMIT],
-  ['the delta bar with its gaps closed', (b) => hasDelta(b) && declared(b) > DENSE_ABOVE],
+  ['the delta rail as one cell per component', (b) => hasDelta(b) && declared(b) <= CELL_LIMIT],
+  ['the delta rail as a proportion', (b) => hasDelta(b) && declared(b) > CELL_LIMIT],
+  ['the delta rail with its gaps closed', (b) => hasDelta(b) && declared(b) > DENSE_ABOVE],
   [
     'the map naming every component at the fitted view',
     (b) => {
@@ -273,18 +273,10 @@ for (const file of files) {
     stale.push(name);
     continue;
   }
-  const page = `${name}.html`;
-  writeFileSync(
-    join(out, page),
-    renderStandaloneHtml(bundle, {
-      javascript,
-      css,
-      title: `Orchescope report for ${bundle.projectName}`,
-    }),
-  );
   rows.push({
     name,
-    page,
+    page: `${name}.html`,
+    bundle,
     project: bundle.projectName,
     components: bundle.graph.components.length,
     drawn: drawn(bundle),
@@ -295,6 +287,50 @@ for (const file of files) {
 }
 
 rows.sort((left, right) => left.components - right.components);
+
+/*
+ * Every page is written knowing what else was written, so the chrome can offer a picker instead of
+ * sending a reader back to an index to change report. The list is a JSON island exactly like the
+ * bundle beside it, which is data rather than script and so needs nothing from the policy: the two
+ * hashes pin the module and the stylesheet, and neither of them changed.
+ *
+ * A report produced by the real command carries no such island, so the picker is absent there. That is
+ * the boundary rather than an omission: one report is one repository at one revision, and offering to
+ * switch to another would offer something the analysis behind it cannot support.
+ */
+const galleryFor = (current) =>
+  JSON.stringify(
+    rows.map((row) => ({
+      page: row.page,
+      project: row.project,
+      components: row.components,
+      runs: row.runs,
+      current: row.page === current,
+    })),
+  ).replace(/<\//g, '<\\/');
+
+const REPORT_ISLAND = '<script type="application/json" id="orchescope-report">';
+
+for (const row of rows) {
+  const html = renderStandaloneHtml(row.bundle, {
+    javascript,
+    css,
+    title: `Orchescope report for ${row.project}`,
+  });
+  if (!html.includes(REPORT_ISLAND)) {
+    process.stderr.write(
+      'The standalone export no longer carries the report island this script writes beside.\n',
+    );
+    process.exit(1);
+  }
+  writeFileSync(
+    join(out, row.page),
+    html.replace(
+      REPORT_ISLAND,
+      `<script type="application/json" id="orchescope-gallery">${galleryFor(row.page)}</script>\n${REPORT_ISLAND}`,
+    ),
+  );
+}
 
 /** Which states no bundle reaches. Named rather than left as a silence, because they are the gaps to fill. */
 const covered = new Set(rows.flatMap((row) => row.reaches));

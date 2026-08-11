@@ -16,7 +16,7 @@ import {
   manifestCommand,
   scenarioRunCommand,
   traceCommand,
-} from '../../apps/web/src/commands.ts';
+} from '../../apps/web/src/presentation/commands.ts';
 
 /**
  * The report prints command lines a reader is meant to run. A printed invocation the binary does not accept is

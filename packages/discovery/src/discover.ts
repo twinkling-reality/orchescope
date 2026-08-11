@@ -54,6 +54,8 @@ export type ScanRequest = {
   readonly cache?: FactCache;
   readonly adapters?: readonly AgentSystemAdapter[];
   readonly git?: { readonly commit?: string; readonly ref?: string; readonly dirty: boolean };
+  /** Called once per parsed file, so a caller can report a determinate count during the parse. */
+  readonly onFileParsed?: (completed: number, total: number) => void;
 };
 
 export type ScanResult = {
@@ -262,6 +264,7 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
     deadline: request.deadline,
     concurrency: request.concurrency,
     ...(request.cache === undefined ? {} : { cache: request.cache }),
+    ...(request.onFileParsed === undefined ? {} : { onFileParsed: request.onFileParsed }),
   });
 
   const symbols = buildSymbolIndex(analysis.facts);

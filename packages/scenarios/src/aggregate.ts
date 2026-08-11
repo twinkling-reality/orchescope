@@ -1,4 +1,4 @@
-import { mean, summarize } from '@orchescope/domain';
+import { formatCount, mean, summarize } from '@orchescope/domain';
 import type {
   EvaluatorResult,
   RepetitionResult,
@@ -104,7 +104,7 @@ export const mergeEvaluators = (
     return {
       kind: first.kind,
       passed: passed === ran.length,
-      detail: `passed in ${passed} of the ${ran.length} repetitions that ran this evaluator`,
+      detail: `passed in ${passed} of ${formatCount(ran.length, 'repetition')} that ran this evaluator`,
     };
   });
 };

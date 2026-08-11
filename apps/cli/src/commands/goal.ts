@@ -4,7 +4,7 @@ import { renderAgentPrompt, renderGoalMarkdown, renderGoalSummary } from '@orche
 import { createGoalFromFinding, validateGoalOutcome } from '@orchescope/usecases';
 import type { CommandContext } from '../context.ts';
 import { EXIT_CODES } from '../exit.ts';
-import { goalSummary } from '../terminal/summary.ts';
+import { goalSummary } from '../terminal/goal-summary.ts';
 
 /**
  * Goal commands.
