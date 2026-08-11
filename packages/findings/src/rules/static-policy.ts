@@ -1,4 +1,9 @@
-import { absenceEvidence, CONFIDENCE_BANDS, derivedEvidence } from '@orchescope/domain';
+import {
+  absenceEvidence,
+  CONFIDENCE_BANDS,
+  derivedEvidence,
+  formatCount,
+} from '@orchescope/domain';
 import {
   controlFlowCycles,
   degrees,
@@ -174,7 +179,7 @@ export const missingTimeoutRule: Rule = {
           confidence: CONFIDENCE_BANDS.strongStructural,
           basis: 'discovered',
           title: 'Every discovered model invocation declares a timeout',
-          explanation: `All ${modelEdges.length} model invocation relations carry an explicit timeout, so a hung provider cannot stall a run indefinitely.`,
+          explanation: `All ${formatCount(modelEdges.length, 'model call')} carry an explicit timeout, so a hung provider cannot stall a run indefinitely.`,
           impact:
             'A slow or hanging provider fails fast instead of consuming the whole run budget.',
           components: modelEdges.map((edge) => edge.from),
@@ -210,7 +215,7 @@ export const missingTimeoutRule: Rule = {
         confidence: CONFIDENCE_BANDS.structural,
         basis: 'discovered' as const,
         title: `Model call to ${target?.displayName ?? modelId} declares no timeout`,
-        explanation: `No timeout was found in the configuration of ${edges.length} invocation relation(s) reaching this model, from ${callers.length} caller(s). A provider that stops responding will hold the request until something else gives up, and nothing in the declared configuration says when that is.`,
+        explanation: `No timeout was found in the configuration of ${formatCount(edges.length, 'call')} reaching this model, from ${formatCount(callers.length, 'caller')}. A provider that stops responding will hold the request until something else gives up, and nothing in the declared configuration says when that is.`,
         impact: 'One unresponsive provider call can consume an entire run.',
         components: [...callers, ...(target === undefined ? [] : [target.id])],
         edges: edges.map((edge) => edge.id),
@@ -270,7 +275,7 @@ export const approvalBoundaryRule: Rule = {
           confidence: CONFIDENCE_BANDS.strongStructural,
           basis: 'discovered',
           title: `${component.displayName} is behind an approval boundary`,
-          explanation: `${component.displayName} has effect class ${component.sideEffect} and is guarded: ${guarded ? 'an approval relation was discovered' : requiresApproval ? 'the tool declares that approval is required' : 'the calling relation declares that approval is required'}.`,
+          explanation: `${component.displayName} has effect class ${component.sideEffect} and is guarded: ${guarded ? 'an approval gate was discovered' : requiresApproval ? 'the tool declares that approval is required' : 'the calling policy declares that approval is required'}.`,
           impact:
             'The risky operation cannot run without an explicit decision, which is the correct shape.',
           components: [component.id],
@@ -284,7 +289,7 @@ export const approvalBoundaryRule: Rule = {
 
       const record = absenceEvidence({
         producer: PRODUCER,
-        searched: `an approval relation or approval requirement on ${component.id}`,
+        searched: `an approval gate or approval requirement on ${component.id}`,
         scope: 'the declared graph',
         inspectedCount: incoming.length,
       });
@@ -300,7 +305,7 @@ export const approvalBoundaryRule: Rule = {
         confidence: CONFIDENCE_BANDS.structural,
         basis: 'discovered',
         title: `${component.displayName} performs a ${component.sideEffect} effect with no approval boundary`,
-        explanation: `${component.displayName} was classified ${component.sideEffect} and no approval relation, tool approval requirement or calling policy requiring approval was found. A model deciding on its own to invoke this operation is the whole risk.`,
+        explanation: `${component.displayName} was classified ${component.sideEffect} and no approval gate, tool approval requirement or calling policy requiring approval was found. A model deciding on its own to invoke this operation is the whole risk.`,
         impact:
           'An agent can perform a consequential external action without a human or a policy deciding that it should.',
         components: [component.id],
@@ -366,7 +371,7 @@ export const promptInjectionBoundaryRule: Rule = {
       confidence: CONFIDENCE_BANDS.heuristic,
       basis: 'inferred' as const,
       title: `${prompt.displayName} interpolates run time content into a prompt`,
-      explanation: `This prompt contains substitution points, and the system also reads content from ${untrustedSources.length} source(s) that Orchescope cannot vouch for: retrieval results, tool results and MCP server output. Whether a substituted value comes from one of those sources cannot be established from syntax alone, so this is a boundary to review rather than a proven vulnerability.`,
+      explanation: `This prompt contains substitution points, and the system also reads content from ${formatCount(untrustedSources.length, 'source')} that Orchescope cannot vouch for: retrieval results, tool results and MCP server output. Whether a substituted value comes from one of those sources cannot be established from syntax alone, so this is a boundary to review rather than a proven vulnerability.`,
       impact:
         'If retrieved or tool provided text reaches this prompt, instructions inside that text are indistinguishable from the system prompt.',
       components: [prompt.id, ...untrustedSources.slice(0, 5).map((component) => component.id)],
@@ -422,7 +427,7 @@ export const architectureShapeRule: Rule = {
         confidence: CONFIDENCE_BANDS.deterministic,
         basis: 'discovered',
         title: `${component.displayName} coordinates ${entry.controlFlowOutDegree} downstream operations`,
-        explanation: `This agent has ${entry.controlFlowOutDegree} outgoing control flow relations. Wide coordination is not wrong on its own, and it does make the agent's prompt, its failure handling and its token cost harder to reason about.`,
+        explanation: `This agent has ${formatCount(entry.controlFlowOutDegree, 'outgoing control flow path')}. Wide coordination is not wrong on its own, and it does make the agent's prompt, its failure handling and its token cost harder to reason about.`,
         impact: 'Every added branch multiplies the paths that have to be tested.',
         components: [component.id],
         evidence: component.evidence.slice(0, 2) as EvidenceId[],
@@ -465,7 +470,7 @@ export const architectureShapeRule: Rule = {
         },
         basis: 'discovered',
         title: `${component.displayName} cannot be reached from any entry point`,
-        explanation: `No entry point declared in this repository reaches ${component.id} through control flow relations. That has three causes and this rule cannot tell them apart: the wiring is missing, the component is left over, or the entry point is outside this repository, which is what a library looks like. ${unreachable.length} of the ${reachabilityCandidates.length} components that participate in control flow are in this state.`,
+        explanation: `No entry point declared in this repository reaches ${component.id} through control flow. That has three causes and this rule cannot tell them apart: the wiring is missing, the component is left over, or the entry point is outside this repository, which is what a library looks like. ${unreachable.length} of the ${reachabilityCandidates.length} components that participate in control flow are in this state.`,
         impact:
           'A component the declared graph cannot reach is one a reader cannot follow, and it is where dead configuration hides.',
         components: [component.id],
@@ -557,7 +562,7 @@ export const broadPermissionRule: Rule = {
       return {
         status: 'insufficient_evidence',
         detail:
-          'permission breadth is only meaningful against observed use, and no run has been ingested',
+          'permission breadth is only meaningful against observed use, and no run has been recorded',
         drafts: [],
       };
     }
@@ -573,7 +578,7 @@ export const broadPermissionRule: Rule = {
       const record = absenceEvidence({
         producer: PRODUCER,
         searched: `a side effect performed by ${component.id}`,
-        scope: `${context.runs.length} observed run(s)`,
+        scope: formatCount(context.runs.length, 'observed run'),
         inspectedCount: context.runs.length,
       });
       drafts.push({
@@ -588,7 +593,7 @@ export const broadPermissionRule: Rule = {
         confidence: CONFIDENCE_BANDS.structural,
         basis: 'inferred',
         title: `${component.displayName} holds write access it was not observed using`,
-        explanation: `${component.displayName} declares ${writePermissions.length} write permission(s) on ${writePermissions.map((permission) => permission.scope).join(', ')}, ran in ${context.runs.length} observed run(s), and performed no recorded side effect. Observed use is not proof that write access is unnecessary, and it is the evidence available.`,
+        explanation: `${component.displayName} declares ${formatCount(writePermissions.length, 'write permission')} on ${writePermissions.map((permission) => permission.scope).join(', ')}, ran in ${formatCount(context.runs.length, 'observed run')}, and performed no recorded side effect. Observed use is not proof that write access is unnecessary, and it is the evidence available.`,
         impact:
           'Broader access than a component needs widens the blast radius of a prompt injection or a bug.',
         components: [component.id],
@@ -646,7 +651,7 @@ export const unusedConfiguredToolRule: Rule = {
       confidence: CONFIDENCE_BANDS.structural,
       basis: 'discovered' as const,
       title: `${tool.displayName} is defined and nothing calls it`,
-      explanation: `${tool.displayName} was discovered as a tool and no agent, group or server relation in this repository points at it. That has three causes and this rule cannot tell them apart: the wiring is missing, the tool is left over from a change, or the caller is somewhere Orchescope did not read, which is what a tool list assembled at run time and a library exporting tools for an application elsewhere both look like. ${orphans.length} of the ${tools.length} discovered tools are in this state.`,
+      explanation: `${tool.displayName} was discovered as a tool and no agent, group or server in this repository points at it. That has three causes and this rule cannot tell them apart: the wiring is missing, the tool is left over from a change, or the caller is somewhere Orchescope did not read, which is what a tool list assembled at run time and a library exporting tools for an application elsewhere both look like. ${orphans.length} of the ${tools.length} discovered tools are in this state.`,
       impact: 'A tool nobody calls still has to be maintained, and it may still hold credentials.',
       components: [tool.id],
       metrics: [
@@ -685,7 +690,7 @@ export const safeRetryRule: Rule = {
     });
     if (safe.length === 0) {
       return context.graph.graph.edges.some((edge) => edge.policy?.retry !== undefined)
-        ? clear('no retry relation declares both a ceiling and an idempotency key')
+        ? clear('no retry declares both a ceiling and an idempotency key')
         : notApplicable('no retry policy was discovered');
     }
 
@@ -708,7 +713,7 @@ export const safeRetryRule: Rule = {
           title: `Retry around ${target?.displayName ?? edge.to} is bounded and keyed`,
           explanation: `${source?.displayName ?? edge.from} retries ${target?.displayName ?? edge.to} at most ${retry?.maxAttempts ?? 'a declared number of'} times with ${retry?.backoff ?? 'unknown'} backoff, and the operation declares an idempotency key. A repeat of the same attempt cannot produce the effect twice.`,
           impact:
-            'This relation recovers from a transient failure without the risk that makes an unkeyed retry dangerous.',
+            'This retry recovers from a transient failure without the risk that makes an unkeyed retry dangerous.',
           components: [edge.to, edge.from],
           edges: [edge.id],
           evidence: edge.evidence.slice(0, 3) as EvidenceId[],

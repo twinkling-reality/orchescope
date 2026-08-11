@@ -106,7 +106,7 @@ The comparison reports each metric with both sample sizes and a direction, and i
 that the samples do not support:
 
 ```
-mixed: 1 metric(s) improved and 1 regressed
+mixed: 1 metric improved and 1 metric regressed
   metric              baseline     candidate    change       samples
   + durationMs        2240.00      1180.00      -47.3%       5/5
   x errors            0.00         2.00         +200.0%      5/5

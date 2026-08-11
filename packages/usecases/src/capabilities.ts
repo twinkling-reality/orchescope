@@ -1,3 +1,4 @@
+import { formatCount } from '@orchescope/domain';
 import type { CapabilityInput } from '@orchescope/report';
 import type { ReportCapability } from '@orchescope/schema';
 import type { Workspace } from '@orchescope/workspace';
@@ -31,9 +32,9 @@ const costReason = (pricedModels: number, tokensObserved: boolean): string => {
     return 'no price is configured, so tokens are reported and cost is not. Add prices under pricing in .orchescope/config.json, keyed by provider/model';
   }
   if (!tokensObserved) {
-    return `${pricedModels} model price(s) are configured, and no ingested run reported any token usage to apply them to`;
+    return `${formatCount(pricedModels, 'model price')} ${pricedModels === 1 ? 'is' : 'are'} configured, and no recorded run reported any token usage to apply them to`;
   }
-  return `cost is estimated from observed tokens and the ${pricedModels} configured model price(s)`;
+  return `cost is estimated from observed tokens and the ${formatCount(pricedModels, 'configured model price')}`;
 };
 
 export const resolveCapabilities = (context: CapabilityContext): CapabilityInput => {

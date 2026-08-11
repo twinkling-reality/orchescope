@@ -19,7 +19,7 @@ be touched, what must not change, and the command that decides the outcome.
   "findingId": "OSC-REL-0001",
   "title": "Attach an idempotency key derived from the request, or stop retrying this operation.",
   "status": "ready",
-  "problemStatement": "The side effect refund|payments/order-1234 was recorded 2 times within a single run, and 18 times across 9 observed run(s), and at least one occurrence came from retry attempt 2. No idempotency key was present, so nothing downstream can collapse the duplicates.\n\nImpact: A duplicated external effect is visible to the user or to a third party. For a payment, a notification or a provisioning call, the second one is a real incident.",
+  "problemStatement": "The side effect refund|payments/order-1234 was recorded 2 times within a single run, and 18 times across 9 observed runs, and at least one occurrence came from retry attempt 2. No idempotency key was present, so nothing downstream can collapse the duplicates.\n\nImpact: A duplicated external effect is visible to the user or to a third party. For a payment, a notification or a provisioning call, the second one is a real incident.",
   "evidence": ["ev_1a2b3c4d5e6f7a8b"],
   "evidenceSummary": [
     { "label": "duplicate_occurrences", "value": "2 count over 9 sample(s)", "basis": "observed" },

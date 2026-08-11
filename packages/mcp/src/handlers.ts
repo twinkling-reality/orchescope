@@ -1,5 +1,5 @@
 import { writeFileSync } from 'node:fs';
-import { OrchescopeError, stableJson } from '@orchescope/domain';
+import { formatCount, OrchescopeError, stableJson } from '@orchescope/domain';
 import { renderAgentPrompt } from '@orchescope/goals';
 import { loopProgress, resolveNextAction, toMermaid, toSarif } from '@orchescope/report';
 import type { Component, Edge, Finding } from '@orchescope/schema';
@@ -132,7 +132,7 @@ const scanAgentSystem = async (
     byKind.set(component.kind, (byKind.get(component.kind) ?? 0) + 1);
   }
   return {
-    text: `${result.graph.components.length} components and ${result.graph.edges.length} relations discovered across ${result.graph.coverage.filesParsed} parsed files. Agent system detected: ${result.agentSystemDetected}.`,
+    text: `${formatCount(result.graph.components.length, 'component')} and ${formatCount(result.graph.edges.length, 'relation')} discovered across ${formatCount(result.graph.coverage.filesParsed, 'parsed file')}. Agent system detected: ${result.agentSystemDetected}.`,
     data: {
       scanId: result.scanId,
       agentSystemDetected: result.agentSystemDetected,
@@ -178,7 +178,7 @@ const auditAgentSystem = async (
   );
   const standing = progress.standingAt;
   return {
-    text: `Audit ${result.scanId}: ${risks.length} risk(s), ${result.bundle.summary.strengthCount} strength(s), ${result.runsConsidered.length} run(s) reconciled. Standing at ${standing?.title ?? 'closed loop'}.`,
+    text: `Audit ${result.scanId}: ${formatCount(risks.length, 'risk')}, ${formatCount(result.bundle.summary.strengthCount, 'strength')}, ${formatCount(result.runsConsidered.length, 'run')} reconciled. Standing at ${standing?.title ?? 'closed loop'}.`,
     data: {
       scanId: result.scanId,
       reportId: result.bundle.reportId,
@@ -237,7 +237,7 @@ const getSystemMap = (context: HandlerContext, args: Record<string, unknown>): T
         .slice(0, limit * 4)
     : [];
   return {
-    text: `${page.length} of ${components.length} matching component(s)${includeEdges ? ` and ${edges.length} adjacent relation(s)` : ''}.`,
+    text: `${page.length} of ${formatCount(components.length, 'matching component')}${includeEdges ? ` and ${formatCount(edges.length, 'adjacent relation')}` : ''}.`,
     data: {
       scanId: scan.scanId,
       total: components.length,
@@ -263,13 +263,13 @@ const getReconciliationDelta = (
   }
   if (bundle.reconciliation === undefined) {
     return {
-      text: 'No runtime evidence has been ingested, so there is no delta to report. Record a run first.',
+      text: 'No runtime evidence has been recorded, so there is no delta to report. Record a run first.',
       data: { hasRuns: false },
     };
   }
   const delta = bundle.reconciliation;
   return {
-    text: `${delta.declaredNotExercised.components.length} declared and never exercised, ${delta.exercisedNotDeclared.components.length} exercised and never declared, ${delta.contradictions.length} contradiction(s), ${delta.duplicateSideEffects.length} duplicated side effect(s).`,
+    text: `${delta.declaredNotExercised.components.length} declared and never exercised, ${delta.exercisedNotDeclared.components.length} exercised and never declared, ${formatCount(delta.contradictions.length, 'contradiction')}, ${formatCount(delta.duplicateSideEffects.length, 'duplicated side effect')}.`,
     data: { hasRuns: true, delta },
   };
 };
@@ -300,7 +300,7 @@ const getFindings = (context: HandlerContext, args: Record<string, unknown>): To
       : all;
   const page = filtered.slice(offset, offset + limit);
   return {
-    text: `${page.length} of ${filtered.length} finding(s).`,
+    text: `${page.length} of ${formatCount(filtered.length, 'finding')}.`,
     data: {
       scanId: scan.scanId,
       total: filtered.length,
@@ -345,7 +345,7 @@ const createImprovementGoal = (
     ...(args['repetitions'] === undefined ? {} : { repetitions: number(args['repetitions'], 3) }),
   });
   return {
-    text: `Created ${goal.id} from ${goal.findingId}. It names ${goal.acceptanceCriteria.length} acceptance criteria and ${goal.validation.commands.length} validation command(s).`,
+    text: `Created ${goal.id} from ${goal.findingId}. It names ${formatCount(goal.acceptanceCriteria.length, 'acceptance criterion', 'acceptance criteria')} and ${formatCount(goal.validation.commands.length, 'validation command')}.`,
     data: { goal, agentPrompt: renderAgentPrompt(goal) },
   };
 };
@@ -367,7 +367,7 @@ const listScenarios = (context: HandlerContext, _args: Record<string, unknown>):
   const { workspace } = context;
   const scenarios = discoverScenarios(workspace);
   return {
-    text: `${scenarios.length} scenario(s) defined.`,
+    text: `${formatCount(scenarios.length, 'scenario')} defined.`,
     data: {
       scenarios: scenarios.map((scenario) => ({
         id: scenario.id,
@@ -397,7 +397,7 @@ const importTraceTool = (context: HandlerContext, args: Record<string, unknown>)
     ...(label === undefined ? {} : { label }),
   });
   return {
-    text: `Imported run ${result.run.id}: ${result.spanCount} span(s) from ${result.serviceNames.length} service(s).`,
+    text: `Imported run ${result.run.id}: ${formatCount(result.spanCount, 'span')} from ${formatCount(result.serviceNames.length, 'service')}.`,
     data: {
       runId: result.run.id,
       status: result.run.status,
@@ -442,7 +442,7 @@ const runTracedTool = async (
     ...(args['timeoutMs'] === undefined ? {} : { timeoutMs: number(args['timeoutMs'], 0) }),
   });
   return {
-    text: `Traced run ${result.run.id}: ${result.spanCount} span(s) from ${result.serviceNames.length} service(s), exit ${result.exitCode ?? 'unknown'}.`,
+    text: `Traced run ${result.run.id}: ${formatCount(result.spanCount, 'span')} from ${formatCount(result.serviceNames.length, 'service')}, exit ${result.exitCode ?? 'unknown'}.`,
     data: {
       runId: result.run.id,
       status: result.run.status,
@@ -468,7 +468,7 @@ const runScenario = async (
     ...(args['repetitions'] === undefined ? {} : { repetitions: number(args['repetitions'], 1) }),
   });
   return {
-    text: `${scenario.id} ${outcome.result.passed ? 'passed' : 'failed'} over ${outcome.result.repetitions.length} repetition(s).`,
+    text: `${scenario.id} ${outcome.result.passed ? 'passed' : 'failed'} over ${formatCount(outcome.result.repetitions.length, 'repetition')}.`,
     data: {
       passed: outcome.result.passed,
       runIds: outcome.runIds,
@@ -496,7 +496,7 @@ const benchmarkVariants = async (
     orchescopeVersion: context.orchescopeVersion,
   });
   return {
-    text: `Benchmark ${report.id} measured ${report.variants.length} variant(s) of ${report.dimension}.`,
+    text: `Benchmark ${report.id} measured ${formatCount(report.variants.length, 'variant')} of ${report.dimension}.`,
     data: {
       benchmarkId: report.id,
       dimension: report.dimension,
@@ -530,7 +530,7 @@ const injectFaults = async (
     ...(args['repetitions'] === undefined ? {} : { repetitions: number(args['repetitions'], 1) }),
   });
   return {
-    text: `Chaos ${report.id}: ${report.outcomes.filter((outcome) => outcome.taskCompleted).length} of ${report.outcomes.length} fault(s) absorbed.`,
+    text: `Chaos ${report.id}: ${report.outcomes.filter((outcome) => outcome.taskCompleted).length} of ${formatCount(report.outcomes.length, 'fault')} absorbed.`,
     data: {
       chaosReportId: report.id,
       environment: report.environment,

@@ -31,7 +31,7 @@ demo            33 components, 32 relations, 23 of 23 files read
 
 1 audit         + done       21 of 22 checks ran
 2 goal          + done       2 jobs written up
-3 rerun         + done       1 of 3 scenarios has been run
+3 rerun         + done       1 of 3 scenarios have been run
 4 measure       + done       10 runs recorded
                              8 faults injected, 1 broke the task
 5 did it help   ! undecided  unchanged: no metric moved enough to call

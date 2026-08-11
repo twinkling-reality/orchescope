@@ -225,7 +225,7 @@ const verdictFrom = (
   if (regressions.length > 0 && improvements.length > 0) {
     return {
       verdict: 'mixed',
-      reason: `${improvements.length} metric(s) improved and ${regressions.length} regressed`,
+      reason: `${formatCount(improvements.length, 'metric')} improved and ${formatCount(regressions.length, 'metric')} regressed`,
     };
   }
   if (regressions.length > 0) {

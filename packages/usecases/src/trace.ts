@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import {
   createDeadline,
   type Deadline,
+  formatCount,
   runId as makeRunId,
   OrchescopeError,
 } from '@orchescope/domain';
@@ -206,7 +207,7 @@ export const runTrace = async (request: TraceRequest): Promise<TraceResult> => {
     });
     workspace.store.saveEvidence(derived.evidence);
     phase.finish(
-      `${session.bundle.spans.length} span(s) from ${session.bundle.services.length} service(s), run ${runId}`,
+      `${formatCount(session.bundle.spans.length, 'span')} from ${formatCount(session.bundle.services.length, 'service')}, run ${runId}`,
     );
 
     return {

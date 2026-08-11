@@ -1,5 +1,5 @@
 import { buildVariants, runBenchmark } from '@orchescope/benchmark';
-import type { Deadline } from '@orchescope/domain';
+import { type Deadline, formatCount } from '@orchescope/domain';
 import type { BenchmarkDimension, BenchmarkReport, Scenario } from '@orchescope/schema';
 import type { Workspace } from '@orchescope/workspace';
 import { currentEnvironment } from './environment.ts';
@@ -31,7 +31,7 @@ export const runBenchmarkUseCase = async (
   const variants = buildVariants({ dimension: request.dimension, values: request.values });
   const phase = workspace.progress.phase(
     'execute',
-    `Benchmarking ${request.dimension} across ${variants.length} variant(s)`,
+    `Benchmarking ${request.dimension} across ${formatCount(variants.length, 'variant')}`,
     variants.length,
   );
 
@@ -60,6 +60,6 @@ export const runBenchmarkUseCase = async (
   });
 
   workspace.store.saveBenchmark(report, workspace.projectId);
-  phase.finish(`${report.variants.length} variant(s) measured`);
+  phase.finish(`${formatCount(report.variants.length, 'variant')} measured`);
   return report;
 };

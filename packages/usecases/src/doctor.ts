@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { arch, platform, tmpdir } from 'node:os';
+import { formatCount } from '@orchescope/domain';
 import { integrityCheck } from '@orchescope/persistence';
 import {
   probeJavaScriptParser,
@@ -127,7 +128,7 @@ export const runDoctor = async (input: {
     status: scenarios.length > 0 ? 'ok' : 'not_applicable',
     detail:
       scenarios.length > 0
-        ? `${scenarios.length} scenario(s) known to this project`
+        ? `${formatCount(scenarios.length, 'scenario')} known to this project`
         : 'no scenario is defined, so execution based commands have nothing to run',
     ...(scenarios.length > 0
       ? {}

@@ -1,4 +1,9 @@
-import { CONFIDENCE_BANDS, derivedEvidence, metricEvidence } from '@orchescope/domain';
+import {
+  CONFIDENCE_BANDS,
+  derivedEvidence,
+  formatCount,
+  metricEvidence,
+} from '@orchescope/domain';
 import type { ComponentId, Evidence, EvidenceId } from '@orchescope/schema';
 import {
   clear,
@@ -71,13 +76,13 @@ export const sequentialIndependentCallsRule: Rule = {
   category: 'performance',
   summary: 'Sibling operations that never overlapped despite having no observed dependency.',
   evaluate: (context) => {
-    if (context.runs.length === 0) return insufficient('no run has been ingested');
+    if (context.runs.length === 0) return insufficient('no run has been recorded');
     const toolEdges = context.graph
       .edgesOfKind('calls_tool')
       .filter((edge) => edge.observation !== undefined && edge.observation.executionCount > 0);
     if (toolEdges.length < 2) {
       return notApplicable(
-        'fewer than two observed tool relations, so ordering cannot be compared',
+        'fewer than two observed tool calls, so ordering cannot be compared',
       );
     }
 
@@ -116,7 +121,7 @@ export const sequentialIndependentCallsRule: Rule = {
         producer: PRODUCER,
         rule: 'independent-calls-run-sequentially',
         inputs: neverParallel.flatMap((edge) => edge.evidence.slice(0, 2)) as EvidenceId[],
-        note: `${neverParallel.length} tool relations from ${sourceId} never overlapped in ${context.runs.length} run(s); sequential total ${Math.round(totalSequential)} ms against a slowest single call of ${Math.round(slowest)} ms`,
+        note: `${formatCount(neverParallel.length, 'tool call')} from ${sourceId} never overlapped in ${formatCount(context.runs.length, 'run')}; sequential total ${Math.round(totalSequential)} ms against a slowest single call of ${Math.round(slowest)} ms`,
       });
 
       drafts.push({
@@ -131,7 +136,7 @@ export const sequentialIndependentCallsRule: Rule = {
         confidence: CONFIDENCE_BANDS.strongStructural,
         basis: 'observed',
         title: `${source?.displayName ?? sourceId} calls ${targets.map((target) => target.displayName).join(' and ')} one after another`,
-        explanation: `Across ${context.runs.length} run(s) these ${neverParallel.length} tool calls never overlapped in wall clock time. Their combined observed time is ${Math.round(totalSequential)} ms and the slowest single call is ${Math.round(slowest)} ms. Whether the calls are truly independent is a question about the code rather than about the trace, so the estimate below is labelled as an estimate.`,
+        explanation: `Across ${formatCount(context.runs.length, 'run')} these ${formatCount(neverParallel.length, 'tool call')} never overlapped in wall clock time. Their combined observed time is ${Math.round(totalSequential)} ms and the slowest single call is ${Math.round(slowest)} ms. Whether the calls are truly independent is a question about the code rather than about the trace, so the estimate below is labelled as an estimate.`,
         impact: `If the calls are independent, starting them together removes about ${Math.round(savingMs)} ms of user visible latency per request.`,
         components: [sourceId, ...targets.map((target) => target.id)],
         edges: neverParallel.map((edge) => edge.id),
@@ -190,7 +195,7 @@ export const latencyConcentrationRule: Rule = {
   category: 'performance',
   summary: 'One component holding most of the measured self time.',
   evaluate: (context) => {
-    if (context.runs.length === 0) return insufficient('no run has been ingested');
+    if (context.runs.length === 0) return insufficient('no run has been recorded');
     const totals = aggregateByComponent(context);
     const overall = [...totals.values()].reduce((total, entry) => total + entry.selfDurationMs, 0);
     if (overall <= 0) return insufficient('no self time was recorded');
@@ -223,7 +228,7 @@ export const latencyConcentrationRule: Rule = {
         confidence: CONFIDENCE_BANDS.strongStructural,
         basis: 'observed',
         title: `${component.displayName} accounts for ${Math.round(share * 100)} percent of measured time`,
-        explanation: `Across ${entry.executions} execution(s) in ${context.runs.length} run(s), ${component.displayName} spent ${Math.round(entry.selfDurationMs)} ms of self time out of ${Math.round(overall)} ms measured in total. Self time excludes time spent inside its children, so this is time this component itself is responsible for.`,
+        explanation: `Across ${formatCount(entry.executions, 'execution')} in ${formatCount(context.runs.length, 'run')}, ${component.displayName} spent ${Math.round(entry.selfDurationMs)} ms of self time out of ${Math.round(overall)} ms measured in total. Self time excludes time spent inside its children, so this is time this component itself is responsible for.`,
         impact: 'Any latency work that does not touch this component will not move the total much.',
         components: [component.id],
         newEvidence: [record],
@@ -264,7 +269,7 @@ export const tokenConcentrationRule: Rule = {
   category: 'cost',
   summary: 'One component holding most of the token usage.',
   evaluate: (context) => {
-    if (context.runs.length === 0) return insufficient('no run has been ingested');
+    if (context.runs.length === 0) return insufficient('no run has been recorded');
     const totals = aggregateByComponent(context);
     const overall = [...totals.values()].reduce(
       (total, entry) => total + entry.inputTokens + entry.outputTokens,
@@ -291,7 +296,7 @@ export const tokenConcentrationRule: Rule = {
         confidence: CONFIDENCE_BANDS.deterministic,
         basis: 'observed',
         title: `${component.displayName} consumes ${Math.round(share * 100)} percent of all tokens`,
-        explanation: `${component.displayName} used ${entry.inputTokens} input and ${entry.outputTokens} output tokens across ${entry.executions} execution(s), which is ${Math.round(share * 100)} percent of the ${overall} tokens measured. Orchescope reports tokens rather than money because the generative AI conventions carry no cost attribute and a bundled price table would go stale.`,
+        explanation: `${component.displayName} used ${entry.inputTokens} input and ${entry.outputTokens} output tokens across ${formatCount(entry.executions, 'execution')}, which is ${Math.round(share * 100)} percent of the ${overall} tokens measured. Orchescope reports tokens rather than money because the generative AI conventions carry no cost attribute and a bundled price table would go stale.`,
         impact: 'Token reduction work anywhere else has a smaller ceiling than work here.',
         components: [component.id],
         evidence: component.evidence.slice(0, 2) as EvidenceId[],
@@ -329,7 +334,7 @@ export const repeatedContextRule: Rule = {
   summary:
     'Several workers receiving similarly large inputs, consistent with a shared full context.',
   evaluate: (context) => {
-    if (context.runs.length === 0) return insufficient('no run has been ingested');
+    if (context.runs.length === 0) return insufficient('no run has been recorded');
     const totals = aggregateByComponent(context);
     const agents = [...totals.values()]
       .map((entry) => ({ entry, component: context.graph.component(entry.componentId) }))
@@ -420,9 +425,9 @@ export const repeatedContextRule: Rule = {
 export const unreliableRelationRule: Rule = {
   id: 'relation-fails-often',
   category: 'reliability',
-  summary: 'A relation whose observed error rate is high enough to matter.',
+  summary: 'A call whose observed error rate is high enough to matter.',
   evaluate: (context) => {
-    if (context.runs.length === 0) return insufficient('no run has been ingested');
+    if (context.runs.length === 0) return insufficient('no run has been recorded');
     const drafts: FindingDraft[] = [];
     for (const edge of context.graph.graph.edges) {
       const observation = edge.observation;
@@ -436,7 +441,7 @@ export const unreliableRelationRule: Rule = {
         ruleId: 'relation-fails-often',
         occurrence: {
           key: 'failing-relation',
-          groupedTitle: '{count} relations failed often enough to be worth reporting',
+          groupedTitle: '{count} calls failed often enough to be worth reporting',
         },
         category: 'reliability',
         polarity: 'risk',
@@ -444,9 +449,8 @@ export const unreliableRelationRule: Rule = {
         confidence: CONFIDENCE_BANDS.deterministic,
         basis: 'observed',
         title: `${source?.displayName ?? edge.from} to ${target?.displayName ?? edge.to} failed ${observation.errorCount} of ${observation.executionCount} times`,
-        explanation: `The observed error rate on this relation is ${Math.round(rate * 100)} percent over ${observation.executionCount} executions, with ${observation.retryCount} retries recorded.`,
-        impact:
-          'A relation that fails this often shapes both the latency distribution and the cost.',
+        explanation: `The observed error rate on this call is ${Math.round(rate * 100)} percent over ${formatCount(observation.executionCount, 'execution')}, with ${formatCount(observation.retryCount, 'retry')} recorded.`,
+        impact: 'A call that fails this often shapes both the latency distribution and the cost.',
         components: [edge.from, edge.to],
         edges: [edge.id],
         evidence: edge.evidence.slice(0, 3) as EvidenceId[],
@@ -467,7 +471,7 @@ export const unreliableRelationRule: Rule = {
     return fired(
       drafts,
       drafts.length === 0
-        ? 'no relation exceeded a 20 percent error rate with at least five executions'
+        ? 'no call exceeded a 20 percent error rate with at least five executions'
         : undefined,
     );
   },

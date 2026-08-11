@@ -1,4 +1,9 @@
-import { absenceEvidence, CONFIDENCE_BANDS, derivedEvidence } from '@orchescope/domain';
+import {
+  absenceEvidence,
+  CONFIDENCE_BANDS,
+  derivedEvidence,
+  formatCount,
+} from '@orchescope/domain';
 import type { ComponentId, EvidenceId } from '@orchescope/schema';
 import { clear, type FindingDraft, fired, insufficient, type Rule } from '../rule.ts';
 
@@ -32,10 +37,10 @@ const carriesNoIdentity = (name: string, kind: string): boolean => {
 export const declaredNotExercisedRule: Rule = {
   id: 'declared-not-exercised',
   category: 'scenario_coverage',
-  summary: 'Components and relations that exist in the code or configuration and appear in no run.',
+  summary: 'Components that exist in the code or configuration and appear in no run.',
   evaluate: (context) => {
     if (context.delta === undefined || context.runs.length === 0) {
-      return insufficient('no runs have been ingested, so nothing can be called unexercised');
+      return insufficient('no runs have been recorded, so nothing can be called unexercised');
     }
     const unexercised = context.delta.declaredNotExercised.components;
     if (unexercised.length === 0) return clear('every declared component was exercised');
@@ -47,7 +52,7 @@ export const declaredNotExercisedRule: Rule = {
       const record = absenceEvidence({
         producer: PRODUCER,
         searched: `spans attributed to ${componentId}`,
-        scope: `${context.runs.length} run(s): ${context.runs.map((entry) => entry.run.id).join(', ')}`,
+        scope: `${formatCount(context.runs.length, 'run')}: ${context.runs.map((entry) => entry.run.id).join(', ')}`,
         inspectedCount: context.runs.length,
       });
       const isTool = component.kind === 'tool';
@@ -55,7 +60,7 @@ export const declaredNotExercisedRule: Rule = {
         ruleId: 'declared-not-exercised',
         occurrence: {
           key: 'declared-not-exercised',
-          groupedTitle: '{count} declared components were never exercised by an ingested run',
+          groupedTitle: '{count} declared components were never exercised by a recorded run',
         },
         category: isTool ? 'maintainability' : 'scenario_coverage',
         polarity: 'risk',
@@ -63,7 +68,7 @@ export const declaredNotExercisedRule: Rule = {
         confidence: CONFIDENCE_BANDS.strongStructural,
         basis: 'inferred',
         title: `${component.displayName} is declared but never exercised`,
-        explanation: `The ${component.kind} ${componentLabel(componentId)} was discovered in the repository and did not appear in any of the ${context.runs.length} ingested run(s). Either no scenario reaches it, or it is unreachable in practice.`,
+        explanation: `The ${component.kind} ${componentLabel(componentId)} was discovered in the repository and did not appear in any of the ${formatCount(context.runs.length, 'recorded run')}. Either no scenario reaches it, or it is unreachable in practice.`,
         impact: isTool
           ? 'A configured tool that never runs is either dead configuration or an untested capability, and both are usually wrong.'
           : 'Coverage of this component is zero, so no runtime claim about it can be made.',
@@ -141,7 +146,7 @@ export const exercisedNotDeclaredRule: Rule = {
       drafts,
       withoutIdentity === 0
         ? undefined
-        : `${withoutIdentity} observed component(s) arrived under a name that is only their kind, which observed-name-carries-no-identity reports instead`,
+        : `${formatCount(withoutIdentity, 'observed component')} arrived under a name that is only their kind, which observed-name-carries-no-identity reports instead`,
     );
   },
 };
@@ -234,7 +239,7 @@ export const duplicateSideEffectRule: Rule = {
         confidence: CONFIDENCE_BANDS.deterministic,
         basis: 'observed' as const,
         title: `${duplicate.key.split('|')[0] ?? 'side effect'} happened ${duplicate.occurrences} times in one run`,
-        explanation: `The side effect ${duplicate.key} was recorded ${duplicate.occurrences} times within a single run, and ${duplicate.totalOccurrences} times across ${duplicate.runIds.length} observed run(s)${attributed ? `, and at least one occurrence came from retry attempt ${attempts.join(' and ')}` : ''}. ${duplicate.idempotencyKeyPresent ? 'An idempotency key was present, so the duplication happened despite it.' : 'No idempotency key was present, so nothing downstream can collapse the duplicates.'}`,
+        explanation: `The side effect ${duplicate.key} was recorded ${duplicate.occurrences} times within a single run, and ${duplicate.totalOccurrences} times across ${formatCount(duplicate.runIds.length, 'observed run')}${attributed ? `, and at least one occurrence came from retry attempt ${attempts.join(' and ')}` : ''}. ${duplicate.idempotencyKeyPresent ? 'An idempotency key was present, so the duplication happened despite it.' : 'No idempotency key was present, so nothing downstream can collapse the duplicates.'}`,
         impact:
           'A duplicated external effect is visible to the user or to a third party. For a payment, a notification or a provisioning call, the second one is a real incident.',
         components: component === undefined ? [] : [component.id],

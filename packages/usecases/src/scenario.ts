@@ -1,5 +1,11 @@
 import { readFileSync } from 'node:fs';
-import { createDeadline, type Deadline, faultPlanId, OrchescopeError } from '@orchescope/domain';
+import {
+  createDeadline,
+  type Deadline,
+  faultPlanId,
+  formatCount,
+  OrchescopeError,
+} from '@orchescope/domain';
 import { assertAllowed, permissionsDecision } from '@orchescope/policy';
 import { loadScenarios, parseScenario, runScenarioWithArtifacts } from '@orchescope/scenarios';
 import type { FaultPlan, Scenario, ScenarioResult, ScenarioVariant } from '@orchescope/schema';
@@ -154,7 +160,7 @@ export const runScenarioUseCase = async (
     }
     workspace.store.saveScenarioResult(artifacts.result, workspace.projectId);
     phase.finish(
-      `${artifacts.result.repetitions.length} repetition(s), ${artifacts.result.passed ? 'passed' : 'failed'}`,
+      `${formatCount(artifacts.result.repetitions.length, 'repetition')}, ${artifacts.result.passed ? 'passed' : 'failed'}`,
     );
 
     return {

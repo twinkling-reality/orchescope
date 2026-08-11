@@ -1,5 +1,5 @@
 import { assertEnvironmentAllowed, runChaosSuite } from '@orchescope/chaos';
-import type { Deadline } from '@orchescope/domain';
+import { type Deadline, formatCount } from '@orchescope/domain';
 import { assertAllowed, chaosEnvironmentDecision } from '@orchescope/policy';
 import type { ChaosEnvironment, ChaosReport, Scenario } from '@orchescope/schema';
 import type { Workspace } from '@orchescope/workspace';
@@ -35,7 +35,7 @@ export const runChaosUseCase = async (request: RunChaosRequest): Promise<ChaosRe
   const faultCount = scenario.faults.length;
   const phase = workspace.progress.phase(
     'execute',
-    `Injecting ${faultCount} fault(s) into ${scenario.id}`,
+    `Injecting ${formatCount(faultCount, 'fault')} into ${scenario.id}`,
     faultCount + 1,
   );
   let completed = 0;
@@ -76,6 +76,6 @@ export const runChaosUseCase = async (request: RunChaosRequest): Promise<ChaosRe
 
   workspace.store.saveChaosReport(report, workspace.projectId);
   const absorbed = report.outcomes.filter((outcome) => outcome.taskCompleted).length;
-  phase.finish(`${absorbed} of ${report.outcomes.length} fault(s) absorbed`);
+  phase.finish(`${absorbed} of ${formatCount(report.outcomes.length, 'fault')} absorbed`);
   return report;
 };

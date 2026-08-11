@@ -1,4 +1,9 @@
-import { CONFIDENCE_BANDS, derivedEvidence, faultInjectionEvidence } from '@orchescope/domain';
+import {
+  CONFIDENCE_BANDS,
+  derivedEvidence,
+  faultInjectionEvidence,
+  formatCount,
+} from '@orchescope/domain';
 import type {
   BenchmarkReport,
   ChaosReport,
@@ -42,7 +47,7 @@ const attributionFor = (
 
 const variantLabel = (variant: VariantResult): string =>
   variant.variant.agents !== undefined
-    ? `${variant.variant.agents} agent(s)`
+    ? formatCount(variant.variant.agents, 'agent')
     : variant.variant.concurrency !== undefined
       ? `concurrency ${variant.variant.concurrency}`
       : variant.variantId;
@@ -252,7 +257,7 @@ export const concurrencySaturationRule: Rule = {
               : CONFIDENCE_BANDS.heuristic,
           basis: 'observed',
           title: `Latency grows faster than load between concurrency ${baselineConcurrency} and ${variantConcurrency}`,
-          explanation: `Concurrency rose by a factor of ${concurrencyRatio.toFixed(1)} and median duration rose by a factor of ${latencyRatio.toFixed(1)}, from ${Math.round(baselineLatency)} ms to ${Math.round(latency)} ms, over ${variant.completedRuns} completed run(s). Growth faster than the added load means something in the path is a bottleneck rather than a parallel resource.`,
+          explanation: `Concurrency rose by a factor of ${concurrencyRatio.toFixed(1)} and median duration rose by a factor of ${latencyRatio.toFixed(1)}, from ${Math.round(baselineLatency)} ms to ${Math.round(latency)} ms, over ${formatCount(variant.completedRuns, 'completed run')}. Growth faster than the added load means something in the path is a bottleneck rather than a parallel resource.`,
           impact:
             'Beyond this point, more traffic makes every request slower rather than serving more of them.',
           components: [...taskLevelComponents(context.graph)],
@@ -334,7 +339,7 @@ const chaosOutcomeDraft = (
       confidence: CONFIDENCE_BANDS.deterministic,
       basis: 'simulated',
       title: `${outcome.faultKind} on ${outcome.target} was absorbed`,
-      explanation: `The fault was applied ${outcome.appliedCount} time(s), the task still completed, recovery ${outcome.recovered ? 'happened' : 'was not needed'}, no side effect was duplicated and cost amplification stayed at ${(outcome.costAmplification ?? 1).toFixed(2)}.`,
+      explanation: `The fault was applied ${formatCount(outcome.appliedCount, 'time')}, the task still completed, recovery ${outcome.recovered ? 'happened' : 'was not needed'}, no side effect was duplicated and cost amplification stayed at ${(outcome.costAmplification ?? 1).toFixed(2)}.`,
       impact: 'This failure mode is handled without user intervention.',
       components: attributionFor(context, outcome.target),
       newEvidence: [record],
@@ -358,7 +363,7 @@ const chaosOutcomeDraft = (
     confidence: CONFIDENCE_BANDS.deterministic,
     basis: 'simulated',
     title: `${outcome.faultKind} on ${outcome.target}: ${headline}`,
-    explanation: `The fault was applied ${outcome.appliedCount} time(s) in run ${outcome.runId}. Task completed: ${outcome.taskCompleted}. Recovered: ${outcome.recovered}. Duplicate side effects: ${outcome.duplicateSideEffects}. Cost amplification against the baseline: ${(outcome.costAmplification ?? 1).toFixed(2)}. Retry amplification: ${(outcome.retryAmplification ?? 1).toFixed(2)}. This is a simulated failure, so the claim is about behaviour under an injected fault rather than about production.`,
+    explanation: `The fault was applied ${formatCount(outcome.appliedCount, 'time')} in run ${outcome.runId}. Task completed: ${outcome.taskCompleted}. Recovered: ${outcome.recovered}. Duplicate side effects: ${outcome.duplicateSideEffects}. Cost amplification against the baseline: ${(outcome.costAmplification ?? 1).toFixed(2)}. Retry amplification: ${(outcome.retryAmplification ?? 1).toFixed(2)}. This is a simulated failure, so the claim is about behaviour under an injected fault rather than about production.`,
     impact: duplicated
       ? 'The failure path produces a duplicated external effect, which is visible outside the system.'
       : collapsed
@@ -426,7 +431,7 @@ export const resilienceRule: Rule = {
       if (report.notApplied.length > 0) {
         return fired(
           drafts,
-          `${report.notApplied.length} requested fault(s) were not applied: ${report.notApplied
+          `${formatCount(report.notApplied.length, 'requested fault')} ${report.notApplied.length === 1 ? 'was' : 'were'} not applied: ${report.notApplied
             .map((entry) => `${entry.faultKind} on ${entry.target} (${entry.reason})`)
             .join('; ')}`,
         );

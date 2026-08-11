@@ -48,7 +48,7 @@ const FIVE: readonly LoopStep[] = [
     ordinal: 3,
     title: 'Rerun',
     state: 'done',
-    summary: '1 of 3 scenarios has been run',
+    summary: '1 of 3 scenarios have been run',
   }),
   step({
     id: 'measure',

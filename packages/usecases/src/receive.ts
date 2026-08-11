@@ -1,4 +1,4 @@
-import { runId as makeRunId, OrchescopeError } from '@orchescope/domain';
+import { formatCount, runId as makeRunId, OrchescopeError } from '@orchescope/domain';
 import { startReceiver } from '@orchescope/runtime';
 import type { RunRecord } from '@orchescope/schema';
 import { deriveTopology } from '@orchescope/traces';
@@ -140,7 +140,7 @@ export const receiveTraces = async (request: ReceiveRequest): Promise<TraceResul
   });
   workspace.store.saveEvidence(derived.evidence);
   phase.finish(
-    `${bundle.spans.length} span(s) from ${bundle.services.length} service(s), run ${runId}`,
+    `${formatCount(bundle.spans.length, 'span')} from ${formatCount(bundle.services.length, 'service')}, run ${runId}`,
   );
 
   return {

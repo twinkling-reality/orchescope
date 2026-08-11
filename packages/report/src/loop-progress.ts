@@ -16,6 +16,7 @@
  * it reports was decided by the engine that wrote the bundle.
  */
 
+import { formatCount } from '@orchescope/domain';
 import type { FindingSet, ReportBundle } from '@orchescope/schema';
 import {
   goalCommand,
@@ -188,7 +189,7 @@ function rerunStep(bundle: ReportBundle): LoopStep {
       ordinal: 3,
       title: 'Rerun',
       state: 'done',
-      summary: `${ran} of ${bundle.scenarios.length} scenarios has been run`,
+      summary: `${ran} of ${formatCount(bundle.scenarios.length, 'scenario')} ${bundle.scenarios.length === 1 ? 'has' : 'have'} been run`,
       detail: [],
       command: null,
     };

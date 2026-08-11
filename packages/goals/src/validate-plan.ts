@@ -1,3 +1,4 @@
+import { formatCount } from '@orchescope/domain';
 import type {
   AcceptanceCriterion,
   Comparison,
@@ -135,7 +136,7 @@ const scenarioPassesOutcome = (
     criterion,
     satisfied: result.passed,
     decided: true,
-    detail: `scenario ${check.scenarioId} ${result.passed ? 'passed' : 'failed'} over ${result.repetitions.length} repetition(s)`,
+    detail: `scenario ${check.scenarioId} ${result.passed ? 'passed' : 'failed'} over ${formatCount(result.repetitions.length, 'repetition')}`,
   };
 };
 

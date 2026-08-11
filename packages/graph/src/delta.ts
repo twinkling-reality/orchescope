@@ -1,4 +1,4 @@
-import { derivedEvidence, spanEvidence } from '@orchescope/domain';
+import { derivedEvidence, formatCount, spanEvidence } from '@orchescope/domain';
 import type {
   Component,
   ComponentId,
@@ -304,7 +304,7 @@ const duplicateSideEffects = (
       producer: PRODUCER,
       rule: 'duplicate_side_effect',
       inputs: bucket.evidence,
-      note: `${key} occurred ${bucket.maxPerRun} times within a single run, and ${bucket.occurrences} times across ${bucket.runIds.size} run(s)`,
+      note: `${key} occurred ${bucket.maxPerRun} times within a single run, and ${bucket.occurrences} times across ${formatCount(bucket.runIds.size, 'run')}`,
     });
     const componentId = [...bucket.componentIds][0];
     duplicates.push({
