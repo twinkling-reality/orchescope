@@ -30,7 +30,7 @@ It speaks the protocol on stdio and writes nothing to standard output that is no
 
 ## The tools
 
-Fifteen, and the read only ones are annotated as such so a client can decide what to allow without asking:
+Seventeen, and the read only ones are annotated as such so a client can decide what to allow without asking:
 
 **Reading, no execution:**
 
@@ -50,6 +50,7 @@ Fifteen, and the read only ones are annotated as such so a client can decide wha
 | --- | --- |
 | `scan_agent_system` | Component counts by kind, edge count and the coverage block |
 | `audit_agent_system` | The summary, the delta, a bounded page of findings, loop standing, the one next action (CLI argv and MCP tool when one exists), and capabilities |
+| `import_trace` | Imports OTLP JSON or newline delimited spans from a path inside the repository and stores a run |
 | `create_improvement_goal` | A goal and the prompt to implement it |
 | `compare_runs` | A verdict with per metric directions and sample sizes |
 | `validate_improvement_goal` | Per criterion outcomes, each satisfied, refused or undecided |
@@ -58,6 +59,7 @@ Fifteen, and the read only ones are annotated as such so a client can decide wha
 
 | Tool | Returns |
 | --- | --- |
+| `run_traced` | Runs an argv under a loopback receiver and stores the spans as a run |
 | `run_scenario` | Pass or fail, run identifiers, reliability, evaluator outcomes |
 | `benchmark_variants` | Per variant results with withheld quantiles named |
 | `inject_faults` | Per fault outcomes and anything that could not be applied |
@@ -70,16 +72,17 @@ on.
 
 The loop is designed so an agent never has to guess whether its change helped.
 
-**1. Establish a baseline.** The agent runs `run_scenario` on the scenario the goal will name, or you do it first. Without a
+**1. Establish a baseline.** Prefer the next action `audit_agent_system` returns. On a repository with no runs that is
+usually `run_traced` (or `import_trace` when spans already exist), or `run_scenario` when a scenario is defined. Without a
 baseline there is nothing to compare against, and the comparison will say so rather than inventing one.
 
-**2. Find something worth changing.** `audit_agent_system`, then `get_findings` with `goalEligibleOnly: true`. Eligibility is
-the filter that matters: a finding needing a design decision is marked as not eligible with the reason, so the agent does not
-start work that cannot be verified.
+**2. Find something worth changing.** `audit_agent_system` again after the run, then `get_findings` with
+`goalEligibleOnly: true`. Eligibility is the filter that matters: a finding needing a design decision is marked as not
+eligible with the reason, so the agent does not start work that cannot be verified.
 
 **3. Get the task.** `create_improvement_goal` with the finding identifier returns the goal and the prompt. The prompt states
 the problem, the evidence, the paths that may be written, what must not change, the acceptance criteria and the exact
-validation command.
+validation command. Audit will not recommend this step until at least one run is stored.
 
 **4. Make the change**, within the write scope. The scope is not advisory: it exists because a change that touched twenty
 files cannot be attributed to a measured outcome.

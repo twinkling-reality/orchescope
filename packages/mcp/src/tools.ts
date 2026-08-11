@@ -165,6 +165,40 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     executes: false,
   },
   {
+    name: 'import_trace',
+    description:
+      'Import OpenTelemetry spans from a file inside the repository (OTLP JSON or newline delimited spans) and store them as a run. Does not execute the audited system. Returns the run identifier and span counts, never the spans themselves.',
+    input: Type.Object(
+      {
+        path: Type.String({ minLength: 1, maxLength: 300 }),
+        label: Type.Optional(Type.String({ maxLength: 120 })),
+      },
+      { additionalProperties: false },
+    ),
+    annotations: effectful('Import a trace', true),
+    executes: false,
+  },
+  {
+    name: 'run_traced',
+    description:
+      'Run a command as an argument array under a loopback OpenTelemetry receiver and store the spans as a run. Returns the run identifier, span count and exit code. Requires policy.allowProcessSpawn and an allowedCommands entry. Pass the real argv that starts the system; never a shell string. When audit names this tool without a command, supply the argv yourself.',
+    input: Type.Object(
+      {
+        command: Type.Optional(
+          Type.Array(Type.String({ minLength: 1, maxLength: 500 }), {
+            minItems: 1,
+            maxItems: 64,
+          }),
+        ),
+        label: Type.Optional(Type.String({ maxLength: 120 })),
+        timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 3_600_000 })),
+      },
+      { additionalProperties: false },
+    ),
+    annotations: effectful('Run a traced command', false),
+    executes: true,
+  },
+  {
     name: 'run_scenario',
     description:
       'Execute one scenario and return its result: task success, evaluator outcomes, reliability and the run identifiers. Runs the audited system, so it requires the project policy to allow process execution.',

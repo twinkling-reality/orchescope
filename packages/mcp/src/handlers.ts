@@ -8,11 +8,13 @@ import {
   compareUseCase,
   createGoalFromFinding,
   discoverScenarios,
+  importTrace,
   loadScenario,
   runAudit,
   runBenchmarkUseCase,
   runChaosUseCase,
   runScenarioUseCase,
+  runTrace,
   validateGoalOutcome,
 } from '@orchescope/usecases';
 import type { Workspace } from '@orchescope/workspace';
@@ -379,6 +381,80 @@ const listScenarios = (context: HandlerContext, _args: Record<string, unknown>):
   };
 };
 
+const importTraceTool = (context: HandlerContext, args: Record<string, unknown>): ToolOutcome => {
+  const path = string(args['path']);
+  if (path === undefined || path.length === 0) {
+    throw new OrchescopeError(
+      'INVALID_ARGUMENT',
+      'import_trace needs a path inside the repository.',
+    );
+  }
+  const label = string(args['label']);
+  const result = importTrace({
+    workspace: context.workspace,
+    file: path,
+    orchescopeVersion: context.orchescopeVersion,
+    ...(label === undefined ? {} : { label }),
+  });
+  return {
+    text: `Imported run ${result.run.id}: ${result.spanCount} span(s) from ${result.serviceNames.length} service(s).`,
+    data: {
+      runId: result.run.id,
+      status: result.run.status,
+      spanCount: result.spanCount,
+      services: result.serviceNames,
+      label: result.run.label,
+    },
+  };
+};
+
+const runTracedTool = async (
+  context: HandlerContext,
+  args: Record<string, unknown>,
+): Promise<ToolOutcome> => {
+  const command = stringArray(args['command']);
+  if (command === undefined || command.length === 0) {
+    throw new OrchescopeError(
+      'INVALID_ARGUMENT',
+      'run_traced needs the argv that starts the audited system.',
+      {
+        remediation:
+          'Pass command as an argument array, for example ["node", "apps/demo/src/main.ts"]. A shell string is refused.',
+      },
+    );
+  }
+  if (command.some((part) => part.startsWith('<') && part.endsWith('>'))) {
+    throw new OrchescopeError(
+      'INVALID_ARGUMENT',
+      'run_traced was given a placeholder instead of a real command.',
+      {
+        remediation:
+          'Replace the placeholder with the argv that starts your system. Orchescope will not invent one.',
+      },
+    );
+  }
+  const label = string(args['label']);
+  const result = await runTrace({
+    workspace: context.workspace,
+    command,
+    orchescopeVersion: context.orchescopeVersion,
+    ...(label === undefined ? {} : { label }),
+    ...(args['timeoutMs'] === undefined ? {} : { timeoutMs: number(args['timeoutMs'], 0) }),
+  });
+  return {
+    text: `Traced run ${result.run.id}: ${result.spanCount} span(s) from ${result.serviceNames.length} service(s), exit ${result.exitCode ?? 'unknown'}.`,
+    data: {
+      runId: result.run.id,
+      status: result.run.status,
+      spanCount: result.spanCount,
+      services: result.serviceNames,
+      exitCode: result.exitCode,
+      receiverUrl: result.receiverUrl,
+      otlpVariables: result.otlpVariables,
+    },
+  };
+};
+
 const runScenario = async (
   context: HandlerContext,
   args: Record<string, unknown>,
@@ -575,6 +651,8 @@ const HANDLERS: Readonly<
   create_improvement_goal: createImprovementGoal,
   get_improvement_goal: getImprovementGoal,
   list_scenarios: listScenarios,
+  import_trace: importTraceTool,
+  run_traced: runTracedTool,
   run_scenario: runScenario,
   benchmark_variants: benchmarkVariants,
   inject_faults: injectFaults,

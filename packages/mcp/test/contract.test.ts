@@ -78,12 +78,14 @@ describe('the advertised tools', () => {
   });
 
   it('name the tools that run the audited system, and only those', () => {
-    // Scanning and auditing read source and stored runs; they never start the system. Only these three do.
+    // Scanning and auditing read source and stored runs; they never start the system. Importing a
+    // span file does not either. Only these four execute the audited process.
     const executing = TOOL_DEFINITIONS.filter((tool) => tool.executes).map((tool) => tool.name);
     assert.deepEqual(executing.slice().sort(), [
       'benchmark_variants',
       'inject_faults',
       'run_scenario',
+      'run_traced',
     ]);
   });
 

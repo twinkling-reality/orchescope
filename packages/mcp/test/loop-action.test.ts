@@ -37,7 +37,7 @@ describe('toAgentNextAction', () => {
     );
   });
 
-  it('leaves trace as argv only, because MCP has no twin for it', () => {
+  it('maps a placeholder wrap command to run_traced without inventing an argv', () => {
     assert.deepEqual(
       toAgentNextAction({
         kind: 'command',
@@ -46,7 +46,38 @@ describe('toAgentNextAction', () => {
       {
         kind: 'command',
         argv: ['orchescope', 'trace', '--', '<the command that starts your system>'],
-        tool: null,
+        tool: { name: 'run_traced', arguments: {} },
+      },
+    );
+  });
+
+  it('maps a concrete wrap command onto run_traced with that argv', () => {
+    assert.deepEqual(
+      toAgentNextAction({
+        kind: 'command',
+        argv: ['orchescope', 'trace', '--', 'node', 'apps/demo/src/main.ts'],
+      }),
+      {
+        kind: 'command',
+        argv: ['orchescope', 'trace', '--', 'node', 'apps/demo/src/main.ts'],
+        tool: {
+          name: 'run_traced',
+          arguments: { command: ['node', 'apps/demo/src/main.ts'] },
+        },
+      },
+    );
+  });
+
+  it('maps an import onto import_trace', () => {
+    assert.deepEqual(
+      toAgentNextAction({
+        kind: 'command',
+        argv: ['orchescope', 'trace', '--import', 'spans.json'],
+      }),
+      {
+        kind: 'command',
+        argv: ['orchescope', 'trace', '--import', 'spans.json'],
+        tool: { name: 'import_trace', arguments: { path: 'spans.json' } },
       },
     );
   });

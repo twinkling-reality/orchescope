@@ -161,14 +161,22 @@ function goalStep(bundle: ReportBundle): LoopStep {
     bundle.findings.find(
       (finding) => finding.polarity === 'risk' && finding.goalReadiness.eligible,
     ) ?? null;
+  /*
+   * Without a run, a goal whose acceptance criteria include metric comparisons cannot close step
+   * five. Standing then walks to rerun or measure. Eligible findings wait until a baseline exists.
+   */
+  const readyToHandOff = eligible !== null && bundle.runs.length > 0;
   return {
     id: 'goal',
     ordinal: 2,
     title: 'Goal',
     state: 'blocked',
     summary: 'nothing handed off yet',
-    detail: [],
-    command: eligible === null ? null : goalCommand(eligible.id),
+    detail:
+      eligible !== null && bundle.runs.length === 0
+        ? ['needs a baseline run before a goal can be verified']
+        : [],
+    command: readyToHandOff ? goalCommand(eligible.id) : null,
   };
 }
 

@@ -26,6 +26,9 @@ Do not rebuild a website. Do not ask which direction to go. Design against `apps
 - Agents are the primary operators. Humans install and glance.
 - No score out of 100. Honest fraction is check suite coverage.
 - Presentation modules select and bound bundle facts. They never analyse again.
+- One next action, shared by TUI, `--json` and MCP (`loopProgress` + `resolveNextAction`).
+- With zero runs, standing prefers a baseline (`trace` / scenario) over `goal create`.
+- MCP ingest twins: `import_trace` and `run_traced`. Never execute the printed placeholder.
 
 ## Failures not to repeat
 

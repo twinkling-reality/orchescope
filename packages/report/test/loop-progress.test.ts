@@ -87,16 +87,47 @@ describe('loopProgress', () => {
     );
   });
 
-  it('stands the reader at the first incomplete step that carries a command', () => {
-    const progress = loopProgress(bundle({ findings: [risk('OSC-REL-0001')] }), [rule('fired')]);
+  it('stands at goal create once a baseline run exists', () => {
+    const progress = loopProgress(
+      bundle({
+        findings: [risk('OSC-REL-0001')],
+        runs: [{ id: 'run_0000000000000001' }] as unknown as ReportBundle['runs'],
+      }),
+      [rule('fired')],
+    );
     assert.equal(progress.standingAt?.id, 'goal');
     assert.deepEqual(progress.nextCommand, ['orchescope', 'goal', 'create', 'OSC-REL-0001']);
   });
 
   /*
+   * Eligible findings without a run used to win standing with goal create, while measure still said
+   * checks were blocked on a run. Thirteen of the sixteen corpus reports have no runs. The goal's
+   * metric criteria cannot close step five without a baseline, so standing walks to trace.
+   */
+  it('prefers a baseline run over goal create when nothing has been run', () => {
+    const progress = loopProgress(bundle({ findings: [risk('OSC-REL-0001')] }), [
+      rule('insufficient_evidence'),
+    ]);
+    assert.equal(progress.standingAt?.id, 'measure');
+    assert.deepEqual(progress.nextCommand?.slice(0, 2), ['orchescope', 'trace']);
+    assert.match(progress.steps.find((step) => step.id === 'goal')?.detail[0] ?? '', /baseline/);
+  });
+
+  it('prefers a scenario run over trace when scenarios exist and nothing has been run', () => {
+    const progress = loopProgress(
+      bundle({
+        findings: [risk('OSC-REL-0001')],
+        scenarios: [{ id: 'support-desk' }] as unknown as ReportBundle['scenarios'],
+      }),
+      [],
+    );
+    assert.equal(progress.standingAt?.id, 'rerun');
+    assert.deepEqual(progress.nextCommand, ['orchescope', 'test', '--scenario', 'support-desk']);
+  });
+
+  /*
    * A goal with nothing eligible to hand off used to park standingAt on a null command while measure
-   * still named `trace`. Five of the sixteen corpus reports hit that shape. The reader stands where
-   * there is something to type.
+   * still named `trace`. The reader stands where there is something to type.
    */
   it('walks past a blocked step with no command to the next one that has one', () => {
     const progress = loopProgress(bundle(), [rule('insufficient_evidence')]);
@@ -110,15 +141,27 @@ describe('loopProgress', () => {
     assert.match(audit?.detail[0] ?? '', /not the same as nothing being wrong/);
   });
 
-  it('names the first eligible problem in the command that writes a goal', () => {
-    const progress = loopProgress(bundle({ findings: [risk('OSC-REL-0001')] }), []);
+  it('names the first eligible problem in the command that writes a goal once a run exists', () => {
+    const progress = loopProgress(
+      bundle({
+        findings: [risk('OSC-REL-0001')],
+        runs: [{ id: 'run_0000000000000001' }] as unknown as ReportBundle['runs'],
+      }),
+      [],
+    );
     const goal = progress.steps.find((step) => step.id === 'goal');
     assert.equal(goal?.state, 'blocked');
     assert.deepEqual(goal?.command, ['orchescope', 'goal', 'create', 'OSC-REL-0001']);
   });
 
   it('offers no goal command when no problem has enough behind it', () => {
-    const progress = loopProgress(bundle({ findings: [risk('OSC-REL-0001', false)] }), []);
+    const progress = loopProgress(
+      bundle({
+        findings: [risk('OSC-REL-0001', false)],
+        runs: [{ id: 'run_0000000000000001' }] as unknown as ReportBundle['runs'],
+      }),
+      [],
+    );
     assert.equal(progress.steps.find((step) => step.id === 'goal')?.command, null);
   });
 

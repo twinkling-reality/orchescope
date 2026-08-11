@@ -71,8 +71,19 @@ export const auditResult = (over: {
   readonly coverage?: Coverage;
   readonly findings?: readonly Finding[];
   readonly reconciliation?: AuditResult['reconciliation'];
-}): AuditResult =>
-  ({
+  readonly runs?: AuditResult['bundle']['runs'];
+}): AuditResult => {
+  /*
+   * A reconciliation without a run in the bundle is a fixture that lied about its own shape: the join
+   * region would render while the loop said nothing had been run. When reconciliation is present and
+   * the caller did not name runs, one placeholder run keeps both regions honest.
+   */
+  const runs =
+    over.runs ??
+    (over.reconciliation === undefined
+      ? []
+      : ([{ id: 'run_0000000000000001' }] as unknown as AuditResult['bundle']['runs']));
+  return {
     graph: { coverage: over.coverage ?? coverage(), provenance: { scanId: 'scan_0' } },
     findingSet: { rulesEvaluated: [] },
     reconciliation: over.reconciliation,
@@ -92,12 +103,13 @@ export const auditResult = (over: {
       goals: [],
       scenarios: [],
       scenarioRuns: [],
-      runs: [],
+      runs,
       componentMetrics: [],
       chaosReports: [],
       comparisons: [],
     },
-  }) as unknown as AuditResult;
+  } as unknown as AuditResult;
+};
 
 export const reconciliation = (over: {
   readonly exercised?: number;

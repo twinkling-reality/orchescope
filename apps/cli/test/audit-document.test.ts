@@ -60,7 +60,7 @@ describe('a repository with a system, a run and two problems', () => {
         '1 audit         + done       no check had anything to look at',
         '2 goal          . not yet    nothing handed off yet',
         '3 rerun         . not yet    no scenario to repeat',
-        '4 measure       . not yet    nothing has been run',
+        '4 measure       + done       1 run recorded',
         '5 did it help   . not yet    needs a before and an after',
         '',
         'findings        2 risks: 1 high, 1 medium; no strengths',

@@ -1,33 +1,66 @@
 # Open product decisions after the browser cut
 
-The browser workspace, report server, standalone HTML export and Playwright UI suite are gone. What remains below is
-what still needs a decision for the agent-first product.
+The browser workspace, report server, standalone HTML export and Playwright UI suite are gone. What remains
+below is what still needs work for the agent-first product, ordered by how much a reader or agent is
+misled by leaving it.
 
-Ordered by how much a reader or agent is misled by leaving it.
+## Settled directions (do not reopen without new evidence)
 
-## 1. Text the analysis packages write still speaks Orchescope
+### Next action is one shared policy
 
-**What is wrong.** Terminal and MCP prose still surfaces engine vocabulary: `declared`, `exercised`, `relation`,
-`run(s)` in some finding strings. Agents and humans both read these strings.
+`loopProgress` and `resolveNextAction` in `packages/report` own standing and the single advance. The
+terminal, `audit --json` and `audit_agent_system` render or map that decision. Agents must not scrape
+the TUI.
 
-**What would decide it.** Whether JSON and MCP are meant to speak the same language as the terminal document. If they
-are, one pass over findings, goals and comparison packages. Grammar slips are worth fixing either way.
+### Baseline before goal when there are no runs
 
-## 2. The coverage pair describes the reachable set, not the declared set
+When `bundle.runs.length === 0`, the goal step must not own the pasteable advance even if eligible
+findings exist. Standing walks to `rerun` (scenario present) or `measure` (`trace`). Goals whose
+acceptance criteria include metric comparisons cannot close step five without a baseline; offering
+`goal create` first invents a handoff that validate cannot decide.
 
-**What is wrong.** `ReconciliationDelta.coverage.declaredComponents` counts every component a run could have reached,
-including undeclared ones. See the earlier write-up in git history under the old TODO item 7.
+Encoding: null `goal.command` when there are no runs. Keep `standingAt` as the first incomplete step
+that carries a command. Do not reorder the five product steps.
 
-**What would decide it.** Whether the pair should describe the declared set or the reachable set, with finding text and
-both renderers moving in the same change.
+### MCP must be able to ingest a run
 
-## 3. Steps two to five rarely run on real repositories
+`import_trace` (no spawn) and `run_traced` (argv array, `policy.allowProcessSpawn`, refuse rather than
+downgrade) are the twins of the CLI. Map them in `loop-action`. Never silently remap wrap to import.
+Never execute the placeholder `<the command that starts your system>`.
 
-**What is wrong.** Measured across corpus bundles, most reports have no runs. The product value is the closed loop, and
-most first contacts never reach it.
+### Coverage pair means the declared set
 
-**What moved.** Audit `--json` and `audit_agent_system` now return loop standing, the one next action, and capabilities,
-so an agent does not have to invent the path or scrape the terminal. The terminal prints that same single advance.
+Long term, `coverage.declaredComponents` / `exercisedComponents` / `componentExerciseRate` describe
+observable components with `presence.static`, and how many of those also have `presence.runtime`.
+Undeclared components stay in `exercisedNotDeclared` only. Change `delta.ts`, the
+`observability-coverage` finding text, TUI join label, and schema comments in one atomic change. Do
+not quietly correct the fraction alone.
 
-**What would decide the rest.** Onboarding that makes one traced run and one goal the default first contact on a
-repository with no runs, not only an eligible `goal create` from discovery findings.
+### Vocabulary is one language
+
+Findings, goals, comparison, MCP summaries and the terminal speak the same nouns. Schema delta keys
+(`declaredNotExercised`, …) stay technical. Finding titles drop engine-only phrasing (`relation`,
+`run(s)`) where a human or agent reads them. Same-language pass, not a second rendering dictionary.
+
+### Join stays its own region; zeros stay news
+
+Findings stay above join. The join region stays absent when there are no runs. Zero deltas still
+render when a run was reconciled: a zero is the difference between "looked and clear" and "never
+looked." Collapsing zeros is rejected. Optional later polish: pack the four delta counts onto fewer
+lines without dropping zeros or inventing a percentage.
+
+## Implementation sequence
+
+| Tranche | Work | Status |
+| --- | --- | --- |
+| 1 | Baseline-before-goal; MCP `import_trace` + `run_traced` + loop-action mapping | done |
+| 2 | Coverage pair (declared-set) atomic across graph, finding, TUI, schema comments | open |
+| 3 | Vocabulary / grammar pass over findings, goals, comparison, MCP chrome | open |
+| optional | Join delta packing (keep zeros, shrink line count) | open |
+
+## Notes that remain true
+
+- Value is step five. An audit alone is inventory.
+- No browser, dashboard, HTML report, or second UI.
+- Colour carries nothing a symbol and a word do not already say.
+- Refuse rather than downgrade.
