@@ -29,21 +29,21 @@ the one sentence about it, so `grep` and `awk` read it as well as a person does:
 ```
 demo            33 components, 32 relations, 23 of 23 files read
 
-1 audit         + done       21 of 22 checks ran
+1 audit         + done       21 of 21 checks ran
 2 goal          + done       2 jobs written up
 3 rerun         + done       1 of 3 scenarios have been run
 4 measure       + done       10 runs recorded
                              8 faults injected, 1 broke the task
 5 did it help   ! undecided  unchanged: no metric moved enough to call
 
-findings        19 risks: 3 high, 6 medium, 10 low; 2 strengths
+findings        20 risks: 3 high, 6 medium, 11 low; 2 strengths
 OSC-RES-0003    ! high       tool_timeout on issue_refund: a side…   1 simulated
 OSC-REL-0005    ! high       Retry around issue_refund can repeat…  2 discovered
 OSC-REL-0002    ! high       refund happened 2 times in one run      11 observed
 OSC-REL-0003    ! medium     Model call to demo-small declares no…  4 discovered
 OSC-SEC-0001    ! medium     2 consequential operations have no a…  6 discovered
 OSC-ARCH-0001   ! medium     metering_record_usage runs without b…    5 observed
-findings        13 more risks, in the report
+findings        14 more risks, in the report
 
 join            14 of 21 declared components exercised
 join            7 declared never exercised · 1 exercised never declared
