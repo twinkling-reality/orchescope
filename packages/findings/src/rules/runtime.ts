@@ -1,5 +1,5 @@
 import { CONFIDENCE_BANDS, derivedEvidence, metricEvidence } from '@orchescope/domain';
-import type { ComponentId, EvidenceId } from '@orchescope/schema';
+import type { ComponentId, Evidence, EvidenceId } from '@orchescope/schema';
 import {
   clear,
   type FindingDraft,
@@ -473,12 +473,49 @@ export const unreliableRelationRule: Rule = {
   },
 };
 
+/**
+ * Support for a coverage claim once a rate exists.
+ *
+ * The rate is derived from the reconciliation counts and the runs that produced them. The rule owns
+ * minting that metric and citing discovery evidence from the named components. Firing with empty
+ * evidence is not an option: the engine would drop the draft as a silent omission, which is the
+ * opposite of "evidence or silence."
+ */
+const coverageClaimSupport = (
+  context: Parameters<Rule['evaluate']>[0],
+  rate: number,
+  componentIds: readonly ComponentId[],
+): { readonly newEvidence: readonly Evidence[]; readonly evidence: readonly EvidenceId[] } => {
+  const coverage = context.delta?.coverage;
+  if (coverage === undefined) {
+    return { newEvidence: [], evidence: [] };
+  }
+  const record = metricEvidence({
+    producer: PRODUCER,
+    runId: context.runs.map((entry) => entry.run.id).join(','),
+    metric: 'component_exercise_rate',
+    value: rate,
+    unit: 'fraction',
+    sampleSize: coverage.declaredComponents,
+    basis: 'observed',
+  });
+  const cited = componentIds.flatMap((componentId) => {
+    const component = context.graph.component(componentId);
+    return component === undefined ? [] : (component.evidence.slice(0, 1) as EvidenceId[]);
+  });
+  return { newEvidence: [record], evidence: cited.slice(0, 5) };
+};
+
 export const observabilityCoverageRule: Rule = {
   id: 'observability-coverage',
   category: 'observability',
   summary: 'How much of the declared system any run has exercised.',
   evaluate: (context) => {
     if (context.delta === undefined || context.runs.length === 0) {
+      const named = context.graph.graph.components.slice(0, 5).map((component) => component.id);
+      if (named.length === 0) {
+        return insufficient('no declared components exist to ground a coverage claim');
+      }
       return fired([
         {
           ruleId: 'observability-coverage',
@@ -492,10 +529,13 @@ export const observabilityCoverageRule: Rule = {
             'Every claim in this report comes from source and configuration analysis. Whether the declared system behaves as declared is unknown until a run is observed.',
           impact:
             'Reconciliation, latency, cost and resilience findings are all unavailable, and they are where most of the value is.',
-          components: context.graph.graph.components.slice(0, 5).map((component) => component.id),
-          evidence: context.graph.graph.components
+          components: named,
+          evidence: named
             .slice(0, 2)
-            .flatMap((component) => component.evidence.slice(0, 1)) as EvidenceId[],
+            .flatMap((componentId) => {
+              const component = context.graph.component(componentId);
+              return component === undefined ? [] : (component.evidence.slice(0, 1) as EvidenceId[]);
+            }),
           recommendation: {
             summary: 'Record one run with orchescope trace.',
             steps: [
@@ -513,7 +553,18 @@ export const observabilityCoverageRule: Rule = {
     }
     const rate = context.delta.coverage.componentExerciseRate;
     if (rate === undefined) return insufficient('no exercise rate could be computed');
+    const coverage = context.delta.coverage;
     if (rate >= 0.8) {
+      const exercised = context.graph.graph.components
+        .filter((component) => component.presence.static && component.presence.runtime)
+        .map((component) => component.id)
+        .slice(0, 10);
+      if (exercised.length === 0) {
+        return insufficient(
+          'an exercise rate was computed but no declared and exercised component is available to cite',
+        );
+      }
+      const support = coverageClaimSupport(context, rate, exercised);
       return fired([
         {
           ruleId: 'observability-coverage',
@@ -523,16 +574,33 @@ export const observabilityCoverageRule: Rule = {
           confidence: CONFIDENCE_BANDS.deterministic,
           basis: 'observed',
           title: `${Math.round(rate * 100)} percent of declared components were exercised`,
-          explanation: `${context.delta.coverage.exercisedComponents} of ${context.delta.coverage.declaredComponents} declared components appeared in at least one run, so the runtime findings in this report cover most of the system.`,
+          explanation: `${coverage.exercisedComponents} of ${coverage.declaredComponents} declared components appeared in at least one run, so the runtime findings in this report cover most of the system.`,
           impact: 'Conclusions about behaviour rest on evidence for most of the declared model.',
-          components: [],
-          evidence: [],
+          components: exercised,
+          newEvidence: support.newEvidence,
+          evidence: support.evidence,
+          metrics: [
+            {
+              name: 'component_exercise_rate',
+              value: Number(rate.toFixed(3)),
+              unit: 'fraction',
+              sampleSize: coverage.declaredComponents,
+              basis: 'observed',
+            },
+          ],
           goalEligible: false,
           goalReason: 'Nothing to change.',
           tags: ['positive', 'coverage'],
         },
       ]);
     }
+    const unexercised = context.delta.declaredNotExercised.components.slice(0, 10);
+    if (unexercised.length === 0) {
+      return insufficient(
+        'an exercise rate below the strength threshold was computed but no unexercised declared component is available to cite',
+      );
+    }
+    const support = coverageClaimSupport(context, rate, unexercised);
     return fired([
       {
         ruleId: 'observability-coverage',
@@ -542,10 +610,20 @@ export const observabilityCoverageRule: Rule = {
         confidence: CONFIDENCE_BANDS.deterministic,
         basis: 'observed',
         title: `Only ${Math.round(rate * 100)} percent of declared components were exercised`,
-        explanation: `${context.delta.coverage.exercisedComponents} of ${context.delta.coverage.declaredComponents} declared components appeared in a run. Runtime findings apply to that subset only.`,
+        explanation: `${coverage.exercisedComponents} of ${coverage.declaredComponents} declared components appeared in a run. Runtime findings apply to that subset only.`,
         impact: 'Most runtime conclusions do not cover the unexercised part of the system.',
-        components: context.delta.declaredNotExercised.components.slice(0, 10),
-        evidence: [],
+        components: unexercised,
+        newEvidence: support.newEvidence,
+        evidence: support.evidence,
+        metrics: [
+          {
+            name: 'component_exercise_rate',
+            value: Number(rate.toFixed(3)),
+            unit: 'fraction',
+            sampleSize: coverage.declaredComponents,
+            basis: 'observed',
+          },
+        ],
         recommendation: {
           summary: 'Add scenarios that reach the unexercised components.',
           steps: [
