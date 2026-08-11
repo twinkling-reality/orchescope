@@ -2,7 +2,7 @@
  * The reconciliation: how much of the declared system a run has ever reached, and the four deltas.
  *
  * This is the join the product exists to compute, so it gets its own key and its own region rather than
- * being folded into a step's sentence. It renders only when a run has been ingested. When none has, the
+ * being folded into a step's sentence. It renders only when a run has been recorded. When none has, the
  * MEASURE step already prices that absence, names how many checks it blocks and carries the command
  * that lifts it, so a second copy here would be one absence reported as two faults.
  */
@@ -27,31 +27,33 @@ const fractionRow = (delta: Reconciliation): Row => ({
 });
 
 /**
- * One row per delta, each keeping the noun the product uses for it everywhere else.
+ * The four deltas packed onto two lines, each keeping the noun the product uses for it everywhere else.
  *
- * `1 duplicated` does not say what was duplicated, and three surfaces using three names for one delta is
- * how a reader stops believing any of them. Four rows rather than one packed line because the phrases
- * are what makes them mean anything, and four counts with their nouns do not fit a single line at
- * eighty columns once any of them reaches four figures.
+ * Pairing declared-against-exercised on one line and contradiction-against-duplicate on the next keeps
+ * the region short without inventing a percentage or dropping a zero. A zero here is as much news as a
+ * one: it is the difference between a contradiction nobody found and a contradiction nobody looked for,
+ * and the reader can tell which because the region only renders when a run was reconciled.
  *
- * A delta of zero renders. A zero here is as much news as a one: it is the difference between a
- * contradiction nobody found and a contradiction nobody looked for, and the reader can tell which
- * because the region only renders when a run was reconciled.
+ * Two lines rather than one: four counts with their nouns do not fit eighty columns once any of them
+ * reaches four figures, and truncating a packed single line would strip the trailing nouns first.
  */
-const deltaRows = (delta: Reconciliation): readonly Row[] =>
-  [
-    `${formatCount(delta.declaredNotExercised.components.length, 'declared component')} never exercised`,
-    `${formatCount(delta.exercisedNotDeclared.components.length, 'exercised component')} never declared`,
-    formatCount(delta.contradictions.length, 'contradicted declaration'),
-    formatCount(delta.duplicateSideEffects.length, 'duplicated external effect'),
+const deltaRows = (delta: Reconciliation): readonly Row[] => {
+  const notExercised = delta.declaredNotExercised.components.length;
+  const notDeclared = delta.exercisedNotDeclared.components.length;
+  const contradictions = delta.contradictions.length;
+  const duplicates = delta.duplicateSideEffects.length;
+  return [
+    `${notExercised} declared never exercised · ${notDeclared} exercised never declared`,
+    `${contradictions} contradicted · ${formatCount(duplicates, 'duplicated external effect')}`,
   ].map((text) => ({ kind: 'keyed', key: 'join', text }) as const);
+};
 
 /**
- * Five lines, fixed, or none.
+ * Three lines, fixed, or none.
  *
- * One for the fraction and one for each of the four deltas. None at all when no run has been ingested,
- * and that absence is not a silent one: the MEASURE step states it, and an empty region may not stand in
- * for a refusal.
+ * One for the fraction and two for the four deltas. None at all when no run has been recorded, and that
+ * absence is not a silent one: the MEASURE step states it, and an empty region may not stand in for a
+ * refusal.
  */
 export const joinRegion = (reconciliation: AuditResult['reconciliation']): Region =>
   reconciliation === undefined ? [] : [fractionRow(reconciliation), ...deltaRows(reconciliation)];

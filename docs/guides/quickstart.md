@@ -46,16 +46,14 @@ OSC-ARCH-0001   ! medium     metering_record_usage runs without b…    5 observ
 findings        13 more risks, in the report
 
 join            14 of 21 declared components exercised
-join            7 declared components never exercised
-join            1 exercised component never declared
-join            0 contradicted declarations
-join            1 duplicated external effect
+join            7 declared never exercised · 1 exercised never declared
+join            0 contradicted · 1 duplicated external effect
 
 run             orchescope test --scenario support-desk --repeat 5
 ```
 
 Findings sit above the join so the worst problem is visible before the coverage rows. `join` is the
-reconciliation, and the four rows under the fraction are the four deltas this product exists to
+reconciliation, and the two packed rows under the fraction are the four deltas this product exists to
 compute. Every finding row ends with how many evidence records stand behind it and how they were
 established, because a title is itself a numeric claim. There is one `run` row: the command that
 advances the loop. A `next` row carries an instruction that names a file to edit, and is never a

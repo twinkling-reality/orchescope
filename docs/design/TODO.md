@@ -46,8 +46,8 @@ Findings, goals, comparison, MCP summaries and the terminal speak the same nouns
 
 Findings stay above join. The join region stays absent when there are no runs. Zero deltas still
 render when a run was reconciled: a zero is the difference between "looked and clear" and "never
-looked." Collapsing zeros is rejected. Optional later polish: pack the four delta counts onto fewer
-lines without dropping zeros or inventing a percentage.
+looked." Collapsing zeros is rejected. The four delta counts pack onto two lines under the fraction
+without dropping zeros or inventing a percentage.
 
 ## Implementation sequence
 
@@ -56,7 +56,7 @@ lines without dropping zeros or inventing a percentage.
 | 1 | Baseline-before-goal; MCP `import_trace` + `run_traced` + loop-action mapping | done |
 | 2 | Coverage pair (declared-set) atomic across graph, finding, TUI, schema comments | done |
 | 3 | Vocabulary / grammar pass over findings, goals, comparison, MCP chrome | done |
-| optional | Join delta packing (keep zeros, shrink line count) | open |
+| optional | Join delta packing (keep zeros, shrink line count) | done |
 
 ## Notes that remain true
 

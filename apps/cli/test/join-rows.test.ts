@@ -8,7 +8,7 @@ import { reconciliation } from './audit-fixture.ts';
  * The join, which is the thing no other tool computes.
  *
  * The two properties that matter are that the fraction is labelled for the declared set, and that the
- * region is absent rather than empty when no run has been ingested.
+ * region is absent rather than empty when no run has been recorded.
  */
 
 const render = (delta: Parameters<typeof joinRegion>[0]): readonly string[] => {
@@ -16,7 +16,7 @@ const render = (delta: Parameters<typeof joinRegion>[0]): readonly string[] => {
   return joinRegion(delta).map((row) => renderRow(row, layout));
 };
 
-describe('when no run has been ingested', () => {
+describe('when no run has been recorded', () => {
   /*
    * Absent, not empty. The measure step already prices the absence, names how many checks it blocks
    * and carries the command that lifts it, so a second copy here is one absence reported as two
@@ -56,12 +56,10 @@ describe('the fraction', () => {
 });
 
 describe('the four deltas', () => {
-  it('keeps the noun the product uses for each one everywhere else', () => {
+  it('packs onto two lines without inventing a percentage', () => {
     assert.deepEqual(render(reconciliation({})).slice(1), [
-      'join            7 declared components never exercised',
-      'join            1 exercised component never declared',
-      'join            0 contradicted declarations',
-      'join            1 duplicated external effect',
+      'join            7 declared never exercised · 1 exercised never declared',
+      'join            0 contradicted · 1 duplicated external effect',
     ]);
   });
 
@@ -74,12 +72,10 @@ describe('the four deltas', () => {
     const none = render(
       reconciliation({ notExercised: 0, notDeclared: 0, contradictions: 0, duplicates: 0 }),
     );
-    assert.equal(none.length, 5);
+    assert.equal(none.length, 3);
     assert.deepEqual(none.slice(1), [
-      'join            0 declared components never exercised',
-      'join            0 exercised components never declared',
-      'join            0 contradicted declarations',
-      'join            0 duplicated external effects',
+      'join            0 declared never exercised · 0 exercised never declared',
+      'join            0 contradicted · 0 duplicated external effects',
     ]);
   });
 
