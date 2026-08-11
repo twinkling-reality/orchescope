@@ -69,7 +69,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: 'audit_agent_system',
     description:
-      'Run a full audit: static discovery, reconciliation against stored runs, and the deterministic finding rules. Returns the reconciliation delta, counts by severity and the identifiers of the highest severity findings.',
+      'Run a full audit: static discovery, reconciliation against stored runs, and the deterministic finding rules. Returns the reconciliation delta, a bounded page of findings, where the repository stands in the five step loop, the one next action (CLI argv and MCP tool when one exists), and which capabilities the current policy allows.',
     input: Type.Object(
       {
         runLimit: Type.Optional(Type.Integer({ minimum: 0, maximum: 50 })),

@@ -8,24 +8,36 @@ import { adapter, auditResult, coverage } from './audit-fixture.ts';
 /**
  * What to do next, answered once.
  *
- * The version before this answered it twice, from two policies, and on the bundled demonstration the
- * two disagreed about which command to name. The ordering below is the whole policy: a rejected input
- * before a missing one, a missing declaration before runtime evidence, runtime evidence before
- * anything that needs it.
+ * The version before this listed every loop command that carried an argv, so on `crewai` a reader saw
+ * both `goal create` and `trace`. The ordering below is the whole policy: a rejected input before a
+ * missing one, a missing declaration before runtime evidence, and exactly one pasteable advance from
+ * the loop.
  */
 
 const step = (id: string, command: readonly string[] | null): LoopStep =>
   ({ id, ordinal: 2, title: id, state: 'blocked', summary: '', detail: [], command }) as LoopStep;
 
-const progress = (steps: readonly LoopStep[]): LoopProgress =>
-  ({ steps, coverage: { ran: 0, blocked: 0, total: 0 }, standingAt: null }) as LoopProgress;
+const progress = (
+  steps: readonly LoopStep[],
+  nextCommand: readonly string[] | null = steps.find((entry) => entry.command !== null)?.command ??
+    null,
+): LoopProgress =>
+  ({
+    steps,
+    coverage: { ran: 0, blocked: 0, total: 0 },
+    standingAt: steps.find((entry) => entry.command !== null) ?? null,
+    nextCommand,
+  }) as LoopProgress;
 
 const render = (
   result: Parameters<typeof runRegion>[0]['result'],
   steps: readonly LoopStep[] = [],
+  nextCommand?: readonly string[] | null,
 ): readonly string[] => {
   const layout = layoutFor(80);
-  return runRegion({ result, progress: progress(steps) }).map((row) => renderRow(row, layout));
+  return runRegion({ result, progress: progress(steps, nextCommand) }).map((row) =>
+    renderRow(row, layout),
+  );
 };
 
 describe('a repository with no detected agent system', () => {
@@ -43,10 +55,9 @@ describe('a repository with no detected agent system', () => {
     );
   });
 
-  it('is told the file to write in as well as the command that creates it', () => {
+  it('is told the one command that creates the manifest template', () => {
     assert.deepEqual(render(auditResult({ agentSystemDetected: false })), [
       'run             orchescope init --manifest',
-      'next            declare your components in .orchescope/manifest.yaml',
     ]);
   });
 
@@ -87,16 +98,17 @@ describe('a manifest the validator rejected', () => {
 });
 
 describe('a repository the loop is waiting on', () => {
-  it('lists the commands in loop order, most urgent first', () => {
+  it('prints the one loop command, even when later steps also carry one', () => {
     assert.deepEqual(
-      render(auditResult({}), [
-        step('goal', ['orchescope', 'goal', 'create', 'OSC-REL-0001']),
-        step('measure', ['orchescope', 'trace', '--', '<the command that starts your system>']),
-      ]),
-      [
-        'run             orchescope goal create OSC-REL-0001',
-        "run             orchescope trace -- '<the command that starts your system>'",
-      ],
+      render(
+        auditResult({}),
+        [
+          step('goal', ['orchescope', 'goal', 'create', 'OSC-REL-0001']),
+          step('measure', ['orchescope', 'trace', '--', '<the command that starts your system>']),
+        ],
+        ['orchescope', 'goal', 'create', 'OSC-REL-0001'],
+      ),
+      ['run             orchescope goal create OSC-REL-0001'],
     );
   });
 
@@ -107,18 +119,11 @@ describe('a repository the loop is waiting on', () => {
     assert.equal(line, "run             orchescope trace -- 'a b'");
   });
 
-  it('never lists more than the three commands the loop can carry at once', () => {
-    const many = ['goal', 'rerun', 'measure', 'verdict', 'extra'].map((id) =>
-      step(id, ['orchescope', id]),
-    );
-    assert.equal(render(auditResult({}), many).length, 3);
-  });
-
   /*
    * A closed loop has nothing waiting on the reader, and a row inviting them to reopen a report is not
    * a thing the loop is waiting on. The loop's own five rows already say every step is done.
    */
   it('contributes nothing when every step is done', () => {
-    assert.deepEqual(render(auditResult({}), [step('goal', null), step('rerun', null)]), []);
+    assert.deepEqual(render(auditResult({}), [step('goal', null), step('rerun', null)], null), []);
   });
 });

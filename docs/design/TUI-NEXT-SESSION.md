@@ -39,11 +39,12 @@ Do not rebuild a website. Do not ask which direction to go. Design against `apps
 
 | file | what it is |
 | --- | --- |
-| `packages/report/src/loop-progress.ts` | five steps from bundle facts |
+| `packages/report/src/loop-progress.ts` | five steps, standing, one `nextCommand` |
+| `packages/report/src/next-action.ts` | shared next action for TUI, `--json`, MCP |
+| `packages/report/src/commands.ts` | argv strings the next action prints |
 | `apps/cli/src/terminal/document-grid.ts` | anchors, tiers, row kinds |
-| `apps/cli/src/terminal/audit-document.ts` | region order |
+| `apps/cli/src/terminal/audit-document.ts` | region order (findings before join) |
 | `apps/cli/src/terminal/progress-renderer.ts` | transient progress |
-| `apps/cli/src/terminal/commands.ts` | argv strings the document prints |
 
 ## What must pass
 

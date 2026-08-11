@@ -87,9 +87,21 @@ describe('loopProgress', () => {
     );
   });
 
-  it('stands the reader at the first step that is not done', () => {
-    const progress = loopProgress(bundle(), [rule('fired')]);
+  it('stands the reader at the first incomplete step that carries a command', () => {
+    const progress = loopProgress(bundle({ findings: [risk('OSC-REL-0001')] }), [rule('fired')]);
     assert.equal(progress.standingAt?.id, 'goal');
+    assert.deepEqual(progress.nextCommand, ['orchescope', 'goal', 'create', 'OSC-REL-0001']);
+  });
+
+  /*
+   * A goal with nothing eligible to hand off used to park standingAt on a null command while measure
+   * still named `trace`. Five of the sixteen corpus reports hit that shape. The reader stands where
+   * there is something to type.
+   */
+  it('walks past a blocked step with no command to the next one that has one', () => {
+    const progress = loopProgress(bundle(), [rule('insufficient_evidence')]);
+    assert.equal(progress.standingAt?.id, 'measure');
+    assert.deepEqual(progress.nextCommand?.slice(0, 2), ['orchescope', 'trace']);
   });
 
   it('says the audit ran even on a repository where nothing was found', () => {
@@ -222,5 +234,6 @@ describe('loopProgress', () => {
       [rule('fired')],
     );
     assert.equal(closed.standingAt, null);
+    assert.equal(closed.nextCommand, null);
   });
 });

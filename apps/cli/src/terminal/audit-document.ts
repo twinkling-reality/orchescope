@@ -45,10 +45,10 @@ const accented = (
 /**
  * Region order, and the reason for it.
  *
- * What this repository is, then where it stands in the loop, then the join the loop's fourth step
- * produced, then what the first step found, then what could not be looked at, then what this run wrote,
- * then what to do. Action is last because it is nearest the cursor, which is the position that replaces
- * the frame the commands used to sit in.
+ * What this repository is, then where it stands in the loop, then what the audit found, then the join
+ * a run produced, then what could not be looked at, then what this run wrote, then the one command that
+ * advances the loop. Findings sit above the join so the worst problem is not buried under five coverage
+ * rows. Action is last because it is nearest the cursor.
  */
 export const auditDocument = (input: AuditDocumentInput): string => {
   const { result, layout } = input;
@@ -66,8 +66,8 @@ export const auditDocument = (input: AuditDocumentInput): string => {
         agentSystemDetected: result.agentSystemDetected,
         joinRenders: join.length > 0,
       }),
-      join,
       findingRegion({ risks, strengths, verbose: input.verbose }),
+      join,
       gapRegion(result.graph.coverage, layout),
       /*
        * A written path is exempt for the reason a command is: half a path names no file. A reader who

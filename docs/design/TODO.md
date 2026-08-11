@@ -26,5 +26,8 @@ both renderers moving in the same change.
 **What is wrong.** Measured across corpus bundles, most reports have no runs. The product value is the closed loop, and
 most first contacts never reach it.
 
-**What would decide it.** Onboarding that makes one traced run and one goal the default agent path, not optional
-advanced commands.
+**What moved.** Audit `--json` and `audit_agent_system` now return loop standing, the one next action, and capabilities,
+so an agent does not have to invent the path or scrape the terminal. The terminal prints that same single advance.
+
+**What would decide the rest.** Onboarding that makes one traced run and one goal the default first contact on a
+repository with no runs, not only an eligible `goal create` from discovery findings.

@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { OrchescopeError, stableJson } from '@orchescope/domain';
 import { renderAgentPrompt } from '@orchescope/goals';
-import { toMermaid, toSarif } from '@orchescope/report';
+import { loopProgress, resolveNextAction, toMermaid, toSarif } from '@orchescope/report';
 import type { Component, Edge, Finding } from '@orchescope/schema';
 import { formatIssues, validate } from '@orchescope/schema';
 import {
@@ -17,6 +17,7 @@ import {
 } from '@orchescope/usecases';
 import type { Workspace } from '@orchescope/workspace';
 import { resolveInsideRoot } from '@orchescope/workspace';
+import { toAgentNextAction } from './loop-action.ts';
 import { type ToolDefinition, toolByName } from './tools.ts';
 
 /**
@@ -165,17 +166,41 @@ const auditAgentSystem = async (
   });
   const maxFindings = number(args['maxFindings'], 10);
   const risks = result.bundle.findings.filter((finding) => finding.polarity === 'risk');
+  const progress = loopProgress(result.bundle, result.findingSet.rulesEvaluated);
+  const next = toAgentNextAction(
+    resolveNextAction({
+      progress,
+      agentSystemDetected: result.agentSystemDetected,
+      adapters: result.graph.coverage.adapters,
+    }),
+  );
+  const standing = progress.standingAt;
   return {
-    text: `Audit ${result.scanId}: ${risks.length} risk(s), ${result.bundle.summary.strengthCount} strength(s), ${result.runsConsidered.length} run(s) reconciled.`,
+    text: `Audit ${result.scanId}: ${risks.length} risk(s), ${result.bundle.summary.strengthCount} strength(s), ${result.runsConsidered.length} run(s) reconciled. Standing at ${standing?.title ?? 'closed loop'}.`,
     data: {
       scanId: result.scanId,
       reportId: result.bundle.reportId,
+      agentSystemDetected: result.agentSystemDetected,
       summary: result.bundle.summary,
       reconciliation: result.reconciliation,
       topFindings: risks.slice(0, maxFindings).map(findingLine),
       truncated: risks.length > maxFindings,
       rulesEvaluated: result.findingSet.rulesEvaluated.length,
       runsReconciled: result.runsConsidered.map((run) => run.id),
+      loop: {
+        standingAt: standing?.id ?? null,
+        checkCoverage: progress.coverage,
+        steps: progress.steps.map((step) => ({
+          id: step.id,
+          ordinal: step.ordinal,
+          title: step.title,
+          state: step.state,
+          summary: step.summary,
+          command: step.command,
+        })),
+        next,
+      },
+      capabilities: result.bundle.capabilities,
     },
   };
 };

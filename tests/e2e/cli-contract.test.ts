@@ -223,14 +223,22 @@ describe('a repository with no agent system', () => {
     const result = await run(['--cwd', root, 'audit']);
     assert.equal(result.code, EXIT.success);
     assert.match(result.stdout, /No agent system was detected/);
-    assert.match(result.stdout, /manifest\.yaml/);
+    assert.match(result.stdout, /^run {13}orchescope init --manifest$/m);
+    assert.equal((result.stdout.match(/^run /gm) ?? []).length, 1);
   });
 
   it('reports the same in the machine readable form', async () => {
     const root = emptyProject();
     const document = parsed(await run(['--cwd', root, 'audit', '--json']));
-    const data = document['data'] as { agentSystemDetected: boolean };
+    const data = document['data'] as {
+      agentSystemDetected: boolean;
+      loop: { next: { kind: string; argv?: readonly string[] } | null };
+    };
     assert.equal(data.agentSystemDetected, false);
+    assert.deepEqual(data.loop.next, {
+      kind: 'command',
+      argv: ['orchescope', 'init', '--manifest'],
+    });
   });
 
   /*

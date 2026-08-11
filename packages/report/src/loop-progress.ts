@@ -17,6 +17,12 @@
  */
 
 import type { FindingSet, ReportBundle } from '@orchescope/schema';
+import {
+  goalCommand,
+  scenarioRepeatCommand,
+  scenarioRunCommand,
+  traceCommand,
+} from './commands.ts';
 
 export type LoopStepId = 'audit' | 'goal' | 'rerun' | 'measure' | 'verdict';
 
@@ -59,18 +65,27 @@ export interface CheckCoverage {
 export interface LoopProgress {
   readonly steps: readonly LoopStep[];
   readonly coverage: CheckCoverage;
-  /** The first step that is not done. Null when the loop has closed. */
+  /**
+   * Where the reader stands: the first incomplete step that carries a command, else the first
+   * incomplete step. Null when the loop has closed.
+   *
+   * A step that is blocked with nothing to type (no eligible finding, no scenario) is not where the
+   * reader stands for action: the next step that does carry a command is. Parking on a null command
+   * left five of the sixteen corpus reports with no pasteable advance while `trace` waited one row
+   * down.
+   */
   readonly standingAt: LoopStep | null;
+  /**
+   * The one argv that advances the loop. Null when nothing a reader types would.
+   *
+   * Derived from `standingAt` so the terminal, `--json` and MCP name the same command. Steps may
+   * still carry their own `command` for readers of the full step list; only this field answers
+   * "what do I do".
+   */
+  readonly nextCommand: readonly string[] | null;
 }
 
 type RulesEvaluated = FindingSet['rulesEvaluated'];
-
-const TRACE_COMMAND = [
-  'orchescope',
-  'trace',
-  '--',
-  '<the command that starts your system>',
-] as const;
 
 export function checkCoverage(rules: RulesEvaluated): CheckCoverage {
   const ran = rules.filter((rule) => rule.status === 'fired' || rule.status === 'clear').length;
@@ -153,7 +168,7 @@ function goalStep(bundle: ReportBundle): LoopStep {
     state: 'blocked',
     summary: 'nothing handed off yet',
     detail: [],
-    command: eligible === null ? null : ['orchescope', 'goal', 'create', eligible.id],
+    command: eligible === null ? null : goalCommand(eligible.id),
   };
 }
 
@@ -181,7 +196,7 @@ function rerunStep(bundle: ReportBundle): LoopStep {
         ? 'no scenario to repeat'
         : `${bundle.scenarios.length} written down, none has ever run`,
     detail: [],
-    command: first === null ? null : ['orchescope', 'test', '--scenario', first],
+    command: first === null ? null : scenarioRunCommand(first),
   };
 }
 
@@ -205,7 +220,7 @@ function measureStep(bundle: ReportBundle, rules: RulesEvaluated): LoopStep {
           ? 'nothing has been run'
           : `${coverage.blocked} ${coverage.blocked === 1 ? 'check is' : 'checks are'} blocked on a run`,
       detail: areas.length === 0 ? [] : [namedAreas(areas)],
-      command: [...TRACE_COMMAND],
+      command: [...traceCommand()],
     };
   }
   const detail: string[] = [];
@@ -261,12 +276,21 @@ function verdictStep(bundle: ReportBundle): LoopStep {
     state: decided ? 'done' : 'failed',
     summary: `${comparison.verdict.replaceAll('_', ' ')}: ${comparison.verdictReason}`,
     detail: [],
-    command:
-      decided || scenario === null
-        ? null
-        : ['orchescope', 'test', '--scenario', scenario, '--repeat', '5'],
+    command: decided || scenario === null ? null : scenarioRepeatCommand(scenario, 5),
   };
 }
+
+/**
+ * The step a reader stands at, and the one command that advances it.
+ *
+ * Prefer the first incomplete step that names an argv. Fall back to the first incomplete step when
+ * none does, so a closed loop is the only case that returns null and a stuck loop still names where
+ * it is stuck.
+ */
+const standingStep = (steps: readonly LoopStep[]): LoopStep | null =>
+  steps.find((step) => step.state !== 'done' && step.command !== null) ??
+  steps.find((step) => step.state !== 'done') ??
+  null;
 
 export function loopProgress(bundle: ReportBundle, rules: RulesEvaluated): LoopProgress {
   const steps = [
@@ -276,9 +300,11 @@ export function loopProgress(bundle: ReportBundle, rules: RulesEvaluated): LoopP
     measureStep(bundle, rules),
     verdictStep(bundle),
   ];
+  const standingAt = standingStep(steps);
   return {
     steps,
     coverage: checkCoverage(rules),
-    standingAt: steps.find((step) => step.state !== 'done') ?? null,
+    standingAt,
+    nextCommand: standingAt?.command ?? null,
   };
 }

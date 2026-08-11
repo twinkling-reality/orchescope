@@ -1,8 +1,8 @@
 /**
- * Command lines the terminal document (and agents reading its text) are meant to run.
+ * Command lines the product prints as the next action.
  *
- * Kept beside the TUI so a printed invocation can be checked against the binary without a second
- * product surface inventing its own argv.
+ * Kept beside `loopProgress` and `resolveNextAction` so a printed invocation and the agent payload
+ * share one argv source. The e2e suite checks each of these against the binary's own help.
  */
 
 export const CLI = 'orchescope';
@@ -28,6 +28,15 @@ export const scenarioRunCommand = (scenario: string): readonly string[] => [
   'test',
   '--scenario',
   scenario,
+];
+
+export const scenarioRepeatCommand = (scenario: string, repeat: number): readonly string[] => [
+  CLI,
+  'test',
+  '--scenario',
+  scenario,
+  '--repeat',
+  String(repeat),
 ];
 
 export const benchmarkCommand = (scenario: string): readonly string[] => [

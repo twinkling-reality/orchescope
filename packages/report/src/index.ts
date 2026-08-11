@@ -8,6 +8,20 @@ export {
   type CapabilityInput,
 } from './bundle.ts';
 export {
+  auditCommand,
+  benchmarkCommand,
+  chaosCommand,
+  CLI,
+  compareCommand,
+  goalCommand,
+  goalPromptCommand,
+  importTraceCommand,
+  manifestCommand,
+  scenarioRepeatCommand,
+  scenarioRunCommand,
+  traceCommand,
+} from './commands.ts';
+export {
   type MermaidOptions,
   type SarifOptions,
   toMermaid,
@@ -24,4 +38,10 @@ export {
   type LoopStepState,
   ZERO_RISK_CAVEAT,
 } from './loop-progress.ts';
+export {
+  type AdapterStatus,
+  type NextAction,
+  type ResolveNextActionInput,
+  resolveNextAction,
+} from './next-action.ts';
 export { buildOverlays, type OverlayInput } from './overlays.ts';

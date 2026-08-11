@@ -16,7 +16,7 @@ import {
   manifestCommand,
   scenarioRunCommand,
   traceCommand,
-} from '../../apps/cli/src/terminal/commands.ts';
+} from '../../packages/report/src/commands.ts';
 
 /**
  * The terminal document prints command lines a reader (or agent) is meant to run. A printed invocation the

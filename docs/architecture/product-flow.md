@@ -37,6 +37,8 @@ schema ──► domain ──► core analysis ──► usecases ──► edg
 - **Use cases are the only composition root the edges call.** CLI and MCP do not touch persistence.
 - **Terminal presentation is swappable.** Pure row modules under `apps/cli/src/terminal/` select and bound bundle facts;
   they never invent a verdict.
+- **One next action, shared.** `loopProgress` and `resolveNextAction` in `packages/report` decide standing and the
+  single advance. The terminal renders it; `audit --json` and `audit_agent_system` return the same decision.
 - **Agents never scrape the TUI.** They use MCP or `--json`.
 
 ## What a stranger should understand in five seconds

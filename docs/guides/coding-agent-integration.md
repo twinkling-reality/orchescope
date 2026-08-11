@@ -49,7 +49,7 @@ Fifteen, and the read only ones are annotated as such so a client can decide wha
 | Tool | Returns |
 | --- | --- |
 | `scan_agent_system` | Component counts by kind, edge count and the coverage block |
-| `audit_agent_system` | The summary, the delta and a bounded page of findings |
+| `audit_agent_system` | The summary, the delta, a bounded page of findings, loop standing, the one next action (CLI argv and MCP tool when one exists), and capabilities |
 | `create_improvement_goal` | A goal and the prompt to implement it |
 | `compare_runs` | A verdict with per metric directions and sample sizes |
 | `validate_improvement_goal` | Per criterion outcomes, each satisfied, refused or undecided |

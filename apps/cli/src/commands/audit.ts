@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import { compareSeverity, OrchescopeError, stableJson } from '@orchescope/domain';
-import { toMermaid, toSarif } from '@orchescope/report';
+import { loopProgress, resolveNextAction, toMermaid, toSarif } from '@orchescope/report';
 import type { Finding, ReportBundle } from '@orchescope/schema';
 import { type AuditResult, discoverScenarios, runAudit } from '@orchescope/usecases';
 import type { CommandContext } from '../context.ts';
@@ -64,11 +64,44 @@ const writeExports = (
   return written;
 };
 
+/**
+ * Loop standing and the one next action, shaped for an agent that must not scrape the terminal.
+ *
+ * The same pure functions feed the human document. Capabilities travel too: they already sit on the
+ * bundle and used to be dropped here, which forced agents to guess whether spawn or compare was open.
+ */
+const agentLoop = (result: AuditResult) => {
+  const progress = loopProgress(result.bundle, result.findingSet.rulesEvaluated);
+  const next = resolveNextAction({
+    progress,
+    agentSystemDetected: result.agentSystemDetected,
+    adapters: result.graph.coverage.adapters,
+  });
+  return {
+    loop: {
+      standingAt: progress.standingAt?.id ?? null,
+      checkCoverage: progress.coverage,
+      steps: progress.steps.map((step) => ({
+        id: step.id,
+        ordinal: step.ordinal,
+        title: step.title,
+        state: step.state,
+        summary: step.summary,
+        detail: step.detail,
+        command: step.command,
+      })),
+      next,
+    },
+    capabilities: result.bundle.capabilities,
+  };
+};
+
 const writeAuditJson = (
   context: CommandContext,
   result: AuditResult,
   written: readonly string[],
 ): void => {
+  const { loop, capabilities } = agentLoop(result);
   context.stdout(
     `${stableJson({
       ok: true,
@@ -83,6 +116,8 @@ const writeAuditJson = (
         coverage: result.graph.coverage,
         findings: result.bundle.findings,
         rulesEvaluated: result.findingSet.rulesEvaluated,
+        loop,
+        capabilities,
         exports: written,
       },
     })}\n`,

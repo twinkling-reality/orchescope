@@ -63,18 +63,17 @@ describe('a repository with a system, a run and two problems', () => {
         '4 measure       . not yet    nothing has been run',
         '5 did it help   . not yet    needs a before and an after',
         '',
+        'findings        2 risks: 1 high, 1 medium; no strengths',
+        'OSC-REL-0001    ! high       a model is called with no timeout de…  2 discovered',
+        'OSC-SEC-0001    ! medium     a model is called with no timeout de…    1 inferred',
+        '',
         'join            15 of 22 parts a run could reach',
         'join            7 declared components never exercised',
         'join            1 exercised component never declared',
         'join            0 contradicted declarations',
         'join            1 duplicated external effect',
         '',
-        'findings        2 risks: 1 high, 1 medium; no strengths',
-        'OSC-REL-0001    ! high       a model is called with no timeout de…  2 discovered',
-        'OSC-SEC-0001    ! medium     a model is called with no timeout de…    1 inferred',
-        '',
         'run             orchescope goal create OSC-REL-0001',
-        "run             orchescope trace -- '<the command that starts your system>'",
       ].join('\n'),
     );
   });
@@ -114,7 +113,6 @@ describe('a repository where nothing was detected', () => {
         'nothing was reported as a problem, which is not the same as nothing being wrong',
         '',
         'run             orchescope init --manifest',
-        'next            declare your components in .orchescope/manifest.yaml',
       ].join('\n'),
     );
   });

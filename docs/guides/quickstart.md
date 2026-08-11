@@ -36,12 +36,6 @@ demo            33 components, 32 relations, 23 of 23 files read
                              8 faults injected, 1 broke the task
 5 did it help   ! undecided  unchanged: no metric moved enough to call
 
-join            15 of 22 parts a run could reach
-join            7 declared components never exercised
-join            1 exercised component never declared
-join            0 contradicted declarations
-join            1 duplicated external effect
-
 findings        19 risks: 3 high, 6 medium, 10 low; 2 strengths
 OSC-RES-0003    ! high       tool_timeout on issue_refund: a side…   1 simulated
 OSC-REL-0005    ! high       Retry around issue_refund can repeat…  2 discovered
@@ -51,36 +45,38 @@ OSC-SEC-0001    ! medium     2 consequential operations have no a…  6 discover
 OSC-ARCH-0001   ! medium     metering_record_usage runs without b…    5 observed
 findings        13 more risks, in the report
 
+join            15 of 22 parts a run could reach
+join            7 declared components never exercised
+join            1 exercised component never declared
+join            0 contradicted declarations
+join            1 duplicated external effect
+
 run             orchescope test --scenario support-desk --repeat 5
 ```
 
-`join` is the reconciliation, and the four rows under the fraction are the four deltas this product
-exists to compute. Every finding row ends with how many evidence records stand behind it and how they
-were established, because a title is itself a numeric claim. `run` rows carry a command you can paste;
-a `next` row carries an instruction that names a file to edit, and is never a command.
+Findings sit above the join so the worst problem is visible before the coverage rows. `join` is the
+reconciliation, and the four rows under the fraction are the four deltas this product exists to
+compute. Every finding row ends with how many evidence records stand behind it and how they were
+established, because a title is itself a numeric claim. There is one `run` row: the command that
+advances the loop. A `next` row carries an instruction that names a file to edit, and is never a
+command.
 
-A repository where nothing was found still gets the five step loop, the sentence saying that nothing
-reported is not the same as nothing wrong, and the file to declare a system in:
+A repository where nothing was detected still gets the five step loop, the sentence saying that
+nothing reported is not the same as nothing wrong, and one command that writes the manifest template:
 
 ```
 run             orchescope init --manifest
-next            declare your components in .orchescope/manifest.yaml
 ```
 
 That writes `.orchescope/manifest.yaml` with the component kinds, relation kinds and side effect classes the validator
 accepts, and declares nothing until you fill it in. A manifest the validator rejects is reported as a failed adapter with
 the field that failed, never ignored. See [adapter-development.md](adapter-development.md).
 
-## Open the report
+## Agents and the same facts
 
-```
-orchescope audit
-```
-
-The terminal prints the findings and the next command. Agents should use `--json` or `orchescope mcp serve`.
-
-Eight sections: overview, system map, findings, performance, resilience, scenarios, comparisons, goals. The map has a
-keyboard navigable table beside it with the same components, so nothing is only available by pointing at a canvas.
+The terminal is the human document. Coding agents should use `orchescope audit --json` or
+`orchescope mcp serve`: both return loop standing, the one next action, and capabilities, so an agent
+does not scrape the terminal.
 
 ## Add runtime evidence
 

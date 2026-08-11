@@ -28,7 +28,9 @@ const progress = (steps: readonly LoopStep[]): LoopProgress =>
   ({
     steps,
     coverage: { ran: 0, blocked: 0, total: 0 },
-    standingAt: steps[0] ?? null,
+    standingAt: steps.find((entry) => entry.state !== 'done') ?? null,
+    nextCommand:
+      steps.find((entry) => entry.state !== 'done' && entry.command !== null)?.command ?? null,
   }) as LoopProgress;
 
 const FIVE: readonly LoopStep[] = [

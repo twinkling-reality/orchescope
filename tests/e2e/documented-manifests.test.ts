@@ -208,6 +208,10 @@ describe('a repository no adapter can read', () => {
     assert.match(result.stdout, /No agent system was detected/);
     assert.match(result.stdout, /^gap {13}\. unparsed {3}go source files \(1\)$/m);
     assert.match(result.stdout, /^run {13}orchescope init --manifest$/m);
-    assert.match(result.stdout, /\.orchescope\/manifest\.yaml/);
+    assert.equal(
+      (result.stdout.match(/^run /gm) ?? []).length,
+      1,
+      'exactly one run row answers what to do',
+    );
   });
 });
