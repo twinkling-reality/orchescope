@@ -29,6 +29,13 @@ export const SkippedFile = Type.Object(
       'ignored',
       'symlink',
       'unreadable',
+      /**
+       * Written by a program rather than by a person, recognised from the file rather than from its path.
+       *
+       * Kept apart from `ignored`, which means the configuration excluded it. A reader who sees a file
+       * they did not exclude reported as ignored has been told the wrong thing about their own scan.
+       */
+      'generated',
     ] as const),
     detail: Type.Optional(Type.String({ maxLength: 500 })),
   },

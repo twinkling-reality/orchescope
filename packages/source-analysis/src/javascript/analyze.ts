@@ -14,7 +14,7 @@ import {
   TEXT_FACT_MIN_LENGTH,
   type TextFact,
 } from '../facts.ts';
-import type { Language } from '../file-set.ts';
+import type { Language } from '../language.ts';
 import { buildLineIndex, type LineIndex } from '../line-index.ts';
 
 /**

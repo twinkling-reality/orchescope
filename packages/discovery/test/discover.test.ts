@@ -392,3 +392,55 @@ describe('how much of what this build reads was read', () => {
     }
   });
 });
+
+/**
+ * A bundle in a directory the exclusion list does not know about.
+ *
+ * Across a sweep of thirty six repositories the retry rules produced no true positive, and two of their
+ * three matches were inside build artifacts: `.docs-out/js` and `packages/extension/media/assets`. Neither
+ * name is on the default exclusion list and neither ever will be, because the list is by directory name
+ * and a project can call its output anything. The minifier symbols those matches raised became real
+ * components: `entrypoint:jy` was counted in the inventory and named in a finding.
+ */
+describe('build output that no exclusion list knows the name of', () => {
+  it('raises no component, and says why it was set aside', async () => {
+    const workspace = createTempWorkspace('orchescope-generated-');
+    workspaces.push(workspace);
+    writeNodeProject(workspace, { name: 'bundled', dependencies: { openai: '^6.0.0' } });
+    const packed = Array.from(
+      { length: 60 },
+      (_unused, index) =>
+        `function ${String.fromCharCode(97 + (index % 26))}${index}(e,t,n){var r=e[t];try{for(var i=0;i<n;i++){r=r(i)}}catch(o){return o}return r}`,
+    ).join('');
+    workspace.write(
+      '.docs-out/js/39.06467a79.js',
+      `!function(e,t){"use strict";${packed}}(0,0);\n`,
+    );
+    const clock = fixedClock(0, 1);
+    const handle = createDeadline(30_000, clock.monotonicMs);
+    try {
+      const result = await discover({
+        root: workspace.root,
+        orchescopeVersion: '0.1.0',
+        clock,
+        deadline: handle,
+        traversal,
+        concurrency: 4,
+      });
+      assert.deepEqual(
+        result.graph.components.map((component) => component.id),
+        [],
+        'a minifier symbol must never become a component',
+      );
+      const skipped = result.graph.coverage.skipped.find(
+        (entry) => entry.file === '.docs-out/js/39.06467a79.js',
+      );
+      assert.ok(skipped !== undefined, 'setting a file aside silently is the failure this avoids');
+      assert.equal(skipped.reason, 'generated');
+      assert.match(skipped.detail ?? '', /minifier/);
+      assert.equal(result.graph.coverage.filesParsed, 0);
+    } finally {
+      handle.dispose();
+    }
+  });
+});

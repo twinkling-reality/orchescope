@@ -3,6 +3,8 @@ import { type Dirent, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { OrchescopeError } from '@orchescope/domain';
 import type { SkippedFile } from '@orchescope/schema';
+import { generationDetail, generationSignal } from './generated-code.ts';
+import { type Language, languageOf } from './language.ts';
 
 /**
  * Repository traversal.
@@ -11,8 +13,6 @@ import type { SkippedFile } from '@orchescope/schema';
  * symbolic links are not followed unless the caller asks, nothing outside the root is read, files over
  * the size limit are skipped and reported rather than truncated, and the file count is bounded.
  */
-
-export type Language = 'javascript' | 'typescript' | 'python' | 'json' | 'yaml' | 'toml' | 'other';
 
 export type SourceFile = {
   /** Repository relative POSIX path. */
@@ -77,30 +77,6 @@ export const DEFAULT_EXCLUDED_DIRECTORIES: readonly string[] = [
   'Carthage',
   '.gradle',
 ];
-
-const EXTENSION_LANGUAGE: Readonly<Record<string, Language>> = {
-  '.ts': 'typescript',
-  '.tsx': 'typescript',
-  '.mts': 'typescript',
-  '.cts': 'typescript',
-  '.js': 'javascript',
-  '.jsx': 'javascript',
-  '.mjs': 'javascript',
-  '.cjs': 'javascript',
-  '.py': 'python',
-  '.pyi': 'python',
-  '.json': 'json',
-  '.jsonc': 'json',
-  '.yaml': 'yaml',
-  '.yml': 'yaml',
-  '.toml': 'toml',
-};
-
-export const languageOf = (path: string): Language => {
-  const dot = path.lastIndexOf('.');
-  if (dot < 0) return 'other';
-  return EXTENSION_LANGUAGE[path.slice(dot).toLowerCase()] ?? 'other';
-};
 
 export const toPosix = (path: string): string => (sep === '/' ? path : path.split(sep).join('/'));
 
@@ -306,6 +282,9 @@ export type FileContents = {
 /**
  * Reads a file as UTF-8 and records its digest. A file containing a NUL byte in its first kilobyte is
  * treated as binary and rejected, because a mislabelled binary would otherwise reach a parser.
+ *
+ * Code a program wrote is set aside here for the same reason: this is the one point every analyser passes
+ * through, so a decision made here holds for every adapter and every rule, including ones added later.
  */
 export const readSource = (file: SourceFile): FileContents | SkippedFile => {
   let bytes: Buffer;
@@ -322,9 +301,14 @@ export const readSource = (file: SourceFile): FileContents | SkippedFile => {
   if (probe.includes(0)) {
     return { file: file.path, reason: 'binary', detail: 'NUL byte within the first kilobyte' };
   }
+  const text = bytes.toString('utf8');
+  const signal = generationSignal(text, file.language);
+  if (signal !== undefined) {
+    return { file: file.path, reason: 'generated', detail: generationDetail(signal) };
+  }
   return {
     file,
-    text: bytes.toString('utf8'),
+    text,
     hash: createHash('sha256').update(bytes).digest('hex'),
   };
 };

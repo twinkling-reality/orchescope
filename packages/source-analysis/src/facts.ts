@@ -1,5 +1,5 @@
 import type { SourceLocation } from '@orchescope/schema';
-import type { Language } from './file-set.ts';
+import type { Language } from './language.ts';
 
 /**
  * The language neutral fact model.

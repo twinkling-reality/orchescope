@@ -49,13 +49,13 @@ export {
   type FileContents,
   type FileSet,
   isSkipped,
-  type Language,
-  languageOf,
   readSource,
   type SourceFile,
   type TraversalOptions,
   toPosix,
 } from './file-set.ts';
+export { type GenerationSignal, generationSignal } from './generated-code.ts';
+export { type Language, languageOf, readsAsCode } from './language.ts';
 export { buildLineIndex, type LineIndex } from './line-index.ts';
 export {
   type DeclaredDependency,

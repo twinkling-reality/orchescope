@@ -1090,6 +1090,10 @@
                   {
                     "const": "unreadable",
                     "type": "string"
+                  },
+                  {
+                    "const": "generated",
+                    "type": "string"
                   }
                 ]
               }
