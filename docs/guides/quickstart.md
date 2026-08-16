@@ -4,8 +4,11 @@ Five minutes, one repository, no configuration.
 
 ## Install
 
-Node.js 24 or newer. No compiler, no native build. Until this is published to npm, install the tarball this repository
-builds with `pnpm package`; see the README.
+Node.js 24 or newer. No compiler, no native build.
+
+```
+npm install -g orchescope
+```
 
 ```
 orchescope doctor
