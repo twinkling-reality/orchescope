@@ -15,12 +15,16 @@ import { SCHEMA_VERSIONS, schemaId } from './version.ts';
 /**
  * Agent specific fault injection.
  *
- * Two delivery mechanisms exist and both are explicit:
+ * Two delivery mechanisms are expressible and both are explicit:
  *  - `cooperative`: the fault plan is handed to the target through ORCHESCOPE_FAULT_PLAN and the
  *    target applies it. Fully deterministic and offline. The bundled demonstration implements it.
- *  - `proxy`: Orchescope runs a loopback fault injecting HTTP proxy and points the target at it
- *    through a base URL environment variable. Works for targets that read their endpoint from the
- *    environment, and requires explicit opt in because it changes where model traffic goes.
+ *  - `proxy`: a loopback fault injecting HTTP proxy would sit in front of the target, reached through
+ *    a base URL environment variable, for faults whose point is that they happen outside the target.
+ *    The schema admits it and `packages/runtime` implements the proxy, but no runner starts one, so a
+ *    fault declaring it is applied cooperatively and the run records that substitution. The vocabulary
+ *    is kept rather than removed because a scenario that means "the provider rate limited us from the
+ *    outside" is describing something real, and deleting the word would only hide that this build
+ *    cannot yet measure it.
  */
 
 export const FaultKind = literals(

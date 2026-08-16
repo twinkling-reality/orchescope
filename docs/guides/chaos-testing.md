@@ -62,7 +62,7 @@ Three markers, and the middle one is the one to look at:
 - **`+`** the task completed and nothing was duplicated. The fault was absorbed.
 - **`!`** the task completed **and an effect happened twice**. This is worse than a clean failure: the caller saw success
   while the payment gateway saw two refunds.
-- **`x`** the task did not complete. A single dependency failure ended it.
+- **`x`** the task did not finish. A single dependency failure ended it.
 
 Two findings are visible in that output. `tool_timeout on issue_refund` duplicated a refund, because the retry has no
 idempotency key and a timeout cannot distinguish "did not happen" from "happened, response lost". `tool_timeout on
@@ -113,9 +113,13 @@ it, that is the finding. Nothing about this makes prompt injection a solved prob
 from the seed. This is the default and the only mode that can express a fault inside the target's own logic, such as a tool
 raising an exception on its first attempt.
 
-**`proxy`** injects at a loopback proxy for faults that can be expressed as an HTTP response: a rate limit, a server error, a
-timeout expressed as never answering. The proxy refuses to forward anywhere other than loopback unless outbound network
-access has been granted.
+**`proxy`** is declared by the schema and is not provided by the runner in this build. It is meant for faults that can be
+expressed as an HTTP response: a rate limit, a server error, a timeout expressed as never answering. The loopback proxy
+itself exists and refuses to forward anywhere other than loopback unless outbound network access has been granted, but
+nothing starts it, so a fault that asks for proxy delivery is handed to the target for cooperative application and the
+result records that substitution as a limitation. A fault whose point is that it happens outside the target cannot be
+measured that way; until the runner provides this mode, write the fault as `cooperative` and know that is what you
+measured.
 
 ## Environments
 
