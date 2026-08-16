@@ -9,13 +9,30 @@ a property of the repository, not of whoever happens to be running the command.
 
 ## The settings
 
+The `policy` block carries two kinds of setting and the difference matters. Some bound **what Orchescope itself does**.
+Two bound **whether Orchescope starts your process**, and none of them bound what that process may then do. A reader who
+takes the block as a whole concludes that tracing is sandboxed; it is not, and the section below the table says so
+plainly.
+
+**What Orchescope itself may do:**
+
 | Setting | Default | What it grants |
 | --- | --- | --- |
-| `policy.allowProcessSpawn` | `true` | Starting a process at all: `trace`, `test`, `benchmark`, `chaos`. Set to `false` for a purely static audit. |
-| `policy.allowedCommands` | `node`, `npm`, `npx`, `pnpm`, `yarn`, `python3`, `python`, `uv`, `deno`, `bun` | Which executables may be started. Matched by exact path or by basename. |
 | `policy.allowOutboundNetwork` | `false` | Reaching anything other than loopback, which today means only a fault proxy forwarding to a non local upstream. |
 | `policy.allowPaidModels` | `false` | Any operation that can incur provider cost. |
 | `policy.allowFilesystemWrites` | `false` | Writing outside the Orchescope state directory, including a git worktree for a comparison. |
+
+**Whether Orchescope starts your process:**
+
+| Setting | Default | What it grants |
+| --- | --- | --- |
+| `policy.allowProcessSpawn` | `true` | Starting a process at all: `trace`, `test`, `benchmark`, `chaos`. Set to `false` for a purely static audit. |
+| `policy.allowedCommands` | `node`, `npm`, `npx`, `pnpm`, `yarn`, `python3`, `python`, `uv`, `deno`, `bun` | Which executables may be started. Matched by exact path or by basename. A guardrail against a typo, not a security control: only `argv[0]` is checked, so `npx <anything>` runs. |
+
+**Ceilings on the work Orchescope will do:**
+
+| Setting | Default | What it bounds |
+| --- | --- | --- |
 | `policy.maxCostUsd` | `0` | Ceiling on estimated cost for a command. Zero means anything with a non zero estimate is refused. |
 | `policy.maxRunDurationMs` | `300000` | Wall clock ceiling for one run. |
 | `policy.maxConcurrentRuns` | `4` | How many runs may execute at once. |
@@ -23,6 +40,18 @@ a property of the repository, not of whoever happens to be running the command.
 | `policy.allowedChaosEnvironments` | `["local_deterministic"]` | Which chaos environments may be used. The others are `declared_test` and `live`. |
 | `redaction.extraPatterns` | `[]` | Additional patterns to redact, in addition to the built in set. |
 | `redaction.sensitiveEnvFragments` | `[]` | Additional environment name fragments whose values are masked. |
+
+## What none of this bounds
+
+**A command Orchescope starts runs with your full ambient privileges.** `allowFilesystemWrites` and
+`allowOutboundNetwork` constrain Orchescope's own behaviour and nothing else; `doctor` says Orchescope "makes no outbound
+request **of its own**" for the same reason. They sit in the same block as `allowedCommands`, which is about the target,
+and that is a genuine ambiguity in the file rather than a subtlety a careful reader would resolve.
+
+So: when `trace`, `test`, `benchmark` or `chaos` starts your system, that system writes the files it always writes, binds
+the ports it always binds and reaches the network it always reaches. Orchescope adds environment variables and, for a
+Node target, loads its own instrumentation into the process. It takes nothing away, and it is not a sandbox. If you need
+one, run the whole command inside it.
 
 Analysis limits (`analysis.maxFiles`, `maxFileBytes`, `timeoutMs`, `concurrency`, `followSymlinks`, `exclude`) bound the
 scan itself. Runtime settings place the OTLP trace receiver and bound what it accepts: `runtime.receiverHost` takes only

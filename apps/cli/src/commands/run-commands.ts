@@ -112,6 +112,23 @@ export const traceCommand = async (
     command,
     orchescopeVersion: context.version,
     ...(options.label === undefined ? {} : { label: options.label }),
+    /*
+     * Said as the process starts rather than in the documentation alone. The settings sitting beside
+     * `allowedCommands` read as though they constrained the target: `allowFilesystemWrites: false` and
+     * `allowOutboundNetwork: false` are about Orchescope's own behaviour, and a reader who takes the
+     * block as a whole concludes that tracing is sandboxed. This is where that belief would otherwise
+     * form. It fires after the policy decision, so a refused command never announces a run that did not
+     * happen.
+     */
+    onStart: (argv) => {
+      if (!context.json && !context.quiet) {
+        context.stderr(
+          context.style.dim(
+            `running with your privileges: ${argv.join(' ')} does here whatever it does when you run it yourself\n`,
+          ),
+        );
+      }
+    },
     ...(options.timeout === undefined ? {} : { timeoutMs: Number.parseInt(options.timeout, 10) }),
     onStdout: (chunk) => {
       if (!context.json && !context.quiet) context.stdout(chunk);

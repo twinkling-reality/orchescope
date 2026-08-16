@@ -39,6 +39,14 @@ export type TraceRequest = {
   readonly timeoutMs?: number;
   readonly onStdout?: (chunk: string) => void;
   readonly onStderr?: (chunk: string) => void;
+  /**
+   * Called once the command has been allowed and before it starts.
+   *
+   * A caller that wants to say something about the process it is about to run has one moment to say it,
+   * and it is after the policy decision: a refusal that had already announced the run would be telling a
+   * reader about something that did not happen.
+   */
+  readonly onStart?: (command: readonly string[]) => void;
 };
 
 export type TraceResult = {
@@ -149,8 +157,11 @@ export const runTrace = async (request: TraceRequest): Promise<TraceResult> => {
     'Tracing',
   );
 
-  // The allow list is what bounds what Orchescope will execute, so the requested command is checked against it rather
-  // than added to it.
+  /*
+   * Checked against rather than added to. The list keeps a typo from starting a process; it is not a boundary, since
+   * only the executable is examined and the default entries are runners that will start anything. What the target may
+   * do once it is running is bounded by the operator's own privileges and by nothing here.
+   */
   const allowedCommands = policy.allowedCommands;
   assertAllowed(commandDecision(policy, request.command), 'Tracing');
 
@@ -169,6 +180,8 @@ export const runTrace = async (request: TraceRequest): Promise<TraceResult> => {
     startedAt,
     sequence: workspace.store.listRuns({ projectId: workspace.projectId, limit: 1000 }).length,
   });
+
+  request.onStart?.(request.command);
 
   const phase = workspace.progress.phase('ingest', `Running ${label}`);
   try {

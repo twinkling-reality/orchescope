@@ -87,7 +87,17 @@ export const PolicyConfig = Type.Object(
     maxConcurrentRuns: PositiveInt,
     maxTotalRuns: PositiveInt,
     allowedChaosEnvironments: Type.Array(ChaosEnvironment, { minItems: 1 }),
-    /** Commands the runner may execute, matched on argv[0]. Empty means every command is refused. */
+    /**
+     * Commands the runner may start, matched on `argv[0]`. Empty means every command is refused.
+     *
+     * A guardrail against a typo rather than a security control, and it is stated that way because it
+     * reads like the second. Only the executable is checked, and the default list contains runners, so
+     * `trace -- seorak` is refused while `trace -- npx seorak` runs. Checking further would not close it:
+     * a runner's argument is any command, and `npm run`, `uv run` and `node -e` each take one.
+     *
+     * Nothing in this block bounds what a started process may then do. The settings above it constrain
+     * Orchescope's own behaviour; a target runs with the operator's full ambient privileges.
+     */
     allowedCommands: Type.Array(NonEmptyString()),
   },
   { additionalProperties: false },

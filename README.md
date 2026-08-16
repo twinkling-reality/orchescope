@@ -160,11 +160,15 @@ Orchescope executes the system you point it at. `trace`, `test`, `benchmark` and
 environment. Chaos injects faults into a running system, and prompt injection scenarios feed hostile text to your agents
 on purpose.
 
-Nothing here makes those operations safe. Orchescope bounds them: process execution is refused unless the configured
-allow list names the command, live chaos environments are refused unless you enable them, cost and duration and
-concurrency have ceilings, and a retry around an operation with no established idempotency is reported rather than
-assumed safe. Run it against a system whose side effects you are prepared to have happen, in an environment where that
-is acceptable.
+Nothing here makes those operations safe, and Orchescope is not a sandbox. A command it starts runs with your full
+ambient privileges: it writes the files it always writes, binds the ports it always binds, and reaches the network it
+always reaches. `policy.allowedCommands` checks only `argv[0]`, so it stops a typo and not a decision, and
+`allowFilesystemWrites` and `allowOutboundNetwork` constrain Orchescope's own behaviour rather than your system's.
+
+What it does bound: process execution is refused entirely unless `policy.allowProcessSpawn` is on, live chaos
+environments are refused unless you enable them, cost and duration and concurrency have ceilings, and a retry around an
+operation with no established idempotency is reported rather than assumed safe. Run it against a system whose side
+effects you are prepared to have happen, in an environment where that is acceptable.
 
 See [SECURITY.md](SECURITY.md) and [docs/security/threat-model.md](docs/security/threat-model.md).
 

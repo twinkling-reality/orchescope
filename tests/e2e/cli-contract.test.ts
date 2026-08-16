@@ -299,6 +299,24 @@ describe('policy refusals', () => {
     assert.equal(result.code, EXIT.policy);
     assert.match(result.stderr, /allowedCommands/);
   });
+
+  /*
+   * The allow list reads as a boundary and is not one: only argv[0] is examined, and the default entries
+   * are runners that will start anything. What bounds a traced command is the privileges of whoever ran
+   * it, so that is said where the belief would otherwise form rather than only in the documentation.
+   */
+  it('says the traced command runs with the operator privileges, and only once it will run', async () => {
+    const refused = await run(['--cwd', demo, 'trace', '--', 'curl', 'https://example.com']);
+    assert.doesNotMatch(
+      refused.stderr,
+      /running with your privileges/,
+      'a refused command announced a run that never happened',
+    );
+
+    const traced = await run(['--cwd', demo, 'trace', '--', 'node', 'src/main.ts']);
+    assert.equal(traced.code, EXIT.success);
+    assert.match(traced.stderr, /running with your privileges/);
+  });
 });
 
 describe('exit codes', () => {

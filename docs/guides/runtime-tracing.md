@@ -18,8 +18,13 @@ the spans as a run.
 orchescope trace --label "nightly" --timeout 120000 -- npm run agent
 ```
 
-The command must be on `policy.allowedCommands`. That list is what bounds what Orchescope will execute, so a command not on
-it is refused with the setting named rather than run.
+The command must be on `policy.allowedCommands`. That check exists to stop a typo starting a process, and it is not a
+security boundary: only `argv[0]` is checked, so `npx <anything>` and `npm run <anything>` walk past it.
+
+The command then runs with your full ambient privileges. Orchescope adds environment variables and, for a Node target,
+loads its own instrumentation into the process; it takes nothing away. Whatever your system does when you run it
+yourself, it does here: it writes the same files, reaches the same network and spends the same budget. Trace a command
+you have read, in an environment where its effects are acceptable.
 
 ## What happens when your system emits nothing
 
