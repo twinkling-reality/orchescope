@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { OrchescopeError } from '@orchescope/domain';
+import { writeStateIgnore } from './state-ignore.ts';
 
 /**
  * Workspace paths.
@@ -9,8 +10,8 @@ import { OrchescopeError } from '@orchescope/domain';
  * makes the footprint obvious, makes cleanup a single directory removal, and means a scan of someone else's
  * repository cannot leave state in a home directory the user did not expect.
  *
- * Configuration is meant to be committed. State, cache and reports are not, so `orchescope init` writes a
- * `.gitignore` inside `.orchescope` that excludes them.
+ * Configuration is meant to be committed. State, cache and reports are not, so every command that creates
+ * the directory writes a `.gitignore` inside `.orchescope` that excludes them.
  */
 
 export const ORCHESCOPE_DIRECTORY = '.orchescope';
@@ -46,7 +47,14 @@ export const resolvePaths = (root: string): WorkspacePaths => {
   };
 };
 
-/** Creates the state directories with owner only permissions. */
+/**
+ * Creates the state directories with owner only permissions, and the ignore file beside them.
+ *
+ * The two happen together because they have to: the ignore file exists to keep what these directories
+ * hold out of a repository's history, and every command that reaches this point is about to write into
+ * them. Leaving the file to `init` meant a reader who followed the quickstart, which says to run `audit`
+ * first, got the state without the rule.
+ */
 export const ensureStateDirectories = (paths: WorkspacePaths): void => {
   for (const directory of [
     paths.orchescope,
@@ -57,6 +65,7 @@ export const ensureStateDirectories = (paths: WorkspacePaths): void => {
   ]) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
   }
+  writeStateIgnore(paths.orchescope);
 };
 
 export const workspaceExists = (paths: WorkspacePaths): boolean => existsSync(paths.configFile);

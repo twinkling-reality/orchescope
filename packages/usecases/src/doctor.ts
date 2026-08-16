@@ -7,7 +7,7 @@ import {
   probePythonParser,
   resetPythonParser,
 } from '@orchescope/source-analysis';
-import type { Workspace } from '@orchescope/workspace';
+import { excludedConfig, type Workspace } from '@orchescope/workspace';
 
 /**
  * Environment checks.
@@ -77,6 +77,27 @@ export const runDoctor = async (input: {
     ...(workspace.configSource === 'file'
       ? {}
       : { remediation: 'Run orchescope init to write one.' }),
+  });
+
+  /*
+   * The permissions a repository grants are a property of the repository, so the file that carries them
+   * is meant to be committed. Git does not consult a `.gitignore` inside a directory an ancestor rule has
+   * already excluded, so a host repository whose root file carries `/.orchescope/` silently keeps the
+   * configuration out of its own history. Nothing else in the tool can notice, because only git knows.
+   */
+  const configIgnoredBy = excludedConfig(workspace.paths.root);
+  checks.push({
+    name: 'configuration is committable',
+    status: configIgnoredBy === undefined ? 'ok' : 'warning',
+    detail:
+      configIgnoredBy === undefined
+        ? 'nothing excludes .orchescope/config.json from this repository'
+        : `${configIgnoredBy.rule} excludes .orchescope/config.json, so the settings this project grants are not in its history`,
+    ...(configIgnoredBy === undefined
+      ? {}
+      : {
+          remediation: `Git will not re-include a file whose directory is excluded, so replace that pattern with these two lines: ${configIgnoredBy.fix.join(' then ')}.`,
+        }),
   });
 
   const javascriptParser = probeJavaScriptParser();

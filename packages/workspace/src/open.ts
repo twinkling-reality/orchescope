@@ -1,5 +1,3 @@
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   type Clock,
   formatTimestamp,
@@ -22,7 +20,8 @@ import {
 } from '@orchescope/persistence';
 import { createRedactor, type Redactor } from '@orchescope/redaction';
 import type { OrchescopeConfig, Sha256Hex } from '@orchescope/schema';
-import { DEFAULT_CONFIG, loadConfig, STATE_GITIGNORE, writeConfig } from './config.ts';
+import { DEFAULT_CONFIG, loadConfig, writeConfig } from './config.ts';
+import { type ExcludedConfig, excludedConfig } from './committable-config.ts';
 import { type GitFacts, readGitFacts } from './git.ts';
 import { type ManifestTemplateResult, writeManifestTemplate } from './manifest-template.ts';
 import {
@@ -132,6 +131,14 @@ export type InitResult = {
   readonly alreadyExisted: boolean;
   /** Present when a manifest template was asked for, whether or not it had to be written. */
   readonly manifest?: ManifestTemplateResult;
+  /**
+   * The git rule excluding the configuration file, when one does.
+   *
+   * Init tells a reader the file is meant to be committed. When a rule higher up the tree excludes the
+   * whole directory, that sentence is false and only git can say so, so the answer travels with the
+   * result rather than being asserted by the sentence.
+   */
+  readonly configIgnoredBy?: ExcludedConfig;
 };
 
 export type InitOptions = {
@@ -154,11 +161,12 @@ export const initWorkspace = (root: string, options: InitOptions = {}): InitResu
       ...(options.projectName === undefined ? {} : { projectName: options.projectName }),
     });
   }
-  writeFileSync(join(paths.orchescope, '.gitignore'), STATE_GITIGNORE, { mode: 0o600 });
+  const ignoredBy = excludedConfig(paths.root);
   return {
     created: !existed,
     configFile: paths.configFile,
     alreadyExisted: existed,
     ...(options.manifest === true ? { manifest: writeManifestTemplate(paths) } : {}),
+    ...(ignoredBy === undefined ? {} : { configIgnoredBy: ignoredBy }),
   };
 };

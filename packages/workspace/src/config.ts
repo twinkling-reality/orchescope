@@ -239,8 +239,3 @@ export const loadConfig = (paths: WorkspacePaths): ConfigLoad => {
 export const writeConfig = (paths: WorkspacePaths, config: OrchescopeConfig): void => {
   writeFileSync(paths.configFile, `${stableJson(config)}\n`, { mode: 0o600 });
 };
-
-export const STATE_GITIGNORE = `# Orchescope keeps analysis state here. Configuration is meant to be committed; state is not.
-state/
-cache/
-`;

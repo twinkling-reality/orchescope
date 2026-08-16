@@ -28,7 +28,8 @@ Everything lives under `.orchescope/` in the audited repository.
 .orchescope/
   config.json          settings; meant to be committed
   manifest.yaml        your declarations; meant to be committed
-  state/               not committed; init writes a local .gitignore for it
+  .gitignore           written whenever the directory is, so state never needs a rule of yours
+  state/               not committed
     orchescope.db      SQLite: scans, runs, spans, side effects, findings, goals, scenarios, comparisons
     artifacts/         content addressed: graphs, trace bundles, report bundles
     reports/           exports you asked for

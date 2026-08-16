@@ -51,6 +51,21 @@ export const initCommand = (
       '  .orchescope/config.json is meant to be committed. .orchescope/state and .orchescope/cache are not, and a .gitignore inside .orchescope says so.\n',
     ),
   );
+  /*
+   * Said here rather than left for the reader to discover, because the sentence above is the one it
+   * contradicts. Git does not consult a .gitignore inside a directory it has already excluded, so the
+   * nested rule is inert and the file this command just wrote will never be committed.
+   */
+  if (result.configIgnoredBy !== undefined) {
+    context.stdout(
+      `${context.style.warn('!')} it will not be committed: ${result.configIgnoredBy.rule} excludes it.\n`,
+    );
+    context.stdout(
+      context.style.dim(
+        `  Git will not re-include a file whose directory is excluded, so replace that pattern with:\n${result.configIgnoredBy.fix.map((line) => `    ${line}\n`).join('')}`,
+      ),
+    );
+  }
   context.stdout(`\n${context.style.dim('next:')} orchescope audit\n`);
   return EXIT_CODES.success;
 };

@@ -146,8 +146,9 @@ Everything stays on your machine.
   [ADR 0002](docs/architecture/adr/0002-deterministic-analysis.md).
 - The only server this tool starts is the receiver `trace` and `receive` use to collect your spans. It binds to
   loopback and lives for the duration of the run.
-- State lives in `.orchescope/state/` inside the repository you audit, which the `init` command adds to a local
-  `.gitignore`. Configuration is meant to be committed; state is not.
+- State lives in `.orchescope/state/` inside the repository you audit. Every command that creates that directory writes
+  a local `.gitignore` beside it, so state is excluded from the first run onward. Configuration is meant to be committed;
+  state is not, and `init` says so when a rule in your repository would keep the configuration out too.
 - Exported reports are redacted with a pattern set before they leave the process. Redaction reduces exposure; it is not a
   guarantee, and the report says so.
 
