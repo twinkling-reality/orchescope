@@ -16,6 +16,7 @@ with the quickstart; read the architecture when you want to change something.
 | [Adapter development](guides/adapter-development.md) | Your framework is not recognised yet |
 | [The corpus](guides/corpus.md) | You changed a reader and want to know what it did to real repositories |
 | [Release](guides/release.md) | You maintain this repository and are publishing a version |
+| [Changelog](../CHANGELOG.md) | You want to know what moved between two versions, and what will move under you |
 
 ## Product
 

@@ -82,8 +82,15 @@ publish is a person at a keyboard rather than something a script or an agent can
 it stops there. Expect also a warning that `bin[orchescope]` was invalid and removed: npm normalises `./dist/orchescope.mjs`
 to `dist/orchescope.mjs` and assigns it straight back, so the binary survives and the warning is noise.
 
+## The notes
+
+[CHANGELOG.md](../../CHANGELOG.md) carries a section per released version, written by hand. A GitHub release body is
+that section pasted in. Two things belong in every section and are easy to leave out: whether the version carries a
+registry attestation, and any change that will move a reader's finding counts or refuse a configuration they already
+have.
+
 ## What is not automated
 
-- No tag, changelog or GitHub release is created by a script here.
+- No tag or GitHub release is created by a script here, and the changelog is written rather than generated.
 - No credential, token or OIDC configuration is stored in this repository.
 - Nothing deprecates or unpublishes a version.
