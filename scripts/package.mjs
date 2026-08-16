@@ -2,7 +2,7 @@
  * Builds a release candidate locally: stage the publishable unit, pack it, record its checksum, and verify it
  * installs and runs.
  *
- * The publishable unit is `release/stage`, not `apps/cli`. The workspace manifest depends on ten
+ * The publishable unit is `release/stage`, not `apps/cli`. The workspace manifest depends on nine
  * `workspace:*` packages that are compiled into the bundle and never published, so publishing `apps/cli`
  * directly would put dependency names on the registry that nobody can install. The stage is left in place
  * after this script finishes, because it is the directory a maintainer publishes from.

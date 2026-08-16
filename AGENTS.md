@@ -86,7 +86,9 @@ Rules the tooling enforces:
 - Never spawn a shell. `spawn` and `execFile` take an argument array, always.
 - Validate every path against the repository root before touching it.
 - Every string that leaves the process passes through `@orchescope/redaction`.
-- Loopback only for every server, with a Host allow list, an Origin check and a capability token.
+- Loopback only for every server. The trace receiver is the only one an ordinary command binds, and it authenticates
+  nothing: what bounds it is the single route it answers, the methods it accepts, and its body, span and window ceilings.
+  A server that needs a caller's identity rather than those bounds does not belong in this repository yet.
 - A refusal names the setting that would grant the action. Nothing downgrades silently to a weaker mode.
 - Do not claim that prompt injection, agent execution or chaos testing is safe.
 

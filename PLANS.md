@@ -1,7 +1,21 @@
 # PLANS.md
 
-The plan of record. Kept in sync with the repository: a phase is marked done when its acceptance evidence exists, not when
-the code was written.
+The plan of record, and the build log with it. A phase is marked done when its acceptance evidence exists rather than
+when the code was written, and a phase already written is left standing rather than rewritten to agree with what
+shipped after it.
+
+## What this record no longer describes
+
+The browser workspace under `apps/web`, the loopback server that served it in `packages/report-server`, the standalone
+HTML export and the Playwright suite under `tests/ui` were removed on 2026-08-11 in `faf5007`, which reframed the
+product as agent first with the terminal as the only human surface. The design records the phases below cite,
+`docs/design/report-system.md` and the state tables under `docs/design/states/`, went with them.
+
+Phases 11, 20, 21 and 22 are largely about those surfaces, and phase 13 cited the server's tests. What they record
+about the reasoning, the measurements and the defects found is true of the day each was written. What they describe as
+shipping does not ship. Where a citation named a file that removal deleted, it now says the path was removed rather
+than sending a reader after something that will not resolve. Nothing else in those phases has been rewritten, because a
+build log edited to agree with the present stops being a record of anything.
 
 ## The thesis
 
@@ -24,9 +38,9 @@ tool.
 | 8. Scenarios, benchmarks, chaos | done | `pnpm orchescope --cwd apps/demo chaos --scenario support-desk-faults` |
 | 9. Comparison and the goal loop | done | `tests/e2e/improvement-loop.test.ts` |
 | 10. Command line surface | done | `tests/e2e/cli-contract.test.ts`, 25 tests |
-| 11. Report bundle and browser workspace | done | `tests/ui/workspace.spec.ts`, 16 tests in Chromium |
+| 11. Report bundle and browser workspace | done, then half removed | the bundle is `packages/report`; the workspace and its 16 Chromium tests went in `faf5007` |
 | 12. Agent interface | done | `packages/mcp/test/contract.test.ts`, 15 tests |
-| 13. Security controls | done | `packages/report-server/test/server.test.ts`, `packages/redaction/test/redact.test.ts` |
+| 13. Security controls | done | `packages/redaction/test/redact.test.ts`; the server tests cited beside it went with `packages/report-server` in `faf5007` |
 | 14. Packaging and distribution | done | `pnpm package`: stage `release/stage`, install the tarball and audit a project with it |
 | 15. Documentation and open source setup | done | `README.md`, `docs/`, `SECURITY.md`, `CONTRIBUTING.md`, CI workflows |
 | 16. Installable product | in progress | see below |
@@ -37,7 +51,8 @@ tool.
 | 21. The loop could not report its own outcome | done | see below |
 | 22. Panels floating on a page, and a composition that died on dark | done | see below |
 
-765 unit and integration tests, 92 end to end tests, 16 browser tests. `pnpm verify` is green.
+635 unit and integration tests and 92 end to end tests. There are no browser tests: the 16 that ran in Chromium went with
+the workspace they tested.
 
 ## Phase 16: what a stranger meets
 
@@ -50,7 +65,8 @@ and it is listed item by item because only some of it is done.
   binary that exists, for a `files` entry that does not, and for the browser workspace, then packed and installed.
   `pnpm package` prints the directory to publish from, and `docs/guides/release.md` is the maintainer checklist.
   Evidence: `release/release-summary.json` records `publishableUnit`, `workspaceDependencies: []` and a passing install
-  smoke test that audits a TypeScript and Python project with the installed binary.
+  smoke test that audits a TypeScript and Python project with the installed binary. The fourth check went with the
+  workspace in `faf5007`; the other three are still what `scripts/package.mjs` runs.
 - **The manifest escape hatch works.** Both documented examples were rejected by the validator; both are corrected and
   `tests/e2e/documented-manifests.test.ts` audits every documented manifest example through the real reader. A manifest
   the validator rejects is now a failed adapter run whose detail names the field, printed on the terminal and shown in the
@@ -70,7 +86,8 @@ and it is listed item by item because only some of it is done.
 - **The JSON contract holds on failure as well as on success.** A failure document now carries `command`, `version` and a
   null `data` beside its `error`, `export --json` answers with the same document shape as everything else, and
   `audit --serve --json` writes one document carrying the URL instead of two. Evidence:
-  `tests/e2e/json-contract.test.ts`, which found four commands that deviated.
+  `tests/e2e/json-contract.test.ts`, which found four commands that deviated. `--serve` was removed with the server it
+  started; the rest of the contract is what the e2e test still holds.
 - **A green gate needs no credential.** The secret scan runs the gitleaks command line at a pinned version, verified
   against the checksum its release publishes, over the history rather than the working tree. The action it replaces
   requires a licence key for an organisation, which is a gate this repository could never have passed.
@@ -487,7 +504,7 @@ Thirteen corpus entries were re-recorded. Every movement is a number falling tow
 The browser workspace drew every panel as the same bordered box and every number as the same tile, so
 the inventory count and the declared against exercised delta carried identical weight, and the delta
 was the third panel down. The section tabs were numbered one to eight, which implies a sequence that
-does not exist. The design record is [`docs/design/report-system.md`](docs/design/report-system.md).
+does not exist. The design record was `docs/design/report-system.md`, deleted with the workspace in `faf5007`.
 
 **One idea replaced eleven tinted variants: fill means evidence.** A filled shape was measured in a
 run and a hollow outline was only declared, on the delta bar, on the map nodes, in the components
@@ -508,8 +525,9 @@ as an observation in the one place the whole design claims not to.
 component up to 120. Above that the filled share is the measured rate rounded onto 120 cells and the
 caption says so, because `openai-agents-python` declares 917 and a cell per component is neither
 readable nor something to put in a document. A count that is not zero never rounds away: one component
-that ran and was never declared is the whole reason the dashed boundary is drawn. Evidence:
-`apps/web/test/delta-bar.test.ts`, thirteen cases across both scales and the degenerate inputs.
+that ran and was never declared is the whole reason the dashed boundary is drawn. The evidence was
+`apps/web/test/delta-bar.test.ts`, thirteen cases across both scales and the degenerate inputs, deleted
+with the workspace in `faf5007`.
 
 **The join summary was computed by the pipeline and read by nothing.** `ReconciliationDelta.joins`
 carries `onNameAlone`, which phase 18 added because a match on kind and name alone is the weakest rule
@@ -523,8 +541,9 @@ re-encoded is a request that succeeds and a face the browser refuses without say
 export gets `font-src data:` and the faces inlined, because opened from a disk it is a `file:` page
 where `'self'` reaches nothing, and an export that silently lost the type would be a different document
 rather than a plainer one. One stylesheet is built twice from one source so the `@font-face` rules have
-one definition. Evidence: `packages/report/test/standalone.test.ts` and four new cases in
-`packages/report-server/test/server.test.ts`.
+one definition. The evidence was `packages/report/test/standalone.test.ts` and four new cases in
+`packages/report-server/test/server.test.ts`. Both files, both content security policies, the standalone
+export and the vendored faces were deleted in `faf5007`. Nothing in the repository serves a font now.
 
 **Three promises the interface made and nothing held.** Keyboard focus stays visible on every control
 it can reach, reduced motion stops every animation and transition, and no section scrolls sideways at
@@ -655,8 +674,8 @@ Evidence: seven cases in `packages/goals/test/create.test.ts`, covering the clas
 within one kind, and that no identifier appears in any sentence a reader is sent to act on; two new
 assertions in `tests/e2e/improvement-loop.test.ts`, one judging the goal with no `--comparison` at all
 and one holding that the judgement reaches the report and names no identifier; and the changed case in
-`apps/web/test/prompt.test.ts`, which now asserts the absence rather than the presence of the
-identifier.
+`apps/web/test/prompt.test.ts`, which asserted the absence rather than the presence of the identifier
+and was deleted with the workspace in `faf5007`. The first two still run.
 
 **Measured against the corpus rather than the demonstration.** `openai-agents-python` at 1390 components
 and `langgraphjs` at 709 were audited and read on the same screens.
@@ -714,6 +733,13 @@ grid entirely, because naming it in full is a promise the design record makes.
 Looking at the populated screens turned up more than this phase changed. Each is reproducible on the
 demonstration report with a benchmark, a chaos run and scenario runs in it.
 
+This list is a record of what a populated report showed, not a backlog. `faf5007` deleted the screens most
+of these were found on, so the ones whose fault sat in `apps/web` went away unfixed rather than fixed. Two
+outlive the workspace. The self time overlay quantises in `packages/report/src/overlays.ts`, which is a core
+package and still rounds each addend. And the rules underneath the derived plurals, the raw schema keys and
+the missing units are about what a reader is shown rather than about a browser, so the terminal document can
+break them the same way.
+
 - **Benchmark variant tables render every measurement as a duration.** `DistributionRow` in
   `apps/web/src/sections/performance.tsx` hard codes the duration formatter, so 1550 tokens prints as
   `1.55 s` and three model calls print as `3 ms`. The unit is not missing from the data; it is in the
@@ -730,9 +756,9 @@ demonstration report with a benchmark, a chaos run and scenario runs in it.
   the Resilience screen, which is the case `docs/design/report-system.md` names and phase 20 records as
   fixed. Nothing tests the rule.
 - **Derived plurals are back**, in both layers: `1 record(s)`, `1 runs`, `1 relations name a component
-  ... and are not drawn`. Phase 20 fixed one site and stated the rule; nothing generalised it. Note that
-  `tests/ui/workspace.spec.ts` pins the plural nouns of the map's match sentence and the filtered case
-  reaches one, so a fix that only swaps nouns breaks a passing test.
+  ... and are not drawn`. Phase 20 fixed one site and stated the rule; nothing generalised it. The warning
+  attached here, that `tests/ui/workspace.spec.ts` pins the plural nouns of the map's match sentence, no
+  longer applies: that suite was deleted in `faf5007`.
 - **Raw schema keys reach the reader.** `MaxDurationMs 30000` with no unit on a screen that renders the
   row above it as `30 s`, `metric successRate no worse than baseline within 0`, and `durationMs (ms)`,
   which says the same thing twice while the value beside it carries no unit at all.
@@ -752,7 +778,7 @@ demonstration report with a benchmark, a chaos run and scenario runs in it.
 The workspace drew rectangles on a visible background: 40px of paper around every screen, 16px between
 cards, and a page ground showing through every gap. Five screens had no designed main area at all and
 rendered as single column documents with a 500px ribbon of prose on the left and 900px of nothing
-beside it. The design record is [`docs/design/report-system.md`](docs/design/report-system.md).
+beside it. The design record was `docs/design/report-system.md`, deleted with the workspace in `faf5007`.
 
 **A screen is a bento now, and there is no page ground anywhere in the stylesheet.** Twelve columns,
 `gap: 0`, and the hairline is drawn by each tile on its right and bottom edges only, so two neighbours
@@ -774,8 +800,9 @@ be a button that fails when pressed. The dark result still read as one navy rect
 grounds inside 1.13:1 of each other is the same failure with one fewer participant. So all three are
 fixed by role, and with no page ground left there was nothing for the theme to act on: the control is
 gone rather than left doing nothing, which is the rule this repository applies to every other control.
-`tests/ui/workspace.spec.ts` holds it from both sides, once on the order and the values of the three
-grounds and once by emulating `prefers-color-scheme: dark`, reloading and asserting nothing moved.
+`tests/ui/workspace.spec.ts` held it from both sides, once on the order and the values of the three
+grounds and once by emulating `prefers-color-scheme: dark`, reloading and asserting nothing moved. That
+suite was deleted with the workspace in `faf5007`.
 
 **Every ground is still the neutral swap, which is what carries the system across.** A tile redefines
 `--ink`, `--outline`, `--sheet`, `--paper` and the two alert hues inside itself, so every existing rule
@@ -849,7 +876,8 @@ eyebrow on a repository authored name, the derived plurals, the raw schema keys 
 grouping. This phase changed the frame and the main areas, not the formatters.
 
 The state tables under `docs/design/states/` are stale for the six screens this rebuilt, and the README
-says which and why. Nobody re-derived them.
+says which and why. Nobody re-derived them, and `faf5007` deleted the whole directory with the screens
+they described.
 
 ## What each phase had to establish
 
@@ -885,7 +913,9 @@ judged is undecided rather than passed.
 setting.
 
 **11. Report.** Loopback only, capability token, strict content security policy, eight sections, a map with a keyboard
-navigable equivalent, and no control that fails when pressed.
+navigable equivalent, and no control that fails when pressed. Only the bundle survived `faf5007`. The server, its token
+and its policy went with the workspace, and the one loopback socket left is the OTLP trace receiver, whose controls are
+in `docs/security/threat-model.md`.
 
 **12. Agent interface.** Fifteen tools with explicit schemas, bounded output, and read only tools annotated as such.
 
@@ -921,7 +951,9 @@ extend it without reading every file.
   are in [ADR 0002](docs/architecture/adr/0002-deterministic-analysis.md).
 - **The dependency direction check needs its own TypeScript.** dependency-cruiser supports the compiler API up to version 6,
   and the repository typechecks with 7, so it is given a private copy. Without that it silently cruises nothing.
-- **Browser tests run in Chromium only.** Support for other engines is not claimed because nothing tests it.
+- **There is no browser surface and no browser test.** The workspace, the server that fed it and the Chromium suite that
+  held it were removed in `faf5007`. The terminal document is the only human interface, and it is tested as a grid of
+  cells rather than as a page.
 
 ## What would come next
 

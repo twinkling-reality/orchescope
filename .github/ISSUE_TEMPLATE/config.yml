@@ -1,8 +1,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/athledev-labs/orchescope/security/advisories/new
+    url: https://github.com/twinkling-reality/orchescope/security/advisories/new
     about: Report privately. Do not open a public issue for a security problem.
   - name: Documentation
-    url: https://github.com/athledev-labs/orchescope/tree/main/docs
+    url: https://github.com/twinkling-reality/orchescope/tree/main/docs
     about: Guides, architecture, protocols and the threat model.

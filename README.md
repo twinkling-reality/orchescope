@@ -123,7 +123,7 @@ domain      identities, invariants, statistics; may only reach node:crypto
 core        graph, discovery, traces, findings, scenarios, benchmark, chaos, comparison, goals, report
 adapters    source analysis, persistence, process runtime, redaction, observability
 assembly    workspace, use cases
-edges       command line, agent interface, report server, browser workspace, demonstration system
+edges       command line, agent interface, demonstration system
 ```
 
 The unified system graph is the centre. Component identity is `(kind, namespace, local name)` rather than a line number,
@@ -140,7 +140,8 @@ Everything stays on your machine.
 - No account, no network calls, no telemetry, no upload, and nothing calls a model. Analysis is deterministic; the
   reason that is a decision rather than an omission is in
   [ADR 0002](docs/architecture/adr/0002-deterministic-analysis.md).
-- The report server binds to loopback, requires a capability token, and refuses a cross site read.
+- The only server this tool starts is the receiver `trace` and `receive` use to collect your spans. It binds to
+  loopback and lives for the duration of the run.
 - State lives in `.orchescope/state/` inside the repository you audit, which the `init` command adds to a local
   `.gitignore`. Configuration is meant to be committed; state is not.
 - Exported reports are redacted with a pattern set before they leave the process. Redaction reduces exposure; it is not a
@@ -170,17 +171,24 @@ Only what is tested is claimed. Each of these has an adapter exercised by tests 
 | --- | --- |
 | OpenAI Agents SDK (JavaScript, TypeScript and Python) | `new Agent({...})` and `Agent(name=...)`, handoffs, tools, `@function_tool` with `name_override` and `needs_approval`, MCP servers including a command nested in `params`, `maxTurns` |
 | LangGraph (JavaScript, TypeScript and Python) | `StateGraph`, `addNode("name", fn)` and `add_node(fn)`, edges, conditional edges, and `create_react_agent(model, tools=[...])` with the model reference it names |
-| CrewAI (Python) | `Agent(...)`, `Crew(...)`, `agents.yaml`, `crew.jsonc` |
+| CrewAI (Python) | `Agent(...)`, `Crew(...)`, `config/agents.yaml` including the model its `llm` field names |
 | Pydantic AI (Python) | `Agent('provider:model', ...)`, `@agent.tool` and `@agent.tool_plain`, `retries`, `requires_approval`, `output_type` |
-| Vercel AI SDK (JavaScript and TypeScript) | `generateText`, `streamText`, `generateObject`, `tool(...)`, `maxSteps` |
+| Vercel AI SDK (JavaScript and TypeScript) | `generateText`, `tool(...)`, `maxSteps` |
 | Model SDKs | OpenAI, Anthropic and compatible clients, including base URL overrides |
-| Model Context Protocol | `mcp.json`, `.mcp.json`, `.vscode/mcp.json`, `McpServer`, `FastMCP` including `from mcp.server import`, `registerTool` and the `@mcp.tool()` decorator |
-| Cloudflare Workers bindings | `wrangler.toml`, `wrangler.json` and `wrangler.jsonc` anywhere in the workspace: `d1_databases`, `kv_namespaces`, `r2_buckets` and queue producers, joined to the code by the binding name |
-| OpenTelemetry | OTLP over HTTP, protobuf and JSON, `gen_ai.*` and OpenInference attributes |
+| Model Context Protocol | `.mcp.json`, `.vscode/mcp.json`, and `FastMCP` including `from mcp.server import` and the `@mcp.tool()` decorator |
+| Cloudflare Workers bindings | `wrangler.toml` anywhere in the workspace: `d1_databases` and `kv_namespaces`, joined to the code by the binding name |
+| OpenTelemetry | OTLP over HTTP, protobuf and JSON, `gen_ai.*` attributes |
 
-Each row names an ecosystem with a fixture repository under `packages/discovery/test`, written the way that framework's own
-documentation writes it, and a test asserting the components, the relations and the evidence. A framework with no fixture is
-one Orchescope does not claim to understand.
+`create_react_agent` is read in its Python spelling only. The JavaScript prebuilt helper takes a different shape, and
+reading it the same way would be a guess rather than a fact.
+
+Each row names an ecosystem with a fixture repository, written the way that framework's own documentation writes it, and
+a test asserting the components, the relations and the evidence. A fixture is a temporary repository the test writes from
+source text it holds, in `packages/discovery/test/adapters.test.ts` and `packages/discovery/test/discover.test.ts`, using
+the workspace builder in `packages/testkit`. A framework with no fixture is one Orchescope does not claim to understand.
+
+More is implemented than this table claims. An adapter reads shapes no fixture pins yet, and an untested shape is not a
+claim this repository makes, so measure a syntax the table does not name before you rely on it.
 
 A fixture agrees with its author, so every adapter is also measured against real repositories pinned at a commit in
 [`corpus/corpus.yaml`](corpus/corpus.yaml), with what it finds in each of them committed beside it. That is what says how
@@ -210,7 +218,7 @@ The repository contains a small multi agent system that runs offline with no cre
 deliberate weaknesses, including a retry around a refund whose idempotency is not established.
 
 ```
-git clone https://github.com/athledev-labs/orchescope
+git clone https://github.com/twinkling-reality/orchescope
 cd orchescope
 pnpm install
 pnpm orchescope --cwd apps/demo test --scenario support-desk

@@ -5,7 +5,7 @@ this repository holds a registry credential.
 
 ## The publishable unit is `release/stage`
 
-`apps/cli/package.json` is a workspace manifest. It depends on ten `workspace:*` packages that are compiled into the
+`apps/cli/package.json` is a workspace manifest. It depends on nine `workspace:*` packages that are compiled into the
 bundle and never published, so `npm publish` from `apps/cli` would put dependency names on the registry that nobody can
 install.
 

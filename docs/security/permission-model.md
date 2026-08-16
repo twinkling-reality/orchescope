@@ -25,9 +25,15 @@ a property of the repository, not of whoever happens to be running the command.
 | `redaction.sensitiveEnvFragments` | `[]` | Additional environment name fragments whose values are masked. |
 
 Analysis limits (`analysis.maxFiles`, `maxFileBytes`, `timeoutMs`, `concurrency`, `followSymlinks`, `exclude`) bound the
-scan itself. Runtime limits (`runtime.maxSpansPerRun`, `maxSpanAttributeBytes`, `maxRequestBytes`, `exportDrainMs`) bound
-what a receiver will accept. Report settings (`report.host`, `port`, `openByDefault`, `retainReports`) control the server;
-`host` accepts only a loopback address.
+scan itself. Runtime settings place the OTLP trace receiver and bound what it accepts: `runtime.receiverHost` takes only
+`127.0.0.1` or `::1` and `receiverPort` defaults to a port the operating system chooses, while `maxSpansPerRun` caps the
+spans one run holds, `maxSpanAttributeBytes` caps one attribute value, `maxRequestBytes` caps one request body, and
+`exportDrainMs` is the grace period for spans still in flight when a traced process exits.
+
+The `report` block (`host`, `port`, `openByDefault`, `retainReports`) grants nothing and bounds nothing. It configured
+the browser workspace and the loopback server that served it, both of which were removed, and no code reads it. It is
+accepted so that a configuration written before that removal still loads, and `orchescope init` writes it because it
+writes the whole default document; an absent section takes the default, so deleting it from a file changes nothing.
 
 ## Scenario permissions
 
@@ -92,8 +98,8 @@ states them so the person or the agent doing the work knows what has to happen f
 
 There is none. Nothing in Orchescope calls a model, so there is no setting to grant it and no credential to supply. The
 report still answers the `model_interpretation` capability, permanently unavailable and with that reason, because the
-browser workspace asks about every capability it knows and a reader deserves the answer rather than silence. The
-decision, the evidence behind it and what would reverse it are in
+report bundle answers every capability it knows and both the terminal document and the agent interface read that answer:
+a reader deserves the reason rather than silence. The decision, the evidence behind it and what would reverse it are in
 [ADR 0002](../architecture/adr/0002-deterministic-analysis.md).
 
 A configuration written before this decision still loads. The `semanticAnalysis` block is ignored and the load reports

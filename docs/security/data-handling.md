@@ -41,9 +41,11 @@ the same graph stored twice occupies one file.
 **Permissions.** Directories are created `0700` and files `0600`, so the store is readable by your account and no other.
 They are not encrypted: a local user with your account can read them, and so can a backup process that runs as you.
 
-**Retention.** `report.retainReports` bounds how many report bundles are kept. Runs and scans accumulate, because a
-comparison against last week's baseline needs last week's runs. Removing `.orchescope/state/` is always safe: the next
-command rebuilds what it needs, and nothing outside that directory depends on it.
+**Retention.** Nothing is deleted on your behalf. `report.retainReports` is carried in the configuration and read by no
+code in this build, so report bundles accumulate the way runs and scans do rather than being bounded by it. Runs and scans
+accumulate by design, because a comparison against last week's baseline needs last week's runs. Removing
+`.orchescope/state/` is always safe: the next command rebuilds what it needs, and nothing outside that directory depends
+on it.
 
 **Size.** Traces dominate. A run of the demonstration system stores a few hundred spans; ten runs plus their reports come to
 roughly eighteen megabytes. A large system traced repeatedly grows faster, and `runtime.maxSpansPerRun` is the ceiling per
@@ -94,13 +96,12 @@ Where an excerpt is genuinely needed for evidence, it is bounded, redacted, and 
 
 ## Reports and exports
 
-- **The served report** exists in memory and is delivered to one loopback client holding a capability token.
 - **`--format json`** is the full bundle, redacted.
-- **`--format html`** is one self contained file with its inline script pinned by hash in its own content security policy.
-  It reaches no network and can be attached to a pull request.
 - **`--format sarif`** carries findings only, for a code scanning tool.
-- **`--format mermaid`** is a diagram of the graph, for a document. Mermaid is an export, never a rendering path inside the
-  workspace.
+- **`--format mermaid`** is a diagram of the graph, for a document.
+
+There is no HTML export and no served report. Both existed and were removed with the browser workspace; the three formats
+above are the whole of what leaves the process.
 
 Nothing an export contains was not already in the store, and everything in it went through redaction.
 

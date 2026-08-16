@@ -26,7 +26,9 @@ Everything below is untrusted input, whatever it claims about itself:
 - **Model output**, in a trace or a target result: an agent system's own model writes into the spans Orchescope reads.
 - **Tool output** recorded in a target's result file.
 - **Anything imported**: a graph, a report bundle, a trace file.
-- **HTTP requests to the report server**, including requests from pages the user did not open.
+- **HTTP requests to the trace receiver.** It listens on loopback while `trace` wraps a command and while `receive` holds
+  a window open, and it authenticates nothing, so a request arriving there is a claim about a run rather than a fact
+  about one.
 
 Trusted: the arguments the user typed, and the configuration file in the repository, which is treated as the user's own
 statement of intent.
@@ -35,13 +37,13 @@ statement of intent.
 
 ### Reading or writing outside the audited repository
 
-*A path in a manifest, a scenario, an export destination or a report request escapes the repository root.*
+*A path in a manifest, a scenario or an export destination escapes the repository root.*
 
 - Every repository relative path is resolved and normalised before it is compared against the root, so
   `<root>/../../etc/passwd` is refused rather than opened. A textual prefix check would accept it.
 - An absolute path is refused where a relative one is expected.
-- The report server serves a fixed allow list of four asset names, resolved inside one directory; it never maps a request
-  path onto the filesystem.
+- The trace receiver answers one route and never maps a request path onto the filesystem, so there is no path in a
+  request for a traversal to be built out of.
 - Traversal does not follow symbolic links unless configuration enables it, and a broken link is recorded as skipped.
 
 ### Executing something the user did not ask for
@@ -62,8 +64,13 @@ statement of intent.
 - Orchescope makes no outbound request of its own. There is no telemetry, no update check and no registry call.
 - Nothing in Orchescope calls a model, so no part of an audited repository reaches a provider. That is a decision with
   a record, not an omission: [ADR 0002](../architecture/adr/0002-deterministic-analysis.md).
-- The chaos fault proxy refuses to forward anywhere other than loopback unless outbound network access has been granted.
-- Every listening socket binds to `127.0.0.1` on a port chosen by the operating system and closes when the command ends.
+- The chaos fault proxy binds `127.0.0.1`, refuses to start at all without an explicit upstream so it can never become an
+  open proxy, and refuses a non loopback upstream unless outbound network access has been granted. The scenario runner
+  does not start it: a fault asking for proxy delivery is handed to the target for cooperative application instead, and
+  the run records that as a limitation rather than performing the substitution quietly.
+- So one socket is bound by an ordinary command, the OTLP trace receiver, on the address `runtime.receiverHost` names,
+  which accepts only `127.0.0.1` or `::1`. The port defaults to one the operating system chooses, and the socket closes
+  when the command ends.
 
 ### A secret leaving the process
 
@@ -77,37 +84,59 @@ statement of intent.
 - **This is a reduction, not a proof.** A secret in a shape nothing recognises can survive it, which is why an export is
   something to review before sharing.
 
-### Another page reading the report
+### Something else reaching the trace receiver
 
-*A page the user did not open reads the analysis from the loopback server.*
+*A process, or a page the user did not open, sends spans to the loopback receiver.*
 
-Five controls, each covering a case the others do not:
+The threat here is a write rather than a read. The receiver serves nothing: `POST /v1/traces` is the only request it
+answers and an OTLP `ExportTraceServiceResponse` is the only thing it returns, so there is no analysis behind it to be
+read and no session to be stolen. What reaching it buys is spans in the run being collected, and the controls bound that.
 
-1. **Host allow list**, so a name that resolves to loopback but is not this server is refused with `421`. This is what stops
-   DNS rebinding.
-2. **Origin check**, so a request declaring a foreign origin is refused.
-3. **Fetch metadata.** A cross site read of an API route is refused; a cross site navigation to a document is allowed,
-   because refusing it would break an ordinary link without protecting anything.
-4. **Capability token.** The port is guessable by scanning; a 32 byte token is not. It arrives once in the URL and is
-   exchanged for an HttpOnly, SameSite=Strict cookie so it stops appearing in the address bar. Comparison is constant time.
-5. **Route and method allow lists**, with a bounded request body and a `413` rather than unbounded buffering.
+1. **Loopback only**, on the address `runtime.receiverHost` names. The setting accepts `127.0.0.1` and `::1` and nothing
+   else, so there is no configuration that quietly listens on a network.
+2. **One route and one method.** Anything other than `POST` is `405`, any path other than `/v1/traces` is `404`.
+3. **A bounded body.** `runtime.maxRequestBytes` is checked against the declared content length before a byte is read
+   and against the running total while it is read, so a lying content length does not get past it. Over the ceiling is
+   `413` rather than unbounded buffering, and a body that does not decompress is refused rather than retried.
+4. **A bounded run.** `runtime.maxSpansPerRun` caps how many spans one run holds; a span past the ceiling is dropped and
+   counted, so the bundle states how many it did not keep rather than implying it saw everything.
+   `maxSpanAttributeBytes` truncates an attribute value rather than discarding the span it belongs to.
+5. **A bounded window.** The socket lives for the wrapped command under `trace`, and for the `--for` window under
+   `receive`, itself capped by `policy.maxRunDurationMs`. An unbounded window would be a daemon, and this is not one.
 
-The served page carries a content security policy with no `unsafe-inline` and no remote origin, `nosniff`, `no-referrer`,
-`no-store`, and same origin resource and opener policies. Both type faces are served as files from that same origin, so the
-policy keeps `font-src 'self'`.
+A span whose trace or span identifier is the wrong length is rejected rather than stored, because an identifier that
+cannot be joined to anything is not evidence, and the count comes back to the exporter as OTLP `partialSuccess` rather
+than being swallowed.
 
-The standalone HTML export pins its own inline script and style by hash and carries `font-src data:` rather than `'self'`.
-Opened from a disk it is a `file:` page, where `'self'` resolves to nothing it can fetch, so the faces it inlines would be
-unreachable. The widening is bounded: `default-src 'none'` still blocks every network destination, `data:` is allowed for
-fonts and for nothing else, and a font is not executable. Evidence: `packages/report/test/standalone.test.ts`.
+Two content types are accepted, protobuf and JSON, because those are what the OpenTelemetry SDKs export; anything else is
+`415`, and a body that does not decode is `400`, which the specification forbids a client from retrying. The receiver
+makes no outbound request of its own and follows no redirect. Header and keep alive timeouts bound a connection that
+opens and says nothing. Evidence: `tests/e2e/receive.test.ts`, which posts to the real receiver over the real transport,
+holds that the window closes itself, and holds that a window nothing exported to says so rather than reporting an empty
+run as a result.
 
-### Untrusted content executing in the report
+### Untrusted content steering the terminal
 
-*A component name, a prompt excerpt, a span attribute or a model response contains markup.*
+*A component name, a prompt excerpt, a span attribute or a model response contains an escape sequence.*
 
-- The browser workspace renders text as text. There is no `innerHTML` path and no dynamic inline style.
-- The bundle is delivered in a JSON island whose closing sequences are escaped.
-- The content security policy has no `unsafe-inline`, so an injected script has nothing to run in even if one arrived.
+The terminal is the only human surface, so this is where hostile text arrives rendered rather than quoted.
+
+- Every string that reaches a cell of the audit document or the progress line passes `sanitiseCell`, which removes the
+  C0 and C1 controls and the delete character before the string is measured. A name carrying a cursor sequence therefore
+  cannot move the cursor, repaint a row already written or end one early.
+- A leading combining mark is dropped with them, because a mark with nothing before it attaches to whatever the terminal
+  drew last, which is a neighbouring cell rather than its own.
+- Width is measured in display columns rather than code units, so a cut never leaves half a wide glyph and a name never
+  overruns the grid it was given.
+- Evidence: `apps/cli/test/display-width.test.ts`.
+
+The bound is the grid. A Mermaid label has its quotes and its line breaks taken out and nothing else; a JSON, SARIF or
+markdown document is text rather than cells. None of them is stripped of escape sequences, because none of them is
+written to a cursor, and every one of them still passes the redactor.
+
+The reader of the JSON document is a coding agent rather than a terminal, and the content is the same. It is still
+untrusted there: a component name is a string a repository chose, and nothing about passing through Orchescope makes it
+an instruction.
 
 ### A misleading result
 
@@ -149,6 +178,9 @@ This is a security concern because a false assurance is acted on:
 - **Chaos causes real failures**, including ones that produce duplicated external effects. That is the measurement.
 - **Prompt injection scenarios feed hostile text to your agents on purpose.** If the agent acts on it, that is the finding.
 - **Redaction is a pattern set.** It cannot prove the absence of a secret.
+- **The trace receiver authenticates nothing.** Anything on the machine that can reach the port while the window is open
+  can push spans into the run being collected, and a run built from spans it did not observe is a measurement of
+  nothing. The bound is that the window is short, the port is loopback, and the receiver hands nothing back.
 - **A local user with your account can read the store.** Owner only permissions, not encryption.
 - **An audit that reports nothing is not a certification.** It means the rules that had evidence did not fire.
 

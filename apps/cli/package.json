@@ -3,6 +3,15 @@
   "version": "0.1.0",
   "description": "Map, test, and improve agent systems. A local first CLI and MCP tool that discovers, audits, benchmarks and resilience tests agentic systems.",
   "license": "Apache-2.0",
+  "author": "Glendon Chin",
+  "homepage": "https://github.com/twinkling-reality/orchescope#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/twinkling-reality/orchescope.git"
+  },
+  "bugs": {
+    "url": "https://github.com/twinkling-reality/orchescope/issues"
+  },
   "type": "module",
   "keywords": [
     "agents",

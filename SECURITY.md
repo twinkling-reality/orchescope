@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Report a suspected vulnerability by opening a private security advisory at
-https://github.com/athledev-labs/orchescope/security/advisories/new, which is the `Security` tab followed by
+https://github.com/twinkling-reality/orchescope/security/advisories/new, which is the `Security` tab followed by
 `Report a vulnerability`. If that is not available to you, open a public issue that says only that you have found a security
 problem and asks for a private channel; do not include the details in the issue.
 

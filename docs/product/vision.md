@@ -92,5 +92,7 @@ The product succeeds if an agent can take a finding, create a goal, make the cha
 about whether the change helped that a person is willing to act on after a glance at the terminal or the CI log.
 
 That loop is covered end to end by `tests/e2e/improvement-loop.test.ts`, which discovers a duplicated refund in the
-demonstration system, creates the goal, applies the fix, reruns the same scenario with the same seed, and requires the
-comparison to reach `improved` from measured runs.
+demonstration system, creates the goal, applies the fix, and reruns the same scenario with the same seed. What it
+requires from measured runs is that the duplicate effect itself went from one to none and that the metric reads
+`improved`; the verdict over every metric together is allowed to be `improved` or `mixed`, because a change that fixes
+the duplicate while moving a second metric the other way is a real outcome and not a failed test.

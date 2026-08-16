@@ -8,3 +8,9 @@
 # The redaction tests need inputs shaped like real credentials, or they would assert nothing. This one is a token from
 # the JWT specification's own example, signed with a published key, and it grants nothing.
 81afa5a92acf42dc99167e3f085b8a2d329c2d63:packages/redaction/test/redact.test.ts:jwt:17
+
+# A literal in a test for the block that printed a served report's URL. The report server bound to loopback and minted
+# a fresh capability token per run, so this stood for a token rather than being one: it named a port on one machine
+# that closed when that run ended. The server, the block and the test were removed with the browser workspace, so no
+# line survives to carry a `gitleaks:allow` note and only a fingerprint can reach it.
+51ce695125419c992f152f517ee6307d99bc3c4d:apps/cli/test/report-ready.test.ts:generic-api-key:16
