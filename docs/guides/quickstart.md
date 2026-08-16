@@ -23,51 +23,51 @@ orchescope audit
 ```
 
 One document, on standard output, and nothing on standard error once the work is done. A line's first
-column says what kind of line it is, its second says what state that thing is in, and its third says
-the one sentence about it, so `grep` and `awk` read it as well as a person does:
+column says what kind of line it is, a line that has a state says it in a second column, and the rest
+says the one sentence about it, so `grep` and `awk` read it as well as a person does:
 
 ```
-demo            33 components, 32 edges, 23 of 23 files read
+demo            this project has 5 agents, 7 tools and 2 models
+                read from 23 of 23 files, with 10 runs on record
 
-1 audit         + done       21 of 21 checks ran
-2 goal          + done       2 jobs written up
-3 rerun         + done       1 of 3 scenarios have been run
-4 measure       + done       10 runs recorded
-                             8 faults injected, 1 broke the task
-5 did it help   ! undecided  unchanged: no metric moved enough to call
+problems        3 serious, 6 medium, 11 minor, worst first
+serious         tool_timeout on issue_refund: an outside effect happened twice
+serious         issue_refund is retried and nothing makes it safe to repeat
+serious         refund happened 2 times in one run
+more            17 more problems: orchescope audit --verbose
 
-findings        20 risks: 3 HIGH, 6 MEDIUM, 11 low; 2 strengths
-findings        |HHHMMMMMMLLLLLLLLLLL| 20
-problem         ! HIGH       tool_timeout on issue_refund: a side…   1 simulated
-problem         ! HIGH       Retry around issue_refund can repeat…  2 discovered
-problem         ! HIGH       refund happened 2 times in one run      11 observed
-problem         ! MEDIUM     Model call to demo-small declares no…  4 discovered
-problem         ! MEDIUM     2 consequential operations have no a…  6 discovered
-problem         ! MEDIUM     metering_record_usage runs without b…    5 observed
-findings        14 more risks; full list: orchescope audit --json
-
-system          14 of 21 declared components exercised
-system          [##############.......] 14/21
-system          7 declared components never exercised
-system          1 exercised component never declared
-system          0 contradicted declarations
-system          1 duplicated external effect
-
+missing         a verdict: the last comparison did not settle it
 run             orchescope test --scenario support-desk --repeat 5
 ```
 
-Findings sit above the system rows so the worst problem is visible before coverage. Finding identifiers
-stay off the default surface; they appear on the `run` line when a goal is next, under `--verbose`, or
-in `audit --json` / MCP for agents. `system` is the reconciliation: how much of the declared model a
-run reached, and the four deltas this product exists to compute. Every finding row ends with how many
-evidence records stand behind it and how they were established, because a title is itself a numeric
-claim. There is one `run` row: the command that advances the loop. A `next` row carries an instruction
-that names a file to edit, and is never a command.
+That is the default glance, and it answers four questions in the order a reader asks them.
 
-A repository where nothing was detected still gets the five step loop, the sentence saying that
-nothing reported is not the same as nothing wrong, and one command that writes the manifest template:
+- **What was audited.** The project name in column one, and what the project turned out to contain.
+  Agents, tools and models are named because they are what makes it an agent system; the part and link
+  counts a graph would report are on `--verbose`. The second line is coverage, and whether anything has
+  ever run.
+- **What is wrong.** The three worst problems, worst first, keyed by how bad each one is. `serious`
+  covers critical and high, `minor` covers low and info; the five severities the engine records are
+  exact and they are in `--verbose`, `--json` and MCP.
+- **What is still missing.** An audit is inventory. The `missing` row names the thing the loop would
+  produce and has not, which is the honest half of what this product claims.
+- **What to run.** One command, and it sits directly under the reason it is worth running.
+
+The five step loop, the reconciliation deltas, evidence bases, confidences and finding identifiers are
+on `orchescope audit --verbose`, and all of them are always in `audit --json` and MCP for agents.
+
+A repository where nothing was detected still gets a plain refusal, and the `missing` row is about the
+command printed under it rather than about a loop that has not started:
 
 ```
+express         this project has 5 parts
+                read from 141 of 141 files, with no runs on record
+No agent system was detected: nothing looked like an agent, tool, or model.
+
+problems        1 medium
+medium          No runtime evidence has been collected
+
+missing         a description of this project that this build can read
 run             orchescope init --manifest
 ```
 
@@ -78,8 +78,30 @@ the field that failed, never ignored. See [adapter-development.md](adapter-devel
 ## Agents and the same facts
 
 The terminal is the human document. Coding agents should use `orchescope audit --json` or
-`orchescope mcp serve`: both return loop standing, the one next action, and capabilities, so an agent
-does not scrape the terminal.
+`orchescope mcp serve`: both return loop standing, the one next action, capabilities, and the answer to
+"did my last change help", so an agent does not scrape the terminal.
+
+That last one is `data.outcome`, and it takes no identifier, because an agent that has to already hold a
+goal id cannot ask the question after a fresh session:
+
+```json
+{
+  "verdict": "unchanged",
+  "verdictReason": "no metric moved enough to call",
+  "decided": false,
+  "goals": [
+    {
+      "goalId": "OSC-GOAL-0001",
+      "validated": false,
+      "blockedBy": ["the finding this goal was created from still fires after the rescan"]
+    }
+  ]
+}
+```
+
+`decided` is the field that matters. `unchanged` and `insufficient_evidence` are refusals, not results,
+so a caller that branches on `verdict` alone will read a refusal as an answer. `blockedBy` names why a
+goal did not validate, which is the part an agent can act on.
 
 ## Add runtime evidence
 

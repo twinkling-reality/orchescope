@@ -27,10 +27,17 @@ export {
   toMermaid,
   toSarif,
 } from './exports.ts';
+export {
+  type GoalStanding,
+  type ImprovementOutcome,
+  improvementOutcome,
+} from './improvement-outcome.ts';
 export { type LayoutResult, layoutGraph, type Position } from './layout.ts';
 export {
   type CheckCoverage,
   checkCoverage,
+  isDecided,
+  latestComparison,
   type LoopProgress,
   loopProgress,
   type LoopStep,

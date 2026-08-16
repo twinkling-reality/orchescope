@@ -119,16 +119,34 @@ const criterionMarker = (
   return result.decided ? context.style.bad('x') : context.style.dim('.');
 };
 
+/**
+ * The one word this command exists to say, said as a word.
+ *
+ * `validated` was carried only by the exit code, so a person reading the block had to count `+` and `x`
+ * glyphs to infer the single boolean they came for, and a person skimming it after an autonomous agent
+ * reported success inferred nothing at all.
+ */
 const writeValidationText = (
   context: CommandContext,
   outcome: ReturnType<typeof validateGoalOutcome>,
 ): void => {
-  context.stdout(`\n${context.style.bold(outcome.goal.id)} ${outcome.validation.summary}\n`);
+  const { style } = context;
+  const decision = outcome.validation.validated
+    ? style.good('validated')
+    : style.bad('not validated');
+  context.stdout(`\n${style.bold(outcome.goal.id)} ${decision}: ${outcome.validation.summary}\n`);
+  if (outcome.comparison !== undefined) {
+    context.stdout(
+      style.dim(
+        `  judged against ${outcome.comparison.id}, which returned ${outcome.comparison.verdict.replaceAll('_', ' ')}\n`,
+      ),
+    );
+  }
   for (const result of outcome.validation.outcomes) {
     context.stdout(
       `  ${criterionMarker(context, result)} ${result.criterion.id} ${result.criterion.statement}\n`,
     );
-    context.stdout(context.style.dim(`      ${result.detail}\n`));
+    context.stdout(style.dim(`      ${result.detail}\n`));
   }
 };
 

@@ -19,7 +19,7 @@ This is the output of `orchescope audit --json` against the demonstration system
   "severity": "high",
   "confidence": 0.85,
   "basis": "discovered",
-  "title": "Retry around issue_refund can repeat an effect that is not known to be idempotent",
+  "title": "issue_refund is retried and nothing makes it safe to repeat",
   "explanation": "orchestrator retries issue_refund, whose effect class is financial, and no idempotency key was found on the operation. Retrying an operation that is not idempotent produces the effect twice whenever the first attempt fails after the effect has already happened, which is exactly the case a timeout cannot distinguish.",
   "impact": "Under a transient failure the external effect happens more than once. Nothing downstream can collapse the duplicates without a key.",
   "components": ["tool:issue_refund", "agent:orchestrator"],

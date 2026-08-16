@@ -350,11 +350,17 @@ const chaosOutcomeDraft = (
     };
   }
 
+  /*
+   * The outcome in the words a reader who did not write the fault plan would use. "A side effect was
+   * duplicated" names the schema's category; "an outside effect happened twice" names the thing the
+   * reader would have to explain to whoever received it twice, and it is the same phrase the
+   * reconciliation region uses for the same event.
+   */
   const headline = collapsed
-    ? 'the task did not complete'
+    ? 'the task did not finish'
     : duplicated
-      ? 'a side effect was duplicated'
-      : 'cost amplified';
+      ? 'an outside effect happened twice'
+      : 'the run cost materially more';
   return {
     ruleId: 'resilience-under-injected-fault',
     category: 'resilience',

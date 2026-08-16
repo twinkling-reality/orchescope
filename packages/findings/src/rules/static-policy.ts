@@ -61,7 +61,7 @@ export const unsafeRetryRule: Rule = {
         ruleId: 'retry-around-non-idempotent-operation',
         occurrence: {
           key: 'unsafe-retry',
-          groupedTitle: '{count} retries can repeat an effect that is not known to be idempotent',
+          groupedTitle: '{count} operations are retried and nothing makes them safe to repeat',
         },
         category: 'reliability',
         polarity: 'risk',
@@ -69,7 +69,12 @@ export const unsafeRetryRule: Rule = {
         confidence:
           effect === 'unknown' ? CONFIDENCE_BANDS.structural : CONFIDENCE_BANDS.strongStructural,
         basis: 'discovered',
-        title: `Retry around ${target.displayName} can repeat an effect that is not known to be idempotent`,
+        /*
+         * "Idempotent" is the precise word and it is a word a reader has to already know. The
+         * remediation this rule writes has always said "safe to repeat", so the title says it too and
+         * the finding speaks one language to the person who reads it and the agent that acts on it.
+         */
+        title: `${target.displayName} is retried and nothing makes it safe to repeat`,
         explanation: `${source?.displayName ?? edge.from} retries ${target.displayName}, whose effect class is ${effect}, and no idempotency key was found on the operation. Retrying an operation that is not idempotent produces the effect twice whenever the first attempt fails after the effect has already happened, which is exactly the case a timeout cannot distinguish.`,
         impact:
           'Under a transient failure the external effect happens more than once. Nothing downstream can collapse the duplicates without a key.',
@@ -703,14 +708,15 @@ export const safeRetryRule: Rule = {
           ruleId: 'bounded-retry-with-declared-idempotency',
           occurrence: {
             key: 'safe-retry',
-            groupedTitle: '{count} retries are bounded and declare an idempotency key',
+            groupedTitle: '{count} retries are bounded and safe to repeat',
           },
           category: 'reliability' as const,
           polarity: 'strength' as const,
           severity: 'info' as const,
           confidence: CONFIDENCE_BANDS.strongStructural,
           basis: 'discovered' as const,
-          title: `Retry around ${target?.displayName ?? edge.to} is bounded and keyed`,
+          /* The risk this rule is the mirror of says "safe to repeat", so the strength says it too. */
+          title: `${target?.displayName ?? edge.to} is retried a bounded number of times and is safe to repeat`,
           explanation: `${source?.displayName ?? edge.from} retries ${target?.displayName ?? edge.to} at most ${retry?.maxAttempts ?? 'a declared number of'} times with ${retry?.backoff ?? 'unknown'} backoff, and the operation declares an idempotency key. A repeat of the same attempt cannot produce the effect twice.`,
           impact:
             'This retry recovers from a transient failure without the risk that makes an unkeyed retry dangerous.',

@@ -958,7 +958,9 @@ def workflow(question: str) -> str:
     const areas = blindSpots(result);
     assert.equal(areas.length, 1, `expected one blind spot, saw ${areas.length}`);
     assert.match(areas[0]?.area ?? '', /langgraph/);
-    assert.match(areas[0]?.area ?? '', /adapter:langgraph/);
+    /* The adapter identifier is diagnostic, so it sits in the reason rather than in the line a terminal renders. */
+    assert.equal(/adapter:langgraph/.test(areas[0]?.area ?? ''), false);
+    assert.match(areas[0]?.reason ?? '', /adapter:langgraph/);
     assert.match(areas[0]?.reason ?? '', /found no component/);
     assert.match(areas[0]?.remediation ?? '', /manifest\.yaml/);
   });

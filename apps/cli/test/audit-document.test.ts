@@ -9,19 +9,23 @@ import { adapter, auditResult, coverage, finding, reconciliation } from './audit
 /**
  * The whole document, composed.
  *
- * The golden comparison is against a repository built here rather than against a cached bundle, so a
- * failure names a layout decision rather than a corpus that moved. What the corpus is for is the runs
- * in the report, and those are the ones that prove the numbers; this proves the arrangement.
+ * The default glance answers four questions and no others: what was audited, what is wrong, what is
+ * still missing, and the one command that gets it. Verbose restores the spine. Goldens are against
+ * fixtures, not the corpus.
  */
 
 const style = createStyle('plain');
 
-const render = (result: Parameters<typeof auditDocument>[0]['result'], columns?: number): string =>
+const render = (
+  result: Parameters<typeof auditDocument>[0]['result'],
+  columns?: number,
+  verbose = false,
+): string =>
   auditDocument({
     result,
     layout: layoutFor(columns),
     style,
-    verbose: false,
+    verbose,
     written: [],
   });
 
@@ -36,6 +40,7 @@ const detected = auditResult({
 const undetected = auditResult({
   projectName: 'express',
   componentCount: 5,
+  componentKinds: {},
   edgeCount: 3,
   agentSystemDetected: false,
   coverage: coverage({
@@ -50,73 +55,63 @@ const undetected = auditResult({
   }),
 });
 
-describe('a repository with a system, a run and two problems', () => {
-  it('composes one document, in one order, at eighty columns', () => {
+describe('the glance', () => {
+  it('says what was audited, what is wrong, what is missing, and what to run', () => {
     assert.equal(
       render(detected),
       [
-        'demo            33 components, 32 edges, 23 of 23 files read',
+        'demo            this project has 5 agents, 7 tools and 2 models',
+        '                read from 23 of 23 files, with 1 run on record',
         '',
-        '1 audit         + done       no check had anything to look at',
-        '2 goal          . not yet    nothing handed off yet',
-        '3 rerun         . not yet    no scenario to repeat',
-        '4 measure       + done       1 run recorded',
-        '5 did it help   . not yet    needs a before and an after',
+        'problems        1 serious, 1 medium, worst first',
+        'serious         a model is called with no timeout declared',
+        'medium          a model is called with no timeout declared',
         '',
-        'findings        2 risks: 1 HIGH, 1 MEDIUM; no strengths',
-        'findings        |HM| 2',
-        'problem         ! HIGH       a model is called with no timeout de…  2 discovered',
-        'problem         ! MEDIUM     a model is called with no timeout de…    1 inferred',
-        '',
-        'system          14 of 21 declared components exercised',
-        'system          [##############.......] 14/21',
-        'system          7 declared components never exercised',
-        'system          1 exercised component never declared',
-        'system          0 contradicted declarations',
-        'system          1 duplicated external effect',
-        '',
+        'missing         a problem picked to work on, with a check that proves it fixed',
         'run             orchescope goal create OSC-REL-0001',
       ].join('\n'),
     );
   });
 
-  /*
-   * Width changes what is cut and never where anything sits. Every key and every state word is on the
-   * same column at both widths and only the right edge moves, which is the property a frame cannot
-   * have because a frame's own edge is a function of its contents.
-   */
-  it('keeps every anchor and every line count when the terminal is wider', () => {
-    const narrow = render(detected).split('\n');
-    const wide = render(detected, 120).split('\n');
-    assert.equal(wide.length, narrow.length);
-    for (const [index, line] of wide.entries()) {
-      assert.equal(line.slice(0, 29), narrow[index]?.slice(0, 29));
-    }
-    assert.ok(wide.some((line) => line.includes('a model is called with no timeout declared ')));
+  it('hides system deltas, the five step loop, and engine severity tokens', () => {
+    const document = render(detected);
+    assert.equal(document.includes('\nsystem'), false);
+    assert.equal(document.includes('1 audit'), false);
+    assert.equal(document.includes('parts in the code'), false);
+    assert.equal(/HIGH|MEDIUM/.test(document), false);
   });
-});
 
-describe('a repository where nothing was detected', () => {
-  it('still draws the loop, states the refusal, and names the file to write in', () => {
+  it('names the missing half of the loop directly above the command that gets it', () => {
+    const lines = render(detected).split('\n');
+    const missing = lines.findIndex((line) => line.startsWith('missing '));
+    assert.ok(missing > 0);
+    assert.ok(lines[missing + 1]?.startsWith('run '));
+  });
+
+  it('still refuses an undetected repository with one next command', () => {
     assert.equal(
       render(undetected),
       [
-        'express         5 components, 3 edges, 141 of 141 files read',
-        'No agent system was detected: nothing declared an agent, a tool or a model call.',
-        'adapters        2 ran (effects, prompts), 1 found nothing to read',
+        'express         this project has 5 parts',
+        '                read from 141 of 141 files, with no runs on record',
+        'No agent system was detected: nothing looked like an agent, tool, or model.',
         '',
-        '1 audit         + done       no check had anything to look at',
-        '2 goal          . not yet    nothing handed off yet',
-        '3 rerun         . not yet    no scenario to repeat',
-        '4 measure       . not yet    nothing is declared for a run to be joined against',
-        '5 did it help   . not yet    needs a before and an after',
-        '',
-        'findings        no risks, no strengths',
+        'problems        no problems found',
         'nothing was reported as a problem, which is not the same as nothing being wrong',
         '',
+        'missing         a description of this project that this build can read',
         'run             orchescope init --manifest',
       ].join('\n'),
     );
+  });
+});
+
+describe('verbose', () => {
+  it('restores the loop, plain system rows, and the identifiers', () => {
+    const document = render(detected, 80, true);
+    assert.match(document, /1 audit/);
+    assert.match(document, /parts in the code showed up in a run/);
+    assert.match(document, /OSC-REL-0001/);
   });
 });
 
@@ -135,6 +130,16 @@ describe('what is true of every document', () => {
         if (line.startsWith('run ') || line.startsWith('next ')) continue;
         assert.ok(visibleWidth(line) <= Math.max(60, columns), `${columns}: ${line}`);
       }
+    }
+  });
+
+  it('keeps the supporting line under the sentence it supports, at every width', () => {
+    for (const columns of [60, 80, 120]) {
+      const lines = render(detected, columns).split('\n');
+      const headline = lines[0] ?? '';
+      const support = lines[1] ?? '';
+      const valueColumn = headline.length - headline.replace(/^demo\s+/, '').length;
+      assert.equal(support.length - support.trimStart().length, valueColumn, `${columns}`);
     }
   });
 

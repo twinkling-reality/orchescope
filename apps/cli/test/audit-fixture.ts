@@ -63,10 +63,33 @@ export const finding = (over: Partial<Finding> = {}): Finding =>
     ...over,
   }) as unknown as Finding;
 
+/**
+ * A component list whose kinds are what the headline names.
+ *
+ * The headline counts agents, tools and models out of the graph and falls back to the part count when
+ * a project has none of the three, so a fixture has to carry components with kinds on them. Padding
+ * with prompts keeps the kind counts and `componentCount` telling the same story, which is what a
+ * golden of the headline is checking.
+ */
+const componentsOfKinds = (
+  counts: Readonly<Record<string, number>>,
+  total: number,
+): AuditResult['graph']['components'] => {
+  const named = Object.entries(counts).flatMap(([kind, count]) =>
+    Array.from({ length: count }, (_value, index) => ({ id: `${kind}:${index}`, kind })),
+  );
+  const padding = Array.from({ length: Math.max(0, total - named.length) }, (_value, index) => ({
+    id: `prompt:${index}`,
+    kind: 'prompt',
+  }));
+  return [...named, ...padding] as unknown as AuditResult['graph']['components'];
+};
+
 export const auditResult = (over: {
   readonly projectName?: string;
   readonly componentCount?: number;
   readonly edgeCount?: number;
+  readonly componentKinds?: Readonly<Record<string, number>>;
   readonly agentSystemDetected?: boolean;
   readonly coverage?: Coverage;
   readonly findings?: readonly Finding[];
@@ -83,8 +106,16 @@ export const auditResult = (over: {
     (over.reconciliation === undefined
       ? []
       : ([{ id: 'run_0000000000000001' }] as unknown as AuditResult['bundle']['runs']));
+  const componentCount = over.componentCount ?? 33;
   return {
-    graph: { coverage: over.coverage ?? coverage(), provenance: { scanId: 'scan_0' } },
+    graph: {
+      coverage: over.coverage ?? coverage(),
+      provenance: { scanId: 'scan_0' },
+      components: componentsOfKinds(
+        over.componentKinds ?? { agent: 5, tool: 7, model: 2 },
+        componentCount,
+      ),
+    },
     findingSet: { rulesEvaluated: [] },
     reconciliation: over.reconciliation,
     agentSystemDetected: over.agentSystemDetected ?? true,
@@ -94,8 +125,9 @@ export const auditResult = (over: {
     bundle: {
       projectName: over.projectName ?? 'demo',
       summary: {
-        componentCount: over.componentCount ?? 33,
+        componentCount,
         edgeCount: over.edgeCount ?? 32,
+        runCount: runs.length,
         findingCountBySeverity: {},
         strengthCount: 0,
       },

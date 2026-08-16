@@ -26,7 +26,7 @@ export const NOT_APPLIED_REASON = 'the target reported no application of this fa
  * Task completion under a fault is a question about the task, not about the scenario's expectations.
  *
  * A chaos scenario often asserts something about behaviour under failure, so folding evaluator results into this
- * predicate would report "the task did not complete" for a run where the system absorbed the fault correctly and one
+ * predicate would report "the task did not finish" for a run where the system absorbed the fault correctly and one
  * assertion about the failure path did not hold. Evaluator outcomes are reported separately, where they belong.
  */
 const succeeded = (repetition: RepetitionResult): boolean =>

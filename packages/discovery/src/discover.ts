@@ -150,10 +150,14 @@ const adapterBlindSpots = (
     );
     if (used.length === 0) continue;
     areas.push({
-      area: `${used.join(', ')} used in source, read by ${adapter.id}`,
+      /*
+       * The area names what was imported and what came of it. Naming the adapter that read it beside
+       * the word this gap renders under produced "unread: mcp used in source, read by adapter:mcp",
+       * which is a line that contradicts itself in the one place a reader is being told about a limit.
+       */
+      area: `${used.join(', ')} is imported here and its adapter found nothing`,
       kind: 'adapter_blind_spot',
-      reason:
-        'The adapter that claims this framework ran and found no component. Either this build does not read the form this repository uses, or this repository imports the framework as a client and declares nothing an adapter could read.',
+      reason: `${adapter.id} claims this framework, ran and found no component. Either this build does not read the form this repository uses, or this repository imports the framework as a client and declares nothing an adapter could read.`,
       remediation:
         'Declare the components in .orchescope/manifest.yaml so they appear in the graph. If the repository does declare components in source, report the form so an adapter can read it.',
     });

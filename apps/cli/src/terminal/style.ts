@@ -92,7 +92,13 @@ export const createStyle = (mode: StyleMode): Style => {
   };
 };
 
-/** Symbols carry the state so that colour is never the only signal. */
+/**
+ * Symbols carry the state so that colour is never the only signal.
+ *
+ * `same` and `unknown` are kept apart for the reason the whole product is: a measurement that did not
+ * move and a measurement that could not be taken are different facts, and one glyph for both is a claim
+ * the evidence does not support.
+ */
 export const SYMBOLS = {
   done: '+',
   active: '>',
@@ -101,6 +107,8 @@ export const SYMBOLS = {
   failed: 'x',
   warning: '!',
   bullet: '*',
+  same: '=',
+  unknown: '?',
 } as const;
 
 export const formatDuration = (milliseconds: number): string => {

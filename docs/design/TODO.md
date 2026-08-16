@@ -51,14 +51,40 @@ deltas still render when a run was reconciled: a zero is the difference between 
 "never looked." Collapsing zeros is rejected. Full product nouns on four delta rows win over packing
 that shortens them. The surface key is `system` (the subject), not `join` (the engine verb).
 
-### Terminal glance hides engine chrome
+### Terminal glance answers four questions
 
-The default terminal document is for a human glance: `problem` / `ok` rows with severity and title,
-not finding identifiers. Identifiers stay available on the `run` line when a goal is next, under
-`--verbose`, and always in `audit --json` / MCP. Loud severities use uppercase and, on a colour TTY,
-a background chip; `NO_COLOR` still reads `! HIGH`. Honest unit meters are allowed only for known
-totals (one cell per risk in the mix, one cell per declared component on system). No scores, no
-invented percentages, no interactive tabs or chords.
+Default `audit` answers, in this order: what was audited, what is wrong, what is still missing, what to
+run. Line one names the project by what it contains (agents, tools, models) rather than by a part
+count, because a size is not a description and a bare folder name in column one reads as a mode. Line
+two is coverage and the run count. Then the three worst problems, then any gap that blocked reading,
+then the `missing` row and the one command, adjacent, because a reason and the command it justifies
+are one thought. No five step loop, no system deltas, no evidence tails, no meters of any kind.
+`--verbose` restores the spine in plain language ("parts in the code", not "declared/exercised") and is
+where identifiers, exact severities, confidences and evidence bases live, along with `--json` / MCP.
+No scores, no invented percentages, no interactive tabs or chords.
+
+### Severity is a key, and a chip is a word
+
+A problem row is keyed by `serious` / `medium` / `minor` and carries no state field. `problem  ! HIGH
+<title>` spent the two widest columns saying one thing twice and left fifty columns for a sentence that
+needed more, and `HIGH` is an engine token. The five severities are exact and stay in `--verbose`,
+`--json` and MCP. A coloured severity is painted before the grid pads it, so the background is the
+width of the word; an eleven column bar with a six character label in it is the failure this rule
+exists to prevent. `NO_COLOR` loses nothing, because the word carries the whole signal.
+
+### The verdict is a result, not an absence
+
+The default `audit` can state a decided verdict. `improved` and `regressed` both mark step five done, so
+a closed loop used to print "nothing: every step of the loop is done" whether a change had helped or had
+broken the system, which is a referee announcing a loss as a win. A decided comparison gets a row keyed
+by its own outcome word; `missing` keeps naming what is absent and is dropped when a verdict has closed
+the loop. `unchanged` and `insufficient_evidence` are not verdicts and still render as `missing`.
+
+Downstream of the same rule: `compare` exits non-zero on `insufficient_evidence` and `mixed`, not only
+on `regressed`, because zero means a gate may proceed. The compare table draws `unchanged` and
+`indeterminate` as different marks (`=` and `?`), since "did not move" and "cannot tell" are the
+distinction the product exists to make. `goal validate` prints `validated` / `not validated` as a word
+and names the comparison that decided it.
 
 ## Implementation sequence
 
@@ -67,6 +93,11 @@ invented percentages, no interactive tabs or chords.
 | 1 | Baseline-before-goal; MCP `import_trace` + `run_traced` + loop-action mapping | done |
 | 2 | Coverage pair (declared-set) atomic across graph, finding, TUI, schema comments | done |
 | 3 | Vocabulary / grammar pass over findings, goals, comparison, MCP chrome | done |
+| 4 | Glance rework: kind headline, severity keys, `missing` row, hugging chips | done |
+| 5 | Verdict as a result: outcome row, compare exit codes, direction marks, `validated` as a word | done |
+| 6 | "Did the last change help" as one selection, shared by terminal, `--json` and MCP, with no identifier | done |
+| next | Let an agent author its own scenario. The rescan criterion still catches it, because it did not write the rule | open |
+| next | Prove the loop closes on a repository nobody designed for it. Without that, the referee has no consumer | open |
 | optional | Join delta packing (keep zeros, shrink line count) | reverted: full nouns |
 
 ## Notes that remain true

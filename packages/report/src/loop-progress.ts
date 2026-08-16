@@ -17,7 +17,7 @@
  */
 
 import { formatCount } from '@orchescope/domain';
-import type { FindingSet, ReportBundle } from '@orchescope/schema';
+import type { Comparison, FindingSet, ReportBundle } from '@orchescope/schema';
 import {
   goalCommand,
   scenarioRepeatCommand,
@@ -263,8 +263,23 @@ function measureStep(bundle: ReportBundle, rules: RulesEvaluated): LoopStep {
  * is the product's whole argument for existing, and it used to sit three clicks deep on a screen with
  * no controls on it.
  */
+/**
+ * The comparison a reader means when they say "did it help", named once.
+ *
+ * The store lists comparisons newest first, so the latest is the head. This is exported because the
+ * terminal has to name the same one the loop's fifth step named: two surfaces each reaching into the
+ * bundle with their own idea of which comparison counts is how a document comes to state a verdict and
+ * a standing that disagree.
+ */
+export const latestComparison = (bundle: ReportBundle): Comparison | undefined =>
+  bundle.comparisons[0];
+
+/** A verdict the comparison was willing to call, as opposed to one it refused. */
+export const isDecided = (comparison: Comparison): boolean =>
+  comparison.verdict === 'improved' || comparison.verdict === 'regressed';
+
 function verdictStep(bundle: ReportBundle): LoopStep {
-  const comparison = bundle.comparisons[0];
+  const comparison = latestComparison(bundle);
   if (comparison === undefined) {
     return {
       id: 'verdict',
@@ -276,7 +291,7 @@ function verdictStep(bundle: ReportBundle): LoopStep {
       command: null,
     };
   }
-  const decided = comparison.verdict === 'improved' || comparison.verdict === 'regressed';
+  const decided = isDecided(comparison);
   const scenario = bundle.scenarios[0]?.id ?? null;
   return {
     id: 'verdict',

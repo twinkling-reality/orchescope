@@ -3,18 +3,8 @@ import { describe, it } from 'node:test';
 import { visibleWidth } from '../src/terminal/display-width.ts';
 import { layoutFor, renderRow } from '../src/terminal/document-grid.ts';
 import { findingRegion } from '../src/terminal/finding-rows.ts';
+import { createStyle } from '../src/terminal/style.ts';
 import { finding } from './audit-fixture.ts';
-
-/**
- * The one region that answers what was found.
- *
- * Two things are load bearing. Every row carries the number of evidence records behind it, because a
- * finding title is itself a numeric claim and a metric without a sample size is not reported. And a
- * repository where nothing fired says so in a sentence rather than by leaving a gap, because an empty
- * list reads as a clean bill of health and this product is not a certification.
- *
- * Finding identifiers stay off the default surface. They are arguments, not headlines.
- */
 
 const risks = (count: number, over: Parameters<typeof finding>[0] = {}) =>
   Array.from({ length: count }, (_value, index) =>
@@ -27,184 +17,140 @@ const render = (input: Parameters<typeof findingRegion>[0], columns = 80): reado
 };
 
 const problemRows = (rendered: readonly string[]): readonly string[] =>
-  rendered.filter((line) => line.startsWith('problem'));
+  rendered.filter((line) => /^(serious|medium|minor)\s/.test(line));
 
-describe('the heading sentence', () => {
-  it('states the mix when more than one severity fired', () => {
+describe('the glance', () => {
+  it('keys every problem by how bad it is, worst first', () => {
     const mixed = [
       ...risks(3, { severity: 'high' }),
       ...risks(6, { severity: 'medium' }),
       ...risks(10, { severity: 'low' }),
     ];
-    assert.equal(
-      render({ risks: mixed, strengths: risks(2), verbose: false })[0],
-      'findings        19 risks: 3 HIGH, 6 MEDIUM, 10 low; 2 strengths',
-    );
+    const rendered = render({ risks: mixed, strengths: risks(2), verbose: false });
+    assert.equal(rendered[0], 'problems        3 serious, 6 medium, 10 minor, worst first');
+    assert.equal(problemRows(rendered).length, 3);
+    assert.ok(problemRows(rendered).every((line) => line.startsWith('serious ')));
+    assert.equal(rendered.at(-1), 'more            16 more problems: orchescope audit --verbose');
   });
 
-  it('says so plainly when every risk is the same severity', () => {
-    assert.equal(
-      render({ risks: risks(4), strengths: risks(1), verbose: false })[0],
-      'findings        4 risks, all MEDIUM; 1 strength',
-    );
-    assert.equal(
-      render({ risks: risks(1), strengths: [], verbose: false })[0],
-      'findings        1 risk, MEDIUM; no strengths',
-    );
+  it('gives the sentence the columns the state field used to hold', () => {
+    const long = 'issue_refund is retried and nothing makes it safe to repeat';
+    const rendered = render({
+      risks: [finding({ severity: 'high', title: long })],
+      strengths: [],
+      verbose: false,
+    });
+    assert.equal(problemRows(rendered)[0], `serious         ${long}`);
   });
 
-  it('draws one letter per risk under the heading when the mix fits', () => {
+  it('keeps identifiers and evidence tails off the glance', () => {
     const rendered = render({
       risks: [
-        ...risks(3, { severity: 'high' }),
-        ...risks(2, { severity: 'medium' }),
-        ...risks(1, { severity: 'low' }),
+        finding({
+          id: 'OSC-RES-0003',
+          evidence: ['a'],
+          basis: 'simulated',
+          severity: 'high',
+          title: 'a refund ran twice',
+        }),
       ],
       strengths: [],
       verbose: false,
     });
-    assert.equal(rendered[1], 'findings        |HHHMML| 6');
+    assert.equal(
+      rendered.some((line) => line.includes('OSC-') || line.includes('simulated')),
+      false,
+    );
+    assert.ok(rendered.some((line) => line.includes('a refund ran twice')));
   });
 
-  it('states the strength count exactly once', () => {
-    const rendered = render({ risks: risks(19), strengths: risks(2), verbose: false });
-    assert.equal(rendered.filter((line) => line.includes('2 strengths')).length, 1);
-  });
-});
-
-describe('a repository where nothing fired', () => {
-  /*
-   * An audit that reports nothing means the rules that had enough evidence to fire did not fire. Left
-   * unsaid, a reader takes it for a clean bill of health.
-   */
-  it('states the caveat at column one and never leaves the region empty', () => {
+  it('states the caveat when nothing fired', () => {
     const rendered = render({ risks: [], strengths: [], verbose: false });
     assert.deepEqual(rendered, [
-      'findings        no risks, no strengths',
+      'problems        no problems found',
       'nothing was reported as a problem, which is not the same as nothing being wrong',
     ]);
   });
+});
 
-  it('fits the caveat whole at eighty columns, and never shortens it', () => {
-    for (const columns of [60, 80, 120]) {
-      const caveat = render({ risks: [], strengths: [], verbose: false }, columns)[1] ?? '';
-      assert.equal(caveat.endsWith('nothing being wrong'), true, `${columns}: ${caveat}`);
-    }
+/**
+ * A chip is a coloured word, not a coloured column.
+ *
+ * The grid pads a key after painting it, so the escape sequences close around the visible word and the
+ * padding that follows is outside them. The failure this guards against printed an eleven column block
+ * of ground with a six character label at one end of it.
+ */
+describe('the severity chip', () => {
+  /* Built from a code point, so the pattern is not itself a control character in source. */
+  const escapeChar = String.fromCharCode(0x1b);
+  const chipPattern = new RegExp(`${escapeChar}\\[[0-9;]*m(.*?)${escapeChar}\\[0m`);
+  const sequencePattern = new RegExp(`${escapeChar}\\[[0-9;]*m`, 'g');
+
+  const painted = (line: string): string => chipPattern.exec(line)?.[1] ?? '';
+
+  it('paints the severity word and nothing beside it', () => {
+    const layout = layoutFor(80);
+    const rows = findingRegion({
+      risks: [
+        finding({ severity: 'high', title: 'one' }),
+        finding({ severity: 'medium', title: 'two' }),
+        finding({ severity: 'low', title: 'three' }),
+      ],
+      strengths: [],
+      verbose: false,
+      style: createStyle('color'),
+    }).map((row) => renderRow(row, layout));
+    assert.deepEqual(rows.slice(1).map(painted), ['serious', 'medium', 'minor']);
+  });
+
+  it('leaves every row the same width and the same words it has without colour', () => {
+    const input = {
+      risks: [finding({ severity: 'high', title: 'one' })],
+      strengths: [],
+      verbose: false,
+    };
+    const layout = layoutFor(80);
+    const coloured = findingRegion({ ...input, style: createStyle('color') }).map((row) =>
+      renderRow(row, layout),
+    );
+    const plain = findingRegion({ ...input, style: createStyle('plain') }).map((row) =>
+      renderRow(row, layout),
+    );
+    assert.deepEqual(coloured.map(visibleWidth), plain.map(visibleWidth));
+    assert.deepEqual(
+      coloured.map((line) => line.replaceAll(sequencePattern, '')),
+      plain,
+    );
   });
 });
 
-describe('the rows', () => {
-  it('lists six problems and then names the remainder in one line', () => {
-    const rendered = render({ risks: risks(19), strengths: risks(2), verbose: false });
+describe('verbose', () => {
+  it('lists six, restores evidence tails, and names the remainder', () => {
+    const rendered = render({ risks: risks(19), strengths: [], verbose: true });
     assert.equal(problemRows(rendered).length, 6);
-    assert.ok(rendered.some((line) => line.includes('|') && line.includes('19')));
+    assert.ok(problemRows(rendered)[0]?.includes('discovered'));
     assert.equal(
       rendered.at(-1),
-      'findings        13 more risks; full list: orchescope audit --json',
+      'more            13 more problems; full list: orchescope audit --json',
     );
   });
 
-  it('keeps finding identifiers off the default surface', () => {
-    const rendered = render({ risks: risks(4), strengths: [], verbose: false });
-    assert.equal(
-      rendered.some((line) => line.includes('OSC-')),
-      false,
-    );
-  });
-
-  it('lists everything and names no remainder when the list is complete', () => {
-    const rendered = render({ risks: risks(4), strengths: [], verbose: false });
-    assert.equal(problemRows(rendered).length, 4);
-    assert.equal(
-      rendered.some((line) => line.includes('more risks')),
-      false,
-    );
-  });
-
-  /*
-   * A finding that cannot become an automated goal is a finding that needs a person, and hiding those
-   * from the person is the exact inversion of what the flag is for.
-   */
-  it('lists a finding no automated goal can be bounded from', () => {
-    const rendered = render({
-      risks: [
-        finding({
-          id: 'OSC-ARCH-0001',
-          title: 'an undeclared tool needs a person to decide',
-          goalReadiness: {
-            eligible: false,
-            reason: 'this needs a person',
-            requiresRuntimeEvidence: false,
-            requiresHumanReview: true,
-          },
-        }),
-      ],
+  it('brings back the identifier and the exact severity on a detail line', () => {
+    const loud = render({
+      risks: [finding({ id: 'OSC-REL-0003', severity: 'critical', confidence: 0.75 })],
       strengths: [],
-      verbose: false,
+      verbose: true,
     });
-    assert.ok(rendered.some((line) => line.includes('undeclared tool')));
-    assert.equal(
-      rendered.some((line) => line.includes('OSC-ARCH-0001')),
-      false,
+    assert.ok(
+      loud.some((line) => line.trim() === 'OSC-REL-0003, critical, reliability, confidence 0.75'),
     );
-  });
-
-  it('carries the sample size and its class on every row, right aligned to one anchor', () => {
-    const rendered = render({
-      risks: [
-        finding({ id: 'OSC-RES-0003', evidence: ['a'], basis: 'simulated', severity: 'high' }),
-        finding({
-          id: 'OSC-REL-0002',
-          evidence: Array(11).fill('e'),
-          basis: 'observed',
-          severity: 'high',
-        }),
-      ],
-      strengths: [],
-      verbose: false,
-    });
-    const rows = problemRows(rendered);
-    assert.ok(rows[0]?.endsWith(' 1 simulated'));
-    assert.ok(rows[1]?.endsWith('11 observed'));
-    for (const row of rows) assert.equal(visibleWidth(row), 80);
   });
 
   it('cuts the title and never the field beside it', () => {
     const long = finding({ title: 'x'.repeat(139), evidence: Array(20).fill('e') });
-    const row = problemRows(render({ risks: [long], strengths: [], verbose: false }))[0] ?? '';
+    const row = problemRows(render({ risks: [long], strengths: [], verbose: true }))[0] ?? '';
     assert.equal(visibleWidth(row), 80);
     assert.ok(row.endsWith('20 discovered'));
     assert.match(row, /x+…/);
-  });
-});
-
-describe('what verbose adds', () => {
-  it('lists strengths only when asked, and never among the risks otherwise', () => {
-    const quiet = render({
-      risks: risks(1),
-      strengths: [finding({ id: 'OSC-STR-0001', polarity: 'strength', title: 'a good shape' })],
-      verbose: false,
-    });
-    assert.equal(
-      quiet.some((line) => line.includes('a good shape')),
-      false,
-    );
-
-    const loud = render({
-      risks: risks(1),
-      strengths: [finding({ id: 'OSC-STR-0001', polarity: 'strength', title: 'a good shape' })],
-      verbose: true,
-    });
-    assert.ok(loud.some((line) => line.includes('+ strength')));
-    assert.ok(loud.some((line) => line.includes('a good shape')));
-  });
-
-  it('brings back the identifier and the two fields a row cannot carry', () => {
-    const loud = render({
-      risks: [finding({ id: 'OSC-REL-0003', confidence: 0.75 })],
-      strengths: [],
-      verbose: true,
-    });
-    assert.ok(loud.some((line) => line.trim() === 'OSC-REL-0003, reliability, confidence 0.75'));
   });
 });

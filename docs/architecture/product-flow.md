@@ -43,7 +43,8 @@ schema ──► domain ──► core analysis ──► usecases ──► edg
 
 ## What a stranger should understand in five seconds
 
-- Terminal: what the worst finding is, where you stand in the five steps, and the one command that advances the loop.
+- Terminal: what was audited, what the worst findings are, what the loop has not produced yet, and the one command that
+  advances it. The five steps themselves are `--verbose`; the default names where you stand by naming what is missing.
 - MCP or JSON: the same facts without prose chrome, for an agent or a gate.
 
 If a change makes the terminal answer "what do I do" in more than one place, it has regressed the root fault recorded in

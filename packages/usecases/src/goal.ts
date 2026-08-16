@@ -102,6 +102,14 @@ const resultsForCriteria = (workspace: Workspace, goal: Goal): readonly Scenario
 export type ValidateGoalResult = {
   readonly goal: Goal;
   readonly validation: GoalValidation;
+  /**
+   * The comparison that decided the metric criteria, when one did.
+   *
+   * The caller resolves this silently when it is not passed, so without it a reader is told a goal was
+   * refused and never told what refused it. A verdict whose evidence cannot be named is not something a
+   * person can check.
+   */
+  readonly comparison?: Comparison;
 };
 
 /**
@@ -188,5 +196,5 @@ export const validateGoalOutcome = (request: ValidateGoalRequest): ValidateGoalR
           ],
   };
   workspace.store.saveGoal(updated, workspace.projectId);
-  return { goal: updated, validation };
+  return { goal: updated, validation, ...(comparison === undefined ? {} : { comparison }) };
 };

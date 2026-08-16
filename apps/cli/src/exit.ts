@@ -7,7 +7,9 @@ import type { Style } from './terminal/style.ts';
  * Codes are part of the interface, so they are stable and documented:
  *
  *  0  success
- *  1  the command succeeded and found something the caller asked to fail on
+ *  1  the command succeeded and found something the caller asked to fail on, or reached no conclusion
+ *     a gate may proceed on: `compare` exits 1 on a regression and on insufficient evidence, because a
+ *     gate that goes green on "I cannot tell" is worse than no gate
  *  2  the caller made a mistake, for example an unknown scenario or an invalid flag
  *  3  the action was refused by policy
  *  4  the audited system failed, not Orchescope

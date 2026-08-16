@@ -1,7 +1,13 @@
 import { writeFileSync } from 'node:fs';
 import { formatCount, OrchescopeError, stableJson } from '@orchescope/domain';
 import { renderAgentPrompt } from '@orchescope/goals';
-import { loopProgress, resolveNextAction, toMermaid, toSarif } from '@orchescope/report';
+import {
+  improvementOutcome,
+  loopProgress,
+  resolveNextAction,
+  toMermaid,
+  toSarif,
+} from '@orchescope/report';
 import type { Component, Edge, Finding } from '@orchescope/schema';
 import { formatIssues, validate } from '@orchescope/schema';
 import {
@@ -177,8 +183,14 @@ const auditAgentSystem = async (
     }),
   );
   const standing = progress.standingAt;
+  /*
+   * Whether the caller's own last change helped, in the same call that says what is wrong. Asking for
+   * it used to require a goal identifier the agent had to have kept from an earlier turn, which is not
+   * something a fresh session or a second agent has.
+   */
+  const outcome = improvementOutcome(result.bundle);
   return {
-    text: `Audit ${result.scanId}: ${formatCount(risks.length, 'risk')}, ${formatCount(result.bundle.summary.strengthCount, 'strength')}, ${formatCount(result.runsConsidered.length, 'run')} reconciled. Standing at ${standing?.title ?? 'closed loop'}.`,
+    text: `Audit ${result.scanId}: ${formatCount(risks.length, 'risk')}, ${formatCount(result.bundle.summary.strengthCount, 'strength')}, ${formatCount(result.runsConsidered.length, 'run')} reconciled. Standing at ${standing?.title ?? 'closed loop'}. ${outcome.summary}.`,
     data: {
       scanId: result.scanId,
       reportId: result.bundle.reportId,
@@ -202,6 +214,7 @@ const auditAgentSystem = async (
         })),
         next,
       },
+      outcome,
       capabilities: result.bundle.capabilities,
     },
   };

@@ -93,12 +93,23 @@ export const layoutFor = (columns: number | undefined): Layout => {
  */
 export type RowKind = 'keyed' | 'detail' | 'caveat' | 'exempt';
 
+/**
+ * Which anchor a detail row hangs from.
+ *
+ * A detail supports the sentence above it, so it starts where that sentence started. A parent that
+ * carries a state word puts its sentence at the rest column; a parent that carries none puts it at the
+ * value column, and a detail indented past its own parent reads as the detail of nothing.
+ */
+export type DetailAlign = 'value' | 'rest';
+
 export interface Row {
   readonly kind: RowKind;
   readonly key?: string;
   /** Symbol and word, both mandatory, so the state survives a pipe and `NO_COLOR` intact. */
   readonly state?: string;
   readonly text: string;
+  /** Detail rows only. Defaults to `rest`, which is where a row with a state puts its sentence. */
+  readonly align?: DetailAlign;
   /** Right aligned against the effective width. The one further anchor a region may declare. */
   readonly tail?: string;
   /** The width that anchor was derived at, shared by every row in the region that declared it. */
@@ -146,7 +157,9 @@ const renderExempt = (row: Row): string => {
 };
 
 const renderDetail = (row: Row, layout: Layout): string => {
-  const indent = layout.tier === 'three_field' ? REST_COLUMN - 1 : VALUE_COLUMN - 1;
+  const anchored =
+    layout.tier === 'three_field' && (row.align ?? 'rest') === 'rest' ? REST_COLUMN : VALUE_COLUMN;
+  const indent = anchored - 1;
   return `${' '.repeat(indent)}${cut(sanitiseCell(row.text), layout.effective - indent)}`;
 };
 

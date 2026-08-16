@@ -369,6 +369,17 @@ export const chaosCommand = async (
     : EXIT_CODES.success;
 };
 
+/**
+ * The verdicts a gate may treat as a pass, and it is a short list on purpose.
+ *
+ * Zero means "this ran and the result is one you may proceed on". `improved` and `unchanged` are both
+ * conclusions the comparison was willing to reach. `regressed` and `mixed` contain a regression.
+ * `insufficient_evidence` reaches no conclusion at all, and exiting zero on it told an autonomous agent
+ * its change had passed on evidence the comparison had already declared unable to decide anything. A
+ * gate that goes green on "I cannot tell" is worse than no gate, because somebody trusts it.
+ */
+const CONCLUSIVE_VERDICTS: ReadonlySet<string> = new Set(['improved', 'unchanged']);
+
 export const compareCommand = (
   context: CommandContext,
   baseline: string,
@@ -388,5 +399,5 @@ export const compareCommand = (
   } else {
     context.stdout(`${comparisonSummary(context.style, comparison)}\n`);
   }
-  return comparison.verdict === 'regressed' ? EXIT_CODES.findings : EXIT_CODES.success;
+  return CONCLUSIVE_VERDICTS.has(comparison.verdict) ? EXIT_CODES.success : EXIT_CODES.findings;
 };

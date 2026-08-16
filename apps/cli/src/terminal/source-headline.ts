@@ -1,12 +1,13 @@
 /**
  * What this repository is, and what was read to say so.
  *
- * One line when an agent system was found, three when none was, and the two extra lines are a refusal
- * rather than a decoration: the caveat says what was looked for and did not appear, and the roster says
- * which readers found nothing, so a reader can tell an unsupported ecosystem apart from an empty one.
- *
- * Nothing here is analysed. Every count was decided by the scan that wrote the coverage record, and
- * this module chooses which of them fit and in what order they are shed.
+ * Line one is the project name and what the project turned out to contain. A bare part count is a size
+ * rather than a description: "33 parts found" tells a reader nothing that "5 agents, 7 tools and 2
+ * models" does not tell them better, and it leaves the name in column one looking like a mode rather
+ * than like the thing being described, which is what "demo" read as. Line two is coverage and how much
+ * runtime evidence exists, because a count with no denominator is a claim about a whole nobody
+ * measured, and because whether anything has ever run is the fact that decides what the rest of this
+ * document is able to say.
  */
 
 import { formatCount } from '@orchescope/domain';
@@ -19,68 +20,92 @@ type Coverage = AuditResult['graph']['coverage'];
 const adapterName = (adapterId: string): string => adapterId.replace(/^adapter:/, '');
 
 /**
- * The count tail, longest first, each variant carrying its own short form.
+ * The three kinds a reader of an agent system asks about first.
  *
- * Degrading is a choice of index rather than a rewrite, which is what stops a narrow terminal getting a
- * sentence nobody ever read. The denominator of the files read is the files in a language this build
- * parses, never the files the walk touched: the walk counts JSON, YAML and TOML so that configuration
- * adapters can read them, and none of the three is parsed as source, so dividing by the walk reports a
- * repository whose every readable file was read as partly read.
+ * Every supported ecosystem names agents, tools and models; the rest of the graph's vocabulary
+ * (prompts, queues, entry points, memories) is either an implementation detail of one of those or a
+ * word a reader would have to be taught. A project with none of the three falls back to the part count,
+ * because naming zero of everything is worse than naming a size.
  */
-const countVariants = (result: AuditResult): readonly string[] => {
-  const summary = result.bundle.summary;
+const HEADLINE_KINDS = ['agent', 'tool', 'model'] as const;
+
+/** `a`, `a and b`, `a, b and c`. No serial comma, so the last two read as a pair. */
+const joinWords = (parts: readonly string[]): string =>
+  parts.length <= 1
+    ? (parts[0] ?? '')
+    : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+
+const inventory = (result: AuditResult): string => {
+  const counts = new Map<string, number>();
+  for (const component of result.graph.components) {
+    counts.set(component.kind, (counts.get(component.kind) ?? 0) + 1);
+  }
+  const named = HEADLINE_KINDS.flatMap((kind) => {
+    const count = counts.get(kind) ?? 0;
+    return count === 0 ? [] : [formatCount(count, kind)];
+  });
+  return named.length === 0
+    ? formatCount(result.bundle.summary.componentCount, 'part')
+    : joinWords(named);
+};
+
+/**
+ * Variants longest first, so a narrow terminal loses the framing words and never the counts.
+ */
+const headlineVariants = (result: AuditResult): readonly string[] => {
+  const found = inventory(result);
+  return [`this project has ${found}`, found];
+};
+
+const runsPhrase = (result: AuditResult): string => {
+  const runs = result.bundle.summary.runCount ?? 0;
+  return runs === 0 ? 'no runs on record' : `${formatCount(runs, 'run')} on record`;
+};
+
+const coverageVariants = (result: AuditResult, verbose: boolean): readonly string[] => {
   const coverage = result.graph.coverage;
   const supported = coverage.filesInSupportedLanguages ?? coverage.filesParsed;
-  const components = formatCount(summary.componentCount, 'component');
-  const edges = formatCount(summary.edgeCount, 'edge');
+  const files = `${coverage.filesParsed} of ${formatCount(supported, 'file')}`;
+  const runs = runsPhrase(result);
+  const graph = `${formatCount(result.bundle.summary.componentCount, 'part')} and ${formatCount(result.bundle.summary.edgeCount, 'link')}`;
+  if (!verbose) return [`read from ${files}, with ${runs}`, `read from ${files}`];
   return [
-    `${components}, ${edges}, ${coverage.filesParsed} of ${formatCount(supported, 'file')} read`,
-    `${components}, ${edges}`,
-    components,
+    `${graph}; ${files} read; ${runs}`,
+    `${graph}; ${files} read`,
+    `read from ${files}, with ${runs}`,
+    `read from ${files}`,
   ];
 };
 
-/**
- * The project name is the key, and it is the one key allowed to overhang its column.
- *
- * A repository called `vercel-ai-chatbot-exercised` is twenty seven columns and truncating it would
- * make two repositories with a shared prefix produce the same first line. It pushes its own value right
- * and nothing else on the page moves.
- *
- * It overhangs to a ceiling and not without one. The name is the directory the audit ran in or the
- * `projectName` a configuration file set, both of them strings this repository treats as untrusted, so
- * a key that never cuts is a line whose width the audited repository chooses.
- *
- * The ceiling is derived from what the key is a key to: the name may take the line as far as still
- * leaves room for the shortest count, and no further. That bounds the row and makes the count
- * unloseable in the same stroke, because the shortest variant then fits by construction and a
- * measurement can never fall off the line without saying so. The longest name in the pinned corpus is
- * twenty seven columns against a ceiling of forty five at sixty, so nothing measured here is cut.
- */
-const sourceHeadline = (
+/** The widest variant that still fits the column it starts in, else the narrowest one written. */
+const fitting = (variants: readonly string[], start: number, layout: Layout): string => {
+  const shortest = variants[variants.length - 1] ?? '';
+  return variants.find((variant) => start + visibleWidth(variant) <= layout.effective) ?? shortest;
+};
+
+const sourceRows = (
   result: AuditResult,
   layout: Layout,
   bold: (text: string) => string,
-): Row => {
-  const variants = countVariants(result);
+  verbose: boolean,
+): readonly Row[] => {
+  const variants = headlineVariants(result);
   const shortest = variants[variants.length - 1] ?? '';
   const key = cut(result.bundle.projectName, layout.effective - visibleWidth(shortest) - 2);
   const start = Math.max(KEY_WIDTH, visibleWidth(key)) + 2;
-  const chosen =
-    variants.find((variant) => start + visibleWidth(variant) <= layout.effective) ?? shortest;
-  return { kind: 'keyed', key, text: chosen, paintKey: bold };
+  return [
+    { kind: 'keyed', key, text: fitting(variants, start, layout), paintKey: bold },
+    {
+      kind: 'detail',
+      align: 'value',
+      text: fitting(coverageVariants(result, verbose), VALUE_COLUMN - 1, layout),
+    },
+  ];
 };
 
-/**
- * The refusal, in three registered forms, and it is never replaced by a blank line.
- *
- * `No agent system was detected` is the sentence three surfaces and two end to end tests agree on, so
- * every form opens with it verbatim and the forms differ only in how much of the list of things that
- * would have counted survives. The shortest form fits any terminal this document renders in.
- */
 const NOT_DETECTED_VARIANTS: readonly string[] = [
-  'No agent system was detected: nothing declared an agent, a model call, a tool or an MCP server.',
-  'No agent system was detected: nothing declared an agent, a tool or a model call.',
+  'No agent system was detected: nothing looked like an agent, a model call, a tool or an MCP server.',
+  'No agent system was detected: nothing looked like an agent, tool, or model.',
   'No agent system was detected.',
 ];
 
@@ -91,14 +116,6 @@ const notDetectedCaveat = (layout: Layout): Row => ({
     (NOT_DETECTED_VARIANTS[NOT_DETECTED_VARIANTS.length - 1] as string),
 });
 
-/**
- * Who read, and who found nothing to read.
- *
- * The roster sheds whole names and never truncates one: half an adapter name is a name that matches no
- * adapter. The two counts are never shed, because the counts are the claim and the names are the
- * evidence for it. The list was a hundred and twenty nine columns on every repository where no system
- * was found, which is the one place a reader most needs the line to be readable.
- */
 const adapterRoster = (coverage: Coverage, layout: Layout): Row | null => {
   const ran = coverage.adapters.filter((adapter) => adapter.status !== 'not_applicable');
   const silent = coverage.adapters.filter((adapter) => adapter.status === 'not_applicable');
@@ -121,11 +138,12 @@ export const sourceRegion = (
   result: AuditResult,
   layout: Layout,
   bold: (text: string) => string,
+  verbose = false,
 ): Region => {
-  const headline = sourceHeadline(result, layout, bold);
-  if (result.agentSystemDetected) return [headline];
+  const rows = sourceRows(result, layout, bold, verbose);
+  if (result.agentSystemDetected) return rows;
+  const caveat = notDetectedCaveat(layout);
+  if (!verbose) return [...rows, caveat];
   const roster = adapterRoster(result.graph.coverage, layout);
-  return roster === null
-    ? [headline, notDetectedCaveat(layout)]
-    : [headline, notDetectedCaveat(layout), roster];
+  return roster === null ? [...rows, caveat] : [...rows, caveat, roster];
 };

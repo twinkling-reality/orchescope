@@ -13,9 +13,19 @@ const VERDICT_PAINTERS: Readonly<Record<string, (style: Style) => (text: string)
   regressed: (style) => style.bad,
 };
 
+/**
+ * Four directions, four markers, and the last two are the point.
+ *
+ * `unchanged` means the evidence was enough and the metric did not move. `indeterminate` means the
+ * evidence was not enough to say either way. Drawing both as the same dim dot erased the one
+ * distinction this product exists to make, and it erased it in the table a reader scans rather than in
+ * the prose they skip. A metric's caveat rescued it only when a caveat happened to be set.
+ */
 const DIRECTION_MARKERS: Readonly<Record<string, (style: Style) => string>> = {
   improved: (style) => style.good(SYMBOLS.done),
   regressed: (style) => style.bad(SYMBOLS.failed),
+  unchanged: (style) => style.dim(SYMBOLS.same),
+  indeterminate: (style) => style.warn(SYMBOLS.unknown),
 };
 
 const metricRow = (

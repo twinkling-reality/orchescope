@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { LoopProgress, LoopStep } from '@orchescope/report';
 import { layoutFor, renderRow } from '../src/terminal/document-grid.ts';
-import { runRegion } from '../src/terminal/run-rows.ts';
+import { nextAction, runRegion } from '../src/terminal/run-rows.ts';
 import { adapter, auditResult, coverage } from './audit-fixture.ts';
 
 /**
@@ -30,14 +30,13 @@ const progress = (
   }) as LoopProgress;
 
 const render = (
-  result: Parameters<typeof runRegion>[0]['result'],
+  result: Parameters<typeof nextAction>[0]['result'],
   steps: readonly LoopStep[] = [],
   nextCommand?: readonly string[] | null,
 ): readonly string[] => {
   const layout = layoutFor(80);
-  return runRegion({ result, progress: progress(steps, nextCommand) }).map((row) =>
-    renderRow(row, layout),
-  );
+  const input = { result, progress: progress(steps, nextCommand) };
+  return runRegion(nextAction(input)).map((row) => renderRow(row, layout));
 };
 
 describe('a repository with no detected agent system', () => {
