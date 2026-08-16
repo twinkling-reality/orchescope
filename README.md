@@ -43,7 +43,14 @@ orchescope audit
 
 Node.js 24 or newer is required. There is no compiler step and no native build on install.
 
-**This is not published to npm yet.** Until it is, install the artifact this repository builds:
+**This is not published to npm yet.** Until it is, install the tarball attached to the latest release:
+
+```
+npm install -g https://github.com/twinkling-reality/orchescope/releases/download/v0.1.0/orchescope-0.1.0.tgz
+```
+
+Its sha256 is published beside it, and `pnpm package` reproduces the same archive from this repository, so you can check
+that what you installed is what this source builds:
 
 ```
 pnpm install
