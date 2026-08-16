@@ -26,6 +26,7 @@ export type ScenarioPolicy = {
   readonly maxRequestBytes: number;
   readonly maxSpanAttributeBytes: number;
   readonly exportDrainMs: number;
+  readonly autoInstrument: boolean;
 };
 
 type Grant = {

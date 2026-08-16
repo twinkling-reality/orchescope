@@ -215,6 +215,9 @@
     "runtime": {
       "additionalProperties": false,
       "properties": {
+        "autoInstrument": {
+          "type": "boolean"
+        },
         "exportDrainMs": {
           "minimum": 1,
           "type": "integer"
@@ -256,7 +259,8 @@
         "maxSpansPerRun",
         "maxSpanAttributeBytes",
         "maxRequestBytes",
-        "exportDrainMs"
+        "exportDrainMs",
+        "autoInstrument"
       ],
       "type": "object"
     },

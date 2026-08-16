@@ -18,6 +18,7 @@ const CORE = [
   'graph',
   'policy',
   'traces',
+  'instrumentation',
   'discovery',
   'adapters',
   'findings',

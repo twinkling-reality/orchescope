@@ -8,6 +8,7 @@ import {
 } from '@orchescope/domain';
 import { assertAllowed, commandDecision } from '@orchescope/policy';
 import {
+  type InstrumentationOutcome,
   OTEL_EXPORT_VARIABLES,
   runTracedSession,
   type TraceSessionResult,
@@ -53,7 +54,17 @@ export type TraceResult = {
    * name what the exporter was expected to honour, rather than leaving the reader to guess.
    */
   readonly otlpVariables: readonly string[];
+  /**
+   * Whether Orchescope loaded its own instrumentation into the target, and if not, why not.
+   *
+   * A run that collects nothing means something different in each case, and the reader's next move differs
+   * with it: a target that is not a Node process cannot be reached this way at all, and no amount of
+   * rerunning the same command will change that.
+   */
+  readonly instrumentation: InstrumentationOutcome;
 };
+
+export type { InstrumentationOutcome };
 
 /**
  * The stored record for one traced run.
@@ -85,6 +96,15 @@ const traceRunRecord = (input: {
     environment: input.environment,
     metrics: {
       ...input.metrics,
+      /*
+       * The wall clock of the traced process, which Orchescope measured itself.
+       *
+       * Span derivation takes a run's duration from its longest root span, which is right for a system
+       * whose instrumentation opens one span around the whole task and wrong for everything else. A run
+       * whose only spans are the outbound requests the shim recorded would have reported the duration of
+       * its slowest HTTP call as the duration of the run.
+       */
+      durationMs: session.process.durationMs,
       ...(result?.success === undefined ? {} : { taskSuccess: result.success }),
       ...(result?.userInterventions === undefined
         ? {}
@@ -162,6 +182,7 @@ export const runTrace = async (request: TraceRequest): Promise<TraceResult> => {
       deadline,
       timeoutMs: request.timeoutMs ?? policy.maxRunDurationMs,
       drainMs: workspace.config.runtime.exportDrainMs,
+      autoInstrument: workspace.config.runtime.autoInstrument,
       maxSpansPerRun: workspace.config.runtime.maxSpansPerRun,
       maxRequestBytes: workspace.config.runtime.maxRequestBytes,
       maxSpanAttributeBytes: workspace.config.runtime.maxSpanAttributeBytes,
@@ -219,6 +240,7 @@ export const runTrace = async (request: TraceRequest): Promise<TraceResult> => {
       targetResultProblem: session.targetResultProblem,
       environment,
       otlpVariables: [...OTEL_EXPORT_VARIABLES],
+      instrumentation: session.instrumentation,
     };
   } finally {
     handle?.dispose();
@@ -314,6 +336,7 @@ export const importTrace = (request: ImportTraceRequest): TraceResult => {
     environment,
     // An import sets no environment for anything: the spans already existed.
     otlpVariables: [],
+    instrumentation: { injected: false, reason: 'disabled' },
   };
 };
 

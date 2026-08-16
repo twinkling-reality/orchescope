@@ -6,7 +6,8 @@
   "description": "OTLP decoding, span normalisation, runtime topology derivation and metric roll ups.",
   "license": "Apache-2.0",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./attributes": "./src/attributes.ts"
   },
   "dependencies": {
     "@orchescope/domain": "workspace:*",

@@ -156,5 +156,10 @@ export const receiveTraces = async (request: ReceiveRequest): Promise<TraceResul
      * the process they already have running, which is what the command prints when it starts listening.
      */
     otlpVariables: [],
+    /*
+     * Nothing was started, so nothing could be instrumented. The process this listened to is one the
+     * operator already had running, and reaching into it is not something a receiver does.
+     */
+    instrumentation: { injected: false, reason: 'not_a_node_target' },
   };
 };

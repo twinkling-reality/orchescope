@@ -50,6 +50,36 @@ const result = await build({
   logLevel: 'warning',
 });
 
+/**
+ * The instrumentation shim, bundled separately on purpose.
+ *
+ * It is loaded into the process being traced, through `NODE_OPTIONS`, so it is the one artifact here whose
+ * size is paid by somebody else's program on every start. Keeping it out of the command line bundle is
+ * what keeps it small, and the ceiling below is asserted rather than described: a shim that grew to carry
+ * the analyser with it would slow down every run it was meant to measure.
+ */
+const SHIM_BYTE_CEILING = 96 * 1024;
+
+await build({
+  entryPoints: [join(root, 'packages/instrumentation/src/register.ts')],
+  outfile: join(outputDirectory, 'instrument.mjs'),
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  target: 'node24',
+  legalComments: 'external',
+  minify: false,
+  sourcemap: false,
+  logLevel: 'warning',
+});
+
+const shimBytes = statSync(join(outputDirectory, 'instrument.mjs')).size;
+if (shimBytes > SHIM_BYTE_CEILING) {
+  throw new Error(
+    `the instrumentation shim is ${shimBytes} bytes, over the ${SHIM_BYTE_CEILING} byte ceiling: it loads into every traced process`,
+  );
+}
+
 const bundleBytes = statSync(join(outputDirectory, 'orchescope.mjs')).size;
 const inputs = Object.keys(result.metafile.inputs).length;
 writeFileSync(
@@ -57,6 +87,7 @@ writeFileSync(
   `${JSON.stringify(
     {
       bundleBytes,
+      shimBytes,
       inputs,
       external,
       node: process.versions.node,
@@ -69,5 +100,8 @@ writeFileSync(
 
 console.log(
   `bundled ${inputs} modules into apps/cli/dist/orchescope.mjs (${(bundleBytes / 1024).toFixed(0)} KiB)`,
+);
+console.log(
+  `instrumentation shim: apps/cli/dist/instrument.mjs (${(shimBytes / 1024).toFixed(0)} KiB of a ${SHIM_BYTE_CEILING / 1024} KiB ceiling)`,
 );
 console.log(`external at runtime: ${external.join(', ')}`);

@@ -1,0 +1,14 @@
+{
+  "name": "@orchescope/instrumentation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The shim Orchescope loads into a traced process so that a system with no OpenTelemetry SDK still produces spans.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@orchescope/traces": "workspace:*"
+  }
+}

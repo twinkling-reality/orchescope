@@ -11,6 +11,7 @@ import {
 } from '@orchescope/schema';
 import { type ProcessOutcome, runProcess } from './process.ts';
 import { type ReceiverHandle, startReceiver } from './receiver.ts';
+import { locateShim, targetRunsNode, withShim } from './shim.ts';
 
 /**
  * A traced run: start a loopback receiver, run the target with the environment that points it at that
@@ -42,6 +43,13 @@ export type TraceSessionRequest = {
   readonly stopSignal: 'SIGINT' | 'SIGTERM';
   readonly killAfterMs: number;
   readonly faultPlan?: FaultPlan;
+  /**
+   * Whether to load Orchescope's own instrumentation into the target.
+   *
+   * Off is a real answer and has to stay one: this puts code inside a process the operator owns, and an
+   * operator who does not want that must be able to say so and still get a receiver.
+   */
+  readonly autoInstrument: boolean;
   readonly onStdout?: (chunk: string) => void;
   readonly onStderr?: (chunk: string) => void;
 };
@@ -52,7 +60,22 @@ export type TraceSessionResult = {
   readonly receiverUrl: string;
   readonly targetResult: TargetResult | undefined;
   readonly targetResultProblem: string | undefined;
+  /**
+   * Whether Orchescope loaded its own instrumentation into the target, and if not, why not.
+   *
+   * A reader has to be able to tell why a run that produced nothing last week produces spans today, and a
+   * reader whose target is not a Node process has to be told that the variable does nothing for it rather
+   * than left to conclude their system is silent.
+   */
+  readonly instrumentation: InstrumentationOutcome;
 };
+
+export type InstrumentationOutcome =
+  | { readonly injected: true; readonly shimPath: string }
+  | {
+      readonly injected: false;
+      readonly reason: 'disabled' | 'not_a_node_target' | 'shim_missing';
+    };
 
 /**
  * Environment for the child. The standard OpenTelemetry variables are set so that an unmodified SDK
@@ -69,12 +92,29 @@ export const OTEL_EXPORT_VARIABLES = [
   'OTEL_TRACES_EXPORTER',
 ] as const;
 
+/**
+ * Whether this run loads the shim, decided once so the environment and the report cannot disagree.
+ *
+ * The three ways it does not happen are kept apart because they are three different sentences for a reader.
+ * Turned off is a choice. A target that is not a Node process is a boundary this cannot cross, and it is
+ * the common case for Cloudflare Workers, Python and containers, which is a large share of real agent
+ * systems. A missing shim is a defect in the build.
+ */
+const resolveInstrumentation = (request: TraceSessionRequest): InstrumentationOutcome => {
+  if (!request.autoInstrument) return { injected: false, reason: 'disabled' };
+  if (!targetRunsNode(request.command)) return { injected: false, reason: 'not_a_node_target' };
+  const shimPath = locateShim(import.meta.url);
+  if (shimPath === undefined) return { injected: false, reason: 'shim_missing' };
+  return { injected: true, shimPath };
+};
+
 export const buildTargetEnv = (input: {
   readonly baseEnv: Readonly<Record<string, string | undefined>>;
   readonly endpoint: string;
   readonly serviceName: string;
   readonly runId: string;
   readonly resultFile: string;
+  readonly shimPath?: string;
   readonly faultPlan?: FaultPlan;
   readonly extraEnv?: Readonly<Record<string, string>>;
 }): Record<string, string> => {
@@ -92,6 +132,9 @@ export const buildTargetEnv = (input: {
   env[TARGET_ENV.endpoint] = input.endpoint;
   env[TARGET_ENV.runId] = input.runId;
   env[TARGET_ENV.resultFile] = input.resultFile;
+  if (input.shimPath !== undefined) {
+    env['NODE_OPTIONS'] = withShim(env['NODE_OPTIONS'], input.shimPath);
+  }
   if (input.faultPlan !== undefined) {
     env[TARGET_ENV.faultPlan] = JSON.stringify(input.faultPlan);
   }
@@ -141,6 +184,7 @@ export const runTracedSession = async (
   const resultDirectory = join(tmpdir(), `orchescope-${request.runId}`);
   mkdirSync(resultDirectory, { recursive: true, mode: 0o700 });
   const resultFile = join(resultDirectory, 'result.json');
+  const instrumentation = resolveInstrumentation(request);
 
   try {
     const env = buildTargetEnv({
@@ -149,6 +193,7 @@ export const runTracedSession = async (
       serviceName: request.serviceName,
       runId: request.runId,
       resultFile,
+      ...(instrumentation.injected ? { shimPath: instrumentation.shimPath } : {}),
       ...(request.faultPlan === undefined ? {} : { faultPlan: request.faultPlan }),
       ...(request.extraEnv === undefined ? {} : { extraEnv: request.extraEnv }),
     });
@@ -179,6 +224,7 @@ export const runTracedSession = async (
       receiverUrl: receiver.url,
       targetResult: target.result,
       targetResultProblem: target.problem,
+      instrumentation,
     };
   } finally {
     await receiver.close();

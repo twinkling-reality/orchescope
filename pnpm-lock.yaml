@@ -186,6 +186,12 @@ importers:
         specifier: workspace:*
         version: link:../testkit
 
+  packages/instrumentation:
+    dependencies:
+      '@orchescope/traces':
+        specifier: workspace:*
+        version: link:../traces
+
   packages/mcp:
     dependencies:
       '@modelcontextprotocol/sdk':

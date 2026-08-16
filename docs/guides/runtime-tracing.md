@@ -21,6 +21,35 @@ orchescope trace --label "nightly" --timeout 120000 -- npm run agent
 The command must be on `policy.allowedCommands`. That list is what bounds what Orchescope will execute, so a command not on
 it is refused with the setting named rather than run.
 
+## What happens when your system emits nothing
+
+Most do not. The variables in the next section are inert unless something in the target process already
+loads an OpenTelemetry SDK, and essentially no Node project does by default.
+
+So for a Node target, Orchescope loads its own instrumentation into the process, with
+`NODE_OPTIONS=--import`. It records every outbound request the target makes: the model it calls, the MCP
+server it talks to over HTTP, and the writes it performs, with the idempotency key when one was sent. It
+recognises the published model endpoints by host, which is what makes a system that calls a provider
+through plain `fetch` rather than through its package visible at all.
+
+It is deliberately small, and deliberately restrained:
+
+- it does nothing unless the process is the subject of a traced run, which matters because `NODE_OPTIONS`
+  is inherited by every child process the target starts;
+- it stands down entirely if the target already runs OpenTelemetry, because that instrumentation knows more
+  than this one does and running both would report every call twice;
+- it captures no prompt or completion content, and no query string;
+- it never writes to your program's output, registers no signal handler, and swallows its own failures. A
+  program must not fail on account of being watched.
+
+Turn it off with `runtime.autoInstrument: false` in `.orchescope/config.json`. Every traced run says on
+standard output whether it was loaded.
+
+**It reaches Node processes only.** `NODE_OPTIONS` means nothing to `python3`, `uvicorn`, `docker` or
+`wrangler`, and a command that spawns a child in another runtime has the same boundary: the child is where
+the spans are. For those, point the target's own exporter at the receiver URL that `orchescope trace`
+prints. The zero span message says which case you are in.
+
 ## What Orchescope sets, and what your process has to do with it
 
 These are set for the target process, and nothing else is required of it:

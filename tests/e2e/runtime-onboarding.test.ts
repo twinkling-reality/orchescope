@@ -213,6 +213,105 @@ describe('the audit that follows a run which collected nothing', () => {
   });
 });
 
+/**
+ * A target with no OpenTelemetry anywhere in it, which is almost every target.
+ *
+ * The three variables a traced run sets are inert unless something in the process already loads an
+ * OpenTelemetry SDK, and essentially no Node project does: two independent sessions across thirty seven
+ * runs of real systems collected zero spans between them, and an audit was inventory for all of them.
+ * These cases are the difference between what the product claims and what it delivers, so they run the
+ * whole chain: a process is loaded with the shim, makes an ordinary HTTP call, and the audit that follows
+ * names what it reached.
+ */
+describe('a traced run of a target that has no instrumentation of its own', () => {
+  /** A target that talks to a service over plain HTTP. It imports nothing and knows nothing about tracing. */
+  const httpProject = (): string => {
+    const root = silentProject();
+    writeFileSync(
+      join(root, 'main.js'),
+      `import { createServer } from 'node:http';
+
+const server = createServer((request, response) => {
+  const body = JSON.stringify({ ok: true });
+  response.writeHead(200, {
+    'content-type': 'application/json',
+    'content-length': String(Buffer.byteLength(body)),
+  });
+  response.end(body);
+});
+await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+const origin = 'http://127.0.0.1:' + server.address().port;
+
+await fetch(origin + '/v1/lookup');
+await fetch(origin + '/v1/charge', {
+  method: 'POST',
+  headers: { 'idempotency-key': 'order-42' },
+  body: '{}',
+});
+server.close();
+`,
+    );
+    return root;
+  };
+
+  it('collects spans from it, and says it loaded the instrumentation that did so', async () => {
+    const root = httpProject();
+    const result = await run(['--cwd', root, 'trace', '--json', '--', 'node', 'main.js']);
+    const document = JSON.parse(result.stdout.trim()) as {
+      data: {
+        spanCount: number;
+        instrumentation: { injected: boolean };
+      };
+    };
+    assert.equal(document.data.instrumentation.injected, true);
+    assert.equal(
+      document.data.spanCount,
+      2,
+      'both outbound requests should have been recorded as spans',
+    );
+  });
+
+  it('turns the run into a reconciliation that names what the system reached', async () => {
+    const root = httpProject();
+    await run(['--cwd', root, 'trace', '--', 'node', 'main.js']);
+    const after = await auditJson(root);
+    const undeclared = after.findings.find(
+      (finding) => finding.ruleId === 'exercised-not-declared',
+    );
+    assert.ok(undeclared !== undefined, 'a component that ran and was never declared is the point');
+    assert.equal(undeclared.basis, 'observed');
+    assert.match(undeclared.title, /127\.0\.0\.1/);
+  });
+
+  it('leaves the target alone when the operator turns it off', async () => {
+    const root = httpProject();
+    mkdirSync(join(root, '.orchescope'), { recursive: true });
+    writeFileSync(
+      join(root, '.orchescope/config.json'),
+      `${JSON.stringify({ schemaVersion: 2, runtime: { autoInstrument: false } }, null, 2)}\n`,
+    );
+    const result = await run(['--cwd', root, 'trace', '--json', '--', 'node', 'main.js']);
+    const document = JSON.parse(result.stdout.trim()) as {
+      data: { spanCount: number; instrumentation: { injected: boolean; reason?: string } };
+    };
+    assert.equal(document.data.instrumentation.injected, false);
+    assert.equal(document.data.instrumentation.reason, 'disabled');
+    assert.equal(document.data.spanCount, 0);
+  });
+
+  /*
+   * The boundary from the field report. A test suite spawned `wrangler dev`, so the server under test ran
+   * in workerd and the variable meant nothing to it. Perfect Node instrumentation would have captured the
+   * client and missed the server, and a reader who is not told that concludes their system is silent.
+   */
+  it('says plainly when the target is a runtime it cannot reach', async () => {
+    const root = silentProject();
+    const result = await run(['--cwd', root, 'trace', '--', 'python3', '-c', 'pass']);
+    assert.match(result.stdout, /not a Node process/);
+    assert.match(result.stdout, /Point its own exporter at http:\/\/127\.0\.0\.1:\d+/);
+  });
+});
+
 describe('a traced run that exports spans', () => {
   it('stores them and points at the report', async () => {
     const root = silentProject();

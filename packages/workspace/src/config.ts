@@ -40,6 +40,7 @@ export const DEFAULT_CONFIG: OrchescopeConfig = {
     maxSpanAttributeBytes: 4_096,
     maxRequestBytes: 8 * 1024 * 1024,
     exportDrainMs: 400,
+    autoInstrument: true,
   },
   report: {
     host: '127.0.0.1',

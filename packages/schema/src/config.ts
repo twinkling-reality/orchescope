@@ -49,6 +49,16 @@ export const RuntimeConfig = Type.Object(
     maxRequestBytes: PositiveInt,
     /** Grace period after the wrapped process exits, for in flight span exports to arrive. */
     exportDrainMs: PositiveInt,
+    /**
+     * Whether a traced Node process is loaded with Orchescope's own instrumentation.
+     *
+     * The OpenTelemetry variables a traced run sets are inert unless something in the target already loads
+     * an SDK, and essentially no Node project does, so without this a run collects nothing and the audit is
+     * inventory. This is on by default because that is the difference between what the product claims and
+     * what it delivers, and it is a setting because it puts Orchescope's code inside a process the operator
+     * owns. A target that already runs OpenTelemetry is left alone whatever this says.
+     */
+    autoInstrument: Type.Boolean(),
   },
   { additionalProperties: false },
 );

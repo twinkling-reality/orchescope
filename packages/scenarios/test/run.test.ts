@@ -74,6 +74,11 @@ const policyFor = (overrides: Partial<ScenarioPolicy> = {}): ScenarioPolicy => (
   maxRequestBytes: 512 * 1024,
   maxSpanAttributeBytes: 8 * 1024,
   exportDrainMs: 25,
+  /*
+   * Off, because these fixtures assert what a scenario produces from its own spans. A shim in the target
+   * would add outbound request spans that belong to a different test.
+   */
+  autoInstrument: false,
   ...overrides,
 });
 

@@ -35,5 +35,6 @@ export {
   importTrace,
   runTrace,
   type TraceRequest,
+  type InstrumentationOutcome,
   type TraceResult,
 } from './trace.ts';

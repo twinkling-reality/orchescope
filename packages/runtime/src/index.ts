@@ -20,6 +20,7 @@ export { type ReceiverHandle, type ReceiverOptions, startReceiver } from './rece
 export {
   buildTargetEnv,
   OTEL_EXPORT_VARIABLES,
+  type InstrumentationOutcome,
   runTracedSession,
   type TraceSessionRequest,
   type TraceSessionResult,

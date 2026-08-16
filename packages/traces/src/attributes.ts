@@ -170,6 +170,7 @@ const OPERATION_BY_NAME_PREFIX: readonly (readonly [string, AgentOperation])[] =
   ['queue_wait', 'queue_wait'],
   ['side_effect', 'side_effect'],
   ['evaluation', 'evaluation'],
+  ['outbound_request', 'outbound_request'],
 ];
 
 export const classifyOperation = (name: string, attributes: Attributes): AgentOperation => {
@@ -213,6 +214,7 @@ const KIND_BY_OPERATION: Readonly<Record<AgentOperation, ComponentKind | undefin
   side_effect: 'side_effect',
   approval: 'approval_boundary',
   evaluation: 'evaluator',
+  outbound_request: 'external_service',
   unclassified: undefined,
 };
 

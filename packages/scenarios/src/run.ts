@@ -166,6 +166,7 @@ const runRepetition = async (
     deadline: input.deadline,
     timeoutMs: context.timeoutMs,
     drainMs: input.policy.exportDrainMs,
+    autoInstrument: input.policy.autoInstrument,
     maxSpansPerRun: input.policy.maxSpansPerRun,
     maxRequestBytes: input.policy.maxRequestBytes,
     maxSpanAttributeBytes: input.policy.maxSpanAttributeBytes,

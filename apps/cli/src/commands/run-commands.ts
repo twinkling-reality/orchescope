@@ -42,6 +42,7 @@ const writeTraceResult = (context: CommandContext, result: TraceResult): number 
           targetResultProblem: result.targetResultProblem,
           receiverUrl: result.receiverUrl,
           otlpVariables: result.otlpVariables,
+          instrumentation: result.instrumentation,
         },
       })}\n`,
     );
@@ -50,6 +51,18 @@ const writeTraceResult = (context: CommandContext, result: TraceResult): number 
     context.stdout(
       `  ${result.spanCount} span(s) from ${result.serviceNames.length || 0} service(s), status ${result.run.status}\n`,
     );
+    /*
+     * Orchescope put code inside the process it just ran. That is what makes an uninstrumented system
+     * produce evidence, and it is not something to do quietly: a reader has to be able to tell why a run
+     * that collected nothing last week collects spans today, and how to stop it.
+     */
+    if (result.instrumentation.injected) {
+      context.stdout(
+        context.style.dim(
+          '  Orchescope loaded its own instrumentation into the target. Turn it off with runtime.autoInstrument in .orchescope/config.json.\n',
+        ),
+      );
+    }
     if (result.spanCount === 0) {
       context.stdout(`${noSpansLines(context.style, result)}\n`);
     }

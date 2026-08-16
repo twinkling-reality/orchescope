@@ -52,6 +52,15 @@ export const AgentOperation = literals([
   'side_effect',
   'approval',
   'evaluation',
+  /**
+   * A request the system made to something outside itself.
+   *
+   * The generative AI conventions have no word for this, and the declared model has had `external_service`
+   * from the beginning, so until now only source analysis could populate it: a run could not say which of
+   * the services a repository talks to it actually reached. That is the half of the reconciliation the
+   * whole product is about, missing for the components whose repeats are the most expensive.
+   */
+  'outbound_request',
   'unclassified',
 ] as const);
 export type AgentOperation = Static<typeof AgentOperation>;

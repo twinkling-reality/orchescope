@@ -22,5 +22,6 @@ export const scenarioPolicyFrom = (workspace: Workspace): ScenarioPolicy => {
     maxRequestBytes: runtime.maxRequestBytes,
     maxSpanAttributeBytes: runtime.maxSpanAttributeBytes,
     exportDrainMs: runtime.exportDrainMs,
+    autoInstrument: runtime.autoInstrument,
   };
 };
