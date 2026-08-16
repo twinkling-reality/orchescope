@@ -132,5 +132,6 @@ median degree of one or two, and a layered layout puts every leaf of a hub in on
 The layout is now concentric, still deterministic, still computed in the CLI with the positions baked
 into the bundle, and it needs no library at all, so the dependency is gone. The same graph lays out at
 2997 by 3000. Nothing else in this record changed: `sigma`, `graphology` and `preact` are unaffected,
-and no layout engine ships to the browser. The measurements are in
-[../../design/report-system.md](../../design/report-system.md).
+and no layout engine ships to the browser. The measurements were in `docs/design/report-system.md`, which was removed
+with the browser workspace in `faf5007`; this paragraph is kept because the decision it records is why the dependency is
+absent, not because the surface it was measured on still exists.
