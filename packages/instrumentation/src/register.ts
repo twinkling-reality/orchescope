@@ -13,12 +13,19 @@ import { install } from './install.ts';
  */
 
 try {
-  install({
+  const installation = install({
     environment: process.env,
     globals: globalThis as unknown as { fetch: typeof globalThis.fetch },
     onBeforeExit: (listener) => process.on('beforeExit', listener),
     setInterval: (body, ms) => setInterval(body, ms),
+    directory: process.cwd(),
   });
+  /*
+   * Awaited here so every patch is in place before the target's first line. `--import` settles the module
+   * it loads, top level await and all, before it loads the entry point, which is the whole reason a patch
+   * that has to resolve a package can be applied at all.
+   */
+  await installation?.patches;
 } catch {
   // A process must not fail on account of being watched.
 }

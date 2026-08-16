@@ -6,6 +6,7 @@ import { createExporter, type FinishedSpan } from '../src/exporter.ts';
 import { alreadyInstrumented, install } from '../src/install.ts';
 import { recogniseModelCall } from '../src/model-endpoints.ts';
 import { recogniseProtocolCall } from '../src/json-rpc.ts';
+import { patchMcpClient } from '../src/mcp-client.ts';
 import { instrumentedFetch } from '../src/outbound-fetch.ts';
 import { readSettings } from '../src/settings.ts';
 import { createTracer, SPAN_KIND_INTERNAL } from '../src/tracer.ts';
@@ -103,6 +104,7 @@ describe('deciding whether to switch on at all', () => {
         ORCHESCOPE_RUN_ID: 'run_0000000000000001',
       },
       globals,
+      directory: process.cwd(),
       onBeforeExit: () => {
         // The install refused, so nothing registered a listener to call.
       },
@@ -441,5 +443,65 @@ describe('the exporter, inside a process that belongs to someone else', () => {
     assert.equal(exporter.dropped(), 1);
     // An exporter that could not reach its receiver must not turn that into the target's problem.
     await exporter.flush();
+  });
+});
+
+/**
+ * The one patch that cannot be avoided, and everything about declining to make it.
+ *
+ * A local Model Context Protocol server is spawned by its client and spoken to over standard input, so no
+ * global carries the call and nothing about it is visible to the rest of this shim. It is also the surface
+ * most likely to move, so the shape is checked before it is touched and what happened is reported: a build
+ * that silently patched nothing would look exactly like a target that called no tools.
+ */
+describe('the Model Context Protocol client', () => {
+  /** A stand in for the published package, so the patch is exercised without installing an SDK. */
+  const fakeSdk = (callTool: unknown) => ({ Client: { prototype: { callTool } } });
+
+  const patchWith = async (loaded: unknown) => {
+    const tracer = countedTracer();
+    const outcome = await patchMcpClient({
+      tracer,
+      directory: process.cwd(),
+      load: () => Promise.resolve([loaded]),
+    });
+    return { outcome, tracer };
+  };
+
+  it('times a tool call and names the tool, which is what the join needs', async () => {
+    let received: unknown;
+    const original = function (this: unknown, params: unknown) {
+      received = params;
+      return Promise.resolve({ content: [] });
+    };
+    const sdk = fakeSdk(original);
+    const { outcome } = await patchWith(sdk);
+    assert.equal(outcome.patched, true);
+
+    const patched = sdk.Client.prototype.callTool as (params: unknown) => Promise<unknown>;
+    await patched.call({}, { name: 'issue_refund', arguments: { chargeId: 'ch_1' } });
+    assert.deepEqual(received, { name: 'issue_refund', arguments: { chargeId: 'ch_1' } });
+    assert.equal(collected[0]?.name, 'execute_tool issue_refund');
+    assert.equal(collected[0]?.attributes['mcp.tool.name'], 'issue_refund');
+  });
+
+  it('lets a failing tool call fail exactly as it would have', async () => {
+    const sdk = fakeSdk(() => Promise.reject(new Error('the server refused')));
+    await patchWith(sdk);
+    const patched = sdk.Client.prototype.callTool as (params: unknown) => Promise<unknown>;
+    await assert.rejects(() => patched.call({}, { name: 'issue_refund' }), /the server refused/);
+    assert.equal(collected[0]?.status.code, 2);
+  });
+
+  it('declines, and says why, when the shape is not the one this build knows', async () => {
+    const { outcome } = await patchWith({ Client: { prototype: {} } });
+    assert.equal(outcome.patched, false);
+    assert.match(outcome.patched === false ? outcome.reason : '', /not the shape this build knows/);
+  });
+
+  it('declines when the target does not depend on it at all', async () => {
+    const outcome = await patchMcpClient({ tracer: countedTracer(), directory: '/nowhere' });
+    assert.equal(outcome.patched, false);
+    assert.match(outcome.patched === false ? outcome.reason : '', /does not depend on it/);
   });
 });

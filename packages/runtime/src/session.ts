@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { type InstrumentationReport, reportPathFor } from '@orchescope/instrumentation';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Clock, Deadline } from '@orchescope/domain';
@@ -71,7 +72,23 @@ export type TraceSessionResult = {
 };
 
 export type InstrumentationOutcome =
-  | { readonly injected: true; readonly shimPath: string }
+  | {
+      readonly injected: true;
+      readonly shimPath: string;
+      /**
+       * What the shim managed to patch inside the target, once it was there.
+       *
+       * Injecting is not instrumenting. A target whose Model Context Protocol client is a shape this build
+       * does not know produces a trace with no tool calls in it, and without this a reader cannot tell that
+       * from a target that made none. Empty when the shim never reported, which is what a process killed
+       * before it settled looks like.
+       */
+      readonly patches: readonly {
+        readonly target: string;
+        readonly patched: boolean;
+        readonly reason?: string;
+      }[];
+    }
   | {
       readonly injected: false;
       readonly reason: 'disabled' | 'not_a_node_target' | 'shim_missing';
@@ -100,12 +117,31 @@ export const OTEL_EXPORT_VARIABLES = [
  * the common case for Cloudflare Workers, Python and containers, which is a large share of real agent
  * systems. A missing shim is a defect in the build.
  */
-const resolveInstrumentation = (request: TraceSessionRequest): InstrumentationOutcome => {
+const resolveInstrumentation = (
+  request: TraceSessionRequest,
+): InstrumentationOutcome | { readonly injected: true; readonly shimPath: string } => {
   if (!request.autoInstrument) return { injected: false, reason: 'disabled' };
   if (!targetRunsNode(request.command)) return { injected: false, reason: 'not_a_node_target' };
   const shimPath = locateShim(import.meta.url);
   if (shimPath === undefined) return { injected: false, reason: 'shim_missing' };
   return { injected: true, shimPath };
+};
+
+/**
+ * What the shim reported it patched, read back from the directory this run owns.
+ *
+ * The shim cannot speak: its only streams belong to the target. It leaves a document beside the result
+ * file instead, and a run that finds none reports no patches rather than inventing an answer, which is
+ * what a process killed before the shim settled looks like from here.
+ */
+const patchesReported = (resultFile: string): InstrumentationReport['patches'] => {
+  try {
+    const parsed = JSON.parse(readFileSync(reportPathFor(resultFile), 'utf8')) as unknown;
+    const patches = (parsed as InstrumentationReport | undefined)?.patches;
+    return Array.isArray(patches) ? patches : [];
+  } catch {
+    return [];
+  }
 };
 
 export const buildTargetEnv = (input: {
@@ -224,7 +260,9 @@ export const runTracedSession = async (
       receiverUrl: receiver.url,
       targetResult: target.result,
       targetResultProblem: target.problem,
-      instrumentation,
+      instrumentation: instrumentation.injected
+        ? { ...instrumentation, patches: patchesReported(resultFile) }
+        : instrumentation,
     };
   } finally {
     await receiver.close();

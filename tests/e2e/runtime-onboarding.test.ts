@@ -312,6 +312,105 @@ server.close();
   });
 });
 
+/**
+ * A tool call to a Model Context Protocol server the target started itself.
+ *
+ * This is the one thing the shim cannot reach through a global: the client spawns the server and speaks to
+ * it over standard input, so nothing about the call passes `fetch`. The package is written into the fixture
+ * rather than installed, which keeps the test offline and pins the two things that actually went wrong when
+ * this was first tried against a real SDK: the exports map reaches its builds through a wildcard, and a
+ * package that ships both a CommonJS and an ES module build is two objects at runtime. Patching the one
+ * `require` happens to find reported success and produced no spans at all.
+ */
+describe('a traced run that calls a tool over standard input', () => {
+  const clientSource = `export class Client {
+  async callTool(params) {
+    return { content: [{ type: 'text', text: 'refunded ' + params.arguments.chargeId }] };
+  }
+}
+`;
+
+  const clientSourceCommonJs = `class Client {
+  async callTool(params) {
+    return { content: [{ type: 'text', text: 'refunded ' + params.arguments.chargeId }] };
+  }
+}
+module.exports = { Client };
+`;
+
+  const withFakeSdk = (): string => {
+    const root = silentProject();
+    const pkg = join(root, 'node_modules/@modelcontextprotocol/sdk');
+    mkdirSync(join(pkg, 'dist/esm/client'), { recursive: true });
+    mkdirSync(join(pkg, 'dist/cjs/client'), { recursive: true });
+    writeFileSync(
+      join(pkg, 'package.json'),
+      `${JSON.stringify(
+        {
+          name: '@modelcontextprotocol/sdk',
+          version: '1.0.0',
+          type: 'module',
+          exports: {
+            './*': { import: './dist/esm/*', require: './dist/cjs/*' },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    writeFileSync(join(pkg, 'dist/esm/client/index.js'), clientSource);
+    writeFileSync(join(pkg, 'dist/cjs/client/index.js'), clientSourceCommonJs);
+    writeFileSync(join(pkg, 'dist/cjs/package.json'), `${JSON.stringify({ type: 'commonjs' })}\n`);
+    writeFileSync(
+      join(root, 'main.js'),
+      `import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+
+const client = new Client();
+const result = await client.callTool({ name: 'issue_refund', arguments: { chargeId: 'ch_1' } });
+console.log(result.content[0].text);
+`,
+    );
+    return root;
+  };
+
+  it('records the tool by name, which is what the reconciliation joins on', async () => {
+    const root = withFakeSdk();
+    const result = await run(['--cwd', root, 'trace', '--json', '--', 'node', 'main.js']);
+    const document = JSON.parse(result.stdout.trim()) as {
+      data: {
+        spanCount: number;
+        instrumentation: { patches?: readonly { target: string; patched: boolean }[] };
+      };
+    };
+    assert.deepEqual(document.data.instrumentation.patches, [
+      { patched: true, target: '@modelcontextprotocol/sdk/client/index.js' },
+    ]);
+    assert.equal(document.data.spanCount, 1, 'the tool call is the span');
+  });
+
+  /*
+   * A patch that declined has to reach somebody. Without this a target whose client is a shape this build
+   * does not know produces a trace with no tool calls in it, which is indistinguishable from a target that
+   * made none.
+   */
+  it('says so when the package is there and its shape is not the one this build knows', async () => {
+    const root = withFakeSdk();
+    const pkg = join(root, 'node_modules/@modelcontextprotocol/sdk');
+    writeFileSync(join(pkg, 'dist/esm/client/index.js'), 'export const Client = {};\n');
+    writeFileSync(join(pkg, 'dist/cjs/client/index.js'), 'module.exports = { Client: {} };\n');
+    writeFileSync(join(root, 'main.js'), "console.log('no tool call here');\n");
+    const result = await run(['--cwd', root, 'trace', '--json', '--', 'node', 'main.js']);
+    const document = JSON.parse(result.stdout.trim()) as {
+      data: { instrumentation: { patches?: readonly { patched: boolean; reason?: string }[] } };
+    };
+    assert.equal(document.data.instrumentation.patches?.[0]?.patched, false);
+    assert.match(
+      document.data.instrumentation.patches?.[0]?.reason ?? '',
+      /not the shape this build knows/,
+    );
+  });
+});
+
 describe('a traced run that exports spans', () => {
   it('stores them and points at the report', async () => {
     const root = silentProject();

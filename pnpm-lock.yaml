@@ -269,6 +269,9 @@ importers:
       '@orchescope/domain':
         specifier: workspace:*
         version: link:../domain
+      '@orchescope/instrumentation':
+        specifier: workspace:*
+        version: link:../instrumentation
       '@orchescope/schema':
         specifier: workspace:*
         version: link:../schema

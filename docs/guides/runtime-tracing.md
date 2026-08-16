@@ -32,7 +32,7 @@ So for a Node target, Orchescope loads its own instrumentation into the process,
 | The request | What the run records |
 | --- | --- |
 | A call to a published model endpoint | a model, with the provider, the model name and the token counts |
-| A Model Context Protocol `tools/call` | the tool, by the name reconciliation joins tools on |
+| A Model Context Protocol `tools/call`, over HTTP or over standard input | the tool, by the name reconciliation joins tools on |
 | Any other write | an outside effect, with the idempotency key when one was sent |
 | Any other read | the service it reached |
 
@@ -40,6 +40,12 @@ Recognising a model endpoint by host is what makes a system that calls a provide
 rather than through its package visible at all. Reading the tool name out of the protocol message is what
 lets a tool your repository declares and a tool your run executes become the same component, which is the
 join the whole audit is built on.
+
+A local MCP server is spawned by its client and spoken to over standard input, so nothing about that call
+passes `fetch`. For it, and only for it, Orchescope patches one method of the client package it finds in
+your own dependencies. The patch checks the shape before it touches anything, and every traced run reports
+what it patched and what it declined to patch, under `instrumentation.patches` in `--json`: a client this
+build does not recognise has to be something you can see, not a trace that quietly holds no tool calls.
 
 A model call and a protocol message are not recorded as outside effects. Both are POSTs, and counting them
 would report two chat completions in one run as one effect that happened twice.

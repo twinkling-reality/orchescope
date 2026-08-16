@@ -7,6 +7,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@orchescope/domain": "workspace:*",
+    "@orchescope/instrumentation": "workspace:*",
     "@orchescope/schema": "workspace:*",
     "@orchescope/traces": "workspace:*"
   },
