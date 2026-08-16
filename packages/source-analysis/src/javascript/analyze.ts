@@ -368,6 +368,59 @@ const CONTROL_FLOW_TYPES: Readonly<Record<string, ControlFlowFact['kind']>> = {
 };
 
 /**
+ * What a loop's form says about whether its passes repeat work or walk a collection.
+ *
+ * `for...of` and `for...in` bind the next element on every pass, so no pass can be a re-attempt of the
+ * one before it. The rest can be either, and are recorded as repeating the same work because that is the
+ * shape a retry has to take.
+ */
+const LOOP_REPETITION: Readonly<Record<string, 'same_work' | 'each_item'>> = {
+  ForStatement: 'same_work',
+  WhileStatement: 'same_work',
+  DoWhileStatement: 'same_work',
+  ForOfStatement: 'each_item',
+  ForInStatement: 'each_item',
+};
+
+/** Enough of a header to recognise a counter by the name its author gave it. */
+const MAX_HEADER_NAMES = 8;
+
+const collectIdentifiers = (node: Node | undefined, into: Set<string>): void => {
+  if (node === undefined || into.size >= MAX_HEADER_NAMES) return;
+  if (node.type === 'Identifier') {
+    const name = field(node, 'name');
+    if (typeof name === 'string') into.add(name);
+    return;
+  }
+  for (const key of Object.keys(node as Record<string, unknown>)) {
+    const value = field(node, key);
+    if (Array.isArray(value)) {
+      for (const entry of value) collectIdentifiers(asNode(entry), into);
+      continue;
+    }
+    collectIdentifiers(asNode(value), into);
+  }
+};
+
+/**
+ * Whether the loop's own form limits how many passes it makes.
+ *
+ * A three part `for` with a test states a ceiling; `for (;;)` and `while` do not, and a `for...of` is
+ * bounded by the collection it walks.
+ */
+const passesBoundedIn = (node: Node): boolean =>
+  node.type === 'ForStatement'
+    ? asNode(field(node, 'test')) !== undefined
+    : node.type === 'ForOfStatement' || node.type === 'ForInStatement';
+
+/** The identifiers a loop names in its own header, which is where a retry counts its attempts. */
+const headerNamesOf = (node: Node): readonly string[] => {
+  const names = new Set<string>();
+  for (const key of ['init', 'test', 'update']) collectIdentifiers(asNode(field(node, key)), names);
+  return [...names];
+};
+
+/**
  * Single traversal. `enclosing` is the nearest named scope, `awaited` marks a call that the caller
  * waits for, and `collecting` accumulates callee paths for the control flow construct being visited.
  */
@@ -384,11 +437,14 @@ const traverse = (
     collecting.push(contains);
     visitChildren(node, context, frame, false, collecting);
     collecting.pop();
+    const repeats = LOOP_REPETITION[node.type];
     context.controlFlow.push({
       kind,
       location: context.index.location(context.file, node.start, node.end),
       enclosing: frame.name,
       contains,
+      ...(repeats === undefined ? {} : { repeats, passesBounded: passesBoundedIn(node) }),
+      ...(repeats === 'same_work' ? { headerNames: headerNamesOf(node) } : {}),
     });
     return;
   }

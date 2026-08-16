@@ -9,6 +9,7 @@ import type { Rule, RuleContext } from '../src/rule.ts';
 import {
   architectureShapeRule,
   safeRetryRule,
+  unboundedRetryRule,
   unsafeRetryRule,
   unusedConfiguredToolRule,
 } from '../src/rules/static-policy.ts';
@@ -36,16 +37,18 @@ const lookup = componentDraft({
   sideEffect: 'read_only',
 });
 
-const graphWith = (policy: EdgePolicy | undefined, target = refund): SystemGraph =>
+const graphWith = (
+  policy: EdgePolicy | undefined,
+  target = refund,
+  metadata: Readonly<Record<string, string>> = {},
+): SystemGraph =>
   buildGraph(
     [orchestrator, target],
     [
-      edgeDraft(
-        'calls_tool',
-        orchestrator,
-        target,
-        policy === undefined ? {} : ({ policy } as Partial<EdgeDraft>),
-      ),
+      edgeDraft('calls_tool', orchestrator, target, {
+        ...(policy === undefined ? {} : { policy }),
+        ...(Object.keys(metadata).length === 0 ? {} : { metadata }),
+      } as Partial<EdgeDraft>),
     ],
   );
 
@@ -112,14 +115,23 @@ describe('retry-around-non-idempotent-operation', () => {
   });
 
   it('fires at a lower severity when the effect class itself is unknown', () => {
-    const unclassified = componentDraft({ kind: 'tool', name: 'send_thing', file: 'src/send.ts' });
+    /*
+     * Classified and undecided, which the draft has to state: a component with no class at all was never
+     * looked at, and the rule now keeps the two apart.
+     */
+    const undecided = componentDraft({
+      kind: 'tool',
+      name: 'send_thing',
+      file: 'src/send.ts',
+      sideEffect: 'unknown',
+    });
     const outcome = unsafeRetryRule.evaluate(
       contextFor(
         graphWith(
           {
             retry: { maxAttempts: 2, bounded: true, backoff: 'fixed', idempotency: 'unknown' },
           },
-          unclassified,
+          undecided,
         ),
       ),
     );
@@ -466,5 +478,75 @@ describe('topology-shape reachability', () => {
       ),
       [],
     );
+  });
+});
+
+/**
+ * One call site, one finding, and no absence asserted by a rule that did not look.
+ *
+ * In all three repositories where both retry rules fired across a thirty six repository sweep, their
+ * components and source locations were byte identical. From the outside that reads as one problem counted
+ * twice, and it doubled the medium severity count wherever it happened. Separately, both rules asserted an
+ * absence, and neither had looked: one named an operation whose sink derives a content addressed key and
+ * enforces it with `ON CONFLICT DO NOTHING`, and the other named a codebase that declares its own attempt
+ * ceiling.
+ */
+describe('the two retry rules together', () => {
+  const unsafe: EdgePolicy = {
+    retry: { bounded: false, backoff: 'unknown', idempotency: 'unknown' },
+  };
+
+  it('report one call site once, with the stronger claim keeping it', () => {
+    const context = contextFor(graphWith(unsafe));
+    const unsafeDrafts = unsafeRetryRule.evaluate(context);
+    const unboundedDrafts = unboundedRetryRule.evaluate(context);
+    assert.equal(unsafeDrafts.drafts.length, 1, 'the specific rule keeps the call site');
+    assert.deepEqual(unboundedDrafts.drafts, [], 'the general rule does not repeat it');
+    assert.match(
+      unboundedDrafts.detail ?? '',
+      /retry-around-non-idempotent-operation reports instead/,
+    );
+  });
+
+  it('still reports an unbounded retry the other rule has nothing to say about', () => {
+    const outcome = unboundedRetryRule.evaluate(contextFor(graphWith(unsafe, lookup)));
+    assert.equal(outcome.drafts.length, 1, 'a read only target is not the other rule s business');
+    assert.match(outcome.drafts[0]?.title ?? '', /no attempt ceiling/);
+  });
+
+  it('asserts no missing key when the operation deduplicates its own effect', () => {
+    const outcome = unsafeRetryRule.evaluate(
+      contextFor(
+        graphWith(unsafe, refund, { deduplicatesAtSink: 'its statement deduplicates on conflict' }),
+      ),
+    );
+    assert.deepEqual(outcome.drafts, []);
+    assert.match(outcome.detail ?? '', /deduplicates its own effect/);
+  });
+
+  /*
+   * `unknown` is the answer discovery gives when it read a write shaped operation and could not tell.
+   * Absent is the answer it gives when nothing asked. Reading the second as the first reported a polled
+   * HTTP read as possibly unsafe to repeat, because the function it named was an inferred entry point no
+   * classifier had ever looked at.
+   */
+  it('says nothing about an operation no classifier ever looked at', () => {
+    const unclassified = componentDraft({
+      kind: 'entrypoint',
+      name: 'poll_status',
+      file: 'src/poll.py',
+    });
+    const outcome = unsafeRetryRule.evaluate(contextFor(graphWith(unsafe, unclassified)));
+    assert.deepEqual(outcome.drafts, []);
+  });
+
+  it('asserts no missing ceiling when the operation declares one', () => {
+    const outcome = unboundedRetryRule.evaluate(
+      contextFor(
+        graphWith(unsafe, lookup, { attemptCeiling: 'it declares DELIVERY_MAX_ATTEMPTS' }),
+      ),
+    );
+    assert.deepEqual(outcome.drafts, []);
+    assert.match(outcome.detail ?? '', /declares its own ceiling/);
   });
 });

@@ -35,20 +35,68 @@ const targetOf = (
   edge: Edge,
 ) => context.graph.component(edge.to);
 
+/**
+ * Whether this retry sits in front of an operation whose repeat cannot be ruled out.
+ *
+ * Shared by the two retry rules so that one cannot start reporting a call site the other has stopped
+ * reporting. In all three repositories where both fired across a thirty six repository sweep, their
+ * components and source locations were byte identical: from the outside it read as one problem counted
+ * twice, and it doubled the medium severity count wherever it happened.
+ */
+const retryIsUnsafe = (
+  context: { graph: { component: (id: string) => Component | undefined } },
+  edge: Edge,
+): boolean => {
+  const retry = edge.policy?.retry;
+  if (retry === undefined || retry.idempotency === 'declared') return false;
+  if (edge.metadata['deduplicatesAtSink'] !== undefined) return false;
+  const target = targetOf(context, edge);
+  /*
+   * A component with no effect class was never classified, which is not the same as one classified
+   * `unknown`. `unknown` is the answer discovery gives when it read a write shaped operation and could not
+   * tell; absent is the answer it gives when nothing asked. Reading the second as the first reported a
+   * polled HTTP read as an operation that might not be safe to repeat, because the enclosing function it
+   * named was an inferred entry point that no classifier had ever looked at.
+   */
+  if (target?.sideEffect === undefined) return false;
+  return RETRY_UNSAFE_EFFECTS.includes(target.sideEffect);
+};
+
+/**
+ * What discovery saw one frame into the operation, when it saw anything.
+ *
+ * Both retry rules assert an absence: no key, no ceiling. An assertion of absence is only worth making by
+ * something that looked, and until now neither did. Where the sink shows a deduplicating statement or a
+ * declared attempt bound, the rule says nothing rather than saying the opposite: the evidence is not proof
+ * that the retry honours either one, and a rule that cannot tell must not pick the accusing answer.
+ */
+const sinkShowed = (
+  edge: Edge,
+  key: 'deduplicatesAtSink' | 'attemptCeiling',
+): string | undefined => {
+  const value = edge.metadata[key];
+  return typeof value === 'string' ? value : undefined;
+};
+
 export const unsafeRetryRule: Rule = {
   id: 'retry-around-non-idempotent-operation',
   category: 'reliability',
   summary: 'A retry wrapped around an operation whose idempotency was not established.',
   evaluate: (context) => {
     const drafts: FindingDraft[] = [];
+    const unassertable: string[] = [];
     for (const edge of context.graph.graph.edges) {
       const retry = edge.policy?.retry;
       if (retry === undefined) continue;
+      const deduplicates = sinkShowed(edge, 'deduplicatesAtSink');
+      if (deduplicates !== undefined) {
+        unassertable.push(deduplicates);
+        continue;
+      }
+      if (!retryIsUnsafe(context, edge)) continue;
       const target = targetOf(context, edge);
       if (target === undefined) continue;
       const effect = target.sideEffect ?? 'unknown';
-      if (!RETRY_UNSAFE_EFFECTS.includes(effect)) continue;
-      if (retry.idempotency === 'declared') continue;
 
       const source = context.graph.component(edge.from);
       const record = derivedEvidence({
@@ -107,7 +155,11 @@ export const unsafeRetryRule: Rule = {
     }
     return fired(
       drafts,
-      drafts.length === 0 ? 'every retried operation declared an idempotency key' : undefined,
+      unassertable.length === 0
+        ? drafts.length === 0
+          ? 'no retry was found in front of an operation whose repeat could not be ruled out'
+          : undefined
+        : `${formatCount(unassertable.length, 'retry')} was left unreported because the operation it calls deduplicates its own effect: ${[...new Set(unassertable)].join(', ')}`,
     );
   },
 };
@@ -118,9 +170,25 @@ export const unboundedRetryRule: Rule = {
   summary: 'A retry with no attempt ceiling.',
   evaluate: (context) => {
     const drafts: FindingDraft[] = [];
+    const unassertable: string[] = [];
+    let leftToTheOtherRule = 0;
     for (const edge of context.graph.graph.edges) {
       const retry = edge.policy?.retry;
       if (retry === undefined || retry.bounded) continue;
+      /*
+       * One call site, one finding. `retry-around-non-idempotent-operation` already reports this edge, at a
+       * higher severity, and its remediation covers the ceiling as well: attach a key or remove the retry.
+       * Reporting the same location twice with two titles reads as two problems and is one.
+       */
+      if (retryIsUnsafe(context, edge)) {
+        leftToTheOtherRule += 1;
+        continue;
+      }
+      const bounded = sinkShowed(edge, 'attemptCeiling');
+      if (bounded !== undefined) {
+        unassertable.push(bounded);
+        continue;
+      }
       const target = context.graph.component(edge.to);
       const source = context.graph.component(edge.from);
       drafts.push({
@@ -158,10 +226,18 @@ export const unboundedRetryRule: Rule = {
         tags: ['retry'],
       });
     }
-    return fired(
-      drafts,
-      drafts.length === 0 ? 'every discovered retry had an attempt ceiling' : undefined,
-    );
+    const notes = [
+      leftToTheOtherRule === 0
+        ? undefined
+        : `${formatCount(leftToTheOtherRule, 'unbounded retry')} sits in front of an operation whose repeat cannot be ruled out, which retry-around-non-idempotent-operation reports instead`,
+      unassertable.length === 0
+        ? undefined
+        : `${formatCount(unassertable.length, 'retry')} was left unreported because the operation it calls declares its own ceiling: ${[...new Set(unassertable)].join(', ')}`,
+      drafts.length === 0 && leftToTheOtherRule === 0 && unassertable.length === 0
+        ? 'every discovered retry had an attempt ceiling'
+        : undefined,
+    ].filter((note): note is string => note !== undefined);
+    return fired(drafts, notes.length === 0 ? undefined : notes.join('; '));
   },
 };
 

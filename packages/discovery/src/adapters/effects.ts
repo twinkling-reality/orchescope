@@ -1,4 +1,4 @@
-import { CONFIDENCE_BANDS } from '@orchescope/domain';
+import { CONFIDENCE_BANDS, moduleNamespace } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type {
   ComponentIdentity,
@@ -6,7 +6,12 @@ import type {
   SideEffectClass,
   SourceLocation,
 } from '@orchescope/schema';
-import type { CallFact, ControlFlowFact, ModuleFacts } from '@orchescope/source-analysis';
+import type {
+  CallFact,
+  ControlFlowFact,
+  ModuleFacts,
+  ObjectEntryFact,
+} from '@orchescope/source-analysis';
 import {
   calleeName,
   dotted,
@@ -103,9 +108,15 @@ const WRITE_VERBS = [
 
 const READ_VERBS = ['get', 'list', 'read', 'fetch', 'lookup', 'search', 'query', 'find', 'check'];
 
-/** Classifies an operation from its own name and its HTTP method, never from optimism. */
+/**
+ * Classifies an operation from its own name and its HTTP method, never from optimism.
+ *
+ * The leading underscore comes off first. It is Python's word for private and it is not part of the verb,
+ * and leaving it on hid the verb from the only thing that reads it: `_get_crew_status`, a polled HTTP GET,
+ * was classified `unknown` and then reported as an operation that might not be safe to repeat.
+ */
 export const classifyEffect = (name: string, httpMethod?: string): SideEffectClass => {
-  const lowered = name.toLowerCase();
+  const lowered = name.toLowerCase().replace(/^_+/, '');
   if (httpMethod !== undefined) {
     const method = httpMethod.toLowerCase();
     if (method === 'get' || method === 'head' || method === 'options') return 'read_only';
@@ -137,6 +148,18 @@ const hostOf = (url: string): string | undefined => {
 };
 
 type Found = { components: number; edges: number; files: Set<string> };
+
+/**
+ * Module namespace to the sentence saying how the operations defined there deduplicate their own effect.
+ *
+ * Keyed by namespace rather than by file path, because that is what a component identity carries and the
+ * point of this map is to be asked about a call's target.
+ */
+type SinkEvidence = {
+  readonly deduplicates: string | undefined;
+  readonly ceiling: string | undefined;
+};
+type Sinks = ReadonlyMap<string, SinkEvidence>;
 
 const serviceIdentity = (host: string): ComponentIdentity =>
   globalIdentity('external_service', GLOBAL_NAMESPACES.service, host);
@@ -373,6 +396,82 @@ const discoverStores = (
   }
 };
 
+/**
+ * Whether the module that defines an operation shows it deduplicating its own effect.
+ *
+ * "No idempotency key was found on the operation" was true of every retry Orchescope reported, because
+ * nothing ever looked: the field existed and no adapter populated it. One reported finding named a call
+ * whose sink derives a content addressed delivery identifier and enforces it with `ON CONFLICT DO
+ * NOTHING`, which is verbatim the remediation the finding then prescribed. Looking one frame in is the
+ * difference between a rule that read the code and a rule that assumed the worst about it.
+ *
+ * The evidence is deliberately coarse. It cannot prove the key covers the retried operation, so it is not
+ * used to declare the retry safe; it is used to stop the rules asserting an absence they never checked.
+ */
+const DEDUPLICATING_SQL = /\bon\s+conflict\b|\bon\s+duplicate\s+key\b|\bmerge\s+into\b/i;
+const DEDUPLICATING_NAME = /idempot|dedup|deterministic/i;
+const IDEMPOTENCY_KEY_NAME = /^idempotency[-_]?(key|token)$/i;
+const ATTEMPT_CEILING_NAME = /max_?(attempts|retries|tries)/i;
+
+const entryDeclaresKey = (entries: readonly ObjectEntryFact[], depth: number): boolean =>
+  entries.some((entry) => {
+    if (IDEMPOTENCY_KEY_NAME.test(entry.key)) return true;
+    if (depth === 0 || entry.value.kind !== 'object') return false;
+    return entryDeclaresKey(entry.value.entries, depth - 1);
+  });
+
+const idempotencyEvidenceIn = (module: ModuleFacts): string | undefined => {
+  if (module.texts.some((text) => DEDUPLICATING_SQL.test(text.value))) {
+    return 'its statement deduplicates on conflict';
+  }
+  const named = module.calls.find((call) => DEDUPLICATING_NAME.test(calleeName(call)));
+  if (named !== undefined) return `it derives a key with ${calleeName(named)}`;
+  const keyed = module.calls.some((call) =>
+    call.args.some(
+      (argument) => argument.kind === 'object' && entryDeclaresKey(argument.entries, 1),
+    ),
+  );
+  return keyed ? 'it sends an idempotency key' : undefined;
+};
+
+/**
+ * Whether the module that defines an operation declares how many attempts it allows.
+ *
+ * The same omission as the key, in the other rule: `no attempt limit could be established from the source`
+ * was reported about a codebase that declares `const DELIVERY_MAX_ATTEMPTS = 6` and enforces it with a
+ * terminal status. A constant is not proof that the retry honours it, so this stops the assertion rather
+ * than making the opposite one.
+ */
+const ceilingEvidenceIn = (module: ModuleFacts): string | undefined => {
+  const declared = module.definitions.find((definition) =>
+    ATTEMPT_CEILING_NAME.test(definition.name),
+  );
+  return declared === undefined ? undefined : `it declares ${declared.name}`;
+};
+
+/**
+ * What the sink showed, carried on the relation so a rule can decline to assert what nobody established.
+ *
+ * The evidence is recorded rather than resolved into `idempotency: 'declared'`, because `declared` means a
+ * key was found on the operation and a name that reads like a key derivation is not that. What it supports
+ * is a refusal: the rules stop claiming an absence they never checked, and say how many they left alone.
+ */
+const sinkMetadata = (sink: SinkEvidence | undefined): Record<string, string> => ({
+  ...(sink?.deduplicates === undefined ? {} : { deduplicatesAtSink: sink.deduplicates }),
+  ...(sink?.ceiling === undefined ? {} : { attemptCeiling: sink.ceiling }),
+});
+
+/**
+ * A ceiling the loop itself states, which is a stronger answer than one found in the sink.
+ *
+ * A `while` bounds nothing by its form, but a condition that names a maximum is the author writing the
+ * limit down. Reported so that the rule declines to assert an absence rather than declaring the retry safe.
+ */
+const headerCeiling = (loop: ControlFlowFact): string | undefined => {
+  const named = (loop.headerNames ?? []).find((name) => ATTEMPT_CEILING_NAME.test(name));
+  return named === undefined ? undefined : `its condition names ${named}`;
+};
+
 /** The operation a retry helper wraps, when it can be named. */
 const wrappedOperationName = (call: CallFact): string | undefined => {
   const wrapped = call.args[0];
@@ -392,6 +491,7 @@ const discoverRetryHelpers = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   found: Found,
+  sinks: Sinks,
 ): void => {
   for (const call of module.calls) {
     if (!RETRY_HELPERS.has(calleeName(call))) continue;
@@ -405,6 +505,7 @@ const discoverRetryHelpers = (
       numberValue(findEntry(entries, 'retries')?.value) ??
       numberValue(findEntry(entries, 'attempts')?.value) ??
       numberValue(findEntry(entries, 'stop_after_attempt')?.value);
+    const sink = sinks.get(target.namespace);
     const policy: EdgePolicy = {
       retry: {
         ...(attempts === undefined ? {} : { maxAttempts: attempts }),
@@ -422,7 +523,7 @@ const discoverRetryHelpers = (
         symbol: `${calleeName(call)}(${wrappedName})`,
         policy,
         confidence: CONFIDENCE_BANDS.structural,
-        metadata: { retryHelper: calleeName(call) },
+        metadata: { retryHelper: calleeName(call), ...sinkMetadata(sink) },
       }),
     );
     found.edges += 1;
@@ -430,6 +531,13 @@ const discoverRetryHelpers = (
   }
 };
 
+/**
+ * The loop a `try` sits inside, in the same function.
+ *
+ * Containment is by line range and by scope. Line range alone matched a `try` in one function against a
+ * loop in another whose range happened to span it, which is how a one shot `fetch` helper whose only
+ * `try` wrapped a `JSON.parse` fallback came to be reported as a retried operation.
+ */
 const enclosingLoopOf = (
   module: ModuleFacts,
   construct: ControlFlowFact,
@@ -437,24 +545,85 @@ const enclosingLoopOf = (
   module.controlFlow.find(
     (candidate) =>
       candidate.kind === 'loop' &&
+      candidate.enclosing === construct.enclosing &&
       candidate.location.startLine <= construct.location.startLine &&
       (candidate.location.endLine ?? candidate.location.startLine) >=
         (construct.location.endLine ?? construct.location.startLine),
   );
 
 /**
- * A loop containing a try that contains a call. This shape is a retry without saying so, and it is recorded as
- * unbounded because nothing in the syntax states a limit.
+ * Calls that pause before the next pass. A retry waits; a work loop has no reason to.
+ *
+ * Matched on the last segment of the callee path, so `timers.setTimeout` and a locally defined `sleep`
+ * both count. Waiting is one of the two things a loop can do that only a re-attempt needs.
+ */
+const DELAY_CALLS = new Set([
+  'sleep',
+  'delay',
+  'wait',
+  'waitFor',
+  'pause',
+  'backoff',
+  'setTimeout',
+  'setInterval',
+]);
+
+/**
+ * Names a loop header gives a counter when the loop is counting attempts.
+ *
+ * The author's own word for what the loop is doing, and the only place in the syntax where a loop says it
+ * is re-attempting rather than iterating. Matched as a fragment because `attempt`, `attempts`, `maxAttempts`
+ * and `attemptNumber` are the same word.
+ */
+const ATTEMPT_NAME = /attempt|retr|tries/i;
+
+/**
+ * Whether anything in this loop says it re-attempts, rather than merely being a loop with a `try` in it.
+ *
+ * This is the whole of the change the field report asked for. A loop with a `try` and an `await` in it was
+ * classified as a retry on the strength of that shape alone, and across thirty six repositories the two
+ * rules built on it produced no true positive: the matches were per item iteration with per item error
+ * isolation, and minified bundles where every shape is present somewhere. So a re-attempt now has to be
+ * stated by the code rather than inferred from its silhouette.
+ *
+ * The known cost is a retry loop that neither waits nor names its counter, which this will not see. That
+ * is a loop that hammers its dependency as fast as it can fail, and it is rarer than the loops this used
+ * to misread. An explicit retry helper is recognised separately and is unaffected.
+ */
+const reattemptEvidence = (
+  loop: ControlFlowFact,
+  attempted: ControlFlowFact,
+): string | undefined => {
+  if (loop.repeats !== 'same_work') return undefined;
+  /*
+   * Both constructs, because a wait before the next pass is written in the catch as often as in the loop
+   * body, and a call belongs to the innermost construct that holds it.
+   */
+  const delay = [...loop.contains, ...attempted.contains]
+    .map((path) => path[path.length - 1])
+    .find((name) => name !== undefined && DELAY_CALLS.has(name));
+  if (delay !== undefined) return `it waits with ${delay} before the next pass`;
+  const counter = (loop.headerNames ?? []).find((name) => ATTEMPT_NAME.test(name));
+  return counter === undefined ? undefined : `its header counts ${counter}`;
+};
+
+/**
+ * A loop that re-attempts the same operation, with a try around it. Recorded as unbounded because nothing
+ * in the syntax states a limit.
  */
 const discoverRetryLoops = (
   module: ModuleFacts,
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   found: Found,
+  sinks: Sinks,
 ): void => {
   for (const construct of module.controlFlow) {
     if (construct.kind !== 'try_catch' || construct.contains.length === 0) continue;
-    if (enclosingLoopOf(module, construct) === undefined) continue;
+    const loop = enclosingLoopOf(module, construct);
+    if (loop === undefined) continue;
+    const evidence = reattemptEvidence(loop, construct);
+    if (evidence === undefined) continue;
 
     const scope = construct.enclosing ?? 'module-scope';
     for (const path of construct.contains) {
@@ -477,9 +646,22 @@ const discoverRetryLoops = (
           to: target,
           location: construct.location,
           symbol: `retry loop around ${name}`,
-          confidence: CONFIDENCE_BANDS.heuristic,
-          policy: { retry: { bounded: false, backoff: 'unknown', idempotency: 'unknown' } },
-          metadata: { retryShape: 'loop-with-try' },
+          confidence: CONFIDENCE_BANDS.structural,
+          policy: {
+            retry: {
+              bounded: loop.passesBounded === true,
+              backoff: 'unknown',
+              idempotency: 'unknown',
+            },
+          },
+          metadata: {
+            retryShape: 'loop-with-try',
+            reattemptEvidence: evidence,
+            ...sinkMetadata(sinks.get(target.namespace)),
+            ...(headerCeiling(loop) === undefined
+              ? {}
+              : { attemptCeiling: headerCeiling(loop) as string }),
+          },
         }),
       );
       found.edges += 1;
@@ -496,6 +678,25 @@ export const effectsAdapter: AgentSystemAdapter = {
   appliesTo: (context) => context.modules.length > 0,
   discover: (context, builder): AdapterFindings => {
     const found: Found = { components: 0, edges: 0, files: new Set() };
+    /*
+     * Read before anything is judged, because the sink of a retried operation is usually in a different
+     * module from the retry, and a rule that asserts an absence has to have looked everywhere it could.
+     */
+    const sinks: Sinks = new Map(
+      context.modules
+        .filter((module) => !isTestFile(module.file))
+        .map(
+          (module) =>
+            [
+              moduleNamespace(module.file),
+              {
+                deduplicates: idempotencyEvidenceIn(module),
+                ceiling: ceilingEvidenceIn(module),
+              },
+            ] as const,
+        )
+        .filter((entry) => entry[1].deduplicates !== undefined || entry[1].ceiling !== undefined),
+    );
     for (const module of context.modules) {
       /*
        * A test harness reaches real clients at fakes, and an effect discovered only there describes the harness
@@ -505,8 +706,8 @@ export const effectsAdapter: AgentSystemAdapter = {
       if (isTestFile(module.file)) continue;
       discoverHttp(module, context, builder, found);
       discoverStores(module, context, builder, found);
-      discoverRetryHelpers(module, context, builder, found);
-      discoverRetryLoops(module, context, builder, found);
+      discoverRetryHelpers(module, context, builder, found, sinks);
+      discoverRetryLoops(module, context, builder, found, sinks);
     }
     return {
       componentsFound: found.components,

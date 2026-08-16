@@ -291,6 +291,52 @@ const CONTROL_FLOW_TYPES: Readonly<Record<string, ControlFlowFact['kind']>> = {
   while_statement: 'loop',
 };
 
+/**
+ * What a loop's form says about whether its passes repeat work or walk a collection.
+ *
+ * Python draws the line more sharply than JavaScript does: `for` binds the next element, always, and a
+ * loop that repeats the same work is a `while`. This is what separates a retry from an iteration, and
+ * reading a loop without it is how per item error isolation came to be reported as a retry around a non
+ * idempotent operation.
+ */
+const RANGE_CALL = /^range\s*\(/;
+
+/**
+ * `for x in range(n)` is the Python idiom for repeating the same work a fixed number of times, and `for x
+ * in items` is iteration. The iterable is what tells them apart, and it is also what says the passes are
+ * bounded: a poll reported as having no attempt limit was bounded by `range(self.max_polling_time)` in the
+ * line the finding pointed at.
+ */
+const loopForm = (node: Node): { repeats: 'same_work' | 'each_item'; passesBounded: boolean } => {
+  if (node.type === 'while_statement') return { repeats: 'same_work', passesBounded: false };
+  const iterable = node.childForFieldName('right');
+  const overRange = iterable !== null && RANGE_CALL.test(iterable.text);
+  return { repeats: overRange ? 'same_work' : 'each_item', passesBounded: true };
+};
+
+/** Enough of a condition to recognise a counter by the name its author gave it. */
+const MAX_HEADER_NAMES = 8;
+
+/**
+ * The identifiers a `while` names in its condition, which is where a retry counts its attempts.
+ *
+ * The condition is the child before the body, and every identifier under it is collected: `while attempt <
+ * MAX_ATTEMPTS` names both, and either is the author saying what the loop is doing.
+ */
+const conditionNames = (node: Node): readonly string[] => {
+  const names = new Set<string>();
+  const walk = (candidate: Node | null): void => {
+    if (candidate === null || names.size >= MAX_HEADER_NAMES) return;
+    if (candidate.type === 'identifier') {
+      names.add(candidate.text);
+      return;
+    }
+    for (const child of namedChildren(candidate)) walk(child);
+  };
+  walk(node.childForFieldName('condition'));
+  return [...names];
+};
+
 const decoratorFacts = (node: Node, context: Context): readonly DecoratorFact[] => {
   const facts: DecoratorFact[] = [];
   for (const child of node.children) {
@@ -358,11 +404,14 @@ const traverse = (
     collecting.push(contains);
     for (const child of namedChildren(node)) traverse(child, context, frame, collecting);
     collecting.pop();
+    const form = controlKind === 'loop' ? loopForm(node) : undefined;
     context.controlFlow.push({
       kind: controlKind,
       location: location(context.file, node),
       enclosing: frame.name,
       contains,
+      ...(form === undefined ? {} : form),
+      ...(form?.repeats === 'same_work' ? { headerNames: conditionNames(node) } : {}),
     });
     return;
   }

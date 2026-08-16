@@ -1344,3 +1344,221 @@ describe('a repository with none of them', () => {
     );
   });
 });
+
+/**
+ * What a retry is, and what merely looks like one.
+ *
+ * Across a sweep of thirty six repositories the two retry rules produced no true positive. They fired on a
+ * loop with a `try` and an `await` in it, which is also the shape of per item iteration with per item error
+ * isolation, and of a one shot helper whose only `try` guards a parse. Both were reported at high severity
+ * with a remediation that would have meant editing correct code. The shapes below are the ones from that
+ * report, kept verbatim in spirit, plus the real retries that still have to be found.
+ */
+describe('a loop with a try in it', () => {
+  const retryEdges = (edges: readonly string[], ids: readonly string[]) =>
+    edges.filter((edge) => edge.includes('->') && ids.length >= 0 && edge.startsWith('calls_'));
+
+  it('is not a retry when every pass takes the next item', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'per-item' });
+      workspace.write(
+        'src/deliver.ts',
+        `export const notify = async (target: string): Promise<void> => {
+  await fetch('https://hooks.example.com/notify', { method: 'POST', body: target });
+};
+
+export const deliverPage = async (page: readonly string[]): Promise<void> => {
+  for (const device of page) {
+    try {
+      await notify(device);
+    } catch (error) {
+      reportInternal(error);
+    }
+  }
+};
+
+const reportInternal = (error: unknown): void => {
+  void error;
+};
+`,
+      );
+    });
+    const retried = result.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
+    assert.deepEqual(
+      retried.map((edge) => edge.id),
+      [],
+      'per item iteration with per item error isolation re-attempts nothing',
+    );
+  });
+
+  it('is not a retry when the try only guards a parse in a one shot helper', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'one-shot' });
+      workspace.write(
+        'src/json.ts',
+        `export const json = async (url: string): Promise<unknown> => {
+  const response = await fetch(url, { redirect: 'error' });
+  const text = await response.text();
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = text;
+    }
+  }
+  return body;
+};
+
+export const eachOf = (items: readonly string[]): void => {
+  for (const item of items) {
+    void item;
+  }
+};
+`,
+      );
+    });
+    const retried = result.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
+    assert.deepEqual(
+      retried.map((edge) => edge.id),
+      [],
+    );
+  });
+
+  it('is a retry when the loop waits before the next pass', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'waits' });
+      workspace.write(
+        'src/send.ts',
+        `const sleep = (ms: number): Promise<void> => new Promise((resolve) => { void ms; resolve(); });
+
+export const charge = async (): Promise<void> => {
+  await fetch('https://payments.example.com/charge', { method: 'POST' });
+};
+
+export const chargeWithRetry = async (): Promise<void> => {
+  let done = false;
+  while (!done) {
+    try {
+      await charge();
+      done = true;
+    } catch {
+      await sleep(1000);
+    }
+  }
+};
+`,
+      );
+    });
+    const retried = result.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
+    assert.ok(retried.length > 0, 'a loop that waits before trying again is a retry');
+    assert.match(String(retried[0]?.metadata['reattemptEvidence'] ?? ''), /waits with sleep/);
+  });
+
+  it('is a retry when the header counts attempts', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'counts' });
+      workspace.write(
+        'src/send.ts',
+        `export const charge = async (): Promise<void> => {
+  await fetch('https://payments.example.com/charge', { method: 'POST' });
+};
+
+export const chargeWithRetry = async (): Promise<void> => {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await charge();
+      return;
+    } catch {
+      void attempt;
+    }
+  }
+};
+`,
+      );
+    });
+    const retried = result.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
+    assert.ok(retried.length > 0, 'a loop whose header counts attempts is a retry');
+    assert.match(String(retried[0]?.metadata['reattemptEvidence'] ?? ''), /counts attempt/);
+    void retryEdges;
+  });
+});
+
+/**
+ * Following the call one level in, before asserting an absence.
+ *
+ * `no idempotency key was found on the operation` was true of every retry Orchescope reported, because
+ * nothing looked: the field existed and no adapter populated it. One reported finding named a call whose
+ * sink derives a content addressed identifier and enforces it with `ON CONFLICT DO NOTHING`, which is
+ * verbatim the remediation the finding then prescribed.
+ */
+describe('a retry whose sink deduplicates', () => {
+  const withSink = (sink: string) => async () =>
+    scan((workspace) => {
+      writeNodeProject(workspace, { name: 'outbox' });
+      workspace.write(
+        'src/enqueue.ts',
+        `${sink}
+export const enqueueWithRetry = async (): Promise<void> => {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      await enqueueDelivery();
+      return;
+    } catch {
+      void attempt;
+    }
+  }
+};
+`,
+      );
+    });
+
+  it('is not reported as having no key when the statement deduplicates on conflict', async () => {
+    const { result } = await withSink(
+      `export const enqueueDelivery = async (): Promise<void> => {
+  const statement =
+    'INSERT INTO delivery_outbox (id, source_key) VALUES (?, ?) ON CONFLICT DO NOTHING RETURNING id';
+  await fetch('https://db.example.com/query', { method: 'POST', body: statement });
+};
+`,
+    )();
+    const retried = result.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
+    assert.ok(retried.length > 0, 'the retry itself is still discovered');
+    assert.match(String(retried[0]?.metadata['deduplicatesAtSink'] ?? ''), /on conflict/i);
+    /*
+     * Recorded rather than resolved into `declared`. A statement that deduplicates is not proof that the
+     * retried operation carries a key, so the relation says what was seen and the rule declines to assert
+     * the opposite.
+     */
+    assert.equal(retried[0]?.policy?.retry?.idempotency, 'unknown');
+  });
+
+  it('is not reported as having no key when the sink derives one', async () => {
+    const { result } = await withSink(
+      `const deterministicDeliveryId = (sourceKey: string): string => sourceKey;
+
+export const enqueueDelivery = async (): Promise<void> => {
+  const id = deterministicDeliveryId('stable');
+  await fetch('https://deliveries.example.com/enqueue', { method: 'POST', body: id });
+};
+`,
+    )();
+    const retried = result.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
+    assert.match(
+      String(retried[0]?.metadata['deduplicatesAtSink'] ?? ''),
+      /deterministicDeliveryId/,
+    );
+  });
+
+  it('records nothing when the sink shows nothing of the kind', async () => {
+    const { result } = await withSink(
+      `export const enqueueDelivery = async (): Promise<void> => {
+  await fetch('https://deliveries.example.com/enqueue', { method: 'POST', body: 'x' });
+};
+`,
+    )();
+    const retried = result.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
+    assert.ok(retried.length > 0);
+    assert.equal(retried[0]?.metadata['deduplicatesAtSink'], undefined);
+  });
+});

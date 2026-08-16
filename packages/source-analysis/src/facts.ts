@@ -108,6 +108,33 @@ export type ControlFlowFact = {
   readonly enclosing: string | undefined;
   /** Callee paths that appear inside this construct, in source order. */
   readonly contains: readonly (readonly string[])[];
+  /**
+   * For a loop, whether each pass does the same work again or takes the next item.
+   *
+   * This is the fact that separates a retry from an iteration, and reading a loop without it is how a
+   * `for (const device of page) { try { ... } catch { ... } }` came to be reported as a retry around a
+   * non idempotent operation. Every pass of that loop acts on a different device: there is no re-attempt
+   * of anything, and the per item catch is error isolation rather than recovery. It is recorded as a
+   * property of the loop's form rather than decided later, because the form is the fact.
+   */
+  readonly repeats?: 'same_work' | 'each_item';
+  /**
+   * For a loop, the identifiers its header names.
+   *
+   * A retry counts attempts in the header: `for (let attempt = 0; attempt < MAX; attempt += 1)`. What that
+   * counter is called is the author's word for what the loop is doing, and it is the only place in the
+   * syntax where a loop says it is re-attempting rather than iterating. Bounded, because a header can name
+   * as much as anyone cares to put in it.
+   */
+  readonly headerNames?: readonly string[];
+  /**
+   * For a loop, whether its own form limits how many passes it makes.
+   *
+   * `for _ in range(10)` and `for (let i = 0; i < 3; i += 1)` state a ceiling in the syntax; `while` and
+   * `for (;;)` do not. A retry that was reported as having no attempt limit turned out to be a poll bounded
+   * by `range(self.max_polling_time)`, which the syntax had said all along.
+   */
+  readonly passesBounded?: boolean;
 };
 
 export type ModuleFacts = {

@@ -7,8 +7,8 @@
       "status": "completed"
     },
     "adapter:effects": {
-      "componentsFound": 208,
-      "edgesFound": 110,
+      "componentsFound": 207,
+      "edgesFound": 109,
       "filesInspected": 68,
       "status": "completed"
     },
@@ -69,21 +69,21 @@
   },
   "agentSystemDetected": true,
   "blindSpots": [
-    "mcp used in source, read by adapter:mcp"
+    "mcp is imported here and its adapter found nothing"
   ],
   "components": {
     "byKind": {
       "agent": 260,
       "agent_group": 90,
       "database": 4,
-      "entrypoint": 100,
+      "entrypoint": 99,
       "external_service": 2,
       "model": 6,
       "prompt": 521,
       "provider": 3,
       "queue": 1
     },
-    "total": 987
+    "total": 986
   },
   "discardedRelations": [],
   "files": {
@@ -97,23 +97,21 @@
     "byRule": {
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
-      "retry-around-non-idempotent-operation": 1,
-      "topology-shape": 1,
-      "unbounded-retry": 1
+      "topology-shape": 1
     },
     "bySeverity": {
       "info": 1,
-      "medium": 4
+      "medium": 2
     },
     "strengths": 1,
-    "total": 5
+    "total": 3
   },
   "kind": "agent_system",
   "languagesNotAnalysed": [],
   "name": "crewai",
   "relations": {
     "byKind": {
-      "calls_service": 43,
+      "calls_service": 42,
       "contains": 104,
       "invokes_model": 25,
       "publishes_to_queue": 2,
@@ -121,6 +119,6 @@
       "served_by_provider": 6,
       "uses_prompt": 7
     },
-    "total": 243
+    "total": 242
   }
 }
