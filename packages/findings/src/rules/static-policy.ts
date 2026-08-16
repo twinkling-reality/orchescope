@@ -3,10 +3,12 @@ import {
   CONFIDENCE_BANDS,
   derivedEvidence,
   formatCount,
+  partOfAuditedSystem,
 } from '@orchescope/domain';
 import {
   controlFlowCycles,
   degrees,
+  type IndexedGraph,
   isControlFlowKind,
   unreachableComponents,
 } from '@orchescope/graph';
@@ -485,6 +487,67 @@ export const promptInjectionBoundaryRule: Rule = {
   },
 };
 
+/**
+ * Components that participate in the declared control flow of the system under audit.
+ *
+ * Two exclusions, for two different reasons. A prompt, a model or a provider is reached by being
+ * referenced rather than by being called, so listing them would be noise that buries the finding a reader
+ * needs. And a server named only in a developer's own editor configuration is not part of this system at
+ * all: nothing in the repository reaches it, that is correct, and reporting it as a defect files a
+ * finding against the wrong party.
+ */
+const REACHABILITY_KINDS: ReadonlySet<string> = new Set([
+  'agent',
+  'tool',
+  'mcp_server',
+  'worker',
+  'queue',
+  'retrieval',
+  'memory',
+  'database',
+  'external_service',
+]);
+
+const participatesInTopology = (component: Component): boolean =>
+  component.presence.static &&
+  REACHABILITY_KINDS.has(component.kind) &&
+  partOfAuditedSystem(component);
+
+const unreachableDrafts = (graph: IndexedGraph): readonly FindingDraft[] => {
+  const candidates = graph.graph.components.filter(participatesInTopology);
+  const unreachable = unreachableComponents(graph).filter(participatesInTopology);
+  return unreachable.map((component) => ({
+    ruleId: 'topology-shape',
+    category: 'architecture',
+    polarity: 'risk',
+    severity: 'low',
+    confidence: CONFIDENCE_BANDS.structural,
+    occurrence: {
+      key: 'unreachable',
+      groupedTitle: '{count} components cannot be reached from any declared entry point',
+    },
+    basis: 'discovered',
+    title: `${component.displayName} cannot be reached from any entry point`,
+    explanation: `No entry point declared in this repository reaches ${component.id} through control flow. That has three causes and this rule cannot tell them apart: the wiring is missing, the component is left over, or the entry point is outside this repository, which is what a library looks like. ${unreachable.length} of the ${candidates.length} components that participate in control flow are in this state.`,
+    impact:
+      'A component the declared graph cannot reach is one a reader cannot follow, and it is where dead configuration hides.',
+    components: [component.id],
+    metrics: [
+      {
+        name: 'unreachableComponents',
+        value: unreachable.length,
+        unit: 'component',
+        sampleSize: candidates.length,
+        basis: 'discovered' as const,
+      },
+    ],
+    evidence: component.evidence.slice(0, 2) as EvidenceId[],
+    goalEligible: false,
+    goalReason: 'Deleting or wiring a component is a decision for the owner.',
+    tags: ['unreachable'],
+  }));
+};
+
 export const architectureShapeRule: Rule = {
   id: 'topology-shape',
   category: 'architecture',
@@ -518,58 +581,7 @@ export const architectureShapeRule: Rule = {
       });
     }
 
-    // Reachability is only meaningful for components that participate in control flow. A prompt, a model or a
-    // provider is reached by being referenced, not by being called, so listing them here would be noise that buries
-    // the finding a reader needs.
-    const reachabilityKinds = new Set([
-      'agent',
-      'tool',
-      'mcp_server',
-      'worker',
-      'queue',
-      'retrieval',
-      'memory',
-      'database',
-      'external_service',
-    ]);
-    const reachabilityCandidates = context.graph.graph.components.filter(
-      (component) => component.presence.static && reachabilityKinds.has(component.kind),
-    );
-    const unreachable = unreachableComponents(context.graph).filter(
-      (component) => component.presence.static && reachabilityKinds.has(component.kind),
-    );
-    for (const component of unreachable) {
-      drafts.push({
-        ruleId: 'topology-shape',
-        category: 'architecture',
-        polarity: 'risk',
-        severity: 'low',
-        confidence: CONFIDENCE_BANDS.structural,
-        occurrence: {
-          key: 'unreachable',
-          groupedTitle: '{count} components cannot be reached from any declared entry point',
-        },
-        basis: 'discovered',
-        title: `${component.displayName} cannot be reached from any entry point`,
-        explanation: `No entry point declared in this repository reaches ${component.id} through control flow. That has three causes and this rule cannot tell them apart: the wiring is missing, the component is left over, or the entry point is outside this repository, which is what a library looks like. ${unreachable.length} of the ${reachabilityCandidates.length} components that participate in control flow are in this state.`,
-        impact:
-          'A component the declared graph cannot reach is one a reader cannot follow, and it is where dead configuration hides.',
-        components: [component.id],
-        metrics: [
-          {
-            name: 'unreachableComponents',
-            value: unreachable.length,
-            unit: 'component',
-            sampleSize: reachabilityCandidates.length,
-            basis: 'discovered' as const,
-          },
-        ],
-        evidence: component.evidence.slice(0, 2) as EvidenceId[],
-        goalEligible: false,
-        goalReason: 'Deleting or wiring a component is a decision for the owner.',
-        tags: ['unreachable'],
-      });
-    }
+    drafts.push(...unreachableDrafts(context.graph));
 
     const cycles = controlFlowCycles(context.graph);
     for (const cycle of cycles.slice(0, 5)) {

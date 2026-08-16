@@ -9,7 +9,13 @@ import {
   stringValue,
 } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
-import { asRecord, asString, asStringArray, jsonPointer } from '../config-files.ts';
+import {
+  asRecord,
+  asString,
+  asStringArray,
+  isAgentClientConfig,
+  jsonPointer,
+} from '../config-files.ts';
 import { configIdentity, createDrafts, sourceIdentity } from '../drafts.ts';
 import { decoratedDefinitions, definitionForCall, matchCalls, projectUses } from '../matching.ts';
 
@@ -100,6 +106,12 @@ const addDeclaredServer = (
         ...(url === undefined ? {} : { url }),
         argsCount: args.length,
         ...(envKeys.length === 0 ? {} : { envKeys }),
+        /*
+         * A coding agent's configuration file is the developer's, not the repository's. Any other file
+         * carrying an `mcpServers` key is the repository declaring a server it connects to, which is
+         * part of the system whether or not this repository implements it.
+         */
+        role: isAgentClientConfig(where.configFile) ? 'developer_tooling' : 'consumed',
       },
       permissions:
         url === undefined
@@ -209,7 +221,7 @@ const discoverServers = (
         location: match.call.location,
         symbol: dotted(match.call.calleePath),
         confidence: match.confidence,
-        details: { for: 'mcp_server', transport: 'stdio' },
+        details: { for: 'mcp_server', transport: 'stdio', role: 'implemented' },
         metadata: { role: 'server', runtimeName: name },
         tags: ['mcp', 'server'],
       }),

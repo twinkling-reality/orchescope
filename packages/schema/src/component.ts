@@ -124,6 +124,17 @@ export const McpServerDetails = detail('mcp_server', {
   argsCount: Type.Optional(NonNegativeInt),
   url: Type.Optional(NonEmptyString()),
   envKeys: Type.Optional(Type.Array(NonEmptyString())),
+  /**
+   * What this repository has to do with the server.
+   *
+   * `implemented` is a server this repository's source constructs. `consumed` is one its source connects
+   * to as a client. `developer_tooling` is one whose only declaration is a file that configures a coding
+   * agent or an editor, which is a fact about whoever works on the repository rather than about the
+   * system in it. The three are not interchangeable: a `.mcp.json` listing one server was enough to
+   * report a 220 component application as a detected agent system containing no agent, tool or model,
+   * and then to raise a finding against the repository for the contradiction.
+   */
+  role: Type.Optional(literals(['implemented', 'consumed', 'developer_tooling'] as const)),
 });
 
 export const PromptDetails = detail('prompt', {

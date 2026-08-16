@@ -4276,6 +4276,22 @@
                         "const": "mcp_server",
                         "type": "string"
                       },
+                      "role": {
+                        "anyOf": [
+                          {
+                            "const": "implemented",
+                            "type": "string"
+                          },
+                          {
+                            "const": "consumed",
+                            "type": "string"
+                          },
+                          {
+                            "const": "developer_tooling",
+                            "type": "string"
+                          }
+                        ]
+                      },
                       "transport": {
                         "anyOf": [
                           {

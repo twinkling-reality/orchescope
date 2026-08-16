@@ -43,6 +43,29 @@ export const KNOWN_CONFIG_PATHS: readonly string[] = [
 ];
 
 /**
+ * Configuration that belongs to a coding agent or an editor rather than to the system in the repository.
+ *
+ * A `.mcp.json` naming a server is a developer telling their own tool where to connect. It is not the
+ * repository declaring part of the system under audit, and reading it as one reported a 220 component
+ * Cloudflare Workers application as a detected agent system with no agent, tool or model in it, on the
+ * strength of a single entry naming Orchescope. The reachability rule then raised a finding against the
+ * repository for the contradiction, which is the tool noticing something is wrong and blaming the wrong
+ * party.
+ *
+ * What is declared in these files is still read and still appears in the graph. A developer's own tooling
+ * is a true fact about a repository; it is not evidence that the repository builds an agent system.
+ */
+const AGENT_CLIENT_CONFIG_PATHS: ReadonlySet<string> = new Set([
+  '.mcp.json',
+  '.vscode/mcp.json',
+  '.cursor/mcp.json',
+  'claude_desktop_config.json',
+  '.claude/settings.json',
+]);
+
+export const isAgentClientConfig = (path: string): boolean => AGENT_CLIENT_CONFIG_PATHS.has(path);
+
+/**
  * Strips JSONC style comments and trailing commas so a `.jsonc` file can be parsed as JSON.
  *
  * Written as an explicit state machine rather than a set of regular expressions, because a comment marker inside a

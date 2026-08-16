@@ -1133,6 +1133,83 @@ assistant = Agent(name="assistant")
   });
 });
 
+/**
+ * A server a developer's own tooling connects to, against one the repository builds.
+ *
+ * A 220 component Cloudflare Workers application came back as a detected agent system with no agent, no
+ * tool and no model in it, because a `.mcp.json` at its root listed Orchescope. The reachability rule
+ * then reported the contradiction as a defect in that repository. Both follow from reading one
+ * developer's editor configuration as a declaration by the software.
+ */
+describe('a server named only in a coding agent configuration file', () => {
+  it('is not evidence that this repository is an agent system', async () => {
+    const result = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'workers-app' });
+      workspace.write(
+        '.mcp.json',
+        `${JSON.stringify({ mcpServers: { orchescope: { command: 'orchescope', args: ['mcp', 'serve'] } } })}\n`,
+      );
+      workspace.write('src/index.ts', 'export const handler = async () => new Response("ok");\n');
+    });
+    assert.equal(
+      result.result.agentSystemDetected,
+      false,
+      `an editor configuration file was read as an agent system: ${result.ids.join(', ')}`,
+    );
+  });
+
+  /*
+   * It stays in the graph. A developer's tooling is a true fact about a repository, and dropping it
+   * would trade a wrong answer for a missing one.
+   */
+  it('is still discovered, and says whose it is', async () => {
+    const result = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'workers-app' });
+      workspace.write(
+        '.mcp.json',
+        `${JSON.stringify({ mcpServers: { orchescope: { command: 'orchescope' } } })}\n`,
+      );
+    });
+    assert.ok(result.ids.includes('mcp_server:orchescope'), `not in ${result.ids.join(', ')}`);
+    const component = result.result.graph.components.find(
+      (entry) => entry.id === 'mcp_server:orchescope',
+    );
+    assert.equal(
+      component?.details?.for === 'mcp_server' ? component.details.role : undefined,
+      'developer_tooling',
+    );
+  });
+
+  it('still counts a server the repository implements in source', async () => {
+    const result = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'server-app',
+        dependencies: { '@modelcontextprotocol/sdk': '^1.0.0' },
+      });
+      workspace.write(
+        '.mcp.json',
+        `${JSON.stringify({ mcpServers: { orchescope: { command: 'orchescope' } } })}\n`,
+      );
+      workspace.write(
+        'src/server.ts',
+        `import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+
+const server = new McpServer({ name: 'inventory', version: '1.0.0' });
+server.registerTool('list_items', { description: 'list the items' }, async () => ({}));
+`,
+      );
+    });
+    assert.equal(result.result.agentSystemDetected, true);
+    const implemented = result.result.graph.components.find(
+      (entry) => entry.id === 'mcp_server:inventory',
+    );
+    assert.equal(
+      implemented?.details?.for === 'mcp_server' ? implemented.details.role : undefined,
+      'implemented',
+    );
+  });
+});
+
 describe('Cloudflare Workers bindings', () => {
   const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
     writeNodeProject(workspace, { name: 'worker-app' });

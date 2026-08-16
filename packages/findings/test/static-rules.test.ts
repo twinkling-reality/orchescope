@@ -479,6 +479,44 @@ describe('topology-shape reachability', () => {
       [],
     );
   });
+
+  /*
+   * Nothing in a repository reaches the server its author's editor is configured to talk to, and that is
+   * correct rather than a defect. Reported as one, it becomes a finding against the wrong party, which is
+   * what a 220 component application got for holding a `.mcp.json`.
+   */
+  it('does not blame a repository for not reaching a developer tooling server', () => {
+    const editorServer = componentDraft({
+      kind: 'mcp_server',
+      name: 'orchescope',
+      file: '.mcp.json',
+      details: { for: 'mcp_server', transport: 'stdio', role: 'developer_tooling' },
+    });
+    const drafts = unreachable(
+      buildGraph(
+        [orchestrator, refund, editorServer],
+        [edgeDraft('calls_tool', orchestrator, refund)],
+      ),
+    );
+    assert.deepEqual(drafts, []);
+  });
+
+  it('still reports a server the repository implements and cannot reach', () => {
+    const ownServer = componentDraft({
+      kind: 'mcp_server',
+      name: 'inventory',
+      file: 'src/server.ts',
+      details: { for: 'mcp_server', transport: 'stdio', role: 'implemented' },
+    });
+    const drafts = unreachable(
+      buildGraph(
+        [orchestrator, refund, ownServer],
+        [edgeDraft('calls_tool', orchestrator, refund)],
+      ),
+    );
+    assert.equal(drafts.length, 1);
+    assert.match(drafts[0]?.title ?? '', /inventory/);
+  });
 });
 
 /**

@@ -163,6 +163,8 @@ const registerMcpServers = (
           transport,
           ...(command === undefined ? {} : { command }),
           ...(url === undefined ? {} : { url }),
+          // The agent in this repository connects to it, so it is part of the system this repository runs.
+          role: 'consumed',
         },
         permissions: [
           url === undefined

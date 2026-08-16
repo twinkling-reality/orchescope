@@ -5,6 +5,7 @@ import {
   isCancellation,
   projectId as makeProjectId,
   scanId as makeScanId,
+  partOfAuditedSystem,
   sha256Hex,
   sha256OfJson,
 } from '@orchescope/domain';
@@ -106,6 +107,9 @@ const unsupportedAreas = (
   }
   return areas;
 };
+
+/** Component kinds whose presence means this repository builds something worth auditing as an agent system. */
+const AGENT_SYSTEM_KINDS: ReadonlySet<string> = new Set(['agent', 'model', 'tool', 'mcp_server']);
 
 /** The top level distribution a specifier belongs to: `langgraph.func` and `langgraph/prebuilt` are both `langgraph`. */
 const distributionOf = (specifier: string): string => {
@@ -357,8 +361,11 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
         });
 
   const detectedEcosystems = analysis.languages.map((entry) => entry.language as Language);
-  const agentSystemDetected = built.graph.components.some((component) =>
-    ['agent', 'model', 'tool', 'mcp_server'].includes(component.kind),
+  const agentSystemDetected = built.graph.components.some(
+    (component) =>
+      AGENT_SYSTEM_KINDS.has(component.kind) &&
+      // A component that belongs to a developer's own tooling is not this repository declaring anything.
+      partOfAuditedSystem(component),
   );
 
   return {
