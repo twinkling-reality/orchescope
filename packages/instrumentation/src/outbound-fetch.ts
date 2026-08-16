@@ -217,10 +217,10 @@ const describeRequest = (
   const model = recogniseModelCall(url, body);
   if (model !== undefined) {
     return {
-      name: `${model.operation} ${model.model ?? model.provider}`,
+      name: `${model.operation} ${model.model ?? model.system}`,
       attributes: {
         ...outboundAttributes(url, method),
-        ...modelAttributes(model.provider, model.operation, model.model),
+        ...modelAttributes(model.system, model.operation, model.model),
       },
       isModelCall: true,
       isOutsideEffect: false,

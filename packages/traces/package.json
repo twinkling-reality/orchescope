@@ -7,7 +7,8 @@
   "license": "Apache-2.0",
   "exports": {
     ".": "./src/index.ts",
-    "./attributes": "./src/attributes.ts"
+    "./attributes": "./src/attributes.ts",
+    "./model-endpoints": "./src/model-endpoints.ts"
   },
   "dependencies": {
     "@orchescope/domain": "workspace:*",

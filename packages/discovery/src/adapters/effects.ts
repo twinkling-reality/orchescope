@@ -21,6 +21,12 @@ import {
   objectArgument,
   stringValue,
 } from '@orchescope/source-analysis';
+import {
+  type ModelEndpoint,
+  modelEndpointForHost,
+  modelFromPath,
+  modelOperationForPath,
+} from '@orchescope/traces/model-endpoints';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
 
@@ -222,6 +228,163 @@ const ensureCaller = (
     inferredFrom: 'enclosing scope of an external effect',
   });
 
+/**
+ * Entries that hold the document a request sends, in the three ways the ecosystems write it.
+ *
+ * A JavaScript `fetch` puts it under `body`, usually wrapped in `JSON.stringify`. A Python client puts it
+ * under `json` or `data` as a dictionary. All three end at the same object, and that object is where a
+ * provider is told which model to use.
+ */
+const MODEL_SEARCH_DEPTH = 4;
+
+/**
+ * Nested objects are followed and arrays are not.
+ *
+ * A request document nests: a JavaScript `fetch` wraps it in `JSON.stringify`, a Python client passes it
+ * as a dictionary, and a provider may take it under a session or an input key, which is how one real call
+ * site writes `JSON.stringify({ session: { model } })`. Following those is reading. Following an array is
+ * guessing, because the arrays in these documents hold messages and tool definitions, and a `model` field
+ * inside one of those describes an element rather than the request.
+ */
+const modelInEntries = (entries: readonly ObjectEntryFact[], depth: number): string | undefined => {
+  const direct = stringValue(findEntry(entries, 'model')?.value);
+  if (direct !== undefined) return direct;
+  if (depth === 0) return undefined;
+  for (const entry of entries) {
+    if (entry.value.kind === 'object') {
+      const nested = modelInEntries(entry.value.entries, depth - 1);
+      if (nested !== undefined) return nested;
+    }
+    if (entry.value.kind === 'call') {
+      for (const argument of entry.value.args) {
+        if (argument.kind !== 'object') continue;
+        const nested = modelInEntries(argument.entries, depth - 1);
+        if (nested !== undefined) return nested;
+      }
+    }
+  }
+  return undefined;
+};
+
+/**
+ * The model this call site names, or nothing.
+ *
+ * Searched only once the host has already said this request goes to a model provider, which is what makes
+ * a bare `model` key readable as the model rather than as some field that happens to share the word. A
+ * model nobody wrote down stays unnamed: inventing one would be worse than the gap it fills.
+ */
+const modelNamedAt = (call: CallFact): string | undefined => {
+  for (const argument of call.args) {
+    if (argument.kind !== 'object') continue;
+    const found = modelInEntries(argument.entries, MODEL_SEARCH_DEPTH);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+};
+
+/**
+ * A model call written as a plain HTTP request.
+ *
+ * One project in a thirty six repository sweep ran thirteen MCP servers and reached OpenAI by posting to
+ * `api.openai.com` with no `openai` entry in its manifest, so the adapter that reads imports found
+ * nothing and the audit described a fifty seven component agent system containing no model. The host is
+ * the only thing in such a request that says what it is, and it is enough.
+ *
+ * The identities are the ones the SDK adapter produces, deliberately: a repository that imports a package
+ * in one module and posts to the same provider in another has one model, and giving the two paths
+ * different names would report it as two. The provider name comes from the shared endpoint table for the
+ * same reason, since the runtime side has to arrive at the same component from the same host.
+ *
+ * No external service component is added beside this one. The call is a model call, and recording it as
+ * both would count one request twice and leave a reader to work out that the two are the same thing.
+ */
+const discoverModelEndpoint = (input: {
+  readonly module: ModuleFacts;
+  readonly context: DiscoveryContext;
+  readonly builder: SystemGraphBuilder;
+  readonly found: Found;
+  readonly call: CallFact;
+  readonly endpoint: ModelEndpoint;
+  readonly url: string;
+  readonly client: string;
+}): void => {
+  const { module, context, builder, found, call, endpoint, url } = input;
+  const path = url.slice(url.indexOf('/', url.indexOf('://') + 3));
+  const model = modelNamedAt(call) ?? modelFromPath(path) ?? 'unspecified';
+  const providerIdentity = globalIdentity(
+    'provider',
+    GLOBAL_NAMESPACES.provider,
+    endpoint.provider,
+  );
+  const modelIdentity = globalIdentity(
+    'model',
+    GLOBAL_NAMESPACES.model,
+    `${endpoint.provider}/${model}`,
+  );
+
+  builder.addComponent(
+    drafts.sourceComponent({
+      kind: 'provider',
+      identity: providerIdentity,
+      file: module.file,
+      name: endpoint.provider,
+      location: call.location,
+      symbol: input.client,
+      confidence: CONFIDENCE_BANDS.strongStructural,
+      permissions: [{ kind: 'network', scope: url, mode: 'write' }],
+      metadata: { client: input.client, reachedOver: 'http', endpoint: url },
+      tags: ['model-endpoint'],
+    }),
+  );
+  builder.addComponent(
+    drafts.sourceComponent({
+      kind: 'model',
+      identity: modelIdentity,
+      file: module.file,
+      name: `${endpoint.provider}/${model}`,
+      location: call.location,
+      symbol: input.client,
+      /*
+       * The host is deterministic and the model is not: it is read when the call site writes it down and
+       * is `unspecified` when the request builds it somewhere this cannot follow.
+       */
+      confidence:
+        model === 'unspecified' ? CONFIDENCE_BANDS.structural : CONFIDENCE_BANDS.strongStructural,
+      details: {
+        for: 'model',
+        provider: endpoint.provider,
+        modelId: model,
+        streaming: false,
+      },
+      metadata: { callSite: input.client, operation: modelOperationForPath(path) },
+      tags: ['model-endpoint'],
+    }),
+  );
+  found.components += 2;
+  found.files.add(module.file);
+
+  builder.addEdge(
+    drafts.edge({
+      kind: 'served_by_provider',
+      from: modelIdentity,
+      to: providerIdentity,
+      location: call.location,
+      symbol: input.client,
+    }),
+  );
+  builder.addEdge(
+    drafts.edge({
+      kind: 'invokes_model',
+      from: ensureCaller(module, call, context, builder, found),
+      to: modelIdentity,
+      location: call.location,
+      symbol: input.client,
+      confidence: CONFIDENCE_BANDS.structural,
+    }),
+  );
+  found.edges += 2;
+};
+
 const httpMethodOf = (call: CallFact): string | undefined => {
   const last = calleeName(call);
   if (HTTP_METHOD_NAMES.has(last) && last !== 'fetch' && last !== 'request') return last;
@@ -259,6 +422,11 @@ const discoverHttp = (
     const first = call.args[0];
     const url = first !== undefined && first.kind === 'string' ? first.value : undefined;
     const host = url === undefined ? undefined : hostOf(url);
+    const endpoint = host === undefined ? undefined : modelEndpointForHost(host);
+    if (endpoint !== undefined && url !== undefined) {
+      discoverModelEndpoint({ module, context, builder, found, call, endpoint, url, client: path });
+      continue;
+    }
     const method = httpMethodOf(call);
     const effect = classifyEffect(call.enclosing ?? path, method);
     const target = host ?? 'unresolved-host';

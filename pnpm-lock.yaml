@@ -131,6 +131,9 @@ importers:
       '@orchescope/source-analysis':
         specifier: workspace:*
         version: link:../source-analysis
+      '@orchescope/traces':
+        specifier: workspace:*
+        version: link:../traces
       smol-toml:
         specifier: 1.7.0
         version: 1.7.0

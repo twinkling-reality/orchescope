@@ -1372,6 +1372,146 @@ export const send = () => axios.post('https://api.example.com/orders', {});
   });
 });
 
+/**
+ * A model call written as a plain HTTP request.
+ *
+ * A project running thirteen MCP servers reached OpenAI by posting to `api.openai.com` with no `openai`
+ * entry in its manifest, and the audit described a fifty seven component agent system containing no
+ * model. Nothing in such a request says what it is except the host.
+ */
+describe('a model reached over plain HTTP with no package to find', () => {
+  it('names the provider from the host and the model from the request body', async () => {
+    const result = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'swarm' });
+      workspace.write(
+        'src/model.ts',
+        `export const ask = async (prompt: string) => {
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    body: JSON.stringify({ model: 'gpt-4o-mini', input: prompt }),
+  });
+  return response.json();
+};
+`,
+      );
+    });
+    assert.ok(result.ids.includes('model:openai/gpt-4o-mini'), `in ${result.ids.join(', ')}`);
+    assert.ok(result.ids.includes('provider:openai'));
+    assert.equal(result.result.agentSystemDetected, true);
+    assert.ok(
+      result.edges.includes('invokes_model:entrypoint:ask->model:openai/gpt-4o-mini'),
+      `the caller was not joined to the model: ${result.edges.join(', ')}`,
+    );
+  });
+
+  it('reads a Python client that passes the document as a keyword argument', async () => {
+    const result = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'swarm', dependencies: ['httpx'] });
+      workspace.write(
+        'src/model.py',
+        `import httpx
+
+
+def ask(prompt: str):
+    return httpx.post(
+        "https://api.anthropic.com/v1/messages",
+        json={"model": "claude-sonnet-4-5", "max_tokens": 1024},
+    )
+`,
+      );
+    });
+    assert.ok(
+      result.ids.includes('model:anthropic/claude-sonnet-4-5'),
+      `in ${result.ids.join(', ')}`,
+    );
+  });
+
+  it('reads a model the provider puts in the path rather than the body', async () => {
+    const result = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'swarm' });
+      workspace.write(
+        'src/model.ts',
+        `export const ask = async () =>
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent', { method: 'POST' });
+`,
+      );
+    });
+    assert.ok(result.ids.includes('model:google/gemini-2.5-pro'), `in ${result.ids.join(', ')}`);
+  });
+
+  /*
+   * The reason the shared endpoint table carries two names for one provider. The span convention calls
+   * Gemini `gcp.gemini` and the package a repository imports is `@google/genai`, so a table with one
+   * column would give a repository that does both two models where it has one.
+   */
+  it('produces one model for a repository that imports the package and also posts to the host', async () => {
+    const result = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'both', dependencies: { openai: '^4.0.0' } });
+      workspace.write(
+        'src/sdk.ts',
+        `import OpenAI from 'openai';
+
+const client = new OpenAI();
+export const viaSdk = () =>
+  client.chat.completions.create({ model: 'gpt-4o-mini', messages: [] });
+`,
+      );
+      workspace.write(
+        'src/raw.ts',
+        `export const viaHttp = async () =>
+  fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    body: JSON.stringify({ model: 'gpt-4o-mini' }),
+  });
+`,
+      );
+    });
+    assert.deepEqual(
+      result.ids.filter((id) => id.startsWith('model:')),
+      ['model:openai/gpt-4o-mini'],
+    );
+    assert.deepEqual(
+      result.ids.filter((id) => id.startsWith('provider:')),
+      ['provider:openai'],
+    );
+  });
+
+  it('leaves a host that is not a model provider as the service it is', async () => {
+    const result = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'billing' });
+      workspace.write(
+        'src/pay.ts',
+        `export const charge = async () =>
+  fetch('https://api.stripe.com/v1/charges', { method: 'POST' });
+`,
+      );
+    });
+    assert.ok(result.ids.includes('external_service:api.stripe.com'));
+    assert.equal(
+      result.ids.some((id) => id.startsWith('model:')),
+      false,
+      `a payment host was read as a model: ${result.ids.join(', ')}`,
+    );
+  });
+
+  /*
+   * A request that builds its document somewhere this cannot follow still reached a provider, and saying
+   * so with the model unnamed is the honest answer. Inventing a model name would be worse than the gap.
+   */
+  it('names the provider and leaves the model unspecified when the call site does not write one', async () => {
+    const result = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'swarm' });
+      workspace.write(
+        'src/model.ts',
+        `export const ask = async (payload: string) =>
+  fetch('https://api.openai.com/v1/responses', { method: 'POST', body: payload });
+`,
+      );
+    });
+    assert.ok(result.ids.includes('model:openai/unspecified'), `in ${result.ids.join(', ')}`);
+  });
+});
+
 describe('an effect a test harness reaches at a fake', () => {
   const writeStore = (workspace: ReturnType<typeof createTempWorkspace>, path: string): void => {
     writeNodeProject(workspace, { name: 'store-app' });

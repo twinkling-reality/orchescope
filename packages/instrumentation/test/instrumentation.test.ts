@@ -125,7 +125,7 @@ describe('recognising a model call that arrives as plain HTTP', () => {
       new URL('https://api.openai.com/v1/responses'),
       JSON.stringify({ model: 'gpt-4.1-mini', input: 'ignored' }),
     );
-    assert.deepEqual(call, { provider: 'openai', operation: 'chat', model: 'gpt-4.1-mini' });
+    assert.deepEqual(call, { system: 'openai', operation: 'chat', model: 'gpt-4.1-mini' });
   });
 
   it('reads the model from the path when the provider puts it there', () => {
@@ -135,7 +135,7 @@ describe('recognising a model call that arrives as plain HTTP', () => {
       ),
       undefined,
     );
-    assert.equal(call?.provider, 'gcp.gemini');
+    assert.equal(call?.system, 'gcp.gemini');
     assert.equal(call?.model, 'gemini-2.5-pro');
   });
 
@@ -146,7 +146,7 @@ describe('recognising a model call that arrives as plain HTTP', () => {
 
   it('leaves the model absent rather than guessing one', () => {
     const call = recogniseModelCall(new URL('https://api.anthropic.com/v1/messages'), 'not json');
-    assert.equal(call?.provider, 'anthropic');
+    assert.equal(call?.system, 'anthropic');
     assert.equal(call?.model, undefined);
   });
 
