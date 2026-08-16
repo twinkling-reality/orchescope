@@ -20,5 +20,12 @@ packageExtensions:
 # The Model Context Protocol SDK pulls in an older node server whose static file handling had a Windows path traversal.
 # Orchescope uses the SDK's stdio transport and never its HTTP server, and the transitive package is pinned forward anyway
 # so an advisory scan of a published install comes back clean.
+#
+# The next two arrive under the same SDK and the same reasoning. `ip-address` reaches the tree through the SDK's rate
+# limiter, which only an HTTP transport starts, and `fast-uri` resolves references for the SDK's schema validator. Both
+# are pinned forward rather than argued away: a reader running an advisory scan should not have to be told which paths
+# this build happens not to take.
 overrides:
   '@hono/node-server': '>=2.0.5'
+  fast-uri: '>=3.1.5'
+  ip-address: '>=10.3.1'
