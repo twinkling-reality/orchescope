@@ -146,13 +146,14 @@ const traceRunRecord = (input: {
 export const runTrace = async (request: TraceRequest): Promise<TraceResult> => {
   const { workspace } = request;
   const policy = workspace.config.policy;
+  const execution = workspace.config.execution;
   assertAllowed(
-    policy.allowProcessSpawn
+    execution.allowProcessSpawn
       ? { allowed: true }
       : {
           allowed: false,
           reason: 'tracing runs a command',
-          settingToChange: 'policy.allowProcessSpawn',
+          settingToChange: 'execution.allowProcessSpawn',
         },
     'Tracing',
   );
@@ -162,8 +163,8 @@ export const runTrace = async (request: TraceRequest): Promise<TraceResult> => {
    * only the executable is examined and the default entries are runners that will start anything. What the target may
    * do once it is running is bounded by the operator's own privileges and by nothing here.
    */
-  const allowedCommands = policy.allowedCommands;
-  assertAllowed(commandDecision(policy, request.command), 'Tracing');
+  const allowedCommands = execution.allowedCommands;
+  assertAllowed(commandDecision(execution, request.command), 'Tracing');
 
   const handle =
     request.deadline === undefined

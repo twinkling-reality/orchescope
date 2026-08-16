@@ -39,7 +39,7 @@ const GRANTS: readonly Grant[] = [
   {
     permission: 'process:spawn',
     granted: (policy) => policy.allowProcessSpawn,
-    configKey: 'policy.allowProcessSpawn',
+    configKey: 'execution.allowProcessSpawn',
   },
   {
     permission: 'network:outbound',
@@ -74,7 +74,7 @@ const deny = (permission: string, configKey: string): never => {
  * grant is required whether or not the scenario bothered to declare it.
  */
 export const assertPermissions = (scenario: Scenario, policy: ScenarioPolicy): void => {
-  if (!policy.allowProcessSpawn) deny('process:spawn', 'policy.allowProcessSpawn');
+  if (!policy.allowProcessSpawn) deny('process:spawn', 'execution.allowProcessSpawn');
   for (const permission of scenario.requiredPermissions) {
     const grant = GRANTS.find((candidate) => candidate.permission === permission);
     if (grant !== undefined && !grant.granted(policy)) deny(permission, grant.configKey);

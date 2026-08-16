@@ -8,13 +8,13 @@ import type { Workspace } from '@orchescope/workspace';
  * was not given, and a change to the configuration shape stays contained to this one function.
  */
 export const scenarioPolicyFrom = (workspace: Workspace): ScenarioPolicy => {
-  const { policy, runtime } = workspace.config;
+  const { policy, execution, runtime } = workspace.config;
   return {
-    allowProcessSpawn: policy.allowProcessSpawn,
+    allowProcessSpawn: execution.allowProcessSpawn,
     allowOutboundNetwork: policy.allowOutboundNetwork,
     allowPaidModels: policy.allowPaidModels,
     allowFilesystemWrites: policy.allowFilesystemWrites,
-    allowedCommands: policy.allowedCommands,
+    allowedCommands: execution.allowedCommands,
     maxRunDurationMs: policy.maxRunDurationMs,
     maxCostUsd: policy.maxCostUsd,
     receiverHost: runtime.receiverHost,

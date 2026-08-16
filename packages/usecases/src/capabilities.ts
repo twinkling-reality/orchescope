@@ -38,7 +38,7 @@ const costReason = (pricedModels: number, tokensObserved: boolean): string => {
 };
 
 export const resolveCapabilities = (context: CapabilityContext): CapabilityInput => {
-  const { policy, pricing } = context.workspace.config;
+  const { policy, execution, pricing } = context.workspace.config;
   const pricedModels = Object.keys(pricing).length;
 
   const reasons: Record<ReportCapability['name'], string> = {
@@ -48,14 +48,14 @@ export const resolveCapabilities = (context: CapabilityContext): CapabilityInput
     rerun_scenario:
       context.scenarioCount === 0
         ? 'no scenario is defined in this project'
-        : !policy.allowProcessSpawn
-          ? 'running a scenario needs policy.allowProcessSpawn'
+        : !execution.allowProcessSpawn
+          ? 'running a scenario needs execution.allowProcessSpawn'
           : 'a scenario can be rerun with orchescope test, or over MCP',
     run_benchmark:
       context.scenarioCount === 0
         ? 'no scenario is defined in this project'
-        : !policy.allowProcessSpawn
-          ? 'running a benchmark needs policy.allowProcessSpawn'
+        : !execution.allowProcessSpawn
+          ? 'running a benchmark needs execution.allowProcessSpawn'
           : 'a benchmark can be started with orchescope benchmark, or over MCP',
     run_chaos:
       context.scenarioCount === 0
@@ -82,8 +82,8 @@ export const resolveCapabilities = (context: CapabilityContext): CapabilityInput
   return {
     costEstimateAvailable: pricedModels > 0 && context.tokensObserved,
     canCreateGoal: context.hasEligibleFindings,
-    canRerunScenario: context.scenarioCount > 0 && policy.allowProcessSpawn,
-    canRunBenchmark: context.scenarioCount > 0 && policy.allowProcessSpawn,
+    canRerunScenario: context.scenarioCount > 0 && execution.allowProcessSpawn,
+    canRunBenchmark: context.scenarioCount > 0 && execution.allowProcessSpawn,
     canRunChaos: context.scenarioCount > 0 && policy.allowedChaosEnvironments.length > 0,
     canCompareRuns: context.runCount >= 2,
     canOpenSourceLocation: false,

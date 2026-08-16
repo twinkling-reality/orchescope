@@ -9,10 +9,10 @@ a property of the repository, not of whoever happens to be running the command.
 
 ## The settings
 
-The `policy` block carries two kinds of setting and the difference matters. Some bound **what Orchescope itself does**.
-Two bound **whether Orchescope starts your process**, and none of them bound what that process may then do. A reader who
-takes the block as a whole concludes that tracing is sandboxed; it is not, and the section below the table says so
-plainly.
+There are two blocks and the difference between them matters. `policy` bounds **what Orchescope itself does**.
+`execution` decides **whether Orchescope starts your process**, and bounds nothing about what that process may then do.
+They used to be one block, and a reader taking it as a whole concluded that tracing was sandboxed; it is not, and the
+section below the tables says so plainly.
 
 **What Orchescope itself may do:**
 
@@ -22,12 +22,15 @@ plainly.
 | `policy.allowPaidModels` | `false` | Any operation that can incur provider cost. |
 | `policy.allowFilesystemWrites` | `false` | Writing outside the Orchescope state directory, including a git worktree for a comparison. |
 
-**Whether Orchescope starts your process:**
+**Whether Orchescope starts your process**, which is its own block for exactly this reason:
 
 | Setting | Default | What it grants |
 | --- | --- | --- |
-| `policy.allowProcessSpawn` | `true` | Starting a process at all: `trace`, `test`, `benchmark`, `chaos`. Set to `false` for a purely static audit. |
-| `policy.allowedCommands` | `node`, `npm`, `npx`, `pnpm`, `yarn`, `python3`, `python`, `uv`, `deno`, `bun` | Which executables may be started. Matched by exact path or by basename. A guardrail against a typo, not a security control: only `argv[0]` is checked, so `npx <anything>` runs. |
+| `execution.allowProcessSpawn` | `true` | Starting a process at all: `trace`, `test`, `benchmark`, `chaos`. Set to `false` for a purely static audit. |
+| `execution.allowedCommands` | `node`, `npm`, `npx`, `pnpm`, `yarn`, `python3`, `python`, `uv`, `deno`, `bun` | Which executables may be started. Matched by exact path or by basename. A guardrail against a typo, not a security control: only `argv[0]` is checked, so `npx <anything>` runs. |
+
+A configuration written before these two moved names them under `policy`. It is read from there, and the load reports
+that it did, so an upgrade does not fail an audit on a key that used to work.
 
 **Ceilings on the work Orchescope will do:**
 
@@ -43,10 +46,9 @@ plainly.
 
 ## What none of this bounds
 
-**A command Orchescope starts runs with your full ambient privileges.** `allowFilesystemWrites` and
-`allowOutboundNetwork` constrain Orchescope's own behaviour and nothing else; `doctor` says Orchescope "makes no outbound
-request **of its own**" for the same reason. They sit in the same block as `allowedCommands`, which is about the target,
-and that is a genuine ambiguity in the file rather than a subtlety a careful reader would resolve.
+**A command Orchescope starts runs with your full ambient privileges.** `policy.allowFilesystemWrites` and
+`policy.allowOutboundNetwork` constrain Orchescope's own behaviour and nothing else; `doctor` says Orchescope "makes no
+outbound request **of its own**" for the same reason. Nothing in either block reaches inside a process that has started.
 
 So: when `trace`, `test`, `benchmark` or `chaos` starts your system, that system writes the files it always writes, binds
 the ports it always binds and reaches the network it always reaches. Orchescope adds environment variables and, for a
@@ -70,7 +72,7 @@ A scenario declares what it needs, and the declaration is checked before anythin
 
 | Permission | Granted by |
 | --- | --- |
-| `process:spawn` | `policy.allowProcessSpawn` |
+| `process:spawn` | `execution.allowProcessSpawn` |
 | `network:loopback` | always allowed: this is how a target reports its own telemetry |
 | `network:outbound` | `policy.allowOutboundNetwork` |
 | `model:paid` | `policy.allowPaidModels` |

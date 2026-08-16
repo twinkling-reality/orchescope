@@ -80,6 +80,21 @@ export const runDoctor = async (input: {
   });
 
   /*
+   * Both notes the loader can produce, and until they were carried here neither reached anyone. A
+   * configuration whose keys were retired or relocated still works, which is the point, and an operator
+   * reading a file that no longer matches the documentation deserves to be told why.
+   */
+  for (const problem of workspace.configProblems) {
+    checks.push({
+      name: 'configuration setting',
+      status: 'warning',
+      detail: problem,
+      remediation:
+        'Update .orchescope/config.json to the setting named, or delete it to take the default.',
+    });
+  }
+
+  /*
    * The permissions a repository grants are a property of the repository, so the file that carries them
    * is meant to be committed. Git does not consult a `.gitignore` inside a directory an ancestor rule has
    * already excluded, so a host repository whose root file carries `/.orchescope/` silently keeps the

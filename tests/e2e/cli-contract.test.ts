@@ -276,9 +276,9 @@ describe('policy refusals', () => {
     await run(['--cwd', root, 'init']);
     const configPath = join(root, '.orchescope/config.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
-      policy: Record<string, unknown>;
+      execution: Record<string, unknown>;
     };
-    config.policy['allowProcessSpawn'] = false;
+    config.execution['allowProcessSpawn'] = false;
     writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
 
     const result = await run(['--cwd', root, 'test', '--scenario', 'support-desk', '--json']);
@@ -345,12 +345,24 @@ describe('init', () => {
     assert.equal(first.code, EXIT.success);
     const config = JSON.parse(readFileSync(join(root, '.orchescope/config.json'), 'utf8')) as {
       policy: Record<string, unknown>;
+      execution: Record<string, unknown>;
       schemaVersion: number;
     };
-    assert.equal(config.schemaVersion, 2, 'the configuration document is at version 2');
+    assert.equal(config.schemaVersion, 3, 'the configuration document is at version 3');
     assert.equal(config.policy['allowOutboundNetwork'], false);
     assert.equal(config.policy['allowPaidModels'], false);
     assert.equal(config.policy['allowFilesystemWrites'], false);
+    /*
+     * The two settings that decide whether a process starts are their own block. Beside the three above,
+     * which constrain Orchescope itself, they read as though they constrained the target, and a reader
+     * taking the block as a whole concluded that a traced command was sandboxed.
+     */
+    assert.equal(config.execution['allowProcessSpawn'], true);
+    assert.equal(
+      'allowProcessSpawn' in config.policy,
+      false,
+      'a setting about the target is in the block about Orchescope',
+    );
 
     writeFileSync(
       join(root, '.orchescope/config.json'),

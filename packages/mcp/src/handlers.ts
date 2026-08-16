@@ -130,12 +130,13 @@ const findingLine = (finding: Finding): Record<string, unknown> => ({
 
 const assertExecutionAllowed = (context: HandlerContext, tool: ToolDefinition): void => {
   if (!tool.executes) return;
-  if (!context.workspace.config.policy.allowProcessSpawn) {
+  if (!context.workspace.config.execution.allowProcessSpawn) {
     throw new OrchescopeError(
       'POLICY_DENIED',
-      `${tool.name} runs the audited system and policy.allowProcessSpawn is false.`,
+      `${tool.name} runs the audited system and execution.allowProcessSpawn is false.`,
       {
-        remediation: 'Set policy.allowProcessSpawn to true in .orchescope/config.json to allow it.',
+        remediation:
+          'Set execution.allowProcessSpawn to true in .orchescope/config.json to allow it.',
       },
     );
   }

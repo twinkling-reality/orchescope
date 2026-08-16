@@ -55,7 +55,7 @@ Seventeen, and the read only ones are annotated as such so a client can decide w
 | `compare_runs` | A verdict with per metric directions and sample sizes |
 | `validate_improvement_goal` | Per criterion outcomes, each satisfied, refused or undecided |
 
-**Executing your system**, which requires `policy.allowProcessSpawn`:
+**Executing your system**, which requires `execution.allowProcessSpawn`:
 
 | Tool | Returns |
 | --- | --- |
@@ -147,7 +147,7 @@ large document never fills the conversation.
 
 ## Cost and permission
 
-Read only tools touch nothing. The three executing tools respect `policy.allowProcessSpawn` and are refused with the setting
+Read only tools touch nothing. The three executing tools respect `execution.allowProcessSpawn` and are refused with the setting
 named when it is off, which lets you give an agent the analysis without giving it the ability to run your system.
 
 Nothing in Orchescope calls a model, so an agent asking it for an audit is not spending anything at a provider. What it

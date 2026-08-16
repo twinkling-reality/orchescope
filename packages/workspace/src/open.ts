@@ -43,6 +43,14 @@ export type Workspace = {
   readonly paths: WorkspacePaths;
   readonly config: OrchescopeConfig;
   readonly configSource: 'defaults' | 'file';
+  /**
+   * What the load had to say about the file it read: a setting that was retired, or one that moved.
+   *
+   * Carried rather than discarded because both notes existed and neither reached a reader. A file whose
+   * keys were quietly relocated works, and the operator who reads it next has no idea why it no longer
+   * matches the documentation.
+   */
+  readonly configProblems: readonly string[];
   readonly projectId: string;
   readonly projectName: string;
   readonly projectPathHash: Sha256Hex;
@@ -110,6 +118,7 @@ export const openWorkspace = (options: OpenWorkspaceOptions): Workspace => {
     paths,
     config,
     configSource: loaded.source,
+    configProblems: loaded.problems,
     projectId,
     projectName,
     projectPathHash,

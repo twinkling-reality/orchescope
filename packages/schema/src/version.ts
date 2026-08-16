@@ -20,7 +20,7 @@ export const SCHEMA_VERSIONS = {
   report: 1,
   traceBundle: 1,
   manifest: 1,
-  config: 2,
+  config: 3,
 } as const;
 
 export type SchemaName = keyof typeof SCHEMA_VERSIONS;

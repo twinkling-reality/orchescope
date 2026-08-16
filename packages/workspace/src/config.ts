@@ -49,7 +49,6 @@ export const DEFAULT_CONFIG: OrchescopeConfig = {
     retainReports: 20,
   },
   policy: {
-    allowProcessSpawn: true,
     allowOutboundNetwork: false,
     allowPaidModels: false,
     allowFilesystemWrites: false,
@@ -58,6 +57,9 @@ export const DEFAULT_CONFIG: OrchescopeConfig = {
     maxConcurrentRuns: 4,
     maxTotalRuns: 200,
     allowedChaosEnvironments: ['local_deterministic'],
+  },
+  execution: {
+    allowProcessSpawn: true,
     allowedCommands: [
       'node',
       'npm',
@@ -94,7 +96,15 @@ type Mutable<T> = { -readonly [K in keyof T]: T[K] };
  * Merges a partial configuration document over the defaults, one section at a time. A section is merged rather
  * than replaced so that setting one policy value does not silently reset the rest.
  */
-const SECTIONS = ['analysis', 'runtime', 'report', 'policy', 'redaction', 'pricing'] as const;
+const SECTIONS = [
+  'analysis',
+  'runtime',
+  'report',
+  'policy',
+  'execution',
+  'redaction',
+  'pricing',
+] as const;
 
 /**
  * Settings that were real and are not any more.
@@ -160,6 +170,66 @@ const retiredSettings = (partial: Record<string, unknown>): readonly string[] =>
     .filter(([key]) => partial[key] !== undefined)
     .map(([key, reason]) => `${key}: ${reason}`);
 
+/**
+ * Settings that moved, and the block they moved to.
+ *
+ * `allowProcessSpawn` and `allowedCommands` decide whether Orchescope starts a process and which one.
+ * They used to sit beside `allowFilesystemWrites` and `allowOutboundNetwork`, which constrain Orchescope
+ * itself, and a reader taking the block as a whole concluded that a traced command was sandboxed. It
+ * never was, so the two scopes are now two blocks.
+ */
+const MOVED_SETTINGS: readonly (readonly [from: string, to: string, key: string])[] = [
+  ['policy', 'execution', 'allowProcessSpawn'],
+  ['policy', 'execution', 'allowedCommands'],
+];
+
+const sectionOf = (partial: Record<string, unknown>, name: string): Record<string, unknown> => {
+  const value = partial[name];
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+};
+
+/**
+ * Rewrites a document that names a setting where it used to live.
+ *
+ * Read forward rather than refused, for the same reason a retired setting is dropped rather than refused:
+ * a configuration file is committed to a repository, and a user who upgrades should not have their audit
+ * fail on a key that used to work.
+ *
+ * A file naming the same setting in both places is refused, not resolved. Picking a winner would mean
+ * one of the two values the operator wrote is discarded silently, and the direction that gets discarded
+ * is the one that denies something. A user who reads stale documentation, adds
+ * `policy.allowProcessSpawn: false` beneath the `execution` block this build wrote, and is told nothing
+ * believes they denied process execution and did not.
+ */
+const relocateMovedSettings = (
+  partial: Record<string, unknown>,
+  file: string,
+): { readonly document: Record<string, unknown>; readonly moved: readonly string[] } => {
+  const moved: string[] = [];
+  const document = { ...partial };
+  for (const [from, to, key] of MOVED_SETTINGS) {
+    const source = sectionOf(document, from);
+    if (!(key in source)) continue;
+    if (key in sectionOf(document, to)) {
+      throw new OrchescopeError(
+        'CONFIG_INVALID',
+        `${key} is named as both ${from}.${key} and ${to}.${key}, and only one of them can be what you meant.`,
+        {
+          detail: { file },
+          remediation: `Keep ${to}.${key}, which is where this setting lives, and remove ${from}.${key}.`,
+        },
+      );
+    }
+    const { [key]: value, ...rest } = source;
+    document[from] = rest;
+    document[to] = { ...sectionOf(document, to), [key]: value };
+    moved.push(`${from}.${key}: this setting is now ${to}.${key}, and was read from its old place`);
+  }
+  return { document, moved };
+};
+
 const mergeConfig = (partial: Record<string, unknown>): OrchescopeConfig => {
   const merged: Mutable<OrchescopeConfig> = {
     ...DEFAULT_CONFIG,
@@ -167,6 +237,7 @@ const mergeConfig = (partial: Record<string, unknown>): OrchescopeConfig => {
     runtime: { ...DEFAULT_CONFIG.runtime },
     report: { ...DEFAULT_CONFIG.report },
     policy: { ...DEFAULT_CONFIG.policy },
+    execution: { ...DEFAULT_CONFIG.execution },
     redaction: { ...DEFAULT_CONFIG.redaction },
     pricing: { ...DEFAULT_CONFIG.pricing },
   };
@@ -212,9 +283,10 @@ export const loadConfig = (paths: WorkspacePaths): ConfigLoad => {
       },
     );
   }
-  const document = parsed as Record<string, unknown>;
+  const relocated = relocateMovedSettings(parsed as Record<string, unknown>, paths.configFile);
+  const document = relocated.document;
   assertShape(document, paths.configFile);
-  const problems = retiredSettings(document);
+  const problems = [...retiredSettings(document), ...relocated.moved];
   const merged = mergeConfig(document);
   const validated = validateDocument(
     OrchescopeConfigSchema,

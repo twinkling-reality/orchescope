@@ -24,7 +24,7 @@ that carries a command. Do not reorder the five product steps.
 
 ### MCP must be able to ingest a run
 
-`import_trace` (no spawn) and `run_traced` (argv array, `policy.allowProcessSpawn`, refuse rather than
+`import_trace` (no spawn) and `run_traced` (argv array, `execution.allowProcessSpawn`, refuse rather than
 downgrade) are the twins of the CLI. Map them in `loop-action`. Never silently remap wrap to import.
 Never execute the placeholder `<the command that starts your system>`.
 

@@ -1,5 +1,5 @@
 {
-  "$id": "urn:orchescope:schema:config:2",
+  "$id": "urn:orchescope:schema:config:3",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
@@ -51,6 +51,26 @@
       ],
       "type": "object"
     },
+    "execution": {
+      "additionalProperties": false,
+      "properties": {
+        "allowProcessSpawn": {
+          "type": "boolean"
+        },
+        "allowedCommands": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "allowProcessSpawn",
+        "allowedCommands"
+      ],
+      "type": "object"
+    },
     "policy": {
       "additionalProperties": false,
       "properties": {
@@ -61,9 +81,6 @@
           "type": "boolean"
         },
         "allowPaidModels": {
-          "type": "boolean"
-        },
-        "allowProcessSpawn": {
           "type": "boolean"
         },
         "allowedChaosEnvironments": {
@@ -86,13 +103,6 @@
           "minItems": 1,
           "type": "array"
         },
-        "allowedCommands": {
-          "items": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "type": "array"
-        },
         "maxConcurrentRuns": {
           "minimum": 1,
           "type": "integer"
@@ -111,7 +121,6 @@
         }
       },
       "required": [
-        "allowProcessSpawn",
         "allowOutboundNetwork",
         "allowPaidModels",
         "allowFilesystemWrites",
@@ -119,8 +128,7 @@
         "maxRunDurationMs",
         "maxConcurrentRuns",
         "maxTotalRuns",
-        "allowedChaosEnvironments",
-        "allowedCommands"
+        "allowedChaosEnvironments"
       ],
       "type": "object"
     },
@@ -265,7 +273,7 @@
       "type": "object"
     },
     "schemaVersion": {
-      "const": 2,
+      "const": 3,
       "type": "number"
     }
   },
@@ -275,6 +283,7 @@
     "runtime",
     "report",
     "policy",
+    "execution",
     "redaction",
     "pricing"
   ],

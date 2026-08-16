@@ -1,5 +1,10 @@
 import { OrchescopeError } from '@orchescope/domain';
-import type { ChaosEnvironment, PolicyConfig, ScenarioPermission } from '@orchescope/schema';
+import type {
+  ChaosEnvironment,
+  ExecutionConfig,
+  PolicyConfig,
+  ScenarioPermission,
+} from '@orchescope/schema';
 
 /**
  * Policy decisions.
@@ -30,47 +35,82 @@ export const assertAllowed = (decision: Decision, action: string): void => {
   });
 };
 
-const PERMISSION_SETTINGS: Readonly<Record<ScenarioPermission, keyof PolicyConfig>> = {
-  'process:spawn': 'allowProcessSpawn',
-  'network:loopback': 'allowProcessSpawn',
-  'network:outbound': 'allowOutboundNetwork',
-  'model:paid': 'allowPaidModels',
-  'filesystem:write': 'allowFilesystemWrites',
+/**
+ * The two blocks a permission spans.
+ *
+ * `policy` says what Orchescope itself may do; `execution` says whether it starts a process at all. A
+ * permission may be granted by either, so a decision reads both and names the one it refused on.
+ */
+export type GrantingConfig = {
+  readonly policy: PolicyConfig;
+  readonly execution: ExecutionConfig;
+};
+
+const PERMISSION_SETTINGS: Readonly<
+  Record<ScenarioPermission, (config: GrantingConfig) => { granted: boolean; setting: string }>
+> = {
+  'process:spawn': (config) => ({
+    granted: config.execution.allowProcessSpawn,
+    setting: 'execution.allowProcessSpawn',
+  }),
+  'network:loopback': (config) => ({
+    granted: config.execution.allowProcessSpawn,
+    setting: 'execution.allowProcessSpawn',
+  }),
+  'network:outbound': (config) => ({
+    granted: config.policy.allowOutboundNetwork,
+    setting: 'policy.allowOutboundNetwork',
+  }),
+  'model:paid': (config) => ({
+    granted: config.policy.allowPaidModels,
+    setting: 'policy.allowPaidModels',
+  }),
+  'filesystem:write': (config) => ({
+    granted: config.policy.allowFilesystemWrites,
+    setting: 'policy.allowFilesystemWrites',
+  }),
 };
 
 export const permissionDecision = (
-  policy: PolicyConfig,
+  config: GrantingConfig,
   permission: ScenarioPermission,
 ): Decision => {
   if (permission === 'network:loopback') return allow();
-  const setting = PERMISSION_SETTINGS[permission];
-  const granted = policy[setting];
-  return granted === true
-    ? allow()
-    : deny(`the scenario requires ${permission}`, `policy.${String(setting)}`);
+  const { granted, setting } = PERMISSION_SETTINGS[permission](config);
+  return granted ? allow() : deny(`the scenario requires ${permission}`, setting);
 };
 
 export const permissionsDecision = (
-  policy: PolicyConfig,
+  config: GrantingConfig,
   permissions: readonly ScenarioPermission[],
 ): Decision => {
   for (const permission of permissions) {
-    const decision = permissionDecision(policy, permission);
+    const decision = permissionDecision(config, permission);
     if (!decision.allowed) return decision;
   }
   return allow();
 };
 
-export const commandDecision = (policy: PolicyConfig, command: readonly string[]): Decision => {
+/**
+ * Whether the runner will start this command.
+ *
+ * A guardrail against a typo rather than a boundary: only the executable is examined, and the default
+ * list contains runners that will start anything. What a started command may then do is bounded by the
+ * privileges of whoever ran Orchescope and by nothing in this file.
+ */
+export const commandDecision = (
+  execution: ExecutionConfig,
+  command: readonly string[],
+): Decision => {
   const executable = command[0];
   if (executable === undefined) return deny('the command was empty', 'the scenario target command');
   const name = executable.split('/').pop() ?? executable;
-  if (policy.allowedCommands.length === 0) {
-    return deny('no command is on the allow list', 'policy.allowedCommands');
+  if (execution.allowedCommands.length === 0) {
+    return deny('no command is on the allow list', 'execution.allowedCommands');
   }
-  return policy.allowedCommands.some((entry) => entry === executable || entry === name)
+  return execution.allowedCommands.some((entry) => entry === executable || entry === name)
     ? allow()
-    : deny(`${name} is not on the command allow list`, 'policy.allowedCommands');
+    : deny(`${name} is not on the command allow list`, 'execution.allowedCommands');
 };
 
 export const chaosEnvironmentDecision = (

@@ -76,9 +76,16 @@ export const ReportConfig = Type.Object(
 );
 export type ReportConfig = Static<typeof ReportConfig>;
 
+/**
+ * What Orchescope itself may do, and how much of it.
+ *
+ * Every setting here constrains this process. None of them constrains a process Orchescope starts, which
+ * is why the two settings that decide whether one starts at all live in their own block: a reader who
+ * found `allowFilesystemWrites: false` next to `allowedCommands` concluded that tracing was sandboxed,
+ * and it never was. See `ExecutionConfig`.
+ */
 export const PolicyConfig = Type.Object(
   {
-    allowProcessSpawn: Type.Boolean(),
     allowOutboundNetwork: Type.Boolean(),
     allowPaidModels: Type.Boolean(),
     allowFilesystemWrites: Type.Boolean(),
@@ -87,6 +94,24 @@ export const PolicyConfig = Type.Object(
     maxConcurrentRuns: PositiveInt,
     maxTotalRuns: PositiveInt,
     allowedChaosEnvironments: Type.Array(ChaosEnvironment, { minItems: 1 }),
+  },
+  { additionalProperties: false },
+);
+export type PolicyConfig = Static<typeof PolicyConfig>;
+
+/**
+ * Whether Orchescope starts a process, and which one.
+ *
+ * Separated from `policy` because the two blocks answer different questions and the answer to this one
+ * is narrower than it looks. Nothing here bounds what a started process may then do: a traced command
+ * runs with the operator's full ambient privileges, writing the files it always writes and reaching the
+ * network it always reaches. Orchescope adds environment variables and, for a Node target, loads its own
+ * instrumentation; it takes nothing away and it is not a sandbox.
+ */
+export const ExecutionConfig = Type.Object(
+  {
+    /** Whether any process may be started at all. False keeps an audit entirely static. */
+    allowProcessSpawn: Type.Boolean(),
     /**
      * Commands the runner may start, matched on `argv[0]`. Empty means every command is refused.
      *
@@ -94,15 +119,12 @@ export const PolicyConfig = Type.Object(
      * reads like the second. Only the executable is checked, and the default list contains runners, so
      * `trace -- seorak` is refused while `trace -- npx seorak` runs. Checking further would not close it:
      * a runner's argument is any command, and `npm run`, `uv run` and `node -e` each take one.
-     *
-     * Nothing in this block bounds what a started process may then do. The settings above it constrain
-     * Orchescope's own behaviour; a target runs with the operator's full ambient privileges.
      */
     allowedCommands: Type.Array(NonEmptyString()),
   },
   { additionalProperties: false },
 );
-export type PolicyConfig = Static<typeof PolicyConfig>;
+export type ExecutionConfig = Static<typeof ExecutionConfig>;
 
 export const RedactionConfig = Type.Object(
   {
@@ -148,6 +170,7 @@ export const OrchescopeConfig = Document(
     runtime: RuntimeConfig,
     report: ReportConfig,
     policy: PolicyConfig,
+    execution: ExecutionConfig,
     redaction: RedactionConfig,
     pricing: PricingConfig,
   }),

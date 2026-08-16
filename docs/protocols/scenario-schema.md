@@ -85,7 +85,7 @@ tags: [support, refund, baseline]
 | --- | --- | --- |
 | `id` | yes | Lowercase, hyphenated, two to sixty four characters. Referenced by every command |
 | `name` | yes | One line for a person |
-| `target.command` | yes | Argv, executed without a shell. The executable must be on `policy.allowedCommands` |
+| `target.command` | yes | Argv, executed without a shell. The executable must be on `execution.allowedCommands` |
 | `target.resultSource` | yes | Where the target's own result comes from: `result_file`, `stdout_json` or `none` |
 | `target.timeoutMs` | yes | Ceiling for one repetition. Exceeding it marks the run `timeout` |
 | `target.stopSignal` | no | `SIGINT` or `SIGTERM` before escalating to `SIGKILL` |

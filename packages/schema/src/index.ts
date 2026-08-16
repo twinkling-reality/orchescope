@@ -54,6 +54,7 @@ export {
 export {
   AnalysisConfig,
   OrchescopeConfig,
+  ExecutionConfig,
   PolicyConfig,
   PricingConfig,
   RedactionConfig,

@@ -68,7 +68,7 @@ export const runProcess = async (request: ProcessRequest): Promise<ProcessOutcom
       {
         detail: { executable, allowed: request.allowedCommands.join(', ') },
         remediation:
-          'Add the executable to policy.allowedCommands in .orchescope/config.json if you intend to run it.',
+          'Add the executable to execution.allowedCommands in .orchescope/config.json if you intend to run it.',
       },
     );
   }

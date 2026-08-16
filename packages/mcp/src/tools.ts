@@ -182,7 +182,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: 'run_traced',
     description:
-      'Run a command as an argument array under a loopback OpenTelemetry receiver and store the spans as a run. Returns the run identifier, span count and exit code. Requires policy.allowProcessSpawn and an allowedCommands entry, which checks argv[0] only and is a guardrail rather than a boundary: the command runs with full ambient privileges and is not sandboxed. Pass the real argv that starts the system; never a shell string. When audit names this tool without a command, supply the argv yourself.',
+      'Run a command as an argument array under a loopback OpenTelemetry receiver and store the spans as a run. Returns the run identifier, span count and exit code. Requires execution.allowProcessSpawn and an allowedCommands entry, which checks argv[0] only and is a guardrail rather than a boundary: the command runs with full ambient privileges and is not sandboxed. Pass the real argv that starts the system; never a shell string. When audit names this tool without a command, supply the argv yourself.',
     input: Type.Object(
       {
         command: Type.Optional(

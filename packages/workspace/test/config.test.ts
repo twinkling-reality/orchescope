@@ -61,6 +61,48 @@ describe('loadConfig', () => {
     );
   });
 
+  /*
+   * The two settings that decide whether a process starts used to sit beside the ones constraining
+   * Orchescope itself, and a reader taking the block as a whole concluded that a traced command was
+   * sandboxed. A file written before the split still names them where they were, and it is read rather
+   * than refused, for the same reason a retired setting is dropped rather than refused: the file is
+   * committed to a repository and an upgrade should not fail an audit on a key that used to work.
+   */
+  it('reads a configuration written before the execution settings moved out of policy', () => {
+    const loaded = withConfig({
+      schemaVersion: 2,
+      policy: { allowProcessSpawn: false, allowedCommands: ['node'], allowPaidModels: true },
+    });
+    assert.equal(loaded.config.execution.allowProcessSpawn, false);
+    assert.deepEqual(loaded.config.execution.allowedCommands, ['node']);
+    assert.equal(loaded.config.policy.allowPaidModels, true, 'the rest of the block still applies');
+    assert.equal(
+      'allowProcessSpawn' in (loaded.config.policy as Record<string, unknown>),
+      false,
+      'a moved setting must not survive in the block it left',
+    );
+    assert.equal(loaded.problems.length, 2);
+    for (const problem of loaded.problems) assert.match(problem, /is now execution\./);
+  });
+
+  /*
+   * Picking a winner would discard one of the two values the operator wrote, and the direction that gets
+   * discarded is the one that denies something. A user following stale documentation, adding
+   * `policy.allowProcessSpawn: false` beneath the block this build wrote, would believe they had denied
+   * process execution and would be wrong.
+   */
+  it('refuses a file that names a moved setting in both places', () => {
+    assert.throws(
+      () =>
+        withConfig({
+          schemaVersion: SCHEMA_VERSIONS.config,
+          policy: { allowProcessSpawn: false },
+          execution: { allowProcessSpawn: true },
+        }),
+      /both policy.allowProcessSpawn and execution.allowProcessSpawn/,
+    );
+  });
+
   it('says nothing about retired settings when the file carries none', () => {
     const loaded = withConfig({ schemaVersion: SCHEMA_VERSIONS.config, report: { port: 4321 } });
     assert.deepEqual(loaded.problems, []);

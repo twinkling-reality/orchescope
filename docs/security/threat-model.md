@@ -53,14 +53,14 @@ statement of intent.
 - Discovery never executes repository code. It parses it.
 - A process is started only by `trace`, `test`, `benchmark` and `chaos`, and only through `spawn` or `execFile` with an
   argument array. There is no shell anywhere, so shell metacharacters have no meaning.
-- The executable is checked against `policy.allowedCommands` first, by exact match or by basename. A path that merely ends
+- The executable is checked against `execution.allowedCommands` first, by exact match or by basename. A path that merely ends
   with an allowed name does not pass.
 - **That list is a guardrail against a typo, not a security control, and it is trivially bypassable.** Only `argv[0]` is
   checked, and the default list contains runners: `orchescope trace -- seorak --once` is refused while
   `orchescope trace -- npx seorak --once` runs. `npm run`, `uv run`, `deno run` and `node -e` walk past it the same way.
   Checking further would not close it either, because a runner's argument can be any command. Treat the list as a way to
   keep an obvious mistake from starting a process, and treat the argv you pass as something you have read.
-- `policy.allowProcessSpawn` gates the whole capability, and setting it to `false` keeps an audit entirely static. That is
+- `execution.allowProcessSpawn` gates the whole capability, and setting it to `false` keeps an audit entirely static. That is
   the only setting here that bounds anything, and it bounds whether a process starts rather than what it may then do.
 - **Once a process starts, it runs with your full ambient privileges.** Orchescope adds environment variables and, for a
   Node target, loads its own instrumentation; it takes nothing away. The traced command can write anywhere you can write,

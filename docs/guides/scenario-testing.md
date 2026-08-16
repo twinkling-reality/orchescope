@@ -134,6 +134,6 @@ They are files in your repository, which means they are reviewed like code and t
 `orchescope audit` discovers and stores them, so `orchescope test --scenario <id>` works by identifier without a path.
 
 Treat a scenario file as untrusted input to Orchescope: it names a command, and that command is checked against
-`policy.allowedCommands` before anything runs. That check reads only `argv[0]`, so a scenario naming `npx` or `npm run`
+`execution.allowedCommands` before anything runs. That check reads only `argv[0]`, so a scenario naming `npx` or `npm run`
 passes it while running anything at all, and what then runs has your full ambient privileges. The allow list is a
 guardrail against a typo. Reviewing a scenario that arrived in a pull request before you run it is the actual control.

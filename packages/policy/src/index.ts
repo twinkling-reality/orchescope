@@ -12,6 +12,7 @@ export {
   commandDecision,
   type Decision,
   deny,
+  type GrantingConfig,
   permissionDecision,
   permissionsDecision,
   writeActionDecision,

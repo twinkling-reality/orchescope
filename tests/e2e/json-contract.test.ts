@@ -175,9 +175,9 @@ describe('the json contract on failure', () => {
     const configPath = join(root, '.orchescope/config.json');
     const { readFileSync, writeFileSync } = await import('node:fs');
     const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
-      policy: Record<string, unknown>;
+      execution: Record<string, unknown>;
     };
-    config.policy['allowProcessSpawn'] = false;
+    config.execution['allowProcessSpawn'] = false;
     writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
 
     const result = await run(['--cwd', root, 'trace', '--json', '--', 'node', '--version']);
@@ -190,7 +190,7 @@ describe('the json contract on failure', () => {
       | undefined;
     assert.equal(
       detail?.setting,
-      'policy.allowProcessSpawn',
+      'execution.allowProcessSpawn',
       'a refusal did not name the setting that would grant it',
     );
   });

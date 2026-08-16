@@ -18,7 +18,7 @@ the spans as a run.
 orchescope trace --label "nightly" --timeout 120000 -- npm run agent
 ```
 
-The command must be on `policy.allowedCommands`. That check exists to stop a typo starting a process, and it is not a
+The command must be on `execution.allowedCommands`. That check exists to stop a typo starting a process, and it is not a
 security boundary: only `argv[0]` is checked, so `npx <anything>` and `npm run <anything>` walk past it.
 
 The command then runs with your full ambient privileges. Orchescope adds environment variables and, for a Node target,

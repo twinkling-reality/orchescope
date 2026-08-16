@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { OrchescopeError } from '@orchescope/domain';
-import type { PolicyConfig } from '@orchescope/schema';
+import type { ExecutionConfig, PolicyConfig } from '@orchescope/schema';
 import {
   assertAllowed,
   budgetDecision,
@@ -21,7 +21,6 @@ import {
  */
 
 const BASE: PolicyConfig = {
-  allowProcessSpawn: false,
   allowOutboundNetwork: false,
   allowPaidModels: false,
   allowFilesystemWrites: false,
@@ -30,19 +29,34 @@ const BASE: PolicyConfig = {
   maxConcurrentRuns: 4,
   maxTotalRuns: 200,
   allowedChaosEnvironments: ['local_deterministic'],
-  allowedCommands: ['node'],
 };
 
 const policy = (overrides: Partial<PolicyConfig> = {}): PolicyConfig => ({ ...BASE, ...overrides });
 
+const EXECUTION: ExecutionConfig = { allowProcessSpawn: false, allowedCommands: ['node'] };
+
+const execution = (overrides: Partial<ExecutionConfig> = {}): ExecutionConfig => ({
+  ...EXECUTION,
+  ...overrides,
+});
+
+/*
+ * The two blocks a permission spans. `policy` says what Orchescope itself may do and `execution` says
+ * whether it starts a process at all, which is why a decision reads both and names the one it refused on.
+ */
+const granting = (
+  policyOverrides: Partial<PolicyConfig> = {},
+  executionOverrides: Partial<ExecutionConfig> = {},
+) => ({ policy: policy(policyOverrides), execution: execution(executionOverrides) });
+
 describe('permissionDecision', () => {
   it('allows loopback, which is how a target reports its own telemetry', () => {
-    assert.equal(permissionDecision(policy(), 'network:loopback').allowed, true);
+    assert.equal(permissionDecision(granting(), 'network:loopback').allowed, true);
   });
 
   it('refuses outbound network, paid models and filesystem writes by default', () => {
     for (const permission of ['network:outbound', 'model:paid', 'filesystem:write'] as const) {
-      const decision = permissionDecision(policy(), permission);
+      const decision = permissionDecision(granting(), permission);
       assert.equal(decision.allowed, false, `${permission} was allowed`);
       if (!decision.allowed) {
         assert.match(decision.settingToChange, /^policy\./);
@@ -53,13 +67,13 @@ describe('permissionDecision', () => {
 
   it('allows what the configuration grants', () => {
     assert.equal(
-      permissionDecision(policy({ allowOutboundNetwork: true }), 'network:outbound').allowed,
+      permissionDecision(granting({ allowOutboundNetwork: true }), 'network:outbound').allowed,
       true,
     );
   });
 
   it('refuses the whole set when one member is refused, and names that one', () => {
-    const decision = permissionsDecision(policy({ allowProcessSpawn: true }), [
+    const decision = permissionsDecision(granting({}, { allowProcessSpawn: true }), [
       'process:spawn',
       'model:paid',
     ]);
@@ -70,24 +84,26 @@ describe('permissionDecision', () => {
 
 describe('commandDecision', () => {
   it('accepts an allow listed executable by name or by path', () => {
-    const allowed = policy({ allowedCommands: ['node'] });
+    const allowed = execution({ allowedCommands: ['node'] });
     assert.equal(commandDecision(allowed, ['node', 'src/main.ts']).allowed, true);
     assert.equal(commandDecision(allowed, ['/usr/local/bin/node', 'src/main.ts']).allowed, true);
   });
 
   it('refuses anything not on the list', () => {
-    const decision = commandDecision(policy({ allowedCommands: ['node'] }), ['bash', '-c', 'x']);
+    const decision = commandDecision(execution({ allowedCommands: ['node'] }), ['bash', '-c', 'x']);
     assert.equal(decision.allowed, false);
-    if (!decision.allowed) assert.equal(decision.settingToChange, 'policy.allowedCommands');
+    if (!decision.allowed) assert.equal(decision.settingToChange, 'execution.allowedCommands');
   });
 
   it('refuses an empty command and an empty allow list', () => {
-    assert.equal(commandDecision(policy({ allowedCommands: ['node'] }), []).allowed, false);
-    assert.equal(commandDecision(policy({ allowedCommands: [] }), ['node']).allowed, false);
+    assert.equal(commandDecision(execution({ allowedCommands: ['node'] }), []).allowed, false);
+    assert.equal(commandDecision(execution({ allowedCommands: [] }), ['node']).allowed, false);
   });
 
   it('is not fooled by a path that merely ends with an allowed name', () => {
-    const decision = commandDecision(policy({ allowedCommands: ['node'] }), ['/tmp/evil/nodejs']);
+    const decision = commandDecision(execution({ allowedCommands: ['node'] }), [
+      '/tmp/evil/nodejs',
+    ]);
     assert.equal(decision.allowed, false);
   });
 });

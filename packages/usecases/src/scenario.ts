@@ -114,7 +114,7 @@ export const runScenarioUseCase = async (
 ): Promise<RunScenarioOutcome> => {
   const { workspace, scenario } = request;
   assertAllowed(
-    permissionsDecision(workspace.config.policy, scenario.requiredPermissions),
+    permissionsDecision(workspace.config, scenario.requiredPermissions),
     `Scenario ${scenario.id}`,
   );
 
