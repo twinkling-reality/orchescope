@@ -1,8 +1,14 @@
 import { writeFileSync } from 'node:fs';
 import { compareSeverity, OrchescopeError, stableJson } from '@orchescope/domain';
-import { loopProgress, resolveNextAction, toMermaid, toSarif } from '@orchescope/report';
+import {
+  improvementOutcome,
+  loopProgress,
+  resolveNextAction,
+  toMermaid,
+  toSarif,
+} from '@orchescope/report';
 import type { Finding, ReportBundle } from '@orchescope/schema';
-import { type AuditResult, discoverScenarios, runAudit } from '@orchescope/usecases';
+import { type AuditResult, runAudit } from '@orchescope/usecases';
 import type { CommandContext } from '../context.ts';
 import { EXIT_CODES } from '../exit.ts';
 import { auditDocument } from '../terminal/audit-document.ts';
@@ -117,6 +123,12 @@ const writeAuditJson = (
         findings: result.bundle.findings,
         rulesEvaluated: result.findingSet.rulesEvaluated,
         loop,
+        /*
+         * Did the last change help, answered without the caller holding an identifier. It was
+         * computed on every audit and reached no surface, so an agent could ask what was wrong and
+         * never ask whether its own last fix had worked.
+         */
+        outcome: improvementOutcome(result.bundle),
         capabilities,
         exports: written,
       },
@@ -152,7 +164,6 @@ export const auditCommand = async (
   context: CommandContext,
   options: AuditOptions,
 ): Promise<number> => {
-  discoverScenarios(context.workspace);
   const result = await runAudit({
     workspace: context.workspace,
     orchescopeVersion: context.version,

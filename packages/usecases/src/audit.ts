@@ -22,6 +22,7 @@ import { deriveTopology } from '@orchescope/traces';
 import type { Workspace } from '@orchescope/workspace';
 import { resolveCapabilities } from './capabilities.ts';
 import { judgeGoal } from './goal.ts';
+import { discoverScenarios } from './scenario.ts';
 import {
   type ObservedMetrics,
   observedKeyToComponentId,
@@ -309,6 +310,16 @@ export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
   const deadline = request.deadline ?? (handle as Deadline);
 
   try {
+    /*
+     * The scenario files on disk are the truth; the store is a cache of them. Reading them here rather
+     * than in each caller is what keeps the surfaces agreeing: the rules below and the bundle both ask
+     * the store what scenarios exist, so a caller that forgot this step got an audit that reported no
+     * scenario in a repository that has three, and a next action pointing at `trace` with a placeholder
+     * command instead of at the scenario it could have rerun. The command line called it and the agent
+     * interface did not, which made the two surfaces disagree about the same repository.
+     */
+    discoverScenarios(workspace);
+
     const discoverPhase = workspace.progress.phase('discover', 'Discovering components');
     const scan = await discover({
       /*

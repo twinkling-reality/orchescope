@@ -275,4 +275,55 @@ describe('the agent interface over stdio', () => {
   it('keeps its diagnostics on standard error, where a client expects them', () => {
     assert.match(client.stderr.join(''), /orchescope mcp serve: \d+ tools available/);
   });
+
+  /*
+   * The scenario files are on disk before anything asks about them, so the first audit of a repository has
+   * to see them. It did not: reading them was the caller's job, the command line did it and this interface
+   * did not, and an agent whose first call is an audit was told that a repository holding three scenarios
+   * held none. What it was handed instead was a placeholder command that the tool it named then refused,
+   * so the opening move of the loop was one no agent could play. A fresh server on a fresh copy is the only
+   * arrangement that can catch it, because one later call to list_scenarios repairs the store and hides it.
+   */
+  it('sees the scenarios on disk when an audit is the first call of the session', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orchescope-mcp-first-'));
+    roots.push(root);
+    cpSync(join(repositoryRoot, 'apps/demo'), root, {
+      recursive: true,
+      filter: (source) => !source.includes('/node_modules') && !source.includes('/state'),
+    });
+    const fresh = new StdioClient(root);
+    try {
+      await fresh.request('initialize', {
+        protocolVersion: PROTOCOL_VERSION,
+        capabilities: {},
+        clientInfo: { name: 'orchescope-e2e', version: '1.0.0' },
+      });
+      fresh.notify('notifications/initialized');
+
+      const response = await fresh.request('tools/call', {
+        name: 'audit_agent_system',
+        arguments: {},
+      });
+      const result = response['result'] as Message | undefined;
+      assert.ok(result !== undefined, `audit produced no result: ${JSON.stringify(response)}`);
+      const data = result['structuredContent'] as {
+        loop: { next: { argv: readonly string[]; tool?: { name: string } } };
+        capabilities: readonly { name: string; available: boolean; reason: string }[];
+      };
+
+      const next = data.loop.next;
+      assert.ok(
+        !next.argv.some((word) => word.includes('<')),
+        `the first action carried a placeholder: ${next.argv.join(' ')}`,
+      );
+      assert.equal(next.tool?.name, 'run_scenario');
+
+      for (const name of ['rerun_scenario', 'run_benchmark', 'run_chaos']) {
+        const capability = data.capabilities.find((entry) => entry.name === name);
+        assert.equal(capability?.available, true, `${name}: ${capability?.reason}`);
+      }
+    } finally {
+      await fresh.close();
+    }
+  });
 });
