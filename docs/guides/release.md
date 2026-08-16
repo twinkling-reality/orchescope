@@ -73,9 +73,14 @@ npm install -g orchescope
 orchescope doctor
 ```
 
-Then update the install section of the README: it currently says the package is not published, and that sentence is only
-true until it is. `release/release-summary.json` records `published: false` because the script that wrote it published
-nothing; it is not a claim about the registry.
+Then read the install section of the README as a stranger would and correct anything the publish has just made untrue.
+`release/release-summary.json` records `published: false` because the script that wrote it published nothing; it is not a
+claim about the registry.
+
+Expect a two factor prompt. An account with it enabled answers `npm publish` with `EOTP` and a browser link, so the
+publish is a person at a keyboard rather than something a script or an agent can finish. Nothing partial is written when
+it stops there. Expect also a warning that `bin[orchescope]` was invalid and removed: npm normalises `./dist/orchescope.mjs`
+to `dist/orchescope.mjs` and assigns it straight back, so the binary survives and the warning is noise.
 
 ## What is not automated
 

@@ -133,7 +133,8 @@ and it is listed item by item because only some of it is done.
 **Not done:**
 
 - **Not published to npm.** `npm install -g orchescope` does not work yet. Publishing needs a registry credential this
-  repository deliberately does not hold, so it stays a maintainer action with a checklist.
+  repository deliberately does not hold, so it stays a maintainer action with a checklist. Since resolved: 0.1.0 was
+  published on 2026-08-15, by hand, from `release/stage`, against a two factor prompt no script here can answer.
 - **No release workflow.** Adding one would mean claiming a secret exists.
 - **Ecosystem support is unchanged**: the same two languages and the same five framework adapters. Nothing here widened
   what is claimed.
