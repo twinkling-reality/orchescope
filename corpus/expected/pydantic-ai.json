@@ -96,15 +96,14 @@
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
       "prompt-injection-boundary": 1,
-      "side-effect-approval-boundary": 1,
       "topology-shape": 2
     },
     "bySeverity": {
       "low": 2,
-      "medium": 4
+      "medium": 3
     },
     "strengths": 0,
-    "total": 6
+    "total": 5
   },
   "kind": "agent_system",
   "languagesNotAnalysed": [],

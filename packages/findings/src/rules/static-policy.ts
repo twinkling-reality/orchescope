@@ -10,6 +10,7 @@ import {
   degrees,
   type IndexedGraph,
   isControlFlowKind,
+  reachableFrom,
   unreachableComponents,
 } from '@orchescope/graph';
 import type { Component, Edge, EvidenceId, SideEffectClass } from '@orchescope/schema';
@@ -321,19 +322,55 @@ export const missingTimeoutRule: Rule = {
   },
 };
 
+/**
+ * Components a model can reach, which is the population this rule is about.
+ *
+ * The risk it names is a model deciding on its own to invoke a consequential operation. An operation no
+ * model can reach is not that risk, however consequential it is, and reporting it as one files a finding
+ * against the wrong thing: across the pinned corpus the operations this used to raise included four React
+ * components issuing `DELETE` behind a user's click, a continuous integration script posting to GitHub,
+ * and a sandbox event sink. Each is a real write and none of them is an agent doing anything.
+ *
+ * An agent, an agent group and an MCP server are roots because a model drives them. A tool is a root in
+ * its own right: a tool exists to be called by a model, whether or not this repository has wired one to
+ * it yet, and a declared tool nobody has connected is the subject of a different rule.
+ */
+const MODEL_DRIVEN_KINDS: readonly string[] = ['agent', 'agent_group', 'mcp_server', 'tool'];
+
+const modelReachable = (graph: IndexedGraph): ReadonlySet<string> =>
+  reachableFrom(
+    graph,
+    graph.graph.components
+      .filter((component) => MODEL_DRIVEN_KINDS.includes(component.kind))
+      .map((component) => component.id),
+  );
+
 export const approvalBoundaryRule: Rule = {
   id: 'side-effect-approval-boundary',
   category: 'security',
   summary: 'Whether an operation with an external effect is guarded by an approval boundary.',
   evaluate: (context) => {
-    const risky = context.graph.graph.components.filter(
+    const consequential = context.graph.graph.components.filter(
       (component) =>
         component.sideEffect === 'financial' ||
         component.sideEffect === 'destructive' ||
         component.sideEffect === 'non_idempotent_write',
     );
-    if (risky.length === 0)
+    if (consequential.length === 0)
       return notApplicable('no operation with a risky effect class was discovered');
+
+    const reachable = modelReachable(context.graph);
+    const risky = consequential.filter((component) => reachable.has(component.id));
+    const unreached = consequential.length - risky.length;
+    /*
+     * Named rather than dropped. An operation this declines to report is one it looked at and decided was
+     * out of scope, and a reader who cannot see that has been told less than was known.
+     */
+    const declined =
+      unreached === 0
+        ? undefined
+        : `${formatCount(unreached, 'consequential operation')} was left unreported because no agent, tool or MCP server in this repository reaches it`;
+    if (risky.length === 0) return notApplicable(declined ?? 'nothing reachable was consequential');
 
     const drafts: FindingDraft[] = [];
     for (const component of risky) {
@@ -411,7 +448,7 @@ export const approvalBoundaryRule: Rule = {
         tags: ['approval', 'side-effect'],
       });
     }
-    return fired(drafts);
+    return fired(drafts, declined);
   },
 };
 

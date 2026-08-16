@@ -7,6 +7,7 @@ import { buildGraph, componentDraft, edgeDraft } from '@orchescope/testkit';
 import { evaluateRules } from '../src/engine.ts';
 import type { Rule, RuleContext } from '../src/rule.ts';
 import {
+  approvalBoundaryRule,
   architectureShapeRule,
   safeRetryRule,
   unboundedRetryRule,
@@ -433,6 +434,90 @@ describe('the order findings are reported in', () => {
       findings.map((finding) => finding.title),
       ['a-bounded-edit', 'a-decision'],
     );
+  });
+});
+
+/**
+ * Who the approval boundary rule is about.
+ *
+ * The risk it names is a model deciding on its own to invoke a consequential operation. Firing on every
+ * consequential operation instead raised, across the pinned corpus, four React components issuing
+ * `DELETE` behind a user's click, a continuous integration script posting to GitHub, and a sandbox event
+ * sink. Each is a real write and none is an agent doing anything.
+ */
+describe('side-effect-approval-boundary reachability', () => {
+  const charge = componentDraft({
+    kind: 'external_service',
+    name: 'api.stripe.com',
+    file: 'src/pay.ts',
+    sideEffect: 'financial',
+  });
+  const uiDelete = componentDraft({
+    kind: 'external_service',
+    name: 'the host AppSidebar builds at run time',
+    file: 'components/app-sidebar.tsx',
+    sideEffect: 'destructive',
+  });
+  const sidebar = componentDraft({
+    kind: 'entrypoint',
+    name: 'AppSidebar',
+    file: 'components/app-sidebar.tsx',
+  });
+
+  const outcomeFor = (graph: SystemGraph) => approvalBoundaryRule.evaluate(contextFor(graph));
+
+  it('fires on an operation an agent can reach', () => {
+    const outcome = outcomeFor(
+      buildGraph(
+        [orchestrator, refund, charge],
+        [edgeDraft('calls_tool', orchestrator, refund), edgeDraft('calls_service', refund, charge)],
+      ),
+    );
+    assert.equal(outcome.status, 'fired');
+    assert.deepEqual(
+      outcome.drafts
+        .filter((draft) => draft.polarity === 'risk')
+        .flatMap((draft) => draft.components)
+        .sort(),
+      ['external_service:api.stripe.com', 'tool:issue_refund'],
+    );
+  });
+
+  it('stays quiet about a write no agent, tool or server reaches', () => {
+    const outcome = outcomeFor(
+      buildGraph([sidebar, uiDelete], [edgeDraft('calls_service', sidebar, uiDelete)]),
+    );
+    assert.notEqual(outcome.status, 'fired');
+    assert.equal(outcome.drafts.length, 0);
+  });
+
+  /*
+   * Declining is not the same as not looking, and a reader who cannot see the difference has been told
+   * less than was known.
+   */
+  it('says how many consequential operations it declined to report, and why', () => {
+    const outcome = outcomeFor(
+      buildGraph(
+        [orchestrator, refund, sidebar, uiDelete],
+        [
+          edgeDraft('calls_tool', orchestrator, refund),
+          edgeDraft('calls_service', sidebar, uiDelete),
+        ],
+      ),
+    );
+    assert.equal(outcome.status, 'fired');
+    assert.match(outcome.detail ?? '', /1 consequential operation was left unreported/);
+    assert.match(outcome.detail ?? '', /no agent, tool or MCP server/);
+  });
+
+  /*
+   * A tool is model invocable by definition, so it is its own root. A repository that declares tools and
+   * has not wired an agent to them yet is the subject of a different rule, not an exemption from this one.
+   */
+  it('treats a tool as reachable even with no agent wired to it', () => {
+    const outcome = outcomeFor(buildGraph([refund], []));
+    assert.equal(outcome.status, 'fired');
+    assert.deepEqual(outcome.drafts[0]?.components, ['tool:issue_refund']);
   });
 });
 
