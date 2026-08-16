@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { CONFIDENCE_BANDS, derivedEvidence, sourceSpanEvidence } from '@orchescope/domain';
 import { indexGraph } from '@orchescope/graph';
-import type { ReconciliationDelta } from '@orchescope/schema';
+import type { Contradiction, ReconciliationDelta } from '@orchescope/schema';
 import { buildGraph, componentDraft } from '@orchescope/testkit';
 import type { RuleContext } from '../src/rule.ts';
-import { exercisedNotDeclaredRule, unnamedObservationRule } from '../src/rules/reconciliation.ts';
+import {
+  contradictedDeclarationRule,
+  exercisedNotDeclaredRule,
+  unnamedObservationRule,
+} from '../src/rules/reconciliation.ts';
 
 /**
  * The join is by name, so a name that identifies nothing is where the join stops.
@@ -92,5 +97,133 @@ describe('exercised-not-declared', () => {
     assert.equal(outcome.status, 'fired');
     assert.equal(outcome.drafts.length, 1);
     assert.match(outcome.drafts[0]?.title ?? '', /^planner runs without being declared/);
+  });
+});
+
+/**
+ * A declaration the run disagreed with.
+ *
+ * A tool annotation is self declared and the Model Context Protocol requires a client to treat it as untrusted, so
+ * the rule reports the disagreement rather than deciding which side is right. The split between the two shapes is
+ * the point: an annotation a caller trusts before it retries is a security question, while a configured limit that
+ * did not hold at runtime is a reliability one, and the two do not deserve the same severity.
+ */
+describe('declaration-contradicted-by-observation', () => {
+  const refund = componentDraft({
+    kind: 'tool',
+    name: 'issue_refund',
+    file: 'src/tools.py',
+    details: { for: 'tool', readOnlyHint: true },
+  });
+  const discovery = sourceSpanEvidence({
+    producer: 'fixture',
+    location: { file: 'src/tools.py', startLine: 1 },
+    symbol: 'issue_refund',
+  });
+  const contradictionEvidence = (rule: string): string =>
+    derivedEvidence({ producer: 'delta', rule, inputs: [discovery.id] }).id;
+
+  const annotation: Contradiction = {
+    componentId: 'tool:issue_refund',
+    kind: 'read_only_hint',
+    declared: 'readOnlyHint: true',
+    observed: 'performed a side effect',
+    evidence: [contradictionEvidence('contradiction:read_only_hint')],
+  };
+  const limit: Contradiction = {
+    componentId: 'tool:issue_refund',
+    kind: 'timeout',
+    declared: 'timeout 200 ms',
+    observed: 'longest observed call 900 ms',
+    evidence: [contradictionEvidence('contradiction:timeout')],
+  };
+
+  const contradictedContext = (contradictions: readonly Contradiction[]): RuleContext => ({
+    ...contextFor([]),
+    graph: indexGraph(buildGraph([declared, anonymous, named, refund], [])),
+    delta: { ...deltaWith([]), contradictions: [...contradictions] },
+  });
+
+  it('fires on an annotation the run contradicted, and reports it as a security finding', () => {
+    const outcome = contradictedDeclarationRule.evaluate(contradictedContext([annotation]));
+    assert.equal(outcome.status, 'fired');
+    assert.equal(outcome.drafts.length, 1);
+    const draft = outcome.drafts[0];
+    assert.equal(draft?.category, 'security');
+    assert.equal(draft?.severity, 'high');
+    assert.equal(draft?.basis, 'observed');
+    assert.equal(draft?.confidence, CONFIDENCE_BANDS.deterministic);
+    assert.deepEqual(draft?.components, ['tool:issue_refund']);
+    assert.deepEqual(draft?.evidence, annotation.evidence, 'the finding cites the delta evidence');
+    assert.deepEqual(draft?.taxonomy, ['owasp-asi:ASI05']);
+    assert.equal(
+      draft?.requiresHumanReview,
+      true,
+      'only a human can decide whether the annotation or the behaviour is wrong',
+    );
+    assert.equal(draft?.title, 'issue_refund declares readOnlyHint: true and behaves otherwise');
+    assert.ok(draft?.tags?.includes('read_only_hint'));
+  });
+
+  /*
+   * The one kind of contradiction no run is needed to notice. Both halves of it are read out of source,
+   * so it has to say discovered: a reader who sees observed will go looking for the run that produced it
+   * and there is none. The severity is unaffected, which is the point — the word is not load bearing for
+   * how bad this is, only for what would have to be true for it to be right.
+   */
+  it('calls a contradiction that source alone produced discovered, not observed', () => {
+    const fromSource: Contradiction = {
+      componentId: 'tool:issue_refund',
+      kind: 'destructive_hint',
+      declared: 'readOnlyHint: true',
+      observed: 'discovered effect class non_idempotent_write',
+      evidence: [contradictionEvidence('contradiction:destructive_hint')],
+    };
+    const outcome = contradictedDeclarationRule.evaluate(contradictedContext([fromSource]));
+    assert.equal(outcome.status, 'fired');
+    const draft = outcome.drafts[0];
+    assert.equal(draft?.basis, 'discovered');
+    assert.equal(draft?.category, 'security', 'it is still an annotation a caller would trust');
+    assert.equal(draft?.severity, 'high', 'discovered carries the same ceiling as observed');
+    assert.match(draft?.explanation ?? '', /The code says/);
+    assert.ok(
+      !(draft?.explanation ?? '').includes('The observation says'),
+      'nothing observed this, so the explanation must not claim an observation',
+    );
+  });
+
+  /* A configured limit that did not hold is a reliability defect, not a claim anyone was invited to trust. */
+  it('reports a contradicted policy limit as reliability at a lower severity', () => {
+    const outcome = contradictedDeclarationRule.evaluate(contradictedContext([limit]));
+    assert.equal(outcome.status, 'fired');
+    const draft = outcome.drafts[0];
+    assert.equal(draft?.category, 'reliability');
+    assert.equal(draft?.severity, 'medium');
+    assert.deepEqual(draft?.taxonomy, []);
+    assert.equal(draft?.requiresHumanReview, false);
+    assert.match(draft?.explanation ?? '', /longest observed call 900 ms/);
+  });
+
+  it('reports one draft per contradiction and groups them under one occurrence', () => {
+    const outcome = contradictedDeclarationRule.evaluate(contradictedContext([annotation, limit]));
+    assert.equal(outcome.drafts.length, 2);
+    assert.deepEqual(
+      outcome.drafts.map((draft) => draft.occurrence?.key),
+      ['contradiction', 'contradiction'],
+    );
+  });
+
+  it('stays quiet when no declaration was contradicted', () => {
+    const outcome = contradictedDeclarationRule.evaluate(contradictedContext([]));
+    assert.equal(outcome.status, 'clear');
+    assert.deepEqual(outcome.drafts, []);
+  });
+
+  it('reports nothing at all before a run has been reconciled', () => {
+    const outcome = contradictedDeclarationRule.evaluate({
+      ...contradictedContext([]),
+      delta: undefined,
+    });
+    assert.equal(outcome.status, 'insufficient_evidence');
   });
 });

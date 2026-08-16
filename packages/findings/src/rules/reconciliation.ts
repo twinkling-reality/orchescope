@@ -166,6 +166,15 @@ export const contradictedDeclarationRule: Rule = {
         contradiction.kind === 'read_only_hint' ||
         contradiction.kind === 'idempotent_hint' ||
         contradiction.kind === 'destructive_hint';
+      /*
+       * Five of the six kinds need a run to notice: a side effect that happened, a duplicate attributed
+       * to a retry, a call that outlived its timeout. `destructive_hint` needs none, because it compares
+       * a declared annotation against the effect class discovery already assigned, and both halves come
+       * out of source. Calling that observed would be presenting an inference as an observation, which is
+       * the one thing this report may not do. It costs no severity to say so: the ceiling for discovered
+       * and observed is the same, and only the word changes.
+       */
+      const fromSourceAlone = contradiction.kind === 'destructive_hint';
       return {
         ruleId: 'declaration-contradicted-by-observation',
         occurrence: {
@@ -176,9 +185,9 @@ export const contradictedDeclarationRule: Rule = {
         polarity: 'risk' as const,
         severity: isAnnotation ? ('high' as const) : ('medium' as const),
         confidence: CONFIDENCE_BANDS.deterministic,
-        basis: 'observed' as const,
+        basis: fromSourceAlone ? ('discovered' as const) : ('observed' as const),
         title: `${component?.displayName ?? contradiction.componentId} declares ${contradiction.declared} and behaves otherwise`,
-        explanation: `The declaration says ${contradiction.declared}. The observation says ${contradiction.observed}. The Model Context Protocol requires clients to treat tool annotations as untrusted, so Orchescope reports the disagreement rather than deciding which side is right.`,
+        explanation: `The declaration says ${contradiction.declared}. ${fromSourceAlone ? 'The code says' : 'The observation says'} ${contradiction.observed}. The Model Context Protocol requires clients to treat tool annotations as untrusted, so Orchescope reports the disagreement rather than deciding which side is right.`,
         impact: isAnnotation
           ? 'A caller that trusts the declaration will make a decision the runtime does not honour, for example retrying an operation it believes is safe.'
           : 'The configured limit is not the limit that applies at runtime.',
@@ -231,14 +240,14 @@ export const duplicateSideEffectRule: Rule = {
         ruleId: 'duplicate-side-effect',
         occurrence: {
           key: 'duplicate',
-          groupedTitle: '{count} side effects happened more than once inside one run',
+          groupedTitle: '{count} outside effects happened more than once in one run',
         },
         category: 'reliability' as const,
         polarity: 'risk' as const,
         severity: duplicate.idempotencyKeyPresent ? ('medium' as const) : ('high' as const),
         confidence: CONFIDENCE_BANDS.deterministic,
         basis: 'observed' as const,
-        title: `${duplicate.key.split('|')[0] ?? 'side effect'} happened ${duplicate.occurrences} times in one run`,
+        title: `${duplicate.key.split('|')[0] ?? 'an outside effect'} happened ${duplicate.occurrences} times in one run`,
         explanation: `The side effect ${duplicate.key} was recorded ${duplicate.occurrences} times within a single run, and ${duplicate.totalOccurrences} times across ${formatCount(duplicate.runIds.length, 'observed run')}${attributed ? `, and at least one occurrence came from retry attempt ${attempts.join(' and ')}` : ''}. ${duplicate.idempotencyKeyPresent ? 'An idempotency key was present, so the duplication happened despite it.' : 'No idempotency key was present, so nothing downstream can collapse the duplicates.'}`,
         impact:
           'A duplicated external effect is visible to the user or to a third party. For a payment, a notification or a provisioning call, the second one is a real incident.',

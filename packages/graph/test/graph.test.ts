@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import type { EdgePolicy, ObservedEdge } from '@orchescope/schema';
 import {
   buildGraph,
   componentDraft,
@@ -379,6 +380,259 @@ describe('computeDelta', () => {
     assert.equal(result.delta.coverage.exercisedComponents, 1);
     assert.equal(result.delta.exercisedNotDeclared.components.length, 1);
     assert.equal(result.delta.coverage.componentExerciseRate, 1 / 3);
+  });
+});
+
+/**
+ * A declaration contradicted by an observation.
+ *
+ * The Model Context Protocol requires a client to treat a tool annotation as untrusted, so `readOnlyHint` is a claim
+ * and not a fact, and the same is true of a declared timeout, retry ceiling or approval requirement. Each test here
+ * declares one thing and then observes the opposite, because a delta that only ever repeats the declaration back is
+ * indistinguishable from one that never checked.
+ */
+describe('a declaration contradicted by an observation', () => {
+  const reader = componentDraft({
+    kind: 'tool',
+    name: 'lookup_order',
+    file: 'src/tools/lookup.ts',
+    details: { for: 'tool', readOnlyHint: true },
+  });
+  const idempotent = componentDraft({
+    kind: 'tool',
+    name: 'issue_refund',
+    file: 'src/tools/refund.ts',
+    details: { for: 'tool', idempotentHint: true },
+  });
+  const writer = componentDraft({
+    kind: 'tool',
+    name: 'purge_records',
+    file: 'src/tools/purge.ts',
+    details: { for: 'tool', readOnlyHint: true },
+    sideEffect: 'non_idempotent_write',
+  });
+  const approval = componentDraft({
+    kind: 'approval_boundary',
+    name: 'refund_approval',
+    file: 'src/approval.ts',
+  });
+
+  const observedTool = (performedSideEffect: boolean) =>
+    computeDelta({
+      graph: reconcile(buildGraph([orchestrator, reader]), [
+        runtimeTopology({
+          components: [
+            observedComponent({ kind: 'tool', observedName: 'lookup_order', performedSideEffect }),
+          ],
+        }),
+      ]).graph,
+      runs: [],
+      spanToComponent: new Map(),
+    }).delta.contradictions;
+
+  it('reports a tool that declares readOnlyHint and was observed causing an effect', () => {
+    const contradictions = observedTool(true);
+    assert.equal(contradictions.length, 1);
+    assert.equal(contradictions[0]?.kind, 'read_only_hint');
+    assert.equal(contradictions[0]?.componentId, 'tool:lookup_order');
+    assert.equal(contradictions[0]?.declared, 'readOnlyHint: true');
+    assert.equal(contradictions[0]?.evidence.length, 1, 'a contradiction has to cite evidence');
+  });
+
+  it('stays quiet when the same declaration was observed and honoured', () => {
+    assert.deepEqual(observedTool(false), []);
+  });
+
+  it('reports a tool that declares idempotentHint and repeated one effect inside a run', () => {
+    const result = computeDelta({
+      graph: buildGraph([orchestrator, idempotent]),
+      runs: [
+        {
+          runId: `run_${'d'.repeat(16)}`,
+          sideEffects: [
+            sideEffectRecord({
+              kind: 'refund',
+              target: 'payments/order-1',
+              spanId: '1'.repeat(16),
+              outcome: 'unknown',
+            }),
+            sideEffectRecord({
+              kind: 'refund',
+              target: 'payments/order-1',
+              spanId: '2'.repeat(16),
+            }),
+          ],
+        },
+      ],
+      // The duplicate is only a contradiction once it is attributed to the component that declared the hint.
+      spanToComponent: new Map([
+        ['1'.repeat(16), 'tool:issue_refund'],
+        ['2'.repeat(16), 'tool:issue_refund'],
+      ]),
+    });
+    assert.equal(result.delta.contradictions.length, 1);
+    assert.equal(result.delta.contradictions[0]?.kind, 'idempotent_hint');
+    assert.equal(result.delta.contradictions[0]?.componentId, 'tool:issue_refund');
+    assert.match(result.delta.contradictions[0]?.observed ?? '', /^2 occurrences/);
+  });
+
+  it('leaves an unattributed duplicate out of the contradictions', () => {
+    const result = computeDelta({
+      graph: buildGraph([orchestrator, idempotent]),
+      runs: [
+        {
+          runId: `run_${'d'.repeat(16)}`,
+          sideEffects: [
+            sideEffectRecord({ kind: 'refund', target: 'payments/order-1', outcome: 'unknown' }),
+            sideEffectRecord({ kind: 'refund', target: 'payments/order-1' }),
+          ],
+        },
+      ],
+      spanToComponent: new Map(),
+    });
+    assert.equal(result.delta.duplicateSideEffects.length, 1);
+    assert.deepEqual(result.delta.contradictions, []);
+  });
+
+  it('reports a tool that declares readOnlyHint and was discovered writing', () => {
+    const result = computeDelta({
+      graph: buildGraph([orchestrator, writer]),
+      runs: [],
+      spanToComponent: new Map(),
+    });
+    assert.equal(result.delta.contradictions.length, 1);
+    assert.equal(result.delta.contradictions[0]?.kind, 'destructive_hint');
+    assert.equal(result.delta.contradictions[0]?.componentId, 'tool:purge_records');
+  });
+
+  const exercisedCall = (policy: EdgePolicy, observation: Partial<ObservedEdge> = {}) =>
+    computeDelta({
+      graph: reconcile(
+        buildGraph(
+          [orchestrator, idempotent],
+          [edgeDraft('calls_tool', orchestrator, idempotent, { policy })],
+        ),
+        [
+          runtimeTopology({
+            components: [
+              observedComponent({ kind: 'agent', observedName: 'orchestrator' }),
+              observedComponent({ kind: 'tool', observedName: 'issue_refund' }),
+            ],
+            edges: [
+              observedEdge({
+                kind: 'calls_tool',
+                fromKind: 'agent',
+                fromObservedName: 'orchestrator',
+                toKind: 'tool',
+                toObservedName: 'issue_refund',
+                ...observation,
+              }),
+            ],
+          }),
+        ],
+      ).graph,
+      runs: [],
+      spanToComponent: new Map(),
+    }).delta.contradictions;
+
+  it('reports a call that ran longer than the timeout it declares', () => {
+    const contradictions = exercisedCall({ timeoutMs: 200 }, { durationsMs: [40, 900] });
+    assert.equal(contradictions.length, 1);
+    assert.equal(contradictions[0]?.kind, 'timeout');
+    assert.equal(contradictions[0]?.componentId, 'tool:issue_refund');
+    assert.equal(contradictions[0]?.observed, 'longest observed call 900 ms');
+  });
+
+  it('stays quiet when every observed call finished inside the declared timeout', () => {
+    assert.deepEqual(exercisedCall({ timeoutMs: 200 }, { durationsMs: [40, 190] }), []);
+  });
+
+  it('reports more retries than the declared attempt ceiling allows', () => {
+    const contradictions = exercisedCall(
+      { retry: { maxAttempts: 2, bounded: true, backoff: 'exponential', idempotency: 'absent' } },
+      { executionCount: 1, retryCount: 3 },
+    );
+    assert.equal(contradictions.length, 1);
+    assert.equal(contradictions[0]?.kind, 'retry_bound');
+    assert.equal(contradictions[0]?.declared, 'maxAttempts 2');
+    assert.equal(contradictions[0]?.observed, '3 retries across 1 executions');
+  });
+
+  /* The ceiling is per execution, so two executions of a two attempt call may carry two retries between them. */
+  it('spends the attempt ceiling once per execution rather than once per run', () => {
+    assert.deepEqual(
+      exercisedCall(
+        { retry: { maxAttempts: 2, bounded: true, backoff: 'exponential', idempotency: 'absent' } },
+        { executionCount: 2, retryCount: 2 },
+      ),
+      [],
+    );
+  });
+
+  it('reports an operation that requires approval and ran without one being observed', () => {
+    const contradictions = exercisedCall({ requiresApproval: true });
+    assert.equal(contradictions.length, 1);
+    assert.equal(contradictions[0]?.kind, 'approval');
+    assert.equal(contradictions[0]?.componentId, 'tool:issue_refund');
+  });
+
+  it('stays quiet when the approval the operation requires was observed', () => {
+    const result = computeDelta({
+      graph: reconcile(
+        buildGraph(
+          [orchestrator, idempotent, approval],
+          [
+            edgeDraft('calls_tool', orchestrator, idempotent, {
+              policy: { requiresApproval: true },
+            }),
+          ],
+        ),
+        [
+          runtimeTopology({
+            components: [
+              observedComponent({ kind: 'agent', observedName: 'orchestrator' }),
+              observedComponent({ kind: 'tool', observedName: 'issue_refund' }),
+              observedComponent({ kind: 'approval_boundary', observedName: 'refund_approval' }),
+            ],
+            edges: [
+              observedEdge({
+                kind: 'calls_tool',
+                fromKind: 'agent',
+                fromObservedName: 'orchestrator',
+                toKind: 'tool',
+                toObservedName: 'issue_refund',
+              }),
+              // The guard runs inside the operation it guards, which is the direction the topology reports.
+              observedEdge({
+                kind: 'guarded_by',
+                fromKind: 'tool',
+                fromObservedName: 'issue_refund',
+                toKind: 'approval_boundary',
+                toObservedName: 'refund_approval',
+              }),
+            ],
+          }),
+        ],
+      ).graph,
+      runs: [],
+      spanToComponent: new Map(),
+    });
+    assert.deepEqual(result.delta.contradictions, []);
+  });
+
+  it('reports every contradiction a single declaration produces, not the first one', () => {
+    const contradictions = exercisedCall(
+      {
+        timeoutMs: 200,
+        retry: { maxAttempts: 1, bounded: true, backoff: 'none', idempotency: 'absent' },
+        requiresApproval: true,
+      },
+      { executionCount: 1, retryCount: 2, durationsMs: [900] },
+    );
+    assert.deepEqual(
+      contradictions.map((contradiction) => contradiction.kind),
+      ['timeout', 'retry_bound', 'approval'],
+    );
   });
 });
 

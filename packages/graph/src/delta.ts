@@ -79,6 +79,7 @@ const annotationContradictions = (
       const record = derivedEvidence({
         producer: PRODUCER,
         rule: 'contradiction:read_only_hint',
+        basis: 'observed',
         inputs: component.evidence as EvidenceId[],
         note: `${component.id} declares readOnlyHint true and was observed performing a side effect`,
       });
@@ -86,7 +87,7 @@ const annotationContradictions = (
         componentId: component.id,
         kind: 'read_only_hint',
         declared: 'readOnlyHint: true',
-        observed: 'performed a declared side effect',
+        observed: 'performed a side effect',
         evidence: [collect(record)],
       });
     }
@@ -96,6 +97,7 @@ const annotationContradictions = (
       const record = derivedEvidence({
         producer: PRODUCER,
         rule: 'contradiction:idempotent_hint',
+        basis: 'observed',
         inputs: duplicate.evidence as EvidenceId[],
         note: `${component.id} declares idempotentHint true and produced ${duplicate.occurrences} occurrences of ${duplicate.key}`,
       });
@@ -115,6 +117,7 @@ const annotationContradictions = (
       const record = derivedEvidence({
         producer: PRODUCER,
         rule: 'contradiction:destructive_hint',
+        basis: 'discovered',
         inputs: component.evidence as EvidenceId[],
         note: `${component.id} declares readOnlyHint true but its discovered effect class is non_idempotent_write`,
       });
@@ -145,6 +148,7 @@ const policyContradictions = (
       const record = derivedEvidence({
         producer: PRODUCER,
         rule: 'contradiction:timeout',
+        basis: 'observed',
         inputs: edge.evidence as EvidenceId[],
         note: `${edge.id} declares a ${timeoutMs} ms timeout and was observed running for ${Math.round(observation.maxDurationMs ?? 0)} ms`,
       });
@@ -164,6 +168,7 @@ const policyContradictions = (
         const record = derivedEvidence({
           producer: PRODUCER,
           rule: 'contradiction:retry_bound',
+          basis: 'observed',
           inputs: edge.evidence as EvidenceId[],
           note: `${edge.id} declares at most ${maxAttempts} attempts, which allows ${allowedRetries} retries across ${observation.executionCount} executions, and ${observation.retryCount} retries were observed`,
         });
@@ -188,6 +193,7 @@ const policyContradictions = (
         const record = derivedEvidence({
           producer: PRODUCER,
           rule: 'contradiction:approval',
+          basis: 'observed',
           inputs: edge.evidence as EvidenceId[],
           note: `${edge.id} declares that approval is required and no approval was observed on any run`,
         });
