@@ -95,7 +95,12 @@ export {
   type InvariantViolation,
   identitiesAreUnique,
 } from './invariants.ts';
-export { basisIsSupportable, runIsSilent } from './observation.ts';
+export {
+  basisIsSupportable,
+  type RunObservation,
+  runIsSilent,
+  runMeasuredNothing,
+} from './observation.ts';
 export { mapWithConcurrency, type ParallelOptions, settleWithConcurrency } from './parallel.ts';
 export { decideByKey, type Rng, seededRng } from './random.ts';
 export {

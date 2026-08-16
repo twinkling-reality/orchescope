@@ -205,6 +205,18 @@ export const createRunsRepository = (input: {
     }));
   };
 
+  /**
+   * How many spans one run produced, without reading the bundle back.
+   *
+   * The bundle is large and lives behind a digest, and the question "did this run measure anything" is
+   * asked of every run a comparison touches. The span rows carry the answer already.
+   */
+  const spanCountForRun = (runId: string): number => {
+    const row = database.get('SELECT COUNT(*) AS spans FROM span WHERE run_id = ?', runId);
+    const value = row === undefined ? 0 : row['spans'];
+    return typeof value === 'number' ? value : 0;
+  };
+
   const traceForRun = (runId: string): TraceBundle | undefined => {
     const row = database.get('SELECT trace_digest FROM run WHERE id = ?', runId);
     const digest = row === undefined ? undefined : optionalText(row, 'trace_digest');
@@ -252,6 +264,7 @@ export const createRunsRepository = (input: {
     saveComponentMetrics,
     runById,
     listRuns,
+    spanCountForRun,
     traceForRun,
     sideEffectsForRun,
     componentMetricsForRun,

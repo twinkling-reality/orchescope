@@ -1,5 +1,5 @@
 import { compare } from '@orchescope/comparison';
-import { OrchescopeError } from '@orchescope/domain';
+import { OrchescopeError, type RunObservation } from '@orchescope/domain';
 import type { Comparison, ComparisonSide, RunRecord } from '@orchescope/schema';
 import type { Workspace } from '@orchescope/workspace';
 import { resolveRevision } from '@orchescope/workspace';
@@ -140,11 +140,19 @@ export const compareUseCase = (request: CompareRequest): Comparison => {
       ? undefined
       : workspace.store.listFindings({ scanId: candidate.scanId });
 
+  /*
+   * Each run travels with how much it observed. A run is a record that something executed and not a
+   * record that anything was measured, and a comparison that cannot tell the two apart reports counters
+   * of zero from an uninstrumented target as though they had been counted.
+   */
+  const observed = (runs: readonly RunRecord[]): readonly RunObservation[] =>
+    runs.map((run) => ({ run, spanCount: workspace.store.spanCountForRun(run.id) }));
+
   const comparison = compare({
     baseline: baseline.side,
     candidate: candidate.side,
-    baselineRuns: baseline.runs,
-    candidateRuns: candidate.runs,
+    baselineRuns: observed(baseline.runs),
+    candidateRuns: observed(candidate.runs),
     ...(baselineGraph === undefined ? {} : { baselineGraph }),
     ...(candidateGraph === undefined ? {} : { candidateGraph }),
     ...(baselineFindings === undefined ? {} : { baselineFindings }),

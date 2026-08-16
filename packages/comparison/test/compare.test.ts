@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import type { RunObservation } from '@orchescope/domain';
 import type { ComparisonSide, RunMetrics, RunRecord, Timestamp } from '@orchescope/schema';
 import {
   compare,
@@ -43,7 +44,7 @@ const metrics = (overrides: Partial<RunMetrics> = {}): RunMetrics => ({
 });
 
 let counter = 0;
-const run = (overrides: Partial<RunMetrics> = {}): RunRecord => {
+const record = (overrides: Partial<RunMetrics> = {}): RunRecord => {
   counter += 1;
   return {
     id: `run_${counter.toString(16).padStart(16, '0')}`,
@@ -66,11 +67,38 @@ const run = (overrides: Partial<RunMetrics> = {}): RunRecord => {
   };
 };
 
-const side = (label: string, runs: readonly RunRecord[]): ComparisonSide => ({
+/** A run that measured something. Ten spans is a stand in for any positive number of them. */
+const run = (overrides: Partial<RunMetrics> = {}): RunObservation => ({
+  run: record(overrides),
+  spanCount: 10,
+});
+
+/**
+ * A run that measured nothing: no span arrived and the target reported no outcome.
+ *
+ * Its counters are the zeros the schema requires it to carry, which is exactly why it is dangerous. The
+ * `taskSuccess` field is absent because nothing set it, and that absence is the signal.
+ */
+const silentRun = (): RunObservation => {
+  const observation = record({
+    durationMs: 0,
+    modelCalls: 0,
+    toolCalls: 0,
+    agentSteps: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    sideEffects: 0,
+    duplicateSideEffects: 0,
+  });
+  const { taskSuccess: _unknownOutcome, ...withoutOutcome } = observation.metrics;
+  return { run: { ...observation, metrics: withoutOutcome }, spanCount: 0 };
+};
+
+const side = (label: string, runs: readonly RunObservation[]): ComparisonSide => ({
   kind: 'run',
-  reference: runs[0]?.id ?? 'none',
+  reference: runs[0]?.run.id ?? 'none',
   label,
-  runIds: runs.map((record) => record.id),
+  runIds: runs.map((observation) => observation.run.id),
 });
 
 const sample = (metric: string, values: readonly number[]) => ({ metric, unit: 'ms', values });
@@ -159,6 +187,31 @@ describe('samplesFromRuns', () => {
     const samples = samplesFromRuns([run()], ['costUsd']);
     assert.deepEqual(samples[0]?.values, []);
   });
+
+  /*
+   * The zeros on a run that measured nothing are the schema's requirement that its counters exist, not
+   * counts of anything. Reading them as samples is how `duplicateSideEffects` came to be compared as
+   * zero against zero, judged unchanged, and banked by an acceptance criterion.
+   */
+  it('takes no sample from a run that produced no span and reported no outcome', () => {
+    const samples = samplesFromRuns([silentRun()], ['duplicateSideEffects', 'durationMs']);
+    assert.deepEqual(samples[0]?.values, []);
+    assert.deepEqual(samples[1]?.values, []);
+  });
+
+  /*
+   * The target result document exists so that a target with no tracing at all can still be evaluated,
+   * so a run measured by that alone is a measurement and stays one.
+   */
+  it('still takes samples from a run the target reported on without any span', () => {
+    const reported: RunObservation = {
+      run: record({ taskSuccess: true, duplicateSideEffects: 2 }),
+      spanCount: 0,
+    };
+    const samples = samplesFromRuns([reported], ['duplicateSideEffects', 'successRate']);
+    assert.deepEqual(samples[0]?.values, [2]);
+    assert.deepEqual(samples[1]?.values, [1]);
+  });
 });
 
 describe('compare', () => {
@@ -210,6 +263,45 @@ describe('compare', () => {
     });
     assert.equal(result.verdict, 'insufficient_evidence');
     assert.ok(result.limitations.some((entry) => entry.includes('sample sizes are 1 baseline')));
+  });
+
+  /*
+   * The A/A that started this. Two traced runs of an uninstrumented target, every counter zero on both
+   * sides, reported `duplicateSideEffects` as unchanged and gave an acceptance criterion something to
+   * bank. Nothing was compared, and that is what the comparison now says.
+   */
+  it('compares nothing when neither side measured anything, and says so', () => {
+    const baselineRuns = [silentRun()];
+    const candidateRuns = [silentRun()];
+    const result = compare({
+      baseline: side('baseline', baselineRuns),
+      candidate: side('candidate', candidateRuns),
+      baselineRuns,
+      candidateRuns,
+      now: NOW,
+    });
+    assert.deepEqual(result.metricDeltas, []);
+    assert.equal(result.verdict, 'insufficient_evidence');
+    assert.match(result.verdictReason, /neither side carries a value/);
+    assert.ok(
+      result.limitations.some((entry) => entry.includes('produced no span and reported no task')),
+      'a reader has to be told which runs were left out and why',
+    );
+  });
+
+  it('leaves a run that measured nothing out of a side that also has real runs', () => {
+    const baselineRuns = [...fiveOf({ durationMs: 1000 }), silentRun()];
+    const candidateRuns = fiveOf({ durationMs: 1000 });
+    const result = compare({
+      baseline: side('baseline', baselineRuns),
+      candidate: side('candidate', candidateRuns),
+      baselineRuns,
+      candidateRuns,
+      metrics: ['durationMs'],
+      now: NOW,
+    });
+    assert.equal(result.metricDeltas[0]?.baselineSamples, 5);
+    assert.equal(result.metricDeltas[0]?.baseline, 1000);
   });
 
   it('records the sample size of every metric it reports', () => {

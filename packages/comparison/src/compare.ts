@@ -4,6 +4,8 @@ import {
   comparisonId as makeComparisonId,
   mean,
   relativeChange,
+  type RunObservation,
+  runMeasuredNothing,
 } from '@orchescope/domain';
 import { diffGraphs } from '@orchescope/graph';
 import type {
@@ -179,14 +181,29 @@ const numericMetric = (run: RunRecord, metric: string): number | undefined => {
   return undefined;
 };
 
-export const samplesFromRuns = (runs: readonly RunRecord[], metrics: readonly string[]) =>
-  metrics.map((metric) => ({
+/**
+ * Samples come from runs that measured something, and a run is not a measurement.
+ *
+ * A traced target that loads no OpenTelemetry SDK and writes no result document exports nothing, and the
+ * run stored for it carries a zero for every counter. Reading those as samples produced the shape this
+ * guard exists to stop: `duplicateSideEffects` compared as zero against zero, judged unchanged, and
+ * banked by an acceptance criterion as satisfied, on two runs in which nothing whatever was observed.
+ * `successRate` was the only metric that behaved, and only because its absent value was absent rather
+ * than fabricated. Dropping the run gives every other metric the same honesty.
+ */
+export const samplesFromRuns = (
+  runs: readonly RunObservation[],
+  metrics: readonly string[],
+): readonly MetricSample[] => {
+  const measured = runs.filter((observation) => !runMeasuredNothing(observation));
+  return metrics.map((metric) => ({
     metric,
     unit: METRIC_UNITS[metric] ?? 'value',
-    values: runs
-      .map((run) => numericMetric(run, metric))
+    values: measured
+      .map((observation) => numericMetric(observation.run, metric))
       .filter((value): value is number => value !== undefined),
   }));
+};
 
 export const DEFAULT_COMPARED_METRICS: readonly string[] = [
   'durationMs',
@@ -212,6 +229,17 @@ const verdictFrom = (
     return {
       verdict: 'regressed',
       reason: 'task success declined, so no latency or cost improvement makes this an improvement',
+    };
+  }
+  /*
+   * No delta at all is not the same as deltas that could not be called. It means neither side supplied a
+   * value for anything, which happens when the runs observed nothing, and "no metric moved enough to
+   * call" would report that void as a finding of stability.
+   */
+  if (deltas.length === 0) {
+    return {
+      verdict: 'insufficient_evidence',
+      reason: 'neither side carries a value for any metric, so nothing was compared',
     };
   }
   if (improvements.length === 0 && regressions.length === 0) {
@@ -243,8 +271,9 @@ const verdictFrom = (
 export type CompareInput = {
   readonly baseline: ComparisonSide;
   readonly candidate: ComparisonSide;
-  readonly baselineRuns: readonly RunRecord[];
-  readonly candidateRuns: readonly RunRecord[];
+  /** Runs on each side, each paired with how much it observed. A run that observed nothing supplies no sample. */
+  readonly baselineRuns: readonly RunObservation[];
+  readonly candidateRuns: readonly RunObservation[];
   readonly metrics?: readonly string[];
   readonly baselineGraph?: SystemGraph;
   readonly candidateGraph?: SystemGraph;
@@ -270,7 +299,16 @@ export const compare = (input: CompareInput): Comparison => {
 
   const decided = verdictFrom(metricDeltas);
 
+  const unmeasured =
+    input.baselineRuns.filter(runMeasuredNothing).length +
+    input.candidateRuns.filter(runMeasuredNothing).length;
+
   const limitations: string[] = [];
+  if (unmeasured > 0) {
+    limitations.push(
+      `${formatCount(unmeasured, 'run')} produced no span and reported no task outcome, so ${unmeasured === 1 ? 'it contributes' : 'they contribute'} no sample to any metric here; a counter of zero from such a run is the absence of a measurement rather than a measurement of zero`,
+    );
+  }
   if (input.baselineRuns.length < 5 || input.candidateRuns.length < 5) {
     limitations.push(
       `sample sizes are ${formatCount(input.baselineRuns.length, 'baseline run')} and ${formatCount(input.candidateRuns.length, 'candidate run')}; differences from fewer than five runs per side are not reported as directional unless the spread is very small`,
@@ -284,7 +322,10 @@ export const compare = (input: CompareInput): Comparison => {
   if (input.baselineGraph === undefined || input.candidateGraph === undefined) {
     limitations.push('no graph delta was computed because one side has no scan');
   }
-  if (metricDeltas.every((delta) => delta.direction === 'indeterminate')) {
+  if (
+    metricDeltas.length > 0 &&
+    metricDeltas.every((delta) => delta.direction === 'indeterminate')
+  ) {
     limitations.push('every metric was indeterminate, so this comparison supports no conclusion');
   }
 

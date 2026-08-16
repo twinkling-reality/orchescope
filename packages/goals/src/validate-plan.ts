@@ -85,6 +85,12 @@ const metricImprovementOutcome = (
 /**
  * Direction matters for a "not worse" criterion: a lower success rate is worse, a lower duplicate count is better. The
  * comparison already resolved direction, so it is used rather than guessed at again here.
+ *
+ * An `indeterminate` direction is the comparison stating that its samples do not support a claim either way, so the
+ * criterion is undecided rather than satisfied. That sentence used to be discarded: the outcome reported `satisfied`
+ * beside `decided: false`, and `validateGoal` reads satisfaction alone, so a goal could reach `validated` carrying a
+ * criterion nothing had decided. Against a pair of runs that produced no span, every metric is indeterminate at best,
+ * which made this the shortest path in the product to a verdict resting on no evidence.
  */
 const metricNotWorseOutcome = (
   criterion: AcceptanceCriterion,
@@ -96,13 +102,19 @@ const metricNotWorseOutcome = (
   if (delta === undefined || delta.baseline === undefined || delta.candidate === undefined) {
     return undecided(criterion, `the comparison carries no values for ${check.metric}`);
   }
-  const worse = delta.candidate > delta.baseline + check.tolerance;
-  const better = delta.candidate < delta.baseline - check.tolerance;
+  const detail = `${check.metric} moved from ${delta.baseline} to ${delta.candidate} and was judged ${delta.direction}${delta.caveat === undefined ? '' : ` (${delta.caveat})`}`;
+  if (delta.direction === 'indeterminate') return undecided(criterion, detail);
+  /*
+   * Direction supplies the sign and the tolerance supplies the magnitude. Comparing the two values here
+   * would need this module to know which way is better for every metric, which the comparison already
+   * decided and would be a second answer able to disagree with the first.
+   */
+  const withinTolerance = Math.abs(delta.candidate - delta.baseline) <= check.tolerance;
   return {
     criterion,
-    satisfied: delta.direction === 'regressed' ? false : !(worse && better),
-    decided: delta.direction !== 'indeterminate',
-    detail: `${check.metric} moved from ${delta.baseline} to ${delta.candidate} and was judged ${delta.direction}${delta.caveat === undefined ? '' : ` (${delta.caveat})`}`,
+    satisfied: delta.direction !== 'regressed' || withinTolerance,
+    decided: true,
+    detail,
   };
 };
 

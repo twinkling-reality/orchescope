@@ -154,7 +154,149 @@ describe('validateGoal, criteria nothing here can decide', () => {
   });
 });
 
+/**
+ * A metric criterion judged against a comparison that measured nothing.
+ *
+ * `duplicateSideEffects moved from 0 to 0 and was judged unchanged` was reported as SATISFIED on a pair
+ * of runs neither of which produced a span. Both zeros were the absence of a measurement, and the
+ * criterion banked a result it never earned. The successRate criterion beside it, whose value was
+ * genuinely missing rather than fabricated, reported undecided, which is the behaviour this borrows.
+ */
+describe('validateGoal, metric criteria against evidence that cannot decide', () => {
+  const comparisonWith = (deltas: readonly Comparison['metricDeltas'][number][]): Comparison =>
+    ({ metricDeltas: deltas }) as Comparison;
+
+  const notWorseGoal = goalWith(
+    [
+      criterion('AC-01', {
+        kind: 'metric_not_worse',
+        metric: 'duplicateSideEffects',
+        tolerance: 0,
+      }),
+    ],
+    GOAL_CREATED,
+  );
+
+  it('leaves the criterion undecided when the comparison carries no values for the metric', () => {
+    const validation = validateGoal(notWorseGoal, input({ comparison: comparisonWith([]) }));
+    assert.equal(validation.outcomes[0]?.decided, false);
+    assert.equal(validation.outcomes[0]?.satisfied, false);
+    assert.equal(validation.validated, false);
+    assert.match(validation.outcomes[0]?.detail ?? '', /carries no values/);
+  });
+
+  /*
+   * An indeterminate direction is the comparison saying out loud that the samples do not support a
+   * claim. Counting that as satisfied inverted the meaning of the strongest sentence the comparison
+   * has, and let a goal reach `validated` with an undecided criterion inside it.
+   */
+  it('does not count an indeterminate direction as satisfied', () => {
+    const validation = validateGoal(
+      notWorseGoal,
+      input({
+        comparison: comparisonWith([
+          {
+            metric: 'duplicateSideEffects',
+            unit: 'count',
+            baseline: 0,
+            candidate: 0,
+            baselineSamples: 1,
+            candidateSamples: 1,
+            direction: 'indeterminate',
+            caveat: 'one side has no samples',
+          },
+        ]),
+      }),
+    );
+    assert.equal(validation.outcomes[0]?.decided, false);
+    assert.equal(validation.outcomes[0]?.satisfied, false);
+    assert.equal(validation.validated, false);
+  });
+
+  it('still satisfies the criterion when the metric was measured and held', () => {
+    const validation = validateGoal(
+      notWorseGoal,
+      input({
+        comparison: comparisonWith([
+          {
+            metric: 'duplicateSideEffects',
+            unit: 'count',
+            baseline: 2,
+            candidate: 0,
+            baselineSamples: 5,
+            candidateSamples: 5,
+            direction: 'improved',
+          },
+        ]),
+      }),
+    );
+    assert.equal(validation.outcomes[0]?.decided, true);
+    assert.equal(validation.outcomes[0]?.satisfied, true);
+    assert.equal(validation.validated, true);
+  });
+
+  it('reports a regression as decided and not satisfied', () => {
+    const validation = validateGoal(
+      notWorseGoal,
+      input({
+        comparison: comparisonWith([
+          {
+            metric: 'duplicateSideEffects',
+            unit: 'count',
+            baseline: 0,
+            candidate: 2,
+            baselineSamples: 5,
+            candidateSamples: 5,
+            direction: 'regressed',
+          },
+        ]),
+      }),
+    );
+    assert.equal(validation.outcomes[0]?.decided, true);
+    assert.equal(validation.outcomes[0]?.satisfied, false);
+  });
+});
+
 describe('validateGoal, the whole goal', () => {
+  /*
+   * The module's own contract, which the arithmetic did not keep: `satisfied` was computed independently
+   * of `decided`, so a goal could carry an undecided criterion and still report itself validated.
+   */
+  it('cannot be validated while a criterion is undecided', () => {
+    const validation = validateGoal(
+      goalWith(
+        [
+          criterion('AC-01', { kind: 'finding_resolved', findingId: 'OSC-REL-0003' }),
+          criterion('AC-02', {
+            kind: 'metric_not_worse',
+            metric: 'duplicateSideEffects',
+            tolerance: 0,
+          }),
+        ],
+        GOAL_CREATED,
+      ),
+      input({
+        comparison: {
+          metricDeltas: [
+            {
+              metric: 'duplicateSideEffects',
+              unit: 'count',
+              baseline: 0,
+              candidate: 0,
+              baselineSamples: 1,
+              candidateSamples: 1,
+              direction: 'indeterminate',
+              caveat: 'one side has no samples',
+            },
+          ],
+        } as Comparison,
+      }),
+    );
+    assert.equal(validation.satisfiedCount, 1);
+    assert.equal(validation.undecidedCount, 1);
+    assert.equal(validation.validated, false);
+  });
+
   it('is validated only when every criterion is satisfied', () => {
     const goal = goalWith(
       [

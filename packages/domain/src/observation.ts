@@ -1,4 +1,4 @@
-import type { ClaimBasis } from '@orchescope/schema';
+import type { ClaimBasis, RunRecord } from '@orchescope/schema';
 
 /**
  * The difference between a run happening and a run measuring something.
@@ -26,3 +26,25 @@ export const runIsSilent = (spanCount: number): boolean => spanCount === 0;
  */
 export const basisIsSupportable = (basis: ClaimBasis, observationCount: number): boolean =>
   basis !== 'observed' || observationCount > 0;
+
+/** A run paired with how much it observed, which is what anything reasoning over runs actually needs. */
+export type RunObservation = {
+  readonly run: RunRecord;
+  readonly spanCount: number;
+};
+
+/**
+ * A run that no mechanism reported anything about.
+ *
+ * Two mechanisms can measure a run and this asks whether either did. Spans are one. The target result
+ * document is the other, and it exists so that a target with no tracing at all can still be evaluated;
+ * its `success` field is required, so a run whose outcome is unknown is a run whose result document was
+ * never read. A run with neither carries a zero for every counter, and those zeros are the shape of the
+ * bug this exists to prevent: a comparison of two such runs reported `duplicateSideEffects` moving from
+ * zero to zero, and an acceptance criterion banked it as satisfied.
+ *
+ * A run measured by only one of the two still counts. Dropping it would discard a real measurement,
+ * which is the same error pointed the other way.
+ */
+export const runMeasuredNothing = (observation: RunObservation): boolean =>
+  observation.spanCount === 0 && observation.run.metrics.taskSuccess === undefined;
