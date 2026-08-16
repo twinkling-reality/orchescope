@@ -7440,6 +7440,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "observedRunCount": {
+          "minimum": 0,
+          "type": "integer"
+        },
         "runCount": {
           "minimum": 0,
           "type": "integer"
@@ -7449,6 +7453,10 @@
           "type": "integer"
         },
         "scenarioCount": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "silentRunCount": {
           "minimum": 0,
           "type": "integer"
         },

@@ -88,6 +88,25 @@ export interface LoopProgress {
 
 type RulesEvaluated = FindingSet['rulesEvaluated'];
 
+/**
+ * How many of a bundle's runs measured anything, asked once for the whole loop.
+ *
+ * The loop used to ask how many runs were recorded, which is a different question and the one that let
+ * an empty run advance it: a traced process that loaded no OpenTelemetry SDK exported nothing, and the
+ * loop reported step four done and stopped naming the command that would have fixed it. Both steps that
+ * care read this, so the two cannot come to disagree.
+ *
+ * A bundle written before the count existed falls back to whether anything was attributed to a
+ * component, which is the same question answered from the data such a bundle does carry. Falling back
+ * to `runs.length` would restore the bug.
+ */
+const measuredRunCount = (bundle: ReportBundle): number =>
+  bundle.summary.observedRunCount ?? (bundle.componentMetrics.length > 0 ? bundle.runs.length : 0);
+
+/** Runs that were recorded and produced no span, which is a thing to report and not a thing to reason from. */
+const silentRunCount = (bundle: ReportBundle): number =>
+  bundle.summary.silentRunCount ?? bundle.runs.length - measuredRunCount(bundle);
+
 export function checkCoverage(rules: RulesEvaluated): CheckCoverage {
   const ran = rules.filter((rule) => rule.status === 'fired' || rule.status === 'clear').length;
   const blocked = rules.filter((rule) => rule.status === 'insufficient_evidence').length;
@@ -163,10 +182,13 @@ function goalStep(bundle: ReportBundle): LoopStep {
       (finding) => finding.polarity === 'risk' && finding.goalReadiness.eligible,
     ) ?? null;
   /*
-   * Without a run, a goal whose acceptance criteria include metric comparisons cannot close step
-   * five. Standing then walks to rerun or measure. Eligible findings wait until a baseline exists.
+   * Without a measured run, a goal whose acceptance criteria include metric comparisons cannot close
+   * step five. Standing then walks to rerun or measure. Eligible findings wait until a baseline
+   * exists, and a run that produced no span is not one: every metric it could be compared on is
+   * unmeasured, so the goal would be handed off against a baseline that can never decide it.
    */
-  const readyToHandOff = eligible !== null && bundle.runs.length > 0;
+  const measured = measuredRunCount(bundle);
+  const readyToHandOff = eligible !== null && measured > 0;
   return {
     id: 'goal',
     ordinal: 2,
@@ -174,7 +196,7 @@ function goalStep(bundle: ReportBundle): LoopStep {
     state: 'blocked',
     summary: 'nothing handed off yet',
     detail:
-      eligible !== null && bundle.runs.length === 0
+      eligible !== null && measured === 0
         ? ['needs a baseline run before a goal can be verified']
         : [],
     command: readyToHandOff ? goalCommand(eligible.id) : null,
@@ -215,23 +237,45 @@ function namedAreas(areas: readonly string[]): string {
   return `${areas.slice(0, NAMED_AREAS).join(', ')} and ${rest} more`;
 }
 
-function measureStep(bundle: ReportBundle, rules: RulesEvaluated): LoopStep {
-  if (bundle.runs.length === 0) {
-    const areas = blockedAreas(rules);
-    const coverage = checkCoverage(rules);
+/**
+ * Nothing has been measured, and why differs.
+ *
+ * A repository nobody has run is one sentence. A repository whose run exported no telemetry is another,
+ * and it was the missing one: the loop counted that run as a measurement, reported the step done and
+ * stopped naming `trace`, which is the only command that would have helped. Both states carry the same
+ * command because the same command fixes both.
+ */
+function unmeasuredStep(bundle: ReportBundle, rules: RulesEvaluated): LoopStep {
+  const silent = silentRunCount(bundle);
+  if (silent > 0) {
     return {
       id: 'measure',
       ordinal: 4,
       title: 'Measure',
       state: 'blocked',
-      summary:
-        coverage.blocked === 0
-          ? 'nothing has been run'
-          : `${coverage.blocked} ${coverage.blocked === 1 ? 'check is' : 'checks are'} blocked on a run`,
-      detail: areas.length === 0 ? [] : [namedAreas(areas)],
+      summary: `${silent} ${silent === 1 ? 'run' : 'runs'} recorded, no span arrived`,
+      detail: ['the target exported no telemetry, so nothing was measured'],
       command: [...traceCommand()],
     };
   }
+  const areas = blockedAreas(rules);
+  const coverage = checkCoverage(rules);
+  return {
+    id: 'measure',
+    ordinal: 4,
+    title: 'Measure',
+    state: 'blocked',
+    summary:
+      coverage.blocked === 0
+        ? 'nothing has been run'
+        : `${coverage.blocked} ${coverage.blocked === 1 ? 'check is' : 'checks are'} blocked on a run`,
+    detail: areas.length === 0 ? [] : [namedAreas(areas)],
+    command: [...traceCommand()],
+  };
+}
+
+function measureStep(bundle: ReportBundle, rules: RulesEvaluated): LoopStep {
+  if (measuredRunCount(bundle) === 0) return unmeasuredStep(bundle, rules);
   const detail: string[] = [];
   const measured = new Set(bundle.componentMetrics.map((entry) => entry.componentId)).size;
   if (measured > 0) {
@@ -244,12 +288,17 @@ function measureStep(bundle: ReportBundle, rules: RulesEvaluated): LoopStep {
       `${outcomes.length} ${outcomes.length === 1 ? 'fault' : 'faults'} injected, ${broke} broke the task`,
     );
   }
+  const silent = silentRunCount(bundle);
+  if (silent > 0) {
+    detail.push(`${silent} ${silent === 1 ? 'run' : 'runs'} recorded no span and measured nothing`);
+  }
+  const measuredRuns = measuredRunCount(bundle);
   return {
     id: 'measure',
     ordinal: 4,
     title: 'Measure',
     state: 'done',
-    summary: `${bundle.runs.length} ${bundle.runs.length === 1 ? 'run' : 'runs'} recorded`,
+    summary: `${measuredRuns} ${measuredRuns === 1 ? 'run' : 'runs'} recorded`,
     detail,
     command: null,
   };

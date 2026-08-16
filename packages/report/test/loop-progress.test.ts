@@ -20,8 +20,17 @@ const rule = (
   category: Rules[number]['category'] = 'reliability',
 ): Rules[number] => ({ ruleId: `rule-${status}-${category}`, category, status });
 
-const bundle = (overrides: Partial<ReportBundle> = {}): ReportBundle =>
-  ({
+/**
+ * A run in the fixture measured something unless the case says otherwise.
+ *
+ * The summary is derived from `runs` rather than left off, because the loop asks how many runs observed
+ * a span and not how many were recorded. A fixture that answered the second question was the shape of the
+ * bug: an empty run counted as a baseline, and the loop reported itself past the step that would have
+ * fixed it.
+ */
+const bundle = (overrides: Partial<ReportBundle> = {}): ReportBundle => {
+  const runs = overrides.runs ?? [];
+  return {
     schemaVersion: 1,
     reportId: 'rpt_0000000000000000',
     projectName: 'fixture',
@@ -34,7 +43,22 @@ const bundle = (overrides: Partial<ReportBundle> = {}): ReportBundle =>
     chaosReports: [],
     comparisons: [],
     ...overrides,
-  }) as unknown as ReportBundle;
+    summary: {
+      runCount: runs.length,
+      observedRunCount: runs.length,
+      silentRunCount: 0,
+      ...(overrides.summary ?? {}),
+    },
+  } as unknown as ReportBundle;
+};
+
+/** One run recorded, no span in it. The loop must treat this as no baseline at all. */
+const silentRunBundle = (overrides: Partial<ReportBundle> = {}): ReportBundle =>
+  bundle({
+    ...overrides,
+    runs: [{ id: 'run_0000000000000001' }] as unknown as ReportBundle['runs'],
+    summary: { runCount: 1, observedRunCount: 0, silentRunCount: 1 } as ReportBundle['summary'],
+  });
 
 const risk = (id: string, eligible = true) =>
   ({
@@ -260,6 +284,44 @@ describe('loopProgress', () => {
     const verdict = progress.steps.find((step) => step.id === 'verdict');
     assert.equal(verdict?.state, 'done');
     assert.equal(verdict?.command, null);
+  });
+
+  /*
+   * A run that produced no span advanced the loop past the only step that could have helped: measure
+   * reported one run recorded and done, and goal offered a handoff against a baseline whose every
+   * metric was unmeasured. Recording that a run happened is right. Reading it as a measurement is not.
+   */
+  it('does not let a run that produced no span stand in for a baseline', () => {
+    const progress = loopProgress(silentRunBundle({ findings: [risk('OSC-REL-0001')] }), [
+      rule('insufficient_evidence'),
+    ]);
+    const measure = progress.steps.find((step) => step.id === 'measure');
+    assert.equal(measure?.state, 'blocked');
+    assert.match(measure?.summary ?? '', /1 run recorded, no span arrived/);
+    assert.deepEqual(measure?.command?.slice(0, 2), ['orchescope', 'trace']);
+    assert.equal(progress.standingAt?.id, 'measure');
+    assert.equal(progress.steps.find((step) => step.id === 'goal')?.command, null);
+  });
+
+  it('counts only the runs that measured something once one of them did', () => {
+    const progress = loopProgress(
+      bundle({
+        runs: [
+          { id: 'run_0000000000000001' },
+          { id: 'run_0000000000000002' },
+        ] as unknown as ReportBundle['runs'],
+        summary: {
+          runCount: 2,
+          observedRunCount: 1,
+          silentRunCount: 1,
+        } as ReportBundle['summary'],
+      }),
+      [rule('fired')],
+    );
+    const measure = progress.steps.find((step) => step.id === 'measure');
+    assert.equal(measure?.state, 'done');
+    assert.match(measure?.summary ?? '', /^1 run recorded$/);
+    assert.ok(measure?.detail.some((line) => /1 run recorded no span/.test(line)));
   });
 
   it('closes the loop only when every step is done', () => {

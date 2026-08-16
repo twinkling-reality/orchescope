@@ -5,7 +5,7 @@ import type { ComponentDraft } from '@orchescope/graph';
 import type { ReconciliationDelta, RunRecord } from '@orchescope/schema';
 import { buildGraph, componentDraft } from '@orchescope/testkit';
 import { evaluateRules } from '../src/engine.ts';
-import type { RuleContext } from '../src/rule.ts';
+import { fired, type Rule, type RuleContext } from '../src/rule.ts';
 import { observabilityCoverageRule } from '../src/rules/runtime.ts';
 
 /**
@@ -66,7 +66,8 @@ const indexed = () => indexGraph(buildGraph([planner, lookup], []));
 const contextFor = (delta: ReconciliationDelta | undefined, withRun: boolean): RuleContext => ({
   graph: indexed(),
   delta,
-  runs: withRun ? [runStub] : [],
+  observedRuns: withRun ? [runStub] : [],
+  silentRuns: [],
   benchmarks: [],
   chaosReports: [],
   scenarios: [],
@@ -99,7 +100,8 @@ describe('observability-coverage', () => {
       graph,
       context: {
         delta: deltaOf({ declared: 5, exercised: 5, notExercised: [], rate: 1 }),
-        runs: [runStub],
+        observedRuns: [runStub],
+        silentRuns: [],
         benchmarks: [],
         chaosReports: [],
         scenarios: [],
@@ -142,7 +144,8 @@ describe('observability-coverage', () => {
           notExercised: [unexercisedId],
           rate: 0.2,
         }),
-        runs: [runStub],
+        observedRuns: [runStub],
+        silentRuns: [],
         benchmarks: [],
         chaosReports: [],
         scenarios: [],
@@ -157,5 +160,94 @@ describe('observability-coverage', () => {
     assert.equal(finding.polarity, 'risk');
     assert.ok(finding.evidence.length > 0);
     assert.ok(finding.components.includes(unexercisedId));
+  });
+
+  /*
+   * The sentence a reader who has just traced their system needs. "No runtime evidence has been
+   * collected" is true and reads as though nothing was tried; "0 percent of declared components were
+   * exercised" is a measurement nobody took. The run happened, the instrumentation did not, and only
+   * the second half is the reader's next problem.
+   */
+  it('names the empty run rather than reporting an exercise rate of zero', () => {
+    const outcome = observabilityCoverageRule.evaluate({
+      ...contextFor(undefined, false),
+      silentRuns: [{ id: 'run_0000000000000001' } as RunRecord],
+    });
+    assert.equal(outcome.status, 'fired');
+    const draft = outcome.drafts[0];
+    assert.match(draft?.title ?? '', /1 run was recorded and produced no spans/);
+    assert.equal(draft?.basis, 'discovered');
+    assert.match(draft?.explanation ?? '', /unmeasured rather than zero/);
+    assert.match(draft?.recommendation?.summary ?? '', /exported no telemetry/);
+  });
+});
+
+/**
+ * The backstop, one layer below any rule.
+ *
+ * `observed` is the only basis that means a machine watched it happen, and the audit that started this
+ * work minted one at 0.98 confidence from a run holding no span. Rules are where the mistake gets made
+ * and the engine is where it can be caught for every rule at once, including rules written later.
+ */
+describe('a draft that claims an observed basis with nothing observed', () => {
+  const claimsObservation: Rule = {
+    id: 'fixture-claims-observation',
+    category: 'observability',
+    summary: 'A rule that reaches for observed without checking whether anything was observed.',
+    evaluate: (context) =>
+      fired([
+        {
+          ruleId: 'fixture-claims-observation',
+          category: 'observability',
+          polarity: 'risk',
+          severity: 'medium',
+          confidence: 0.98,
+          basis: 'observed',
+          title: 'Only 0 percent of declared components were exercised',
+          explanation: 'fixture',
+          impact: 'fixture',
+          components: context.graph.graph.components.slice(0, 1).map((component) => component.id),
+          evidence: context.graph.graph.components[0]?.evidence.slice(0, 1) ?? [],
+          goalEligible: false,
+          goalReason: 'fixture',
+        },
+      ]),
+  };
+
+  const evaluate = (observed: boolean) =>
+    evaluateRules({
+      scanId: 'scan_0000000000000000',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      graph: indexed(),
+      context: {
+        delta: undefined,
+        observedRuns: observed ? [runStub] : [],
+        silentRuns: observed ? [] : [{ id: 'run_0000000000000001' } as RunRecord],
+        benchmarks: [],
+        chaosReports: [],
+        scenarios: [],
+        evidenceById: new Map(),
+      },
+      rules: [claimsObservation],
+    });
+
+  it('is dropped, and the drop is recorded rather than swallowed', () => {
+    const result = evaluate(false);
+    assert.deepEqual(result.findingSet.findings, []);
+    assert.ok(
+      result.findingSet.rulesEvaluated.some(
+        (rule) =>
+          rule.ruleId === 'fixture-claims-observation' &&
+          rule.status === 'insufficient_evidence' &&
+          /no run produced a span to observe/.test(rule.detail ?? ''),
+      ),
+      'the drop has to be recorded, not swallowed',
+    );
+  });
+
+  it('survives untouched once a run produced a span', () => {
+    const result = evaluate(true);
+    assert.equal(result.findingSet.findings.length, 1);
+    assert.equal(result.findingSet.findings[0]?.basis, 'observed');
   });
 });

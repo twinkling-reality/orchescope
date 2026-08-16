@@ -190,7 +190,12 @@ const auditAgentSystem = async (
    */
   const outcome = improvementOutcome(result.bundle);
   return {
-    text: `Audit ${result.scanId}: ${formatCount(risks.length, 'risk')}, ${formatCount(result.bundle.summary.strengthCount, 'strength')}, ${formatCount(result.runsConsidered.length, 'run')} reconciled. Standing at ${standing?.title ?? 'closed loop'}. ${outcome.summary}.`,
+    /*
+     * A silent run is named here rather than left to be inferred from a run count that did not move.
+     * An agent that traced its system and read "0 runs reconciled" would reasonably conclude the trace
+     * failed to store anything, when what happened is that it stored a run holding no span.
+     */
+    text: `Audit ${result.scanId}: ${formatCount(risks.length, 'risk')}, ${formatCount(result.bundle.summary.strengthCount, 'strength')}, ${formatCount(result.runsConsidered.length, 'run')} reconciled${result.silentRuns.length === 0 ? '' : `, ${formatCount(result.silentRuns.length, 'run')} recorded no span`}. Standing at ${standing?.title ?? 'closed loop'}. ${outcome.summary}.`,
     data: {
       scanId: result.scanId,
       reportId: result.bundle.reportId,
@@ -201,6 +206,8 @@ const auditAgentSystem = async (
       truncated: risks.length > maxFindings,
       rulesEvaluated: result.findingSet.rulesEvaluated.length,
       runsReconciled: result.runsConsidered.map((run) => run.id),
+      /** Runs that were recorded and produced no span. Nothing in this report was derived from them. */
+      runsWithoutSpans: result.silentRuns.map((run) => run.id),
       loop: {
         standingAt: standing?.id ?? null,
         checkCoverage: progress.coverage,

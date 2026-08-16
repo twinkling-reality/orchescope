@@ -84,7 +84,25 @@ export type RunEvidence = {
 export type RuleContext = {
   readonly graph: IndexedGraph;
   readonly delta: ReconciliationDelta | undefined;
-  readonly runs: readonly RunEvidence[];
+  /**
+   * Runs that produced at least one span. These are the only runs a runtime claim may rest on.
+   *
+   * The field is named for what it carries rather than for where it came from, because the shorter
+   * name invited the mistake this product exists to avoid: a rule that guarded on `runs.length === 0`
+   * read as careful and was not, since a run that exported nothing still counted. Nine rules changed
+   * their answer on a run containing no span, and one of them told a reader that six tools which
+   * provably executed had never been exercised.
+   */
+  readonly observedRuns: readonly RunEvidence[];
+  /**
+   * Runs that were recorded and produced no span.
+   *
+   * They are evidence of an attempt to measure and of nothing else, so no rule may derive an absence
+   * from them. They are carried rather than discarded because a reader who has just run `trace` needs
+   * to be told that the run landed and the instrumentation did not, which is a different sentence
+   * from never having run anything.
+   */
+  readonly silentRuns: readonly RunRecord[];
   readonly benchmarks: readonly BenchmarkReport[];
   readonly chaosReports: readonly ChaosReport[];
   readonly scenarios: readonly Scenario[];

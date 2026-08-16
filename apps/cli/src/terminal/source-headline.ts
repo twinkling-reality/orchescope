@@ -57,9 +57,18 @@ const headlineVariants = (result: AuditResult): readonly string[] => {
   return [`this project has ${found}`, found];
 };
 
+/**
+ * How much runtime evidence exists, which is not the same as how many runs happened.
+ *
+ * The count used to be of runs on record, and a run that exported no telemetry is on record. A reader
+ * who traced an uninstrumented target saw "1 run on record" on a document whose every runtime claim was
+ * still missing, and had no way to tell that the run was the reason rather than the remedy.
+ */
 const runsPhrase = (result: AuditResult): string => {
-  const runs = result.bundle.summary.runCount ?? 0;
-  return runs === 0 ? 'no runs on record' : `${formatCount(runs, 'run')} on record`;
+  const observed = result.bundle.summary.observedRunCount ?? result.bundle.summary.runCount ?? 0;
+  const silent = result.bundle.summary.silentRunCount ?? 0;
+  if (observed > 0) return `${formatCount(observed, 'run')} on record`;
+  return silent === 0 ? 'no runs on record' : `${formatCount(silent, 'run')} on record, no spans`;
 };
 
 const coverageVariants = (result: AuditResult, verbose: boolean): readonly string[] => {

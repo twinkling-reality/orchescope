@@ -563,7 +563,7 @@ export const broadPermissionRule: Rule = {
   category: 'permissions',
   summary: 'A declared permission that observed behaviour did not need.',
   evaluate: (context) => {
-    if (context.runs.length === 0) {
+    if (context.observedRuns.length === 0) {
       return {
         status: 'insufficient_evidence',
         detail:
@@ -583,8 +583,8 @@ export const broadPermissionRule: Rule = {
       const record = absenceEvidence({
         producer: PRODUCER,
         searched: `a side effect performed by ${component.id}`,
-        scope: formatCount(context.runs.length, 'observed run'),
-        inspectedCount: context.runs.length,
+        scope: formatCount(context.observedRuns.length, 'observed run'),
+        inspectedCount: context.observedRuns.length,
       });
       drafts.push({
         ruleId: 'permissions-broader-than-observed-use',
@@ -598,7 +598,7 @@ export const broadPermissionRule: Rule = {
         confidence: CONFIDENCE_BANDS.structural,
         basis: 'inferred',
         title: `${component.displayName} holds write access it was not observed using`,
-        explanation: `${component.displayName} declares ${formatCount(writePermissions.length, 'write permission')} on ${writePermissions.map((permission) => permission.scope).join(', ')}, ran in ${formatCount(context.runs.length, 'observed run')}, and performed no recorded side effect. Observed use is not proof that write access is unnecessary, and it is the evidence available.`,
+        explanation: `${component.displayName} declares ${formatCount(writePermissions.length, 'write permission')} on ${writePermissions.map((permission) => permission.scope).join(', ')}, ran in ${formatCount(context.observedRuns.length, 'observed run')}, and performed no recorded side effect. Observed use is not proof that write access is unnecessary, and it is the evidence available.`,
         impact:
           'Broader access than a component needs widens the blast radius of a prompt injection or a bug.',
         components: [component.id],

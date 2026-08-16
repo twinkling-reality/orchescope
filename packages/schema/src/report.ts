@@ -181,6 +181,19 @@ export const ReportBundle = Document(
         findingCountBySeverity: Type.Record(Type.String(), NonNegativeInt),
         strengthCount: NonNegativeInt,
         runCount: NonNegativeInt,
+        /**
+         * Runs that produced at least one span, which are the only runs anything measured rests on.
+         *
+         * A run is a record that a command executed. It is not a record that anything was observed:
+         * a target with no OpenTelemetry SDK loaded exports nothing, and reading `runCount` as though
+         * it answered this question is what let an audit report an exercise rate of zero percent for
+         * a system whose tools had run. Optional because bundles written before this field existed
+         * carry none, and a reader must not fall back to `runCount`, which answers a different
+         * question.
+         */
+        observedRunCount: Type.Optional(NonNegativeInt),
+        /** Runs recorded that produced no span. Reported so an empty run is visible rather than silently dropped. */
+        silentRunCount: Type.Optional(NonNegativeInt),
         scenarioCount: NonNegativeInt,
       },
       { additionalProperties: false },

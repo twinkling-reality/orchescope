@@ -1,5 +1,6 @@
 import {
   assertNoViolations,
+  basisIsSupportable,
   capSeverity,
   compareSeverity,
   dedupeEvidence,
@@ -206,6 +207,26 @@ export const evaluateRules = (input: EvaluateInput): EngineResult => {
         category: draft.category,
         status: 'insufficient_evidence',
         detail: `a draft titled "${draft.title}" was dropped because it carried no evidence`,
+      });
+      continue;
+    }
+
+    /*
+     * The same admissibility test as the one above, applied to the word rather than to the citation.
+     *
+     * `observed` means a machine watched it happen. A rule that reaches for it when no run produced a
+     * span is not overconfident, it is describing a different kind of claim, and the audit that did
+     * exactly this reported an exercise rate of zero percent with a confidence of 0.98 against six
+     * tools that had run. The check lives here rather than inside any rule so that a rule added later
+     * inherits it, and the drop is recorded rather than thrown so a defect in one rule cannot take a
+     * reader's whole audit down with it.
+     */
+    if (!basisIsSupportable(draft.basis, context.observedRuns.length)) {
+      evaluated.push({
+        ruleId: draft.ruleId,
+        category: draft.category,
+        status: 'insufficient_evidence',
+        detail: `a draft titled "${draft.title}" claimed an observed basis and no run produced a span to observe`,
       });
       continue;
     }

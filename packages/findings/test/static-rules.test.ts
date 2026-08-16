@@ -52,7 +52,8 @@ const graphWith = (policy: EdgePolicy | undefined, target = refund): SystemGraph
 const contextFor = (graph: SystemGraph): RuleContext => ({
   graph: indexGraph(graph),
   delta: undefined,
-  runs: [],
+  observedRuns: [],
+  silentRuns: [],
   benchmarks: [],
   chaosReports: [],
   scenarios: [],
@@ -231,7 +232,8 @@ describe('the two retry rules together', () => {
       graph: indexGraph(graph),
       context: {
         delta: undefined,
-        runs: [],
+        observedRuns: [],
+        silentRuns: [],
         benchmarks: [],
         chaosReports: [],
         scenarios: [],
@@ -283,7 +285,8 @@ describe('findings that repeat', () => {
       graph: indexGraph(graph),
       context: {
         delta: undefined,
-        runs: [],
+        observedRuns: [],
+        silentRuns: [],
         benchmarks: [],
         chaosReports: [],
         scenarios: [],
@@ -355,7 +358,8 @@ describe('the order findings are reported in', () => {
       graph: indexGraph(graph),
       context: {
         delta: undefined,
-        runs: [],
+        observedRuns: [],
+        silentRuns: [],
         benchmarks: [],
         chaosReports: [],
         scenarios: [],
@@ -403,7 +407,8 @@ describe('the order findings are reported in', () => {
       graph: indexGraph(buildGraph([orchestrator], [])),
       context: {
         delta: undefined,
-        runs: [],
+        observedRuns: [],
+        silentRuns: [],
         benchmarks: [],
         chaosReports: [],
         scenarios: [],

@@ -39,7 +39,7 @@ const aggregateByComponent = (
   context: Parameters<Rule['evaluate']>[0],
 ): ReadonlyMap<string, Aggregate> => {
   const totals = new Map<string, Aggregate>();
-  for (const entry of context.runs) {
+  for (const entry of context.observedRuns) {
     for (const metric of entry.componentMetrics) {
       const current =
         totals.get(metric.componentId) ??
@@ -71,7 +71,7 @@ export const sequentialIndependentCallsRule: Rule = {
   category: 'performance',
   summary: 'Sibling operations that never overlapped despite having no observed dependency.',
   evaluate: (context) => {
-    if (context.runs.length === 0) return insufficient('no run has been recorded');
+    if (context.observedRuns.length === 0) return insufficient('no run has been recorded');
     const toolEdges = context.graph
       .edgesOfKind('calls_tool')
       .filter((edge) => edge.observation !== undefined && edge.observation.executionCount > 0);
@@ -114,7 +114,7 @@ export const sequentialIndependentCallsRule: Rule = {
         producer: PRODUCER,
         rule: 'independent-calls-run-sequentially',
         inputs: neverParallel.flatMap((edge) => edge.evidence.slice(0, 2)) as EvidenceId[],
-        note: `${formatCount(neverParallel.length, 'tool call')} from ${sourceId} never overlapped in ${formatCount(context.runs.length, 'run')}; sequential total ${Math.round(totalSequential)} ms against a slowest single call of ${Math.round(slowest)} ms`,
+        note: `${formatCount(neverParallel.length, 'tool call')} from ${sourceId} never overlapped in ${formatCount(context.observedRuns.length, 'run')}; sequential total ${Math.round(totalSequential)} ms against a slowest single call of ${Math.round(slowest)} ms`,
       });
 
       drafts.push({
@@ -129,7 +129,7 @@ export const sequentialIndependentCallsRule: Rule = {
         confidence: CONFIDENCE_BANDS.strongStructural,
         basis: 'observed',
         title: `${source?.displayName ?? sourceId} calls ${targets.map((target) => target.displayName).join(' and ')} one after another`,
-        explanation: `Across ${formatCount(context.runs.length, 'run')} these ${formatCount(neverParallel.length, 'tool call')} never overlapped in wall clock time. Their combined observed time is ${Math.round(totalSequential)} ms and the slowest single call is ${Math.round(slowest)} ms. Whether the calls are truly independent is a question about the code rather than about the trace, so the estimate below is labelled as an estimate.`,
+        explanation: `Across ${formatCount(context.observedRuns.length, 'run')} these ${formatCount(neverParallel.length, 'tool call')} never overlapped in wall clock time. Their combined observed time is ${Math.round(totalSequential)} ms and the slowest single call is ${Math.round(slowest)} ms. Whether the calls are truly independent is a question about the code rather than about the trace, so the estimate below is labelled as an estimate.`,
         impact: `If the calls are independent, starting them together removes about ${Math.round(savingMs)} ms of user visible latency per request.`,
         components: [sourceId, ...targets.map((target) => target.id)],
         edges: neverParallel.map((edge) => edge.id),
@@ -188,7 +188,7 @@ export const latencyConcentrationRule: Rule = {
   category: 'performance',
   summary: 'One component holding most of the measured self time.',
   evaluate: (context) => {
-    if (context.runs.length === 0) return insufficient('no run has been recorded');
+    if (context.observedRuns.length === 0) return insufficient('no run has been recorded');
     const totals = aggregateByComponent(context);
     const overall = [...totals.values()].reduce((total, entry) => total + entry.selfDurationMs, 0);
     if (overall <= 0) return insufficient('no self time was recorded');
@@ -202,7 +202,7 @@ export const latencyConcentrationRule: Rule = {
       if (component === undefined) continue;
       const record = metricEvidence({
         producer: PRODUCER,
-        runId: context.runs.map((run) => run.run.id).join(','),
+        runId: context.observedRuns.map((run) => run.run.id).join(','),
         metric: 'self_time_share',
         value: share,
         unit: 'fraction',
@@ -221,7 +221,7 @@ export const latencyConcentrationRule: Rule = {
         confidence: CONFIDENCE_BANDS.strongStructural,
         basis: 'observed',
         title: `${component.displayName} accounts for ${Math.round(share * 100)} percent of measured time`,
-        explanation: `Across ${formatCount(entry.executions, 'execution')} in ${formatCount(context.runs.length, 'run')}, ${component.displayName} spent ${Math.round(entry.selfDurationMs)} ms of self time out of ${Math.round(overall)} ms measured in total. Self time excludes time spent inside its children, so this is time this component itself is responsible for.`,
+        explanation: `Across ${formatCount(entry.executions, 'execution')} in ${formatCount(context.observedRuns.length, 'run')}, ${component.displayName} spent ${Math.round(entry.selfDurationMs)} ms of self time out of ${Math.round(overall)} ms measured in total. Self time excludes time spent inside its children, so this is time this component itself is responsible for.`,
         impact: 'Any latency work that does not touch this component will not move the total much.',
         components: [component.id],
         newEvidence: [record],
@@ -262,7 +262,7 @@ export const tokenConcentrationRule: Rule = {
   category: 'cost',
   summary: 'One component holding most of the token usage.',
   evaluate: (context) => {
-    if (context.runs.length === 0) return insufficient('no run has been recorded');
+    if (context.observedRuns.length === 0) return insufficient('no run has been recorded');
     const totals = aggregateByComponent(context);
     const overall = [...totals.values()].reduce(
       (total, entry) => total + entry.inputTokens + entry.outputTokens,
@@ -327,7 +327,7 @@ export const repeatedContextRule: Rule = {
   summary:
     'Several workers receiving similarly large inputs, consistent with a shared full context.',
   evaluate: (context) => {
-    if (context.runs.length === 0) return insufficient('no run has been recorded');
+    if (context.observedRuns.length === 0) return insufficient('no run has been recorded');
     const totals = aggregateByComponent(context);
     const agents = [...totals.values()]
       .map((entry) => ({ entry, component: context.graph.component(entry.componentId) }))
@@ -420,7 +420,7 @@ export const unreliableRelationRule: Rule = {
   category: 'reliability',
   summary: 'A call whose observed error rate is high enough to matter.',
   evaluate: (context) => {
-    if (context.runs.length === 0) return insufficient('no run has been recorded');
+    if (context.observedRuns.length === 0) return insufficient('no run has been recorded');
     const drafts: FindingDraft[] = [];
     for (const edge of context.graph.graph.edges) {
       const observation = edge.observation;
@@ -489,7 +489,7 @@ const coverageClaimSupport = (
   }
   const record = metricEvidence({
     producer: PRODUCER,
-    runId: context.runs.map((entry) => entry.run.id).join(','),
+    runId: context.observedRuns.map((entry) => entry.run.id).join(','),
     metric: 'component_exercise_rate',
     value: rate,
     unit: 'fraction',
@@ -503,35 +503,45 @@ const coverageClaimSupport = (
   return { newEvidence: [record], evidence: cited.slice(0, 5) };
 };
 
-export const observabilityCoverageRule: Rule = {
-  id: 'observability-coverage',
-  category: 'observability',
-  summary: 'How much of the declared system any run has exercised.',
-  evaluate: (context) => {
-    if (context.delta === undefined || context.runs.length === 0) {
-      const named = context.graph.graph.components.slice(0, 5).map((component) => component.id);
-      if (named.length === 0) {
-        return insufficient('no declared components exist to ground a coverage claim');
-      }
-      return fired([
-        {
-          ruleId: 'observability-coverage',
-          category: 'observability',
-          polarity: 'risk',
-          severity: 'medium',
-          confidence: CONFIDENCE_BANDS.deterministic,
-          basis: 'discovered',
-          title: 'No runtime evidence has been collected',
-          explanation:
-            'Every claim in this report comes from source and configuration analysis. Whether the declared system behaves as declared is unknown until a run is observed.',
-          impact:
-            'Reconciliation, latency, cost and resilience findings are all unavailable, and they are where most of the value is.',
-          components: named,
-          evidence: named.slice(0, 2).flatMap((componentId) => {
-            const component = context.graph.component(componentId);
-            return component === undefined ? [] : (component.evidence.slice(0, 1) as EvidenceId[]);
-          }),
-          recommendation: {
+/**
+ * Nothing was observed, and the reason changes the reader's next move.
+ *
+ * A repository nobody has traced needs the command. A repository that was traced and exported nothing
+ * needs its target instrumented, and telling that reader to run the command they just ran is the worst
+ * answer available. The branch this replaced said neither: it reported an exercise rate of zero percent
+ * labelled `observed` at 0.98 confidence, computed from a delta built out of an empty run, about a
+ * system whose tools had in fact executed. Coverage that was never measured is not coverage of zero.
+ */
+const noObservationDraft = (
+  context: Parameters<Rule['evaluate']>[0],
+  named: readonly ComponentId[],
+): FindingDraft => {
+  const silent = context.silentRuns.length;
+  return {
+    ruleId: 'observability-coverage',
+    category: 'observability',
+    polarity: 'risk',
+    severity: 'medium',
+    confidence: CONFIDENCE_BANDS.deterministic,
+    basis: 'discovered',
+    title:
+      silent === 0
+        ? 'No runtime evidence has been collected'
+        : `${formatCount(silent, 'run')} was recorded and produced no spans`,
+    explanation:
+      silent === 0
+        ? 'Every claim in this report comes from source and configuration analysis. Whether the declared system behaves as declared is unknown until a run is observed.'
+        : `${formatCount(silent, 'run')} reached the receiver and no span arrived, so every claim in this report still comes from source and configuration analysis. A run that exported nothing says nothing about which components ran: the exercise rate for it is unmeasured rather than zero, and this report does not report one.`,
+    impact:
+      'Reconciliation, latency, cost and resilience findings are all unavailable, and they are where most of the value is.',
+    components: [...named],
+    evidence: named.slice(0, 2).flatMap((componentId) => {
+      const component = context.graph.component(componentId);
+      return component === undefined ? [] : (component.evidence.slice(0, 1) as EvidenceId[]);
+    }),
+    recommendation:
+      silent === 0
+        ? {
             summary: 'Record one run with orchescope trace.',
             steps: [
               'Run: orchescope trace -- <the command that starts your system>',
@@ -539,12 +549,35 @@ export const observabilityCoverageRule: Rule = {
             ],
             effort: 'small',
             risk: 'low',
+          }
+        : {
+            summary:
+              'The run happened and the target exported no telemetry. Load an OpenTelemetry SDK in the traced process, or declare the components in .orchescope/manifest.yaml.',
+            steps: [
+              'Confirm the traced process loads an OpenTelemetry SDK. The exporter variables Orchescope sets do nothing on their own.',
+              'If the system runs in a child process or another runtime, point that process at the receiver URL that orchescope trace printed.',
+              'Rerun: orchescope trace -- <the command that starts your system>',
+            ],
+            effort: 'medium',
+            risk: 'low',
           },
-          goalEligible: false,
-          goalReason: 'This is a next step for the operator rather than a code change.',
-          tags: ['coverage'],
-        },
-      ]);
+    goalEligible: false,
+    goalReason: 'This is a next step for the operator rather than a code change.',
+    tags: ['coverage'],
+  };
+};
+
+export const observabilityCoverageRule: Rule = {
+  id: 'observability-coverage',
+  category: 'observability',
+  summary: 'How much of the declared system any run has exercised.',
+  evaluate: (context) => {
+    if (context.delta === undefined || context.observedRuns.length === 0) {
+      const named = context.graph.graph.components.slice(0, 5).map((component) => component.id);
+      if (named.length === 0) {
+        return insufficient('no declared components exist to ground a coverage claim');
+      }
+      return fired([noObservationDraft(context, named)]);
     }
     const rate = context.delta.coverage.componentExerciseRate;
     if (rate === undefined) return insufficient('no exercise rate could be computed');

@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { CONFIDENCE_BANDS, derivedEvidence, sourceSpanEvidence } from '@orchescope/domain';
 import { indexGraph } from '@orchescope/graph';
-import type { Contradiction, ReconciliationDelta } from '@orchescope/schema';
+import type { Contradiction, ReconciliationDelta, RunRecord } from '@orchescope/schema';
 import { buildGraph, componentDraft } from '@orchescope/testkit';
 import type { RuleContext } from '../src/rule.ts';
 import {
   contradictedDeclarationRule,
+  declaredNotExercisedRule,
   exercisedNotDeclaredRule,
   unnamedObservationRule,
 } from '../src/rules/reconciliation.ts';
@@ -43,7 +44,8 @@ const deltaWith = (observed: readonly string[]): ReconciliationDelta => ({
 const contextFor = (observed: readonly string[]): RuleContext => ({
   graph: indexGraph(buildGraph([declared, anonymous, named], [])),
   delta: deltaWith(observed),
-  runs: [],
+  observedRuns: [],
+  silentRuns: [],
   benchmarks: [],
   chaosReports: [],
   scenarios: [],
@@ -78,6 +80,48 @@ describe('observed-name-carries-no-identity', () => {
       delta: undefined,
     });
     assert.equal(outcome.status, 'insufficient_evidence');
+  });
+});
+
+/**
+ * The rule that turned a silent run into six confident falsehoods.
+ *
+ * A traced integration suite on an uninstrumented target returned no span. The delta built from it marked
+ * every declared component unexercised, and this rule reported each one as never having run, against a suite
+ * whose source shows three of the tools executing repeatedly. The declaration side of the join was read
+ * correctly and the observation side was empty, which is not the same as a run in which nothing happened.
+ */
+describe('declared-not-exercised', () => {
+  const withNothingExercised = (): RuleContext => ({
+    ...contextFor([]),
+    delta: {
+      ...deltaWith([]),
+      declaredNotExercised: {
+        components: ['agent:support_agent', 'agent:planner'],
+        edges: [],
+        runIds: ['run_0000000000000001'],
+      },
+    },
+  });
+
+  it('says nothing when a run was recorded and produced no span', () => {
+    const outcome = declaredNotExercisedRule.evaluate({
+      ...withNothingExercised(),
+      silentRuns: [{ id: 'run_0000000000000001' } as RunRecord],
+    });
+    assert.equal(outcome.status, 'insufficient_evidence');
+    assert.deepEqual(outcome.drafts, []);
+    assert.match(outcome.detail ?? '', /produced no span/);
+  });
+
+  it('still fires once a run produced something to be absent from', () => {
+    const outcome = declaredNotExercisedRule.evaluate({
+      ...withNothingExercised(),
+      observedRuns: [{ run: { id: 'run_0000000000000001' } as RunRecord, componentMetrics: [] }],
+    });
+    assert.equal(outcome.status, 'fired');
+    assert.equal(outcome.drafts.length, 2);
+    assert.equal(outcome.drafts[0]?.basis, 'inferred');
   });
 });
 

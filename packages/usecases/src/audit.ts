@@ -1,5 +1,5 @@
 import { discover } from '@orchescope/discovery';
-import { createDeadline, type Deadline, formatCount } from '@orchescope/domain';
+import { createDeadline, type Deadline, formatCount, runIsSilent } from '@orchescope/domain';
 import { evaluateRules, linkConflicts } from '@orchescope/findings';
 import { computeDelta, indexGraph, type RunSideEffects, reconcile } from '@orchescope/graph';
 import { buildReportBundle } from '@orchescope/report';
@@ -54,7 +54,10 @@ export type AuditResult = {
   readonly bundle: ReportBundle;
   readonly reportDigest: string;
   readonly agentSystemDetected: boolean;
+  /** Runs that produced at least one span, which are the runs this report reconciled against. */
   readonly runsConsidered: readonly RunRecord[];
+  /** Runs that were recorded and produced no span. Named so a caller can say so, never reasoned from. */
+  readonly silentRuns: readonly RunRecord[];
   readonly scanId: string;
 };
 
@@ -89,7 +92,10 @@ type ReconcileStage = {
   readonly graph: SystemGraph;
   readonly evidence: readonly Evidence[];
   readonly reconciliation: ReconciliationDelta | undefined;
-  readonly runsConsidered: readonly RunRecord[];
+  /** Runs that produced at least one span. Everything runtime in this report rests on these. */
+  readonly observedRuns: readonly RunRecord[];
+  /** Runs that were recorded and produced no span. Reported, and never reasoned from. */
+  readonly silentRuns: readonly RunRecord[];
 };
 
 /**
@@ -98,6 +104,12 @@ type ReconcileStage = {
  * Attribution matters here: a span carries the observed component key, and reconciliation resolved that observed
  * component to a declared one. Joining the two is what lets a duplicated effect name the tool that produced it rather
  * than saying only that duplication happened.
+ *
+ * A run whose bundle holds no span is set aside before any of that. `importTrace` already refuses a file that yields
+ * no span, on the grounds that an empty run would reconcile as though nothing ran; the same is true of a traced run
+ * that exported nothing, and that one has to be stored because it happened. Feeding it to reconciliation produced a
+ * delta in which every declared component was unexercised, which is the absence of a measurement wearing the shape of
+ * one. Excluding it here rather than in each rule is what makes the guarantee hold for a rule written later.
  */
 const reconcileStoredRuns = (input: {
   readonly workspace: Workspace;
@@ -106,9 +118,10 @@ const reconcileStoredRuns = (input: {
 }): ReconcileStage => {
   const { workspace, runLimit } = input;
   const evidence: Evidence[] = [];
-  const runsConsidered: RunRecord[] = [];
+  const observedRuns: RunRecord[] = [];
+  const silentRuns: RunRecord[] = [];
   if (runLimit <= 0) {
-    return { graph: input.graph, evidence, reconciliation: undefined, runsConsidered };
+    return { graph: input.graph, evidence, reconciliation: undefined, observedRuns, silentRuns };
   }
 
   const ingestPhase = workspace.progress.phase('reconcile', 'Reconciling runtime evidence');
@@ -121,18 +134,26 @@ const reconcileStoredRuns = (input: {
     const run = workspace.store.runById(summary.runId);
     const bundle = workspace.store.traceForRun(summary.runId);
     if (run === undefined || bundle === undefined) continue;
+    if (runIsSilent(bundle.spans.length)) {
+      silentRuns.push(run);
+      continue;
+    }
     const derived = deriveTopology(bundle);
     topologies.push(derived.topology);
     evidence.push(...derived.evidence);
-    runsConsidered.push(run);
+    observedRuns.push(run);
     runSideEffects.push({ runId: summary.runId, sideEffects: bundle.sideEffects });
     metricsByRun.push({ runId: summary.runId, metrics: derived.componentMetricsByName });
     for (const [spanId, key] of derived.spanToComponentKey) spanToComponentKey.set(spanId, key);
   }
 
   if (topologies.length === 0) {
-    ingestPhase.skip('no run with trace data is stored for this project');
-    return { graph: input.graph, evidence, reconciliation: undefined, runsConsidered };
+    ingestPhase.skip(
+      silentRuns.length === 0
+        ? 'no run with trace data is stored for this project'
+        : `${formatCount(silentRuns.length, 'recorded run')} produced no span, so there is nothing to reconcile against`,
+    );
+    return { graph: input.graph, evidence, reconciliation: undefined, observedRuns, silentRuns };
   }
 
   const reconciled = reconcile(input.graph, topologies);
@@ -171,7 +192,8 @@ const reconcileStoredRuns = (input: {
     graph: reconciled.graph,
     evidence,
     reconciliation: delta.delta,
-    runsConsidered,
+    observedRuns,
+    silentRuns,
   };
 };
 
@@ -242,6 +264,7 @@ const assembleReport = (input: {
   readonly findings: readonly Finding[];
   readonly evidence: readonly Evidence[];
   readonly runsConsidered: readonly RunRecord[];
+  readonly silentRuns: readonly RunRecord[];
   readonly componentMetrics: readonly ComponentRunMetrics[];
   readonly reconciliation: ReconciliationDelta | undefined;
 }): ReportBundle => {
@@ -262,6 +285,7 @@ const assembleReport = (input: {
     findings,
     evidence: input.evidence,
     runs: runsConsidered,
+    silentRuns: input.silentRuns,
     scenarios,
     scenarioRuns: runsConsidered
       .filter((run) => run.scenarioId !== undefined)
@@ -363,7 +387,8 @@ export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
     evidence.push(...reconciled.evidence);
     const graph = reconciled.graph;
     const reconciliation = reconciled.reconciliation;
-    const runsConsidered = reconciled.runsConsidered;
+    const runsConsidered = reconciled.observedRuns;
+    const silentRuns = reconciled.silentRuns;
 
     const analysePhase = workspace.progress.phase('analyse', 'Reviewing findings');
     const indexed = indexGraph(graph);
@@ -377,10 +402,11 @@ export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
       graph: indexed,
       context: {
         delta: reconciliation,
-        runs: runsConsidered.map((run) => ({
+        observedRuns: runsConsidered.map((run) => ({
           run,
           componentMetrics: workspace.store.componentMetricsForRun(run.id),
         })),
+        silentRuns,
         benchmarks: latestBenchmarks(workspace),
         chaosReports: latestChaosReports(workspace),
         scenarios: workspace.store.listScenarios(workspace.projectId),
@@ -412,6 +438,7 @@ export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
       findings,
       evidence,
       runsConsidered,
+      silentRuns,
       componentMetrics,
       reconciliation,
     });
@@ -426,6 +453,7 @@ export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
       reportDigest,
       agentSystemDetected: scan.agentSystemDetected,
       runsConsidered,
+      silentRuns,
       scanId: graph.provenance.scanId,
     };
   } finally {

@@ -100,6 +100,10 @@ export const auditResult = (over: {
    * A reconciliation without a run in the bundle is a fixture that lied about its own shape: the join
    * region would render while the loop said nothing had been run. When reconciliation is present and
    * the caller did not name runs, one placeholder run keeps both regions honest.
+   *
+   * Those runs are observed runs. A reconciliation can only exist because something produced a span, so
+   * a fixture that carried runs and reported none of them as observed would be describing a state the
+   * product cannot reach.
    */
   const runs =
     over.runs ??
@@ -128,6 +132,8 @@ export const auditResult = (over: {
         componentCount,
         edgeCount: over.edgeCount ?? 32,
         runCount: runs.length,
+        observedRunCount: runs.length,
+        silentRunCount: 0,
         findingCountBySeverity: {},
         strengthCount: 0,
       },

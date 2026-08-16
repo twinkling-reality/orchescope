@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, describe, it } from 'node:test';
@@ -11,6 +11,13 @@ import { promisify } from 'node:util';
  * Getting the first run in is where a reader gets stuck, so an empty run has to be a report rather than a dead
  * end: it names what Orchescope listened on, which variables the target was expected to honour, and the way
  * forward that needs no instrumentation. The target here is a process that exports nothing on purpose.
+ *
+ * The second half of this file is the audit that follows such a run. `trace` reported the empty run correctly
+ * from the first release and `audit` then read it as a measurement: a run holding no span produced an exercise
+ * rate of zero percent labelled `observed` at 0.98 confidence, a declared-not-exercised finding naming tools
+ * that had run, seven checks that counted as having run on evidence that did not exist, and a loop that
+ * declared step four done. Absence of measurement is not measurement of absence, and these cases are what
+ * hold the two apart.
  */
 
 const execFileAsync = promisify(execFile);
@@ -52,6 +59,65 @@ const silentProject = (): string => {
   return root;
 };
 
+/**
+ * The same silent target, with components declared so the reconciliation rules have something to be wrong
+ * about. Without a declared component there is nothing to call unexercised and the bug cannot be reproduced.
+ */
+const declaredSilentProject = (): string => {
+  const root = silentProject();
+  mkdirSync(join(root, '.orchescope'), { recursive: true });
+  writeFileSync(
+    join(root, '.orchescope/manifest.yaml'),
+    [
+      'schemaVersion: 1',
+      'components:',
+      '  - kind: agent',
+      '    name: orchestrator',
+      '    definedIn: main.js',
+      '  - kind: tool',
+      '    name: issue_refund',
+      '    definedIn: main.js',
+      '    sideEffect: financial',
+      'edges:',
+      '  - kind: calls_tool',
+      '    from: orchestrator',
+      '    to: issue_refund',
+      '',
+    ].join('\n'),
+  );
+  return root;
+};
+
+type Finding = {
+  readonly ruleId: string;
+  readonly basis: string;
+  readonly title: string;
+  readonly severity: string;
+};
+
+type AuditDocument = {
+  readonly data: {
+    readonly reconciliation?: { readonly coverage: { readonly componentExerciseRate?: number } };
+    readonly findings: readonly Finding[];
+    readonly rulesEvaluated: readonly { readonly ruleId: string; readonly status: string }[];
+    readonly loop: {
+      readonly standingAt: string | null;
+      readonly checkCoverage: {
+        readonly ran: number;
+        readonly blocked: number;
+        readonly total: number;
+      };
+      readonly next: { readonly kind: string; readonly argv?: readonly string[] } | null;
+    };
+  };
+};
+
+const auditJson = async (root: string): Promise<AuditDocument['data']> => {
+  const result = await run(['--cwd', root, 'audit', '--json']);
+  assert.equal(result.code, 0, result.stderr);
+  return (JSON.parse(result.stdout) as AuditDocument).data;
+};
+
 describe('a traced run that collects nothing', () => {
   it('says what it listened on, what it set, and how to proceed without instrumenting', async () => {
     const root = silentProject();
@@ -91,6 +157,59 @@ describe('a traced run that collects nothing', () => {
     const root = silentProject();
     const result = await run(['--cwd', root, 'trace', '--', 'node', 'main.js']);
     assert.match(result.stdout, /next: instrument the target/);
+  });
+});
+
+describe('the audit that follows a run which collected nothing', () => {
+  it('refuses to derive an absence from it, and says a run was recorded and produced no spans', async () => {
+    const root = declaredSilentProject();
+    const before = await auditJson(root);
+    const traced = await run(['--cwd', root, 'trace', '--', 'node', 'main.js']);
+    assert.equal(traced.code, 0, traced.stderr);
+    const after = await auditJson(root);
+
+    const statusOf = (data: AuditDocument['data'], ruleId: string) =>
+      data.rulesEvaluated.find((rule) => rule.ruleId === ruleId)?.status;
+
+    // Nothing was exercised and nothing was found unexercised: neither claim has evidence behind it.
+    assert.equal(statusOf(after, 'declared-not-exercised'), 'insufficient_evidence');
+    assert.equal(
+      after.findings.some((finding) => finding.ruleId === 'declared-not-exercised'),
+      false,
+    );
+
+    const coverage = after.findings.find((finding) => finding.ruleId === 'observability-coverage');
+    assert.ok(coverage !== undefined, 'observability-coverage must still speak');
+    assert.match(coverage.title, /recorded and produced no spans/);
+    assert.equal(coverage.basis, 'discovered');
+    assert.equal(
+      /percent of declared components were exercised/.test(coverage.title),
+      false,
+      'an exercise rate is a measurement and none was taken',
+    );
+
+    // No delta at all, so no rate can be read from one either.
+    assert.equal(after.reconciliation, undefined);
+
+    // The run bought no coverage, so the count of checks that ran must not move.
+    assert.deepEqual(after.loop.checkCoverage, before.loop.checkCoverage);
+
+    // And the loop still points at the thing that would actually help.
+    assert.equal(after.loop.standingAt, 'measure');
+    assert.deepEqual(after.loop.next, {
+      kind: 'command',
+      argv: ['orchescope', 'trace', '--', '<the command that starts your system>'],
+    });
+  });
+
+  it('keeps every finding it does report free of an observed basis', async () => {
+    const root = declaredSilentProject();
+    await run(['--cwd', root, 'trace', '--', 'node', 'main.js']);
+    const after = await auditJson(root);
+    assert.deepEqual(
+      after.findings.filter((finding) => finding.basis === 'observed').map((f) => f.ruleId),
+      [],
+    );
   });
 });
 

@@ -39,8 +39,12 @@ export const declaredNotExercisedRule: Rule = {
   category: 'scenario_coverage',
   summary: 'Components that exist in the code or configuration and appear in no run.',
   evaluate: (context) => {
-    if (context.delta === undefined || context.runs.length === 0) {
-      return insufficient('no runs have been recorded, so nothing can be called unexercised');
+    if (context.delta === undefined || context.observedRuns.length === 0) {
+      return insufficient(
+        context.silentRuns.length === 0
+          ? 'no runs have been recorded, so nothing can be called unexercised'
+          : `${formatCount(context.silentRuns.length, 'run')} produced no span, and a run that measured nothing cannot establish that anything went unexercised`,
+      );
     }
     const unexercised = context.delta.declaredNotExercised.components;
     if (unexercised.length === 0) return clear('every declared component was exercised');
@@ -52,8 +56,8 @@ export const declaredNotExercisedRule: Rule = {
       const record = absenceEvidence({
         producer: PRODUCER,
         searched: `spans attributed to ${componentId}`,
-        scope: `${formatCount(context.runs.length, 'run')}: ${context.runs.map((entry) => entry.run.id).join(', ')}`,
-        inspectedCount: context.runs.length,
+        scope: `${formatCount(context.observedRuns.length, 'run')}: ${context.observedRuns.map((entry) => entry.run.id).join(', ')}`,
+        inspectedCount: context.observedRuns.length,
       });
       const isTool = component.kind === 'tool';
       drafts.push({
@@ -68,7 +72,7 @@ export const declaredNotExercisedRule: Rule = {
         confidence: CONFIDENCE_BANDS.strongStructural,
         basis: 'inferred',
         title: `${component.displayName} is declared but never exercised`,
-        explanation: `The ${component.kind} ${componentLabel(componentId)} was discovered in the repository and did not appear in any of the ${formatCount(context.runs.length, 'recorded run')}. Either no scenario reaches it, or it is unreachable in practice.`,
+        explanation: `The ${component.kind} ${componentLabel(componentId)} was discovered in the repository and did not appear in any of the ${formatCount(context.observedRuns.length, 'recorded run')}. Either no scenario reaches it, or it is unreachable in practice.`,
         impact: isTool
           ? 'A configured tool that never runs is either dead configuration or an untested capability, and both are usually wrong.'
           : 'Coverage of this component is zero, so no runtime claim about it can be made.',

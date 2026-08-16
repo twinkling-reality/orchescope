@@ -50,7 +50,15 @@ export type BuildBundleInput = {
   readonly graph: SystemGraph;
   readonly findings: readonly Finding[];
   readonly evidence: readonly Evidence[];
+  /** Runs that produced at least one span. Everything measured in this bundle came from these. */
   readonly runs: readonly RunRecord[];
+  /**
+   * Runs that were recorded and produced no span.
+   *
+   * They join `runs` in the bundle, because a reader who has just traced something needs to see that
+   * the run landed, and they are counted apart from it, because nothing here was measured by them.
+   */
+  readonly silentRuns: readonly RunRecord[];
   readonly scenarios: readonly Scenario[];
   readonly scenarioRuns: readonly ScenarioRunSummary[];
   readonly componentMetrics: readonly ComponentRunMetrics[];
@@ -126,6 +134,7 @@ const withLayout = (graph: SystemGraph): SystemGraph => {
 
 export const buildReportBundle = (input: BuildBundleInput): ReportBundle => {
   const graph = withLayout(input.graph);
+  const allRuns = [...input.runs, ...input.silentRuns];
   const overlays = buildOverlays({
     graph,
     componentMetrics: input.componentMetrics,
@@ -163,7 +172,7 @@ export const buildReportBundle = (input: BuildBundleInput): ReportBundle => {
     reportId: makeReportId({
       scanId: graph.provenance.scanId,
       generatedAt: input.generatedAt,
-      runIds: input.runs.map((run) => run.id),
+      runIds: allRuns.map((run) => run.id),
     }),
     generatedAt: input.generatedAt,
     projectName: graph.provenance.projectName,
@@ -171,7 +180,7 @@ export const buildReportBundle = (input: BuildBundleInput): ReportBundle => {
     ...(input.reconciliation === undefined ? {} : { reconciliation: input.reconciliation }),
     findings: [...input.findings],
     evidence: [...input.evidence],
-    runs: [...input.runs],
+    runs: allRuns,
     scenarios: [...input.scenarios],
     scenarioRuns: [...input.scenarioRuns],
     componentMetrics: [...input.componentMetrics],
@@ -193,7 +202,9 @@ export const buildReportBundle = (input: BuildBundleInput): ReportBundle => {
       ).length,
       findingCountBySeverity,
       strengthCount,
-      runCount: input.runs.length,
+      runCount: allRuns.length,
+      observedRunCount: input.runs.length,
+      silentRunCount: input.silentRuns.length,
       scenarioCount: input.scenarios.length,
     },
     metadata: {
