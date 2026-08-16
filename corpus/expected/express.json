@@ -89,7 +89,7 @@
       "observability-coverage": 1
     },
     "bySeverity": {
-      "medium": 1
+      "info": 1
     },
     "strengths": 0,
     "total": 1

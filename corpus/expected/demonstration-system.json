@@ -105,9 +105,9 @@
     },
     "bySeverity": {
       "high": 1,
-      "info": 2,
+      "info": 3,
       "low": 1,
-      "medium": 3
+      "medium": 2
     },
     "strengths": 2,
     "total": 7

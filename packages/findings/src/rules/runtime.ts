@@ -521,7 +521,19 @@ const noObservationDraft = (
     ruleId: 'observability-coverage',
     category: 'observability',
     polarity: 'risk',
-    severity: 'medium',
+    /*
+     * Two different sentences, and only one of them describes something going wrong.
+     *
+     * With no run on record this fired at medium in every repository that had a component, twenty three
+     * of twenty three across a sweep, which is a finding carrying no information: it says the operator
+     * has not run the next step yet, and the loop already says that and routes to it. Ranking it beside
+     * a duplicated refund teaches a reader to skim the list, and the list is the product.
+     *
+     * A run that was recorded and produced nothing is a different claim. Something was attempted and the
+     * instrumentation did not land, which is a fact about this repository with a specific remediation, so
+     * it keeps the weight it earned.
+     */
+    severity: silent === 0 ? 'info' : 'medium',
     confidence: CONFIDENCE_BANDS.deterministic,
     basis: 'discovered',
     title:

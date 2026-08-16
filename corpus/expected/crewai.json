@@ -100,8 +100,8 @@
       "topology-shape": 1
     },
     "bySeverity": {
-      "info": 1,
-      "medium": 2
+      "info": 2,
+      "medium": 1
     },
     "strengths": 1,
     "total": 3

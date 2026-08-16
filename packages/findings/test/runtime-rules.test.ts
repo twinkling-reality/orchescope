@@ -84,6 +84,16 @@ describe('observability-coverage', () => {
     assert.ok((draft?.components.length ?? 0) > 0);
   });
 
+  /*
+   * It fired at medium in twenty three of twenty three repositories that had a component, which is a
+   * finding carrying no information: it says the operator has not run the next step yet, and the loop
+   * already says that and routes to it. Ranked beside a duplicated refund it teaches a reader to skim.
+   */
+  it('states an unrun system at the weight of a note, not of a defect', () => {
+    const outcome = observabilityCoverageRule.evaluate(contextFor(undefined, false));
+    assert.equal(outcome.drafts[0]?.severity, 'info');
+  });
+
   it('reports insufficient evidence when a rate cannot be computed', () => {
     const outcome = observabilityCoverageRule.evaluate(
       contextFor(deltaOf({ declared: 0, exercised: 0, notExercised: [] }), true),
@@ -179,6 +189,11 @@ describe('observability-coverage', () => {
     assert.equal(draft?.basis, 'discovered');
     assert.match(draft?.explanation ?? '', /unmeasured rather than zero/);
     assert.match(draft?.recommendation?.summary ?? '', /exported no telemetry/);
+    /*
+     * A run that was attempted and produced nothing is a fact about this repository with a remediation,
+     * which is what separates it from a system nobody has run yet.
+     */
+    assert.equal(draft?.severity, 'medium');
   });
 });
 
