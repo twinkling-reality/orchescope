@@ -5,6 +5,7 @@ import { after, before, describe, it } from 'node:test';
 import { createExporter, type FinishedSpan } from '../src/exporter.ts';
 import { alreadyInstrumented, install } from '../src/install.ts';
 import { recogniseModelCall } from '../src/model-endpoints.ts';
+import { recogniseProtocolCall } from '../src/json-rpc.ts';
 import { instrumentedFetch } from '../src/outbound-fetch.ts';
 import { readSettings } from '../src/settings.ts';
 import { createTracer, SPAN_KIND_INTERNAL } from '../src/tracer.ts';
@@ -152,6 +153,57 @@ describe('recognising a model call that arrives as plain HTTP', () => {
   });
 });
 
+describe('recognising a protocol call inside the request that carries it', () => {
+  const rpc = (body: unknown) => recogniseProtocolCall(JSON.stringify(body));
+
+  it('names the method and the tool a call executed', () => {
+    assert.deepEqual(
+      rpc({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'issue_refund' } }),
+      { method: 'tools/call', toolName: 'issue_refund' },
+    );
+  });
+
+  /*
+   * Only `tools/call` carries a name worth joining on. Giving `tools/list` a component would put the act of
+   * asking what exists into the inventory of what exists.
+   */
+  it('names the method alone for the conversation around the calls', () => {
+    assert.deepEqual(rpc({ jsonrpc: '2.0', id: 1, method: 'tools/list' }), {
+      method: 'tools/list',
+      toolName: undefined,
+    });
+  });
+
+  it('reads the first call of a batch, since one span cannot honestly name several', () => {
+    const call = rpc([
+      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'first' } },
+      { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'second' } },
+    ]);
+    assert.equal(call?.toolName, 'first');
+  });
+
+  it('says nothing about a body that is not a protocol message', () => {
+    assert.equal(recogniseProtocolCall(undefined), undefined);
+    assert.equal(recogniseProtocolCall('not json'), undefined);
+    assert.equal(rpc({ model: 'gpt-4o-mini', messages: [] }), undefined);
+    assert.equal(rpc({ jsonrpc: '1.0', method: 'legacy' }), undefined);
+  });
+
+  /*
+   * The arguments to a tool call are the payload of the system under test. The method and the name are read
+   * from the body and nothing else is.
+   */
+  it('reads the name and not the arguments', () => {
+    const call = rpc({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'issue_refund', arguments: { customerEmail: 'ada@example.com' } },
+    });
+    assert.deepEqual(Object.keys(call ?? {}).toSorted(), ['method', 'toolName']);
+  });
+});
+
 /** Stands in for the receiver a real run exports to, so traffic to it can be shown to be left alone. */
 const RECEIVER_ORIGIN = 'http://127.0.0.1:65535';
 
@@ -241,7 +293,71 @@ describe('the fetch that was patched', () => {
     await patched().fetch(`${origin}/charge?api_key=secret`, { method: 'POST', body: '{}' });
     const target = collected[0]?.events[0]?.attributes['orchescope.side_effect.target'];
     assert.equal(String(target).includes('secret'), false);
-    assert.match(String(target), /\/charge$/);
+    assert.match(String(target), /\/charge#[0-9a-f]{8}$/);
+  });
+
+  /*
+   * Duplicate detection keys on the target, so two different writes to one endpoint must not look like one
+   * write performed twice. That reading would be reported at high severity, about a payment or a
+   * notification, on a system that did nothing wrong.
+   */
+  it('tells two different writes to one endpoint apart, and two identical ones together', async () => {
+    const { fetch: instrumented } = patched();
+    await instrumented(`${origin}/notify`, { method: 'POST', body: '{"to":"ada"}' });
+    await instrumented(`${origin}/notify`, { method: 'POST', body: '{"to":"grace"}' });
+    await instrumented(`${origin}/notify`, { method: 'POST', body: '{"to":"ada"}' });
+    const targets = collected.map(
+      (span) => span.events[0]?.attributes['orchescope.side_effect.target'],
+    );
+    assert.equal(targets[0], targets[2], 'the same request sent twice is one effect repeated');
+    assert.notEqual(targets[0], targets[1], 'a different request is a different effect');
+  });
+
+  /*
+   * A model call and a protocol message are both POSTs, and neither is a thing that happened to the world.
+   * Counting them here would report two chat completions in one run as one outside effect performed twice.
+   */
+  it('records no outside effect for a model call or a protocol message', async () => {
+    const { fetch: instrumented } = patched();
+    await instrumented(`${origin}/mcp`, {
+      method: 'POST',
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'x' } }),
+    });
+    assert.deepEqual(collected[0]?.events, []);
+  });
+
+  /*
+   * The join that makes a protocol call worth recording. A span that names only the host it reached cannot
+   * be matched to a tool a repository declared, and matching by name is the whole reconciliation.
+   */
+  it('names the tool a protocol call executed, rather than the server it went to', async () => {
+    await patched().fetch(`${origin}/mcp`, {
+      method: 'POST',
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'issue_refund', arguments: { chargeId: 'ch_1' } },
+      }),
+    });
+    const span = collected[0];
+    assert.equal(span?.name, 'execute_tool issue_refund');
+    assert.equal(span?.attributes['mcp.tool.name'], 'issue_refund');
+    assert.equal(span?.attributes['mcp.method.name'], 'tools/call');
+    assert.equal(
+      span?.attributes['orchescope.component'],
+      undefined,
+      'naming the host here would bury the tool name the join needs',
+    );
+  });
+
+  it('leaves a protocol message that names no tool as a request to the server', async () => {
+    await patched().fetch(`${origin}/mcp`, {
+      method: 'POST',
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    });
+    assert.match(collected[0]?.name ?? '', /^outbound_request /);
+    assert.equal(collected[0]?.attributes['mcp.method.name'], 'tools/list');
   });
 
   it('reports a failing status as an error without throwing one', async () => {

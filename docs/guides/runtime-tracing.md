@@ -27,10 +27,22 @@ Most do not. The variables in the next section are inert unless something in the
 loads an OpenTelemetry SDK, and essentially no Node project does by default.
 
 So for a Node target, Orchescope loads its own instrumentation into the process, with
-`NODE_OPTIONS=--import`. It records every outbound request the target makes: the model it calls, the MCP
-server it talks to over HTTP, and the writes it performs, with the idempotency key when one was sent. It
-recognises the published model endpoints by host, which is what makes a system that calls a provider
-through plain `fetch` rather than through its package visible at all.
+`NODE_OPTIONS=--import`. It records every outbound request the target makes and names it by what it did:
+
+| The request | What the run records |
+| --- | --- |
+| A call to a published model endpoint | a model, with the provider, the model name and the token counts |
+| A Model Context Protocol `tools/call` | the tool, by the name reconciliation joins tools on |
+| Any other write | an outside effect, with the idempotency key when one was sent |
+| Any other read | the service it reached |
+
+Recognising a model endpoint by host is what makes a system that calls a provider through plain `fetch`
+rather than through its package visible at all. Reading the tool name out of the protocol message is what
+lets a tool your repository declares and a tool your run executes become the same component, which is the
+join the whole audit is built on.
+
+A model call and a protocol message are not recorded as outside effects. Both are POSTs, and counting them
+would report two chat completions in one run as one effect that happened twice.
 
 It is deliberately small, and deliberately restrained:
 

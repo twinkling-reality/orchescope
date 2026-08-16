@@ -21,6 +21,7 @@
 
 export { createExporter, type Exporter, type FinishedSpan } from './exporter.ts';
 export { alreadyInstrumented, install, type Installation } from './install.ts';
+export { type ProtocolCall, recogniseProtocolCall } from './json-rpc.ts';
 export { type ModelCall, recogniseModelCall } from './model-endpoints.ts';
 export { instrumentedFetch } from './outbound-fetch.ts';
 export { type InstrumentationSettings, readSettings } from './settings.ts';

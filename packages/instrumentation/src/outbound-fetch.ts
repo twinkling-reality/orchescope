@@ -1,5 +1,7 @@
-import { GEN_AI, ORCHESCOPE } from '@orchescope/traces/attributes';
+import { createHash } from 'node:crypto';
+import { GEN_AI, MCP, ORCHESCOPE } from '@orchescope/traces/attributes';
 import type { AttributeValue, SpanAttributes } from './exporter.ts';
+import { type ProtocolCall, recogniseProtocolCall } from './json-rpc.ts';
 import { recogniseModelCall } from './model-endpoints.ts';
 import { SPAN_KIND_CLIENT, type SpanHandle, type Tracer } from './tracer.ts';
 
@@ -67,8 +69,23 @@ const headerValue = (
   }
 };
 
-/** A target without its query string, because a query string is where a credential ends up. */
-const targetOf = (url: URL): string => `${url.host}${url.pathname}`;
+/**
+ * What an effect acted on: the host and the path, and which request it was.
+ *
+ * The query string is left out because a query string is where a credential ends up, and this string
+ * travels into a report. The digest is in because duplicate detection keys on this: two writes to the same
+ * endpoint are the same logical operation when they carry the same request and two different operations
+ * when they do not. Without it, a system that posts two different messages to one webhook in a single run
+ * would be reported as having performed one outside effect twice, at high severity, which is the exact
+ * shape of confident wrongness this work exists to remove.
+ *
+ * A digest is not the body. Nothing here can be read back out of it, and no payload leaves the process.
+ */
+const targetOf = (url: URL, body: string | undefined): string => {
+  const path = `${url.host}${url.pathname}`;
+  if (body === undefined || body.length === 0) return path;
+  return `${path}#${createHash('sha256').update(body).digest('hex').slice(0, 8)}`;
+};
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -82,12 +99,53 @@ const modelAttributes = (
   ...(model === undefined ? {} : { [GEN_AI.requestModel]: model }),
 });
 
-const outboundAttributes = (url: URL, method: string): SpanAttributes => ({
-  [ORCHESCOPE.component]: url.host,
+/**
+ * What every outbound request carries, whatever it turned out to be.
+ *
+ * `orchescope.component` is left out on purpose. It overrides every other name when the topology decides
+ * what a span belongs to, so setting it to the host here would bury the tool name a protocol call carries
+ * and turn an `execute_tool` span into another external service. It is added back, below, only for the
+ * requests whose component genuinely is the host they went to.
+ */
+const httpAttributes = (url: URL, method: string): SpanAttributes => ({
   'http.request.method': method,
   'server.address': url.host,
   'url.path': url.pathname,
 });
+
+const outboundAttributes = (url: URL, method: string): SpanAttributes => ({
+  ...httpAttributes(url, method),
+  [ORCHESCOPE.component]: url.host,
+});
+
+/**
+ * A protocol call, named by what it did rather than by where it went.
+ *
+ * `mcp.tool.name` is one of the three names reconciliation joins tools on, so a tool a repository declared
+ * and a tool a run executed become the same component. The server address stays as an attribute: the tool
+ * is what ran, and which server answered is a fact about it.
+ */
+const protocolAttributes = (
+  url: URL,
+  method: string,
+  call: ProtocolCall,
+): { readonly name: string; readonly attributes: SpanAttributes } => {
+  const base: SpanAttributes = {
+    ...httpAttributes(url, method),
+    [MCP.methodName]: call.method,
+    [MCP.serverName]: url.host,
+  };
+  if (call.toolName === undefined) {
+    return {
+      name: `outbound_request ${url.host}`,
+      attributes: { ...base, [ORCHESCOPE.component]: url.host },
+    };
+  }
+  return {
+    name: `execute_tool ${call.toolName}`,
+    attributes: { ...base, [MCP.toolName]: call.toolName },
+  };
+};
 
 /**
  * Token counts, read from a copy of the response.
@@ -139,7 +197,13 @@ export type FetchPatchOptions = {
   readonly receiverOrigin: string;
 };
 
-/** What a span for this request is called and carries, decided before the request is made. */
+/**
+ * What a span for this request is called and carries, decided before the request is made.
+ *
+ * Three shapes, in order of how much they say. A call to a published model endpoint is a model call. A
+ * JSON-RPC document is a protocol call and names the tool it executed. Everything else is a request to a
+ * service, which is the least a run can say about reaching one and still more than nothing.
+ */
 const describeRequest = (
   url: URL,
   method: string,
@@ -148,27 +212,44 @@ const describeRequest = (
   readonly name: string;
   readonly attributes: SpanAttributes;
   readonly isModelCall: boolean;
+  readonly isOutsideEffect: boolean;
 } => {
-  const call = recogniseModelCall(url, body);
-  if (call === undefined) {
+  const model = recogniseModelCall(url, body);
+  if (model !== undefined) {
     return {
-      name: `outbound_request ${url.host}`,
-      attributes: outboundAttributes(url, method),
+      name: `${model.operation} ${model.model ?? model.provider}`,
+      attributes: {
+        ...outboundAttributes(url, method),
+        ...modelAttributes(model.provider, model.operation, model.model),
+      },
+      isModelCall: true,
+      isOutsideEffect: false,
+    };
+  }
+  const protocol = recogniseProtocolCall(body);
+  if (protocol !== undefined) {
+    return {
+      ...protocolAttributes(url, method, protocol),
       isModelCall: false,
+      isOutsideEffect: false,
     };
   }
   return {
-    name: `${call.operation} ${call.model ?? call.provider}`,
-    attributes: {
-      ...outboundAttributes(url, method),
-      ...modelAttributes(call.provider, call.operation, call.model),
-    },
-    isModelCall: true,
+    name: `outbound_request ${url.host}`,
+    attributes: outboundAttributes(url, method),
+    isModelCall: false,
+    isOutsideEffect: WRITE_METHODS.has(method),
   };
 };
 
 /**
  * A write that reached the outside world, recorded as the event duplicate analysis reads.
+ *
+ * Only a plain write counts. A model call is a POST and so is every Model Context Protocol message, and
+ * recording those here would put the transport into the ledger of things that happened to the world: two
+ * chat completions in one run would read as one outside effect performed twice, at high severity, and so
+ * would two calls to two different tools on one server. What each of those did is the business of the
+ * component the span already names.
  *
  * An outcome of `unknown` is not a hedge. A request that never returned may still have been delivered, and
  * that is precisely the case a duplicated effect comes from, so it counts as an occurrence rather than
@@ -179,14 +260,14 @@ const recordEffect = (
   input: {
     readonly url: URL;
     readonly method: string;
+    readonly body: string | undefined;
     readonly outcome: string;
     readonly idempotencyKey: string | undefined;
   },
 ): void => {
-  if (!WRITE_METHODS.has(input.method)) return;
   span.addEvent(ORCHESCOPE.sideEffectEvent, {
     [ORCHESCOPE.sideEffectKind]: `http.${input.method.toLowerCase()}`,
-    [ORCHESCOPE.sideEffectTarget]: targetOf(input.url),
+    [ORCHESCOPE.sideEffectTarget]: targetOf(input.url, input.body),
     [ORCHESCOPE.sideEffectOutcome]: input.outcome,
     ...(input.idempotencyKey === undefined
       ? {}
@@ -201,28 +282,27 @@ export const instrumentedFetch = (options: FetchPatchOptions): typeof globalThis
     if (url === undefined || url.origin === receiverOrigin) return original(input, init);
 
     const method = requestMethod(input, init);
-    const described = describeRequest(url, method, requestBody(init));
+    const body = requestBody(init);
+    const described = describeRequest(url, method, body);
     const span = tracer.start({
       name: described.name,
       kind: SPAN_KIND_CLIENT,
       attributes: described.attributes,
     });
     const idempotencyKey = headerValue(input, init, IDEMPOTENCY_HEADER);
+    const effect = { url, method, body, idempotencyKey };
 
     try {
       const response = await tracer.within(span, () => original(input, init));
       span.set('http.response.status_code', response.status as AttributeValue);
       if (described.isModelCall) recordUsage(span, response);
-      recordEffect(span, {
-        url,
-        method,
-        outcome: effectOutcome(response.status),
-        idempotencyKey,
-      });
+      if (described.isOutsideEffect) {
+        recordEffect(span, { ...effect, outcome: effectOutcome(response.status) });
+      }
       span.end(response.ok ? 'ok' : 'error', response.ok ? undefined : `status ${response.status}`);
       return response;
     } catch (error) {
-      recordEffect(span, { url, method, outcome: 'unknown', idempotencyKey });
+      if (described.isOutsideEffect) recordEffect(span, { ...effect, outcome: 'unknown' });
       span.end('error', error instanceof Error ? error.message : 'the request failed');
       throw error;
     }
