@@ -68,6 +68,11 @@ Every tool validates its arguments against the schema it advertises, refuses an 
 bounds its output. Nothing returns a whole graph or a whole report: they return counts, a page, and identifiers to follow up
 on.
 
+Every answer arrives twice: as `structuredContent`, which is the typed payload to read fields from, and as a text block that
+mirrors it one line per record. A client that renders only text shows its reader the same findings, components and criteria,
+so nothing is visible on one side and missing on the other. The text mirrors the page rather than the whole set, which is
+what keeps it bounded.
+
 ## The workflow that works
 
 The loop is designed so an agent never has to guess whether its change helped.

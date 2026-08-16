@@ -25,6 +25,16 @@ import {
 } from '@orchescope/usecases';
 import type { Workspace } from '@orchescope/workspace';
 import { resolveInsideRoot } from '@orchescope/workspace';
+import {
+  componentDigest,
+  criterionDigest,
+  edgeDigest,
+  findingDigest,
+  goalDigest,
+  metricDeltaDigest,
+  nextActionDigest,
+  reconciliationDigest,
+} from './digest.ts';
 import { toAgentNextAction } from './loop-action.ts';
 import { type ToolDefinition, toolByName } from './tools.ts';
 
@@ -38,6 +48,14 @@ import { type ToolDefinition, toolByName } from './tools.ts';
 
 export type ToolOutcome = {
   readonly text: string;
+  /**
+   * One line per record the answer holds, mirroring the structured payload.
+   *
+   * A tool whose whole substance is structured used to leave a client that renders text with a count and
+   * nothing else. These lines go into the same text block as `text`, so both kinds of reader get the
+   * answer. They are bounded by the page the payload already carries rather than by a limit of their own.
+   */
+  readonly digest?: readonly string[];
   readonly data: Record<string, unknown>;
   readonly isError?: boolean;
 };
@@ -139,6 +157,24 @@ const scanAgentSystem = async (
   }
   return {
     text: `${formatCount(result.graph.components.length, 'component')} and ${formatCount(result.graph.edges.length, 'edge')} discovered across ${formatCount(result.graph.coverage.filesParsed, 'parsed file')}. Agent system detected: ${result.agentSystemDetected}.`,
+    /*
+     * What was found and what could not be inspected, which is the pair this tool exists to report. An
+     * adapter that ran and found nothing is as much of the answer as one that found something.
+     */
+    digest: [
+      ...[...byKind.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([kind, count]) => `${formatCount(count, kind)}.`),
+      ...result.graph.coverage.adapters
+        .filter((adapter) => adapter.status !== 'not_applicable')
+        .map(
+          (adapter) =>
+            `${adapter.adapterId} ${adapter.status}: ${adapter.componentsFound} components, ${adapter.edgesFound} edges.${adapter.detail === undefined ? '' : ` ${adapter.detail}`}`,
+        ),
+      ...result.graph.coverage.unsupported.map(
+        (area) => `Not inspected: ${area.area}. ${area.reason}`,
+      ),
+    ],
     data: {
       scanId: result.scanId,
       agentSystemDetected: result.agentSystemDetected,
@@ -196,6 +232,12 @@ const auditAgentSystem = async (
      * failed to store anything, when what happened is that it stored a run holding no span.
      */
     text: `Audit ${result.scanId}: ${formatCount(risks.length, 'risk')}, ${formatCount(result.bundle.summary.strengthCount, 'strength')}, ${formatCount(result.runsConsidered.length, 'run')} reconciled${result.silentRuns.length === 0 ? '' : `, ${formatCount(result.silentRuns.length, 'run')} recorded no span`}. Standing at ${standing?.title ?? 'closed loop'}. ${outcome.summary}.`,
+    /*
+     * The risks and the one next action, which are what an audit is read for. The reconciliation, the
+     * loop steps and the capabilities stay in the payload: they are context for a decision rather than
+     * the decision, and mirroring all of them would put a report back in the conversation.
+     */
+    digest: [...risks.slice(0, maxFindings).map(findingDigest), ...nextActionDigest(next)],
     data: {
       scanId: result.scanId,
       reportId: result.bundle.reportId,
@@ -258,6 +300,7 @@ const getSystemMap = (context: HandlerContext, args: Record<string, unknown>): T
     : [];
   return {
     text: `${page.length} of ${formatCount(components.length, 'matching component')}${includeEdges ? ` and ${formatCount(edges.length, 'adjacent edge')}` : ''}.`,
+    digest: [...page.map(componentDigest), ...edges.map(edgeDigest)],
     data: {
       scanId: scan.scanId,
       total: components.length,
@@ -290,6 +333,7 @@ const getReconciliationDelta = (
   const delta = bundle.reconciliation;
   return {
     text: `${delta.declaredNotExercised.components.length} declared and never exercised, ${delta.exercisedNotDeclared.components.length} exercised and never declared, ${formatCount(delta.contradictions.length, 'contradiction')}, ${formatCount(delta.duplicateSideEffects.length, 'duplicated side effect')}.`,
+    digest: reconciliationDigest(delta),
     data: { hasRuns: true, delta },
   };
 };
@@ -321,6 +365,7 @@ const getFindings = (context: HandlerContext, args: Record<string, unknown>): To
   const page = filtered.slice(offset, offset + limit);
   return {
     text: `${page.length} of ${formatCount(filtered.length, 'finding')}.`,
+    digest: page.map(findingDigest),
     data: {
       scanId: scan.scanId,
       total: filtered.length,
@@ -340,7 +385,25 @@ const getFinding = (context: HandlerContext, args: Record<string, unknown>): Too
   }
   const evidence = workspace.store.evidenceByIds(finding.evidence.slice(0, 12));
   return {
-    text: `${finding.id} ${finding.severity} ${finding.category}: ${finding.title}`,
+    text: findingDigest(finding),
+    /*
+     * The three things a reader decides on: why it fired, what it costs, and what to do about it. The
+     * whole record is in the payload; a title alone is not enough to act on and was all the text carried.
+     */
+    digest: [
+      finding.explanation,
+      `Impact: ${finding.impact}`,
+      ...finding.metrics.map(
+        (metric) =>
+          `${metric.name}: ${metric.value} ${metric.unit} over ${formatCount(metric.sampleSize, 'sample')}, ${metric.basis}.`,
+      ),
+      ...(finding.recommendation === undefined
+        ? []
+        : [`Recommended: ${finding.recommendation.summary}`]),
+      finding.goalReadiness.eligible
+        ? 'A goal can be created from this finding.'
+        : `Not goal eligible: ${finding.goalReadiness.reason}`,
+    ],
     data: {
       finding,
       evidence: evidence.map((record) => ({
@@ -374,6 +437,7 @@ const createImprovementGoal = (
     text: created
       ? `Created ${goal.id} from ${goal.findingId}. ${shape}`
       : `${goal.id} already covers ${goal.findingId} and is ${goal.status}, so it was returned unchanged. ${shape} Pass createAnother to cut a second goal from the same finding.`,
+    digest: goalDigest(goal),
     data: { goal, created, agentPrompt: renderAgentPrompt(goal) },
   };
 };
@@ -387,6 +451,7 @@ const getImprovementGoal = (
   if (goal === undefined) throw new OrchescopeError('NOT_FOUND', 'No such goal.');
   return {
     text: `${goal.id} (${goal.status}): ${goal.title}`,
+    digest: goalDigest(goal),
     data: { goal, agentPrompt: renderAgentPrompt(goal) },
   };
 };
@@ -396,6 +461,10 @@ const listScenarios = (context: HandlerContext, _args: Record<string, unknown>):
   const scenarios = discoverScenarios(workspace);
   return {
     text: `${formatCount(scenarios.length, 'scenario')} defined.`,
+    digest: scenarios.map(
+      (scenario) =>
+        `${scenario.id}: ${scenario.name}. Needs ${scenario.requiredPermissions.join(', ') || 'no permission'}. ${formatCount(scenario.faults.length, 'fault')}, ${formatCount(scenario.evaluators.length, 'evaluator')}.`,
+    ),
     data: {
       scenarios: scenarios.map((scenario) => ({
         id: scenario.id,
@@ -497,6 +566,13 @@ const runScenario = async (
   });
   return {
     text: `${scenario.id} ${outcome.result.passed ? 'passed' : 'failed'} over ${formatCount(outcome.result.repetitions.length, 'repetition')}.`,
+    digest: [
+      ...outcome.result.aggregate.evaluators.map(
+        (evaluator) =>
+          `${evaluator.kind} ${evaluator.skipped === true ? `skipped: ${evaluator.skipReason ?? 'no reason recorded'}` : evaluator.passed ? 'passed' : 'failed'}. ${evaluator.detail}`,
+      ),
+      ...outcome.result.limitations.map((limitation) => `Limitation: ${limitation}`),
+    ],
     data: {
       passed: outcome.result.passed,
       runIds: outcome.runIds,
@@ -524,7 +600,18 @@ const benchmarkVariants = async (
     orchescopeVersion: context.orchescopeVersion,
   });
   return {
+    /*
+     * A quantile withheld for want of samples is reported as withheld rather than omitted, because a
+     * missing p95 and a p95 nobody may rely on read identically once the number is gone.
+     */
     text: `Benchmark ${report.id} measured ${formatCount(report.variants.length, 'variant')} of ${report.dimension}.`,
+    digest: [
+      ...report.variants.map(
+        (variant) =>
+          `${variant.variantId}: ${variant.completedRuns} completed runs, success ${variant.successRate ?? 'not measured'}, p50 ${variant.durationMs.p50 ?? 'withheld'} ms, p95 ${variant.durationMs.p95 ?? 'withheld'} ms, ${variant.aggregateMetrics.inputTokens + variant.aggregateMetrics.outputTokens} tokens.`,
+      ),
+      ...report.limitations.map((limitation) => `Limitation: ${limitation}`),
+    ],
     data: {
       benchmarkId: report.id,
       dimension: report.dimension,
@@ -559,6 +646,15 @@ const injectFaults = async (
   });
   return {
     text: `Chaos ${report.id}: ${report.outcomes.filter((outcome) => outcome.taskCompleted).length} of ${formatCount(report.outcomes.length, 'fault')} absorbed.`,
+    digest: [
+      ...report.outcomes.map(
+        (outcome) =>
+          `${outcome.faultKind} on ${outcome.target}, applied ${outcome.appliedCount} times: task ${outcome.taskCompleted ? 'completed' : 'did not complete'}, ${outcome.recovered ? 'recovered' : 'did not recover'}, ${formatCount(outcome.duplicateSideEffects, 'duplicated side effect')}.`,
+      ),
+      ...report.notApplied.map(
+        (entry) => `Not applied: ${entry.faultKind} on ${entry.target}. ${entry.reason}`,
+      ),
+    ],
     data: {
       chaosReportId: report.id,
       environment: report.environment,
@@ -586,6 +682,10 @@ const compareRuns = (context: HandlerContext, args: Record<string, unknown>): To
   });
   return {
     text: `${comparison.verdict}: ${comparison.verdictReason}`,
+    digest: [
+      ...comparison.metricDeltas.map(metricDeltaDigest),
+      ...comparison.limitations.map((limitation) => `Limitation: ${limitation}`),
+    ],
     data: {
       comparisonId: comparison.id,
       verdict: comparison.verdict,
@@ -611,6 +711,7 @@ const validateImprovementGoal = (
   });
   return {
     text: `${outcome.goal.id}: ${outcome.validation.summary}`,
+    digest: outcome.validation.outcomes.map(criterionDigest),
     data: {
       validated: outcome.validation.validated,
       summary: outcome.validation.summary,

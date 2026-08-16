@@ -46,8 +46,13 @@ export const createMcpServer = (options: McpServerOptions): Server => {
     const name = request.params.name;
     try {
       const outcome = await callTool(options.context, name, request.params.arguments);
+      /*
+       * The digest joins the headline into one text block rather than becoming a second one. A client
+       * that renders only the first block would otherwise be back where it started.
+       */
+      const text = [outcome.text, ...(outcome.digest ?? [])].join('\n');
       return {
-        content: [{ type: 'text' as const, text: outcome.text }],
+        content: [{ type: 'text' as const, text }],
         structuredContent: outcome.data,
         isError: outcome.isError ?? false,
       };

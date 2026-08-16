@@ -133,6 +133,10 @@ const callTool = async (name: string, args: Message = {}): Promise<Message> => {
   return result;
 };
 
+/** What a client that renders only the text block puts in front of its reader. */
+const textOf = (result: Message): string =>
+  (result['content'] as readonly { text: string }[]).map((block) => block.text).join('\n');
+
 describe('the agent interface over stdio', () => {
   it('completes the handshake as orchescope, naming the version it advertises tools for', () => {
     const info = handshake['serverInfo'] as { name: string; version: string } | undefined;
@@ -244,6 +248,36 @@ describe('the agent interface over stdio', () => {
       'a validation command does not name this tool',
     );
     assert.ok(content.agentPrompt.length > 200, 'the implementer prompt is too thin to act on');
+  });
+
+  /*
+   * A client that renders `content` and ignores `structuredContent` is still common, and against one of
+   * those `get_findings` showed its reader the sentence "2 of 2 findings." and not one word about either.
+   * The property is that the text block carries the same answer the structured payload does.
+   */
+  it('puts the answer in the text block, not only in the structured payload', async () => {
+    const result = await callTool('get_findings', { limit: 5 });
+    const text = textOf(result);
+    const page = result['structuredContent'] as {
+      findings: readonly { id: string; title: string; severity: string }[];
+    };
+    assert.ok(page.findings.length > 0, 'no finding was returned');
+    for (const found of page.findings) {
+      assert.ok(text.includes(found.id), `the text does not name ${found.id}: ${text}`);
+      assert.ok(text.includes(found.title), `the text does not carry the title of ${found.id}`);
+      assert.ok(
+        text.includes(found.severity),
+        `the text does not carry the severity of ${found.id}`,
+      );
+    }
+
+    const map = await callTool('get_system_map', { limit: 5 });
+    const mapText = textOf(map);
+    const components = (map['structuredContent'] as { components: readonly { id: string }[] })
+      .components;
+    for (const component of components) {
+      assert.ok(mapText.includes(component.id), `the text does not name ${component.id}`);
+    }
   });
 
   /*
