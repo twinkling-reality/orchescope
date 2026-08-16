@@ -168,7 +168,7 @@ describe('declaration-contradicted-by-observation', () => {
   /*
    * The one kind of contradiction no run is needed to notice. Both halves of it are read out of source,
    * so it has to say discovered: a reader who sees observed will go looking for the run that produced it
-   * and there is none. The severity is unaffected, which is the point — the word is not load bearing for
+   * and there is none. The severity is unaffected, which is the point: the word is not load bearing for
    * how bad this is, only for what would have to be true for it to be right.
    */
   it('calls a contradiction that source alone produced discovered, not observed', () => {

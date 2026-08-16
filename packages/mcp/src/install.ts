@@ -18,6 +18,15 @@ export type InstallTarget = {
   readonly file: string;
   readonly key: 'mcpServers' | 'servers';
   readonly description: string;
+  /*
+   * Whether the file this writes is committed with the repository or belongs to one machine. A project
+   * scoped file is read by whoever checks the repository out, so it may not name this machine's node
+   * binary, this machine's copy of the script, or this machine's path to the repository: those are three
+   * ways to write a file that works here and fails for everyone else, and it fails as a client that
+   * silently lists no tools. A user scoped file is the opposite case and needs the absolute paths,
+   * because nothing guarantees what directory the client starts the server in.
+   */
+  readonly scope: 'project' | 'user';
 };
 
 export const installTargets = (repositoryRoot: string, home: string): readonly InstallTarget[] => [
@@ -26,24 +35,28 @@ export const installTargets = (repositoryRoot: string, home: string): readonly I
     file: join(repositoryRoot, '.mcp.json'),
     key: 'mcpServers',
     description: 'project scoped, shared with anyone who checks out this repository',
+    scope: 'project',
   },
   {
     client: 'vscode',
     file: join(repositoryRoot, '.vscode', 'mcp.json'),
     key: 'servers',
     description: 'workspace scoped for editors that read .vscode/mcp.json',
+    scope: 'project',
   },
   {
     client: 'cursor',
     file: join(repositoryRoot, '.cursor', 'mcp.json'),
     key: 'mcpServers',
     description: 'project scoped for Cursor',
+    scope: 'project',
   },
   {
     client: 'claude-desktop',
     file: join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json'),
     key: 'mcpServers',
     description: 'user scoped on macOS',
+    scope: 'user',
   },
 ];
 

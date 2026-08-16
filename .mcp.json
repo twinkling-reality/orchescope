@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "orchescope": {
+      "args": ["mcp", "serve"],
+      "command": "orchescope",
+      "env": {}
+    }
+  }
+}

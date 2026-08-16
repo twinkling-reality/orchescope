@@ -68,10 +68,20 @@ export const mcpInstallCommand = (
     return EXIT_CODES.user;
   }
 
+  /*
+   * A project scoped file is committed, so it has to name the binary rather than this machine. The
+   * client starts a project server with the project as its working directory, which is what lets the
+   * --cwd go: naming an absolute root here is the difference between a file a colleague can use and one
+   * that resolves to a directory they do not have. If orchescope is not on their path they get a command
+   * that is not found, which says what is wrong, rather than a server that starts somewhere else.
+   */
+  const portable = target.scope === 'project';
   const result = installServer({
     target,
-    command: process.execPath,
-    args: [process.argv[1] ?? 'orchescope', 'mcp', 'serve', '--cwd', context.workspace.paths.root],
+    command: portable ? 'orchescope' : process.execPath,
+    args: portable
+      ? ['mcp', 'serve']
+      : [process.argv[1] ?? 'orchescope', 'mcp', 'serve', '--cwd', context.workspace.paths.root],
     overwrite: options.overwrite === true,
   });
 

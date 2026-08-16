@@ -21,6 +21,7 @@ export const DEFAULT_EXCLUDED_DIRECTORIES: readonly string[] = [
   '.next',
   '.nuxt',
   '.turbo',
+  '.cache',
   '.orchescope',
   'target',
   'vendor',

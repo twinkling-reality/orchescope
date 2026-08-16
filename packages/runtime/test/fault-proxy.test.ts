@@ -11,8 +11,8 @@ import { proxyCapableFaults, startFaultProxy } from '../src/fault-proxy.ts';
  *
  * No runner starts this proxy in this build, which is why it had no test: nothing exercised it end to end and
  * the gap was invisible. That is backwards for this file in particular. Its safety properties are claims the
- * threat model makes in prose — binds to loopback, never becomes an open proxy, refuses a non loopback
- * upstream unless outbound access was granted — and an unstarted server is exactly the kind that acquires a
+ * threat model makes in prose: binds to loopback, never becomes an open proxy, refuses a non loopback
+ * upstream unless outbound access was granted. An unstarted server is exactly the kind that acquires a
  * hole while nobody is watching. These assert the refusals directly, so the properties hold on the day
  * something does wire it up rather than being rechecked by hand then.
  */

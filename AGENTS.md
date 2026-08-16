@@ -101,6 +101,24 @@ Rules the tooling enforces:
 - Every displayed number carries its basis: observed, discovered, inferred, estimated, simulated or model
   interpreted.
 
+## Using Orchescope while you work on Orchescope
+
+`.mcp.json` registers this build as an MCP server, so a coding agent working in this repository has the same
+seventeen tools an ordinary user gets. It names the `orchescope` binary rather than a path, so it needs the CLI
+on your path: `npm install -g` the tarball `pnpm package` builds, or the one attached to the latest release.
+
+Point it at `apps/demo`, not at the repository root. This repository is not an agent system: it reads them. Every
+framework name the adapters know appears here as a string literal, which is why `corpus/corpus.yaml` pins
+`packages/discovery` as a `not_agent_system` entry with a ceiling of zero components. An audit of the root finds
+the demonstration system and little else, and a reader who mistakes that for a self assessment has learned
+nothing. The demonstration system is the fixture with declared weaknesses in it, and it is what the improvement
+loop closes on.
+
+Prefer the tools over rebuilding the CLI on every change: `audit_agent_system` for what a scan now produces,
+`get_findings` for what a rule change did to the set, `create_improvement_goal` and `validate_improvement_goal`
+for whether the loop still closes. Read what the tools return rather than scraping the terminal document, which
+is a human surface and is allowed to change shape.
+
 ## Prohibited
 
 - Presenting an inference as an observation, or an estimate as a measurement.
