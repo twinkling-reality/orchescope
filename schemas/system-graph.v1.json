@@ -1141,6 +1141,10 @@
                     "type": "string"
                   },
                   {
+                    "const": "adapter_found_nothing",
+                    "type": "string"
+                  },
+                  {
                     "const": "adapter_blind_spot",
                     "type": "string"
                   },

@@ -45,6 +45,8 @@ const adapterName = (adapterId: string): string => adapterId.replace(/^adapter:/
  */
 const UNSUPPORTED_STATE: Readonly<Record<string, string>> = {
   language_not_analysed: '. unparsed',
+  adapter_found_nothing: '. unread',
+  // The name this build no longer writes, still rendered so a report stored by an earlier one reads.
   adapter_blind_spot: '. unread',
   discarded_relation: '. discarded',
 };

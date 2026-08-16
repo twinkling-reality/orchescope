@@ -85,7 +85,11 @@ export const observationOf = (entry, audit, bundle, exercise) => {
     ),
     ...(exercise === undefined ? {} : { runtime: runtimeOf(exercise, bundle) }),
     languagesNotAnalysed: areasOfKind(coverage, 'language_not_analysed'),
-    blindSpots: areasOfKind(coverage, 'adapter_blind_spot'),
+    // Both kinds, because a graph stored by an earlier build carries the name no longer written.
+    foundNothing: [
+      ...areasOfKind(coverage, 'adapter_found_nothing'),
+      ...areasOfKind(coverage, 'adapter_blind_spot'),
+    ],
     discardedRelations: areasOfKind(coverage, 'discarded_relation'),
     findings: {
       total: findings.length,

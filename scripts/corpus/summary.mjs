@@ -3,7 +3,7 @@
  *
  * Three numbers earn their place on every line: the parse rate, because a reader that parsed a third of the source
  * it claims to read knows a third of it; what each adapter contributed, because that is what says which adapters matter;
- * and the blind spots, because an adapter that claims a framework and reads nothing from it is the failure mode a
+ * and the adapters that found nothing, because one claiming a framework and reading nothing from it is the failure mode a
  * per framework reader has, and it is invisible unless it is printed.
  *
  * The parse rate is against the files in a language this build reads, not against every file the traversal walked.
@@ -28,7 +28,7 @@ export const describe = (observation) => {
     `${observation.name}  ${observation.agentSystemDetected ? 'agent system' : 'no agent system'}, ${observation.components.total} components, ${observation.relations.total} relations`,
     `  parse rate    ${observation.files.parsed}/${observation.files.inSupportedLanguages} files in a language this build reads (${percent(observation.files.parsed, observation.files.inSupportedLanguages)}%), ${observation.files.discovered} discovered${observation.files.truncated ? ', truncated' : ''}`,
     `  adapters      ${contributions(observation.adapters).join(', ') || 'none contributed'}`,
-    `  blind spots   ${observation.blindSpots.join('; ') || 'none'}`,
+    `  found nothing ${observation.foundNothing.join('; ') || 'none'}`,
     `  findings      ${observation.findings.total} across ${Object.keys(observation.findings.byRule).length} rule(s), ${observation.findings.strengths} strength(s)`,
   ];
   if (observation.runtime !== undefined) {

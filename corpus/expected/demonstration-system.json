@@ -68,7 +68,6 @@
     }
   },
   "agentSystemDetected": true,
-  "blindSpots": [],
   "components": {
     "byKind": {
       "agent": 5,
@@ -112,6 +111,7 @@
     "strengths": 2,
     "total": 7
   },
+  "foundNothing": [],
   "kind": "agent_system",
   "languagesNotAnalysed": [],
   "name": "demonstration-system",

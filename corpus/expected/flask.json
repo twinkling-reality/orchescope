@@ -68,7 +68,6 @@
     }
   },
   "agentSystemDetected": false,
-  "blindSpots": [],
   "components": {
     "byKind": {
       "database": 1,
@@ -95,6 +94,7 @@
     "strengths": 0,
     "total": 1
   },
+  "foundNothing": [],
   "kind": "not_agent_system",
   "languagesNotAnalysed": [],
   "name": "flask",

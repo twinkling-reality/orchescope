@@ -68,7 +68,6 @@
     }
   },
   "agentSystemDetected": true,
-  "blindSpots": [],
   "components": {
     "byKind": {
       "agent": 620,
@@ -108,6 +107,7 @@
     "strengths": 0,
     "total": 6
   },
+  "foundNothing": [],
   "kind": "agent_system",
   "languagesNotAnalysed": [],
   "name": "openai-agents-python",

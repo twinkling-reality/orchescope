@@ -67,7 +67,7 @@ describe('an area no adapter models', () => {
       render({
         unsupported: [
           { area: 'go source files (1)', kind: 'language_not_analysed', reason: 'x' },
-          { area: 'mcp used in source', kind: 'adapter_blind_spot', reason: 'y' },
+          { area: 'mcp used in source', kind: 'adapter_found_nothing', reason: 'y' },
           { area: 'edge to nowhere', kind: 'discarded_relation', reason: 'z' },
           { area: 'something older', reason: 'w' },
         ] as never,
@@ -78,6 +78,22 @@ describe('an area no adapter models', () => {
         'gap             . discarded  edge to nowhere',
         'gap             . unread     something older',
       ],
+    );
+  });
+
+  /*
+   * `adapter_blind_spot` is the name this build stopped writing, and a report stored by an earlier one
+   * still carries it. Accepted for reading and never emitted, so it has to render rather than fall
+   * through to the unnamed case, which would tell a reader less than the document holds.
+   */
+  it('renders the name this build no longer writes', () => {
+    assert.deepEqual(
+      render({
+        unsupported: [
+          { area: 'mcp used in source', kind: 'adapter_blind_spot', reason: 'y' },
+        ] as never,
+      }),
+      ['gap             . unread     mcp used in source'],
     );
   });
 

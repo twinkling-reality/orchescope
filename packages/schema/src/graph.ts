@@ -60,13 +60,25 @@ export const AdapterRun = Type.Object(
 export type AdapterRun = Static<typeof AdapterRun>;
 
 /**
- * Why an area is unsupported, separated because the three causes belong to different owners: a
- * language nobody has written a parser for is a limit of this release, an adapter that read nothing
- * from a framework it claims is a reader that is behind, and a discarded relation is a defect in the
+ * Why an area is unsupported, separated because the causes belong to different owners: a language
+ * nobody has written a parser for is a limit of this release, an adapter that read nothing from a
+ * framework it claims may be a reader that is behind, and a discarded relation is a defect in the
  * adapter that reported it. A reader that has to match on prose cannot tell them apart.
+ *
+ * `adapter_found_nothing` states what happened and stops there, which is the whole of the change from
+ * the name it replaces. `adapter_blind_spot` said the gap was Orchescope's, while the reason travelling
+ * beside it has always named two causes and declined to choose: either this build does not read the form
+ * a repository uses, or that repository imports a framework as a client and declares nothing an adapter
+ * could read. A kind that decides what the reason refuses to decide is an inference wearing the clothes
+ * of an observation, which is the one thing this schema exists to keep apart.
+ *
+ * The old name is accepted for reading and never emitted, the way the trace attribute vocabulary handles
+ * a convention that moved. That keeps a graph stored by an earlier build readable, so nothing has to be
+ * migrated and no document version moves.
  */
 const UnsupportedAreaKind = literals([
   'language_not_analysed',
+  'adapter_found_nothing',
   'adapter_blind_spot',
   'discarded_relation',
 ] as const);

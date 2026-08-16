@@ -68,9 +68,6 @@
     }
   },
   "agentSystemDetected": true,
-  "blindSpots": [
-    "mcp is imported here and its adapter found nothing"
-  ],
   "components": {
     "byKind": {
       "agent": 260,
@@ -106,6 +103,9 @@
     "strengths": 1,
     "total": 3
   },
+  "foundNothing": [
+    "mcp is imported here and its adapter found nothing"
+  ],
   "kind": "agent_system",
   "languagesNotAnalysed": [],
   "name": "crewai",

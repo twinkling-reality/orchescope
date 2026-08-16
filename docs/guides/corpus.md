@@ -27,7 +27,7 @@ Nothing is vendored. This repository is Apache-2.0 and the corpus is not, so the
 langgraphjs  agent system, 750 components, 708 relations
   parse rate    1165/1165 files in a language this build reads (100%), 1381 discovered
   adapters      effects 334c/221r, langgraph 1240c/1014r, prompts 144c/2r
-  blind spots   ai used in source, read by adapter:vercel-ai-sdk; openai used in source, read by adapter:model-sdk
+  found nothing ai is imported here and its adapter found nothing; openai is imported here and its adapter found nothing
   findings      6 across 2 rule(s), 0 strength(s)
   expectation   matched
 ```
@@ -46,7 +46,7 @@ A check that differs prints the path that moved:
 ```
 langgraphjs  no agent system, 119 components, 126 relations
   adapters      effects 334c/221r
-  blind spots   @langchain/langgraph, langgraph, @langchain/core used in source, read by adapter:langgraph
+  found nothing @langchain/langgraph, langgraph, @langchain/core is imported here and its adapter found nothing
   expectation   19 difference(s)
     adapters.adapter:langgraph.componentsFound: expected 1240, observed 0
     adapters.adapter:langgraph.edgesFound: expected 1014, observed 0

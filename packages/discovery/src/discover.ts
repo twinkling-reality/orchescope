@@ -129,9 +129,9 @@ const distributionOf = (specifier: string): string => {
  *
  * A type only import does not count. `import type { ToolUIPart } from "ai"` is erased before the program runs and
  * can construct no agent, model or tool, so an adapter reading nothing from it is correct rather than behind.
- * Counting those was how two repositories came to carry a blind spot naming a framework they render types from.
+ * Counting those was how two repositories came to carry a gap naming a framework they render types from.
  */
-const adapterBlindSpots = (
+const adaptersThatFoundNothing = (
   adapters: readonly AgentSystemAdapter[],
   runs: readonly AdapterRun[],
   modules: readonly ModuleFacts[],
@@ -160,7 +160,7 @@ const adapterBlindSpots = (
        * which is a line that contradicts itself in the one place a reader is being told about a limit.
        */
       area: `${used.join(', ')} is imported here and its adapter found nothing`,
-      kind: 'adapter_blind_spot',
+      kind: 'adapter_found_nothing',
       reason: `${adapter.id} claims this framework, ran and found no component. Either this build does not read the form this repository uses, or this repository imports the framework as a client and declares nothing an adapter could read.`,
       remediation:
         'Declare the components in .orchescope/manifest.yaml so they appear in the graph. If the repository does declare components in source, report the form so an adapter can read it.',
@@ -325,7 +325,7 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
     adapters: adapterRuns,
     unsupported: [
       ...unsupportedAreas(fileSet.extensionCounts),
-      ...adapterBlindSpots(adapters, adapterRuns, analysis.facts),
+      ...adaptersThatFoundNothing(adapters, adapterRuns, analysis.facts),
     ],
     durationMs: request.clock.monotonicMs() - startedAtMs,
     truncated: fileSet.truncated,

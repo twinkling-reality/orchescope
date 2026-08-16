@@ -147,6 +147,6 @@ describe('the corpus check', () => {
     assert.match(stdout, /0 differing, 0 not measured/);
     assert.match(stdout, /parse rate/);
     assert.match(stdout, /adapters /);
-    assert.match(stdout, /blind spots/);
+    assert.match(stdout, /found nothing/);
   });
 });

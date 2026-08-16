@@ -26,7 +26,7 @@ frameworks and two languages:
 1. **No corpus repository contains a language no parser here reads.** `languagesNotAnalysed` is empty in all fourteen
    expectations. The stated purpose of the model path was to read the facts of a file no adapter could read; there is
    no such file in the corpus.
-2. **Every gap the corpus does report is an adapter form in a language already parsed.** Four blind spots across three
+2. **Every gap the corpus does report is an adapter form in a language already parsed.** Four adapters found nothing across three
    repositories: `langgraphjs` imports the Vercel AI SDK and an OpenAI client that the adapters claiming them read
    nothing from, and `crewai` and `anthropic-quickstarts` import the MCP SDK in source while the MCP adapter reads
    configuration files. Each names the framework and the adapter, which is a work item for a deterministic reader, not
@@ -76,10 +76,10 @@ that a second run reproduces. That is a stronger property than the one being giv
 corpus checks depend on.
 
 **Breadth now has one path: an adapter, or the manifest.** The manifest remains the honest escape hatch for anything
-no adapter reads, and the blind spot report names which adapter to teach next.
+no adapter reads, and the report of what an adapter found nothing in names which adapter to teach next.
 
 **This decision is reversible, and here is what would reverse it.** A corpus entry in a language no parser here reads
-that contains an agent system, or a blind spot that survives a serious attempt at an adapter. Should either appear,
+that contains an agent system, or an adapter that keeps finding nothing after a serious attempt at it. Should either appear,
 the implementation is the one phase 17 described: a bounded, opt in, content hash cached pass that reads the facts of
 that file and proposes components as a manifest draft for a person or an agent to accept. Proposals, never facts. The
 severity cap and the `model_interpreted` basis are still in the contract for that day.

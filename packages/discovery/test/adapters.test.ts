@@ -932,7 +932,9 @@ export const HELP = "Answer the question in the box. You are never charged for a
 
 describe('an adapter that claims a framework and reads nothing from it', () => {
   const blindSpots = (result: Awaited<ReturnType<typeof scan>>) =>
-    result.result.graph.coverage.unsupported.filter((area) => area.kind === 'adapter_blind_spot');
+    result.result.graph.coverage.unsupported.filter(
+      (area) => area.kind === 'adapter_found_nothing',
+    );
 
   it('reports the framework and the adapter rather than saying nothing was found', async () => {
     // LangGraph's functional API. The adapter reads graphs and prebuilt agents, not `@task` and `@entrypoint`.
@@ -1100,7 +1102,9 @@ def describe() -> str:
       `the server was not joined to its tool: ${result.edges.join(', ')}`,
     );
     assert.deepEqual(
-      result.result.graph.coverage.unsupported.filter((area) => area.kind === 'adapter_blind_spot'),
+      result.result.graph.coverage.unsupported.filter(
+        (area) => area.kind === 'adapter_found_nothing',
+      ),
       [],
     );
   });

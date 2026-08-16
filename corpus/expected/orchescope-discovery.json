@@ -68,7 +68,6 @@
     }
   },
   "agentSystemDetected": false,
-  "blindSpots": [],
   "components": {
     "byKind": {},
     "total": 0
@@ -87,6 +86,7 @@
     "strengths": 0,
     "total": 0
   },
+  "foundNothing": [],
   "kind": "not_agent_system",
   "languagesNotAnalysed": [],
   "name": "orchescope-discovery",

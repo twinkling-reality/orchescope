@@ -2,7 +2,7 @@
  * Compares an expectation with an observation.
  *
  * The result is a list of differences rather than a boolean, because the point of the corpus is the diff: a
- * maintainer reads which adapter went quiet, which rule started firing and which blind spot appeared, and decides
+ * maintainer reads which adapter went quiet, which rule started firing and which adapter found nothing, and decides
  * whether that is a fix or a regression. Nothing here decides that, and nothing here rewrites an expectation.
  */
 

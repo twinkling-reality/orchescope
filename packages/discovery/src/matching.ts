@@ -19,8 +19,8 @@ import type { DiscoveryContext } from './adapter.ts';
  * Two languages spell a submodule differently and both mean the same distribution: JavaScript writes
  * `@modelcontextprotocol/sdk/server`, Python writes `mcp.server`. Reading only the first form is how
  * `from mcp.server import FastMCP` came to be invisible to the adapter that claims MCP while the coverage report,
- * which already split on the dot, said the repository used it. One reader behind the other is what a blind spot
- * looks like from the outside, so both separators are honoured here rather than in each adapter.
+ * which already split on the dot, said the repository used it. One reader behind the other is what an adapter that
+ * found nothing looks like from the outside, so both separators are honoured here rather than in each adapter.
  *
  * `localRoots` names the repository's own top level Python packages, and a specifier rooted in one of them is
  * never a distribution. Without that, a repository with a directory called `agents` in it has every
