@@ -1512,6 +1512,89 @@ export const viaSdk = () =>
   });
 });
 
+/**
+ * A request whose address is built at run time.
+ *
+ * Every one of them used to be the same component, `external_service:unresolved-host`: eleven call sites
+ * across nine files in one project, in three different packages, merged into one node carrying a single
+ * effect class that could be right for at most one of them. It was also the subject of a medium severity
+ * finding in three of twenty three projects, which asked a reader to act on a component nobody can name.
+ */
+describe('a host the source does not write down', () => {
+  const dynamicHosts = (ids: readonly string[]) =>
+    ids.filter((id) => id.startsWith('external_service:unresolved-host'));
+
+  it('is one component per call site, each named for where it is', async () => {
+    const result = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'two-calls' });
+      workspace.write(
+        'src/client.ts',
+        `export const readReport = async (base: string) => fetch(\`\${base}/report\`);
+
+export const deleteReport = async (base: string) =>
+  fetch(\`\${base}/report\`, { method: 'DELETE' });
+`,
+      );
+    });
+    assert.equal(dynamicHosts(result.ids).length, 2, `saw ${result.ids.join(', ')}`);
+    const names = result.result.graph.components
+      .filter((component) => component.kind === 'external_service')
+      .map((component) => component.displayName)
+      .sort();
+    assert.deepEqual(names, [
+      'the host deleteReport builds at run time',
+      'the host readReport builds at run time',
+    ]);
+  });
+
+  /*
+   * The reason the merge mattered rather than merely read badly. One node carried one effect class, so a
+   * `DELETE` and a `GET` in different files were reported as whichever of the two merged first.
+   */
+  it('keeps the effect class of each call site instead of one standing for all of them', async () => {
+    const result = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'two-calls' });
+      workspace.write(
+        'src/client.ts',
+        `export const readReport = async (base: string) => fetch(\`\${base}/report\`, { method: 'GET' });
+
+export const deleteReport = async (base: string) =>
+  fetch(\`\${base}/report\`, { method: 'DELETE' });
+`,
+      );
+    });
+    const effects = new Map(
+      result.result.graph.components
+        .filter((component) => component.kind === 'external_service')
+        .map((component) => [component.displayName, component.sideEffect]),
+    );
+    assert.equal(effects.get('the host readReport builds at run time'), 'read_only');
+    assert.equal(effects.get('the host deleteReport builds at run time'), 'destructive');
+  });
+
+  it('still merges a host that is written down, wherever it is called from', async () => {
+    const result = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'one-host' });
+      workspace.write(
+        'src/a.ts',
+        `export const charge = async () =>
+  fetch('https://api.stripe.com/v1/charges', { method: 'POST' });
+`,
+      );
+      workspace.write(
+        'src/b.ts',
+        `export const refundIt = async () =>
+  fetch('https://api.stripe.com/v1/refunds', { method: 'POST' });
+`,
+      );
+    });
+    assert.deepEqual(
+      result.ids.filter((id) => id.startsWith('external_service:')),
+      ['external_service:api.stripe.com'],
+    );
+  });
+});
+
 describe('an effect a test harness reaches at a fake', () => {
   const writeStore = (workspace: ReturnType<typeof createTempWorkspace>, path: string): void => {
     writeNodeProject(workspace, { name: 'store-app' });

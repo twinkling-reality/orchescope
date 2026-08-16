@@ -73,9 +73,9 @@
     "byKind": {
       "database": 1,
       "entrypoint": 5,
-      "external_service": 2
+      "external_service": 3
     },
-    "total": 8
+    "total": 9
   },
   "discardedRelations": [],
   "files": {

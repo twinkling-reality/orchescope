@@ -74,14 +74,14 @@
       "agent": 426,
       "database": 2,
       "entrypoint": 18,
-      "external_service": 1,
+      "external_service": 6,
       "mcp_server": 5,
       "model": 16,
       "prompt": 750,
       "provider": 6,
       "tool": 502
     },
-    "total": 1726
+    "total": 1731
   },
   "discardedRelations": [],
   "files": {
@@ -96,14 +96,15 @@
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
       "prompt-injection-boundary": 1,
+      "side-effect-approval-boundary": 1,
       "topology-shape": 2
     },
     "bySeverity": {
       "low": 2,
-      "medium": 3
+      "medium": 4
     },
     "strengths": 0,
-    "total": 5
+    "total": 6
   },
   "kind": "agent_system",
   "languagesNotAnalysed": [],

@@ -74,12 +74,12 @@
       "agent": 6,
       "database": 2,
       "entrypoint": 17,
-      "external_service": 2,
+      "external_service": 16,
       "model": 2,
       "prompt": 7,
       "tool": 5
     },
-    "total": 41
+    "total": 55
   },
   "discardedRelations": [],
   "files": {
@@ -94,14 +94,15 @@
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
       "prompt-injection-boundary": 1,
+      "side-effect-approval-boundary": 1,
       "topology-shape": 1
     },
     "bySeverity": {
       "info": 1,
-      "medium": 3
+      "medium": 4
     },
     "strengths": 1,
-    "total": 4
+    "total": 5
   },
   "kind": "agent_system",
   "languagesNotAnalysed": [],

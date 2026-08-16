@@ -75,11 +75,11 @@
       "agent_group": 91,
       "database": 4,
       "entrypoint": 72,
-      "external_service": 1,
+      "external_service": 20,
       "prompt": 126,
       "queue": 1
     },
-    "total": 709
+    "total": 728
   },
   "discardedRelations": [],
   "files": {
@@ -92,14 +92,15 @@
   "findings": {
     "byRule": {
       "observability-coverage": 1,
+      "side-effect-approval-boundary": 1,
       "topology-shape": 1
     },
     "bySeverity": {
       "low": 1,
-      "medium": 1
+      "medium": 2
     },
     "strengths": 0,
-    "total": 2
+    "total": 3
   },
   "kind": "agent_system",
   "languagesNotAnalysed": [],

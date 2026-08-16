@@ -77,13 +77,13 @@
       "agent_group": 90,
       "database": 4,
       "entrypoint": 99,
-      "external_service": 2,
+      "external_service": 41,
       "model": 6,
       "prompt": 521,
       "provider": 3,
       "queue": 1
     },
-    "total": 986
+    "total": 1025
   },
   "discardedRelations": [],
   "files": {

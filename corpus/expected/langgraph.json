@@ -75,12 +75,12 @@
       "agent_group": 61,
       "database": 2,
       "entrypoint": 27,
-      "external_service": 1,
+      "external_service": 4,
       "prompt": 295,
       "queue": 1,
       "tool": 3
     },
-    "total": 852
+    "total": 855
   },
   "discardedRelations": [],
   "files": {

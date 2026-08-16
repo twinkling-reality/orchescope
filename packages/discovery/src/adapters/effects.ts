@@ -171,6 +171,48 @@ const serviceIdentity = (host: string): ComponentIdentity =>
   globalIdentity('external_service', GLOBAL_NAMESPACES.service, host);
 
 /**
+ * The service a request reaches, named for its host when the source says one and for its call site when
+ * it does not.
+ *
+ * `external_service:unresolved-host` was a single component standing for every request in a repository
+ * whose address is built at run time: eleven call sites across nine files in one project, in three
+ * different packages, merged into one node. That node then carried one effect class, which could be
+ * right for at most one of them, and it was the subject of a medium severity finding in three of twenty
+ * three projects. A reader was being asked to act on a component nobody can name.
+ *
+ * Two separate defects, and both come from the same merge. Scoping the identity to the function making
+ * the call keeps unrelated services apart, because that is what they are, and lets each one carry the
+ * effect class of the call it actually describes. The display name says where to look, since the one
+ * thing a reader can be told about a host nobody wrote down is who builds it.
+ *
+ * A host that is written down is still one component wherever it is called from. Two modules naming
+ * `api.stripe.com` are naming one service.
+ */
+const serviceCalledAt = (
+  module: ModuleFacts,
+  call: CallFact,
+  host: string | undefined,
+): {
+  readonly identity: ComponentIdentity;
+  readonly name: string;
+  readonly displayName: string;
+} => {
+  if (host !== undefined) {
+    return { identity: serviceIdentity(host), name: host, displayName: host };
+  }
+  const scope = call.enclosing;
+  const name = `unresolved-host:${scope ?? 'module-scope'}`;
+  return {
+    identity: sourceIdentity('external_service', module.file, name),
+    name,
+    displayName:
+      scope === undefined
+        ? `a host ${module.file} builds at run time`
+        : `the host ${scope} builds at run time`,
+  };
+};
+
+/**
  * The component an effect is attributed to, created if this is the first time it was needed.
  *
  * When the enclosing scope already produced a component, for example an agent a framework adapter found, the
@@ -429,14 +471,15 @@ const discoverHttp = (
     }
     const method = httpMethodOf(call);
     const effect = classifyEffect(call.enclosing ?? path, method);
-    const target = host ?? 'unresolved-host';
+    const service = serviceCalledAt(module, call, host);
 
     builder.addComponent(
       drafts.sourceComponent({
         kind: 'external_service',
-        identity: serviceIdentity(target),
+        identity: service.identity,
         file: module.file,
-        name: target,
+        name: service.name,
+        displayName: service.displayName,
         location: call.location,
         symbol: path,
         confidence:
@@ -449,7 +492,11 @@ const discoverHttp = (
         },
         sideEffect: effect,
         permissions: [
-          { kind: 'network', scope: target, mode: effect === 'read_only' ? 'read' : 'write' },
+          {
+            kind: 'network',
+            scope: host ?? service.name,
+            mode: effect === 'read_only' ? 'read' : 'write',
+          },
         ],
         metadata: {
           client: path,
@@ -466,7 +513,7 @@ const discoverHttp = (
       drafts.edge({
         kind: 'calls_service',
         from: ensureCaller(module, call, context, builder, found),
-        to: serviceIdentity(target),
+        to: service.identity,
         location: call.location,
         symbol: path,
         confidence: CONFIDENCE_BANDS.structural,

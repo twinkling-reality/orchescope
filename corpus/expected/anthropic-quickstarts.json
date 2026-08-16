@@ -73,14 +73,14 @@
     "byKind": {
       "agent": 6,
       "entrypoint": 5,
-      "external_service": 1,
+      "external_service": 5,
       "mcp_server": 1,
       "model": 2,
       "prompt": 36,
       "provider": 1,
       "tool": 1
     },
-    "total": 53
+    "total": 57
   },
   "discardedRelations": [],
   "files": {

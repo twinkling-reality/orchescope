@@ -74,7 +74,7 @@
       "agent": 620,
       "database": 2,
       "entrypoint": 41,
-      "external_service": 1,
+      "external_service": 4,
       "mcp_server": 21,
       "model": 15,
       "prompt": 370,
@@ -82,7 +82,7 @@
       "queue": 1,
       "tool": 318
     },
-    "total": 1390
+    "total": 1393
   },
   "discardedRelations": [],
   "files": {
