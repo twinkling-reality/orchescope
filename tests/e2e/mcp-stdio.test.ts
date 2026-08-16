@@ -246,6 +246,36 @@ describe('the agent interface over stdio', () => {
     assert.ok(content.agentPrompt.length > 200, 'the implementer prompt is too thin to act on');
   });
 
+  /*
+   * Six calls naming one finding produced six identical goals in a real session, because an agent reading
+   * the response shape calls this more than once. The tool annotates itself idempotent, so this is the
+   * claim being held rather than a preference.
+   */
+  it('returns the goal a finding already has instead of a second copy of it', async () => {
+    const eligible = await callTool('get_findings', { limit: 1, goalEligibleOnly: true });
+    const [first] = (eligible['structuredContent'] as { findings: readonly { id: string }[] })
+      .findings;
+    assert.ok(first !== undefined, 'the demonstration reported no goal eligible finding');
+
+    const goalIdOf = (result: Message): { id: string; created: boolean } => {
+      const data = result['structuredContent'] as { goal: { id: string }; created: boolean };
+      return { id: data.goal.id, created: data.created };
+    };
+
+    const opened = goalIdOf(await callTool('create_improvement_goal', { findingId: first.id }));
+    const repeated = goalIdOf(await callTool('create_improvement_goal', { findingId: first.id }));
+    assert.equal(repeated.id, opened.id, 'a second call created a second goal for one finding');
+    assert.equal(repeated.created, false, 'a reused goal was reported as created');
+
+    const another = await callTool('create_improvement_goal', {
+      findingId: first.id,
+      createAnother: true,
+    });
+    const deliberate = goalIdOf(another);
+    assert.notEqual(deliberate.id, opened.id, 'createAnother did not cut a second goal');
+    assert.equal(deliberate.created, true);
+  });
+
   it('refuses an unknown field instead of ignoring it', async () => {
     const result = await callTool('get_findings', { limit: 1, sevrity: 'high' });
     assert.equal(result['isError'], true, 'a misspelled option was accepted');

@@ -359,14 +359,22 @@ const createImprovementGoal = (
   args: Record<string, unknown>,
 ): ToolOutcome => {
   const { workspace } = context;
-  const goal = createGoalFromFinding({
+  const { goal, created } = createGoalFromFinding({
     workspace,
     findingId: string(args['findingId']) ?? '',
     ...(args['repetitions'] === undefined ? {} : { repetitions: number(args['repetitions'], 3) }),
+    ...(args['createAnother'] === true ? { createAnother: true } : {}),
   });
+  const shape = `It names ${formatCount(goal.acceptanceCriteria.length, 'acceptance criterion', 'acceptance criteria')} and ${formatCount(goal.validation.commands.length, 'validation command')}.`;
   return {
-    text: `Created ${goal.id} from ${goal.findingId}. It names ${formatCount(goal.acceptanceCriteria.length, 'acceptance criterion', 'acceptance criteria')} and ${formatCount(goal.validation.commands.length, 'validation command')}.`,
-    data: { goal, agentPrompt: renderAgentPrompt(goal) },
+    /*
+     * A reused goal says so. A caller that asked twice and was told "Created" both times has no way to tell
+     * one goal from two, which is how six identical goals came out of six calls.
+     */
+    text: created
+      ? `Created ${goal.id} from ${goal.findingId}. ${shape}`
+      : `${goal.id} already covers ${goal.findingId} and is ${goal.status}, so it was returned unchanged. ${shape} Pass createAnother to cut a second goal from the same finding.`,
+    data: { goal, created, agentPrompt: renderAgentPrompt(goal) },
   };
 };
 

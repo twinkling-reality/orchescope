@@ -136,6 +136,7 @@ which is correct: nothing measured it.
   paths" followed by the write scope.
 - `--markdown` renders it for a pull request or an issue.
 - `--json` emits this document.
-- Over the Model Context Protocol, `create_improvement_goal` returns both the document and the prompt.
+- Over the Model Context Protocol, `create_improvement_goal` returns both the document and the prompt, and a `created`
+  flag saying whether this call cut the goal or returned the one the finding already had.
 
 Nothing dispatches the work. Orchescope produces the task and, afterwards, an honest answer about the outcome.

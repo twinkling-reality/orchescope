@@ -82,7 +82,9 @@ eligible with the reason, so the agent does not start work that cannot be verifi
 
 **3. Get the task.** `create_improvement_goal` with the finding identifier returns the goal and the prompt. The prompt states
 the problem, the evidence, the paths that may be written, what must not change, the acceptance criteria and the exact
-validation command. Audit will not recommend this step until at least one run is stored.
+validation command. Audit will not recommend this step until at least one run is stored. Calling it again for the same
+finding returns the goal that already exists with `created: false`, so exploring the response costs nothing; pass
+`createAnother` to cut a second goal deliberately.
 
 **4. Make the change**, within the write scope. The scope is not advisory: it exists because a change that touched twenty
 files cannot be attributed to a measured outcome.

@@ -4,5 +4,6 @@
  */
 
 export { type CreateGoalInput, createGoal } from './create.ts';
+export { openGoalForFinding } from './existing-goal.ts';
 export { renderAgentPrompt, renderGoalMarkdown, renderGoalSummary } from './render.ts';
 export { type CriterionOutcome, type GoalValidation, validateGoal } from './validate-plan.ts';

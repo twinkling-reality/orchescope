@@ -17,14 +17,15 @@ import { goalSummary } from '../terminal/goal-summary.ts';
 export const goalCreateCommand = (
   context: CommandContext,
   findingId: string,
-  options: { readonly repetitions?: string },
+  options: { readonly repetitions?: string; readonly another?: boolean },
 ): number => {
-  const goal = createGoalFromFinding({
+  const { goal, created } = createGoalFromFinding({
     workspace: context.workspace,
     findingId,
     ...(options.repetitions === undefined
       ? {}
       : { repetitions: Number.parseInt(options.repetitions, 10) }),
+    ...(options.another === true ? { createAnother: true } : {}),
   });
   if (context.json) {
     context.stdout(
@@ -32,10 +33,15 @@ export const goalCreateCommand = (
         ok: true,
         command: 'goal create',
         version: context.version,
-        data: { goal, agentPrompt: renderAgentPrompt(goal) },
+        data: { goal, created, agentPrompt: renderAgentPrompt(goal) },
       })}\n`,
     );
   } else {
+    if (!created) {
+      context.stdout(
+        `${context.style.dim('.')} ${findingId} already has ${goal.id}, so it was returned unchanged. Use --another to cut a second goal from it.\n`,
+      );
+    }
     context.stdout(`${goalSummary(context.style, goal)}\n`);
     context.stdout(
       `\n${context.style.dim('next:')} orchescope goal show ${goal.id} --prompt   ${context.style.dim('# the text to hand to a coding agent')}\n`,

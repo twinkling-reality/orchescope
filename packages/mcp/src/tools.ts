@@ -137,11 +137,12 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: 'create_improvement_goal',
     description:
-      'Convert an eligible finding into a bounded improvement goal and return it together with a plain text prompt suitable for handing to a coding agent. Writes the goal to the local store.',
+      'Convert an eligible finding into a bounded improvement goal and return it together with a plain text prompt suitable for handing to a coding agent. Writes the goal to the local store. Calling this twice for one finding returns the goal that already exists rather than a second copy of it; pass createAnother to cut another one deliberately.',
     input: Type.Object(
       {
         findingId: Type.String({ maxLength: 40 }),
         repetitions: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
+        createAnother: Type.Optional(Type.Boolean()),
       },
       { additionalProperties: false },
     ),

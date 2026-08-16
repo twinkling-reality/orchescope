@@ -47,6 +47,23 @@ export const createGoalsRepository = (input: { readonly database: Database }) =>
     return row === undefined ? undefined : (JSON.parse(text(row, 'json')) as Goal);
   };
 
+  /**
+   * Goals cut from one finding, newest first.
+   *
+   * Ordered by identifier because a goal identifier is a zero padded sequence, so the string order is the
+   * order they were created in. This is what lets goal creation return the goal a finding already has
+   * rather than a duplicate of it; whether an existing goal still answers the finding is decided in
+   * `@orchescope/goals`, not here.
+   */
+  const goalsForFinding = (projectId: string, findingId: string): readonly Goal[] => {
+    const rows = database.all(
+      'SELECT json FROM goal WHERE project_id = ? AND finding_id = ? ORDER BY id DESC',
+      projectId,
+      findingId,
+    );
+    return rows.map((row) => JSON.parse(text(row, 'json')) as Goal);
+  };
+
   const listGoals = (projectId: string, status?: string): readonly Goal[] => {
     const rows =
       status === undefined
@@ -63,6 +80,7 @@ export const createGoalsRepository = (input: { readonly database: Database }) =>
     nextGoalSequence,
     saveGoal,
     goalById,
+    goalsForFinding,
     listGoals,
   };
 };

@@ -15,6 +15,7 @@ export { type Check, type CheckStatus, type DoctorResult, runDoctor } from './do
 export { currentEnvironment } from './environment.ts';
 export {
   type CreateGoalRequest,
+  type CreateGoalResult,
   createGoalFromFinding,
   type ValidateGoalRequest,
   type ValidateGoalResult,

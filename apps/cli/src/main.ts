@@ -241,7 +241,8 @@ goal
   .description('turn an eligible finding into a bounded improvement goal')
   .argument('<findingId>', 'finding identifier, for example OSC-PERF-0001')
   .option('--repetitions <count>', 'repetitions the validation plan should use')
-  .action(async (findingId: string, options: { repetitions?: string }) => {
+  .option('--another', 'cut a second goal from a finding that already has an open one')
+  .action(async (findingId: string, options: { repetitions?: string; another?: boolean }) => {
     await withContext('goal create', globals(), (context) =>
       goalCreateCommand(context, findingId, options),
     );

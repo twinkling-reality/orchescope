@@ -1,5 +1,10 @@
 import { OrchescopeError } from '@orchescope/domain';
-import { createGoal, type GoalValidation, validateGoal } from '@orchescope/goals';
+import {
+  createGoal,
+  type GoalValidation,
+  openGoalForFinding,
+  validateGoal,
+} from '@orchescope/goals';
 import type { Comparison, Finding, Goal, ScenarioResult, Timestamp } from '@orchescope/schema';
 import type { Workspace } from '@orchescope/workspace';
 
@@ -9,6 +14,10 @@ import type { Workspace } from '@orchescope/workspace';
  * Validation scenarios are chosen by matching a scenario's tags against the finding's components and tags rather
  * than by guessing: a scenario is only proposed when it names one of the affected components or shares a tag
  * with the finding, and a goal with no validation scenario says so instead of pretending it can be verified.
+ *
+ * Creation is idempotent per finding: a finding that already has an open goal gets that goal back rather than a
+ * copy of it, and the caller is told which happened. What counts as the same goal is decided by
+ * `openGoalForFinding` in `@orchescope/goals`.
  */
 
 export type CreateGoalRequest = {
@@ -16,6 +25,19 @@ export type CreateGoalRequest = {
   readonly scanId?: string;
   readonly findingId: string;
   readonly repetitions?: number;
+  /**
+   * Cuts a second goal from a finding that already has an open one.
+   *
+   * Opt in rather than default, because the caller that asks twice is usually asking the same question
+   * twice. A caller that genuinely wants two attempts at one finding says so.
+   */
+  readonly createAnother?: boolean;
+};
+
+export type CreateGoalResult = {
+  readonly goal: Goal;
+  /** False when the finding already had an open goal, which was returned unchanged. */
+  readonly created: boolean;
 };
 
 const chooseValidationScenarios = (
@@ -37,7 +59,7 @@ const chooseValidationScenarios = (
   return chosen.slice(0, 3).map((scenario) => scenario.id);
 };
 
-export const createGoalFromFinding = (request: CreateGoalRequest): Goal => {
+export const createGoalFromFinding = (request: CreateGoalRequest): CreateGoalResult => {
   const { workspace } = request;
   const scanId = request.scanId ?? workspace.store.latestScan(workspace.projectId)?.scanId;
   if (scanId === undefined) {
@@ -51,6 +73,14 @@ export const createGoalFromFinding = (request: CreateGoalRequest): Goal => {
       remediation: 'List findings with orchescope audit --json, or rerun the audit.',
     });
   }
+  if (request.createAnother !== true) {
+    const existing = openGoalForFinding(
+      workspace.store.goalsForFinding(workspace.projectId, finding.id),
+      finding,
+    );
+    if (existing !== undefined) return { goal: existing, created: false };
+  }
+
   const graph = workspace.store.graphForScan(scanId);
   const components = graph.components.filter((component) =>
     finding.components.includes(component.id),
@@ -72,7 +102,7 @@ export const createGoalFromFinding = (request: CreateGoalRequest): Goal => {
     repetitions: request.repetitions ?? 3,
   });
   workspace.store.saveGoal(goal, workspace.projectId);
-  return goal;
+  return { goal, created: true };
 };
 
 export type ValidateGoalRequest = {
