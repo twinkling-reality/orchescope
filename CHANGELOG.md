@@ -2,7 +2,7 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
-## Unreleased
+## 0.3.0
 
 This answers the field report against 0.2.0, from the same TypeScript monorepo the 0.1.0 report came from, roughly
 eighteen hundred analysed files.

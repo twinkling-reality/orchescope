@@ -109,8 +109,8 @@ Every command accepts `--json` and then writes exactly one JSON document to stan
 document has the same four keys whatever happened, so a caller never special cases an outcome:
 
 ```json
-{ "ok": true, "command": "audit", "version": "0.2.0", "data": { "…": "…" } }
-{ "ok": false, "command": "audit", "version": "0.2.0", "data": null, "error": { "code": "…", "category": "…", "message": "…" } }
+{ "ok": true, "command": "audit", "version": "0.3.0", "data": { "…": "…" } }
+{ "ok": false, "command": "audit", "version": "0.3.0", "data": null, "error": { "code": "…", "category": "…", "message": "…" } }
 ```
 
 Exit codes are part of the interface: `0` success, `1` findings at or above a `--fail-on` threshold, `2` a caller mistake,
