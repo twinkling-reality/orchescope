@@ -79,14 +79,14 @@
       "agent": 292,
       "database": 2,
       "entrypoint": 17,
-      "external_service": 12,
+      "external_service": 11,
       "mcp_server": 15,
       "model": 10,
       "prompt": 274,
       "provider": 1,
       "tool": 125
     },
-    "total": 748
+    "total": 747
   },
   "discardedRelations": [],
   "files": {

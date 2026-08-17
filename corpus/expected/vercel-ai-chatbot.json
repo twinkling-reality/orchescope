@@ -79,12 +79,12 @@
       "agent": 6,
       "database": 1,
       "entrypoint": 17,
-      "external_service": 16,
+      "external_service": 14,
       "model": 2,
       "prompt": 7,
       "tool": 5
     },
-    "total": 54
+    "total": 52
   },
   "discardedRelations": [],
   "files": {

@@ -1,4 +1,9 @@
-import { CONFIDENCE_BANDS, INFERRED_ENTRY_POINT_TAG, moduleNamespace } from '@orchescope/domain';
+import {
+  CONFIDENCE_BANDS,
+  formatCount,
+  INFERRED_ENTRY_POINT_TAG,
+  moduleNamespace,
+} from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type {
   ComponentIdentity,
@@ -8,6 +13,7 @@ import type {
 } from '@orchescope/schema';
 import type { CallSiteEffects } from '../call-site-effect.ts';
 import type {
+  ArgumentFact,
   CallFact,
   ControlFlowFact,
   ModuleFacts,
@@ -183,7 +189,53 @@ const hostOf = (url: string): string | undefined => {
   return match?.[2];
 };
 
-type Found = { components: number; edges: number; files: Set<string> };
+/** The marker a template literal carries in place of each substitution. */
+// biome-ignore lint/suspicious/noTemplateCurlyInString: this is the marker the fact model records
+const SUBSTITUTION = '${...}';
+
+/**
+ * The address a request names, from a literal or from the part of a template written before it computes
+ * anything.
+ *
+ * A repository that builds its URLs writes the host down as often as not: `` `https://api.stripe.com/${id}` ``
+ * says exactly which service it reaches, and reading only plain strings turned every one of those into a
+ * component named after the function that built it. Two requests to one host became two services, and a
+ * reader was asked to act on a host nobody had named.
+ *
+ * The authority has to be finished before the first substitution. `` `https://api.${region}.example.com/x` ``
+ * has a prefix of `https://api.` and reading a host out of that would invent `api.`, which is worse than
+ * declining: it is a confident answer to a question the source did not settle. A terminator after the
+ * authority is what proves the host is whole.
+ *
+ * This reads the hosts a repository wrote and not the ones it assembles. `` `${API_BASE}${path}` `` begins
+ * with a substitution and states nothing at all here, which is the common shape in a codebase with one
+ * configured base URL; following that constant is a separate piece of work and the adapter says how many
+ * requests it left unresolved rather than implying it read them.
+ */
+const addressOf = (argument: ArgumentFact | undefined): string | undefined => {
+  if (argument === undefined) return undefined;
+  if (argument.kind === 'string') return argument.value;
+  if (argument.kind !== 'template') return undefined;
+  if (!argument.hasSubstitutions) return argument.value;
+  const prefix = argument.value.slice(0, argument.value.indexOf(SUBSTITUTION));
+  const authority = /^[a-z][a-z0-9+.-]*:\/\/[^/?#]+[/?#]/i.exec(prefix);
+  return authority === null ? undefined : prefix;
+};
+
+type Found = {
+  components: number;
+  edges: number;
+  files: Set<string>;
+  /**
+   * Requests whose address this build could not resolve to a host.
+   *
+   * Counted so the adapter can say what it did not read. Every one of these is a component named for the
+   * function that built the address rather than for the service it reaches, and a reader looking at a
+   * list of those deserves to know it is looking at a limit of this build rather than at a system that
+   * talks to sixty eight different places.
+   */
+  unresolvedAddresses: number;
+};
 
 /**
  * Module namespace to the sentence saying how the operations defined there deduplicate their own effect.
@@ -512,8 +564,11 @@ type RequestCall = {
   readonly written: string;
   /** The client it resolves to, when the source reached it under another name. */
   readonly alias: string | undefined;
+  /** The address as far as the source writes it, which is the whole of it only when `dynamic` is false. */
   readonly url: string | undefined;
   readonly host: string | undefined;
+  /** Whether the address is completed at run time, so the recorded url is a prefix and not the request. */
+  readonly dynamic: boolean;
 };
 
 const requestAt = (
@@ -536,8 +591,14 @@ const requestAt = (
   );
   if (client === undefined) return undefined;
   const first = call.args[0];
-  const url = first !== undefined && first.kind === 'string' ? first.value : undefined;
-  return { written, alias, url, host: url === undefined ? undefined : hostOf(url) };
+  const url = addressOf(first);
+  return {
+    written,
+    alias,
+    url,
+    host: url === undefined ? undefined : hostOf(url),
+    dynamic: first?.kind !== 'string',
+  };
 };
 
 const discoverHttp = (
@@ -551,7 +612,7 @@ const discoverHttp = (
   for (const call of module.calls) {
     const request = requestAt(call, aliases);
     if (request === undefined) continue;
-    const { written, alias, url, host } = request;
+    const { written, alias, url, host, dynamic } = request;
     const endpoint = host === undefined ? undefined : modelEndpointForHost(host);
     if (endpoint !== undefined && url !== undefined) {
       discoverModelEndpoint({
@@ -599,13 +660,20 @@ const discoverHttp = (
           client: written,
           ...(alias === undefined ? {} : { aliasOf: alias }),
           ...(method === undefined ? {} : { httpMethod: method }),
-          ...(url === undefined ? { urlIsDynamic: true } : { url }),
+          /*
+           * The address and whether it is the whole of it are two facts. A template writes its host and
+           * completes the rest at run time, so recording the prefix as `url` without saying so would
+           * report a request to `https://api.stripe.com/` that nothing ever makes.
+           */
+          ...(url === undefined ? {} : { url }),
+          ...(dynamic ? { urlIsDynamic: true } : {}),
         },
         tags: ['http'],
       }),
     );
     found.components += 1;
     found.files.add(module.file);
+    if (host === undefined) found.unresolvedAddresses += 1;
     performed.record(module.file, call, service.identity);
 
     builder.addEdge(
@@ -1085,7 +1153,12 @@ export const effectsAdapter: AgentSystemAdapter = {
   packages: [],
   appliesTo: (context) => context.modules.length > 0,
   discover: (context, builder): AdapterFindings => {
-    const found: Found = { components: 0, edges: 0, files: new Set() };
+    const found: Found = {
+      components: 0,
+      edges: 0,
+      files: new Set(),
+      unresolvedAddresses: 0,
+    };
     /*
      * Read before anything is judged, because the sink of a retried operation is usually in a different
      * module from the retry, and a rule that asserts an absence has to have looked everywhere it could.
@@ -1132,6 +1205,11 @@ export const effectsAdapter: AgentSystemAdapter = {
       componentsFound: found.components,
       edgesFound: found.edges,
       filesInspected: found.files.size,
+      ...(found.unresolvedAddresses === 0
+        ? {}
+        : {
+            note: `${formatCount(found.unresolvedAddresses, 'request builds', 'requests build')} an address this build could not resolve to a host, so each is named for the function that builds it. A base address held in a constant is the common cause and following one is not something this build does.`,
+          }),
     };
   },
 };

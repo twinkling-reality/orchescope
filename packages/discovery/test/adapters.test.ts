@@ -2255,3 +2255,79 @@ export async function shipBatch(opts: ShipOptions): Promise<{ ok: boolean }> {
     assert.equal(retried[0]?.metadata['httpMethod'], 'POST');
   });
 });
+
+/**
+ * The host a request writes down, when it completes the rest of the address at run time.
+ *
+ * Reading only plain strings made every such request a component named for the function that built it,
+ * so two calls to one service were two components and a reader was asked to act on a host nobody had
+ * named. What the source wrote is readable; what it computes is not, and the two have to be told apart
+ * without inventing anything in between.
+ */
+describe('an address a template literal builds', () => {
+  const serviceFor = async (expression: string) => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'addresses' });
+      workspace.write(
+        'src/call.ts',
+        `const region = 'eu';
+const base = 'https://api.example.com';
+const id = '1';
+
+export const load = async (): Promise<void> => {
+  void region;
+  void base;
+  await fetch(${expression});
+};
+`,
+      );
+    });
+    return result.graph.components.find((component) => component.kind === 'external_service');
+  };
+
+  it('names the host when the authority is finished before the first substitution', async () => {
+    const service = await serviceFor('`https://api.stripe.com/v1/charges/${id}`');
+    assert.equal(service?.id, 'external_service:api.stripe.com');
+    assert.equal(
+      service?.metadata['urlIsDynamic'],
+      true,
+      'the recorded address is a prefix, and saying otherwise would report a request nobody makes',
+    );
+  });
+
+  /*
+   * `https://api.` is what the source wrote and it is not a host. Reading one out of it would be a
+   * confident answer to a question the source did not settle, which is worse than declining.
+   */
+  it('declines when the substitution is inside the authority', async () => {
+    const service = await serviceFor('`https://api.${region}.example.com/things`');
+    assert.equal(service?.id.includes('unresolved-host'), true, `resolved to ${service?.id}`);
+  });
+
+  it('declines when the address begins with a substitution', async () => {
+    const service = await serviceFor('`${base}/things`');
+    assert.equal(service?.id.includes('unresolved-host'), true, `resolved to ${service?.id}`);
+  });
+
+  it('says how many addresses it could not resolve, rather than leaving the count to be inferred', async () => {
+    const { adapters } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'unresolved' });
+      workspace.write(
+        'src/call.ts',
+        `const base = 'https://api.example.com';
+
+export const one = async (): Promise<void> => {
+  await fetch(\`\${base}/one\`);
+};
+
+export const two = async (): Promise<void> => {
+  await fetch(\`\${base}/two\`);
+};
+`,
+      );
+    });
+    const effects = adapters.find((adapter) => adapter.adapterId === 'adapter:effects');
+    assert.match(effects?.detail ?? '', /2 requests build an address/);
+    assert.match(effects?.detail ?? '', /constant/);
+  });
+});
