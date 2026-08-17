@@ -81,6 +81,12 @@ const UnsupportedAreaKind = literals([
   'adapter_found_nothing',
   'adapter_blind_spot',
   'discarded_relation',
+  /*
+   * A directory the configuration excluded that the repository tracks files inside. The owner of this
+   * one is the configuration rather than this build or the repository, which is why it is its own kind:
+   * the remediation is a setting to narrow, not a parser to write or a form to report.
+   */
+  'excluded_from_analysis',
 ] as const);
 
 export const UnsupportedArea = Type.Object(
@@ -100,6 +106,15 @@ export type UnsupportedArea = Static<typeof UnsupportedArea>;
 
 export const ScanCoverage = Type.Object(
   {
+    /**
+     * Files traversal reached and recognised as some language, whether or not this build parses it.
+     *
+     * These four counts are four different sets and not a partition, and a reader who adds them expecting
+     * one is right to be confused. A discovered file may be in a language nothing here reads, so it is
+     * counted here and not in `filesInSupportedLanguages`. A skipped path may never have been discovered
+     * at all, because a directory declined before it is entered takes its contents with it and is counted
+     * once. Each number answers its own question and none of them is the remainder of another.
+     */
     filesDiscovered: NonNegativeInt,
     /**
      * How many of the discovered files are in a language this build reads.
@@ -109,12 +124,19 @@ export const ScanCoverage = Type.Object(
      * file was read. This is the denominator that means what a reader assumes it means.
      */
     filesInSupportedLanguages: Type.Optional(NonNegativeInt),
+    /** How many of the files in a language this build reads were actually read. */
     filesParsed: NonNegativeInt,
     bytesParsed: NonNegativeInt,
     /**
-     * How many files were skipped in total. `skipped` lists a bounded sample of them, because a repository with a
-     * vendored dependency tree in it can skip thousands of files for one reason, and a list that long is not a
-     * report. The count is separate so that bounding the list never changes the measurement.
+     * How many paths were skipped in total, files and declined directories together.
+     *
+     * A directory is one entry standing for everything inside it, because traversal stops at a directory
+     * it does not enter and never learns what was there. Excluding those entries from the count was how a
+     * repository came to report `filesSkipped: 0` with six tracked source files removed.
+     *
+     * `skipped` lists a bounded sample, because a repository with a vendored dependency tree in it can
+     * skip thousands of files for one reason and a list that long is not a report. The count is separate
+     * so that bounding the list never changes the measurement.
      */
     filesSkipped: Type.Optional(NonNegativeInt),
     skipped: Type.Array(SkippedFile),

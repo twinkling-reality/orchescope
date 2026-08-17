@@ -1151,6 +1151,10 @@
                   {
                     "const": "discarded_relation",
                     "type": "string"
+                  },
+                  {
+                    "const": "excluded_from_analysis",
+                    "type": "string"
                   }
                 ]
               },

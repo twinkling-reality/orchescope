@@ -10,6 +10,7 @@ import {
   type SourceFile,
 } from './file-set.ts';
 import { analyzeJavaScript } from './javascript/analyze.ts';
+import { type Language, readsAsCode } from './language.ts';
 import { analyzePython } from './python/analyze.ts';
 
 /**
@@ -68,9 +69,13 @@ export const probeJavaScriptParser = (): { readonly ok: boolean; readonly detail
   }
 };
 
-/** The languages this build reads. Everything else is discovered, counted and never parsed. */
-export const isSupportedLanguage = (language: string): boolean =>
-  language === 'typescript' || language === 'javascript' || language === 'python';
+/**
+ * The languages this build reads. Everything else is discovered, counted and never parsed.
+ *
+ * One definition, in `language.ts` where a fact about a language belongs. This name is what the rest of
+ * the workspace asks by, and it existed here as a second copy of the same three comparisons.
+ */
+export const isSupportedLanguage = (language: Language): boolean => readsAsCode(language);
 
 export type AnalysisResult = {
   readonly facts: readonly ModuleFacts[];

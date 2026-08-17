@@ -26,7 +26,12 @@ describe('when nothing was missed', () => {
   });
 });
 
-describe('skipped files', () => {
+/*
+ * The word is `path` rather than `file`. A directory traversal declined to enter is one entry standing
+ * for everything inside it, and calling two excluded directories two files understates what was lost in
+ * the one line a reader has to notice it in.
+ */
+describe('skipped paths', () => {
   it('groups a complete list by reason and counts each one', () => {
     assert.deepEqual(
       render({
@@ -34,8 +39,8 @@ describe('skipped files', () => {
         skipped: [...skipped('too_large', 7), ...skipped('symlink', 13)] as never,
       }),
       [
-        'gap             . skipped    13 files, symlink',
-        'gap             . skipped    7 files, too large',
+        'gap             . skipped    13 paths, symlink',
+        'gap             . skipped    7 paths, too large',
       ],
     );
   });
@@ -50,13 +55,13 @@ describe('skipped files', () => {
       filesSkipped: 81,
       skipped: [...skipped('too_large', 21), ...skipped('symlink', 13)] as never,
     })[0];
-    assert.equal(line, 'gap             . skipped    81 files, 34 sampled: too large, symlink');
-    assert.equal(/\d+ files, too large/.test(line ?? ''), false);
+    assert.equal(line, 'gap             . skipped    81 paths, 34 sampled: too large, symlink');
+    assert.equal(/\d+ paths, too large/.test(line ?? ''), false);
   });
 
   it('falls back to the sample as the total when the scan recorded no total', () => {
     assert.deepEqual(render({ skipped: skipped('binary', 3) as never }), [
-      'gap             . skipped    3 files, binary',
+      'gap             . skipped    3 paths, binary',
     ]);
   });
 });
@@ -154,5 +159,28 @@ describe('the ceiling', () => {
     });
     assert.equal(rendered.filter((line) => line.startsWith('gap')).length, 5);
     assert.equal(rendered.at(-1), 'gap             2 more kinds of gap, in the report');
+  });
+});
+
+/**
+ * A directory this build's own configuration excluded, in a repository that tracks source inside it.
+ *
+ * The state word is its own, because the owner of this gap is neither the repository nor this reader: it
+ * is the configuration, and the remediation is a setting to narrow rather than a parser to write.
+ */
+describe('a directory excluded from analysis', () => {
+  it('renders under a word of its own rather than as an unread area', () => {
+    assert.deepEqual(
+      render({
+        unsupported: [
+          {
+            area: 'src/build',
+            kind: 'excluded_from_analysis',
+            reason: 'Traversal did not enter it.',
+          },
+        ] as never,
+      }),
+      ['gap             . excluded   src/build'],
+    );
   });
 });

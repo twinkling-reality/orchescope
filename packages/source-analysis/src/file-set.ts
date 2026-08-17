@@ -5,7 +5,7 @@ import { OrchescopeError } from '@orchescope/domain';
 import type { SkippedFile } from '@orchescope/schema';
 import { generationDetail, generationSignal } from './generated-code.ts';
 import { type IgnoreRules, noIgnoreRules } from './ignore-rules.ts';
-import { type Language, languageOf } from './language.ts';
+import { type Language, languageOf, readsAsCode } from './language.ts';
 
 /**
  * Repository traversal.
@@ -23,10 +23,20 @@ export type SourceFile = {
   readonly byteLength: number;
 };
 
+/** A directory traversal declined to enter, and the rule that declined it. */
+export type DeclinedDirectory = { readonly path: string; readonly rule: string };
+
 export type FileSet = {
   readonly root: string;
   readonly files: readonly SourceFile[];
   readonly skipped: readonly SkippedFile[];
+  /**
+   * Declined directories the repository tracks files inside, which is the case a reader has to act on.
+   *
+   * Recorded apart from the skip list rather than read back out of it, because the skip list is prose
+   * for a person and a caller that has to match on prose cannot tell one cause from another.
+   */
+  readonly excludedTracked: readonly DeclinedDirectory[];
   readonly truncated: boolean;
   /**
    * Counts of every file extension seen during traversal, including languages Orchescope does not
@@ -102,9 +112,68 @@ const isExcluded = (relativePath: string, options: TraversalOptions): boolean =>
     (prefix) => relativePath === prefix || relativePath.startsWith(`${prefix}/`),
   );
 
+/**
+ * A directory this build's own configuration declined to enter, and the rule that declined it.
+ *
+ * A directory is not a file, so nothing here recorded one, and a directory taken out takes every file
+ * inside it with it. `build`, `out`, `target`, `vendor` and `coverage` are ordinary module names as well
+ * as ordinary build output names, so a repository with `src/build/` in it lost real source and the
+ * report said `filesSkipped: 0` and listed nothing. It is the one failure this coverage block exists to
+ * make impossible.
+ *
+ * Only for a rule this build brought. A directory the repository's own ignore file excludes is the
+ * repository saying it is not part of it, and repeating that back is noise; a name list this build
+ * guessed at is a guess, and a reader is owed the ones it acted on.
+ *
+ * The index decides whether it is worth saying, and what it has to track is source rather than any file
+ * at all. A directory holding committed code in a language this build reads is code that was not read
+ * and a reader has to be told which. A directory holding nothing of the kind is derived output, or is
+ * this tool's own state directory whose manifest is committed on purpose, and naming those buries the
+ * one line that matters. Where there is no index there is no statement to read, so every decline is
+ * named and none of them is called a loss.
+ */
+const tracksSourceUnder = (directory: string, tracked: ReadonlySet<string>): boolean => {
+  const prefix = `${directory}/`;
+  for (const path of tracked) {
+    if (path.startsWith(prefix) && readsAsCode(languageOf(path))) return true;
+  }
+  return false;
+};
+
+const declineDirectory = (
+  relativePath: string,
+  rule: string,
+  options: TraversalOptions,
+  walker: Walker,
+): void => {
+  const { trackedPaths } = options;
+  if (trackedPaths === undefined) {
+    walker.skipped.push({
+      file: relativePath,
+      reason: 'ignored',
+      detail: `the directory is excluded by ${rule}`,
+    });
+    return;
+  }
+  /*
+   * Asked in two steps because the first is a lookup and the second is a scan, and the first is false
+   * for almost every excluded directory there is: nothing under a `node_modules` is tracked, so nothing
+   * under it is ever walked here.
+   */
+  if (!trackedPaths.has(relativePath)) return;
+  if (!tracksSourceUnder(relativePath, trackedPaths)) return;
+  walker.skipped.push({
+    file: relativePath,
+    reason: 'ignored',
+    detail: `the directory is excluded by ${rule}, and the repository tracks source inside it`,
+  });
+  walker.excludedTracked.push({ path: relativePath, rule });
+};
+
 type Walker = {
   readonly files: SourceFile[];
   readonly skipped: SkippedFile[];
+  readonly excludedTracked: DeclinedDirectory[];
   readonly extensionCounts: Map<string, number>;
   truncated: boolean;
 };
@@ -237,10 +306,14 @@ const walk = (
     if (walker.truncated) return;
     const absolutePath = join(current, entry.name);
     const relativePath = toPosix(relative(root, absolutePath));
-    if (isExcluded(relativePath, options)) continue;
 
     const kind = classifyEntry(entry, absolutePath, relativePath, options, walker);
     if (kind === 'skip') continue;
+    if (isExcluded(relativePath, options)) {
+      if (kind === 'directory')
+        declineDirectory(relativePath, 'a configured prefix', options, walker);
+      continue;
+    }
     /*
      * Asked after the entry is known to be a directory or a file, because a pattern ending in a slash
      * excludes only a directory and answering before that is known would apply it to both.
@@ -257,10 +330,18 @@ const walk = (
           detail: `excluded by ${excludedBy}`,
         });
       }
+      /*
+       * A directory the repository's own rules exclude is not named. The repository has already said it
+       * is not part of it, and a directory it tracks a file inside never reaches here: the index is
+       * consulted first and takes the exclusion away.
+       */
       continue;
     }
     if (kind === 'directory') {
-      if (options.excludeDirectories.includes(entry.name)) continue;
+      if (options.excludeDirectories.includes(entry.name)) {
+        declineDirectory(relativePath, `analysis.exclude (${entry.name})`, options, walker);
+        continue;
+      }
       walk(root, absolutePath, options, walker, rules);
       continue;
     }
@@ -317,6 +398,7 @@ export const collectFiles = (root: string, options: TraversalOptions): FileSet =
   const walker: Walker = {
     files: [],
     skipped: [],
+    excludedTracked: [],
     extensionCounts: new Map(),
     truncated: false,
   };
@@ -325,6 +407,7 @@ export const collectFiles = (root: string, options: TraversalOptions): FileSet =
     root,
     files: walker.files,
     skipped: walker.skipped,
+    excludedTracked: walker.excludedTracked,
     truncated: walker.truncated,
     extensionCounts: Object.fromEntries(walker.extensionCounts),
   };

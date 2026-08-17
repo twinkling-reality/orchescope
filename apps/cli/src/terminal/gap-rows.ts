@@ -49,12 +49,17 @@ const UNSUPPORTED_STATE: Readonly<Record<string, string>> = {
   // The name this build no longer writes, still rendered so a report stored by an earlier one reads.
   adapter_blind_spot: '. unread',
   discarded_relation: '. discarded',
+  excluded_from_analysis: '. excluded',
 };
 
 /**
  * The count is the total; the names come from the sample, and never with counts of their own.
  *
- * `filesSkipped` is how many files were skipped. `skipped` is a bounded sample of them, and on
+ * The word is `path` rather than `file`: a directory traversal declined to enter is one entry standing
+ * for everything inside it, and calling two excluded directories two files understates what was lost in
+ * the one line a reader has to notice it in.
+ *
+ * `filesSkipped` is how many paths were skipped. `skipped` is a bounded sample of them, and on
  * `pydantic-ai-exercised` the two are eighty one and thirty four. Counting reasons out of the sample
  * and printing them as though they described the whole is an inference presented as an observation, so
  * a per reason count is printed only when the sample is the whole, which is what makes the two forms
@@ -75,7 +80,7 @@ const skippedRows = (coverage: Coverage): readonly Row[] => {
           kind: 'keyed',
           key: 'gap',
           state: '. skipped',
-          text: `${count} ${count === 1 ? 'file' : 'files'}, ${readable(reason)}`,
+          text: `${count} ${count === 1 ? 'path' : 'paths'}, ${readable(reason)}`,
         }) as const,
     );
   }
@@ -86,7 +91,7 @@ const skippedRows = (coverage: Coverage): readonly Row[] => {
       kind: 'keyed',
       key: 'gap',
       state: '. skipped',
-      text: `${total} files, ${sample.length} sampled: ${named.join(', ')}${rest === 0 ? '' : ` and ${rest} more`}`,
+      text: `${total} paths, ${sample.length} sampled: ${named.join(', ')}${rest === 0 ? '' : ` and ${rest} more`}`,
     },
   ];
 };
@@ -96,7 +101,7 @@ const skippedRows = (coverage: Coverage): readonly Row[] => {
  *
  * `reason` is prose the schema caps at no length at all, and on `crewai` it is two hundred and twenty
  * six characters, which rendered as four wrapped rows inside a sixty nine column frame. A terminal row
- * states a classification; a paragraph is the report's job. The kind is a closed set of three, so the
+ * states a classification; a paragraph is the report's job. The kind is a closed set, so the
  * classification is bounded by construction and cannot be widened by an adapter author, and `reason`
  * and `remediation` are both in the machine readable document.
  */

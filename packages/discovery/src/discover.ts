@@ -21,6 +21,7 @@ import type {
 import {
   analyzeFileSet,
   collectFiles,
+  type DeclinedDirectory,
   type FactCache,
   boundSkipped,
   isSupportedLanguage,
@@ -170,6 +171,29 @@ const adaptersThatFoundNothing = (
   }
   return areas;
 };
+
+/**
+ * Source the configuration removed and the repository kept.
+ *
+ * `analysis.exclude` matches a path segment at any depth, and `build`, `out`, `target`, `vendor` and
+ * `coverage` are ordinary module names as well as ordinary build output names. A repository with
+ * `src/build/` in it lost every file inside it while the report said `filesSkipped: 0`, listed nothing,
+ * and printed a headline saying every file had been read.
+ *
+ * Reported as an area rather than as a finding because a finding is about the system and this is about
+ * the scan, and because the decision is the owner's: a project that vendors its dependencies on purpose
+ * wants exactly this exclusion and only its owner knows which case they are in.
+ */
+const excludedTrackedSource = (
+  declined: readonly DeclinedDirectory[],
+): readonly UnsupportedArea[] =>
+  declined.map((entry) => ({
+    area: `${entry.path}, which the repository tracks source inside`,
+    kind: 'excluded_from_analysis' as const,
+    reason: `Traversal did not enter it because ${entry.rule} excludes it, so nothing it declares is in this graph. An exclusion matches a path segment at any depth, so a name chosen for build output also removes a module of the same name wherever it sits.`,
+    remediation:
+      'Set analysis.exclude in .orchescope/config.yaml to the directory names this repository actually uses for derived output, then rerun the audit and check the parsed count.',
+  }));
 
 /**
  * Relations the graph could not keep, grouped by the adapter that reported them.
@@ -331,6 +355,7 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
     adapters: adapterRuns,
     unsupported: [
       ...unsupportedAreas(fileSet.extensionCounts),
+      ...excludedTrackedSource(fileSet.excludedTracked),
       ...adaptersThatFoundNothing(adapters, adapterRuns, analysis.facts),
     ],
     durationMs: request.clock.monotonicMs() - startedAtMs,

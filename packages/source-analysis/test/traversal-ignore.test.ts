@@ -108,3 +108,122 @@ describe('traversal and the repository ignore file', () => {
     );
   });
 });
+
+/**
+ * A directory taken out takes every file inside it, and said nothing.
+ *
+ * `analysis.exclude` matches a path segment at any depth, and `build`, `out`, `target`, `vendor` and
+ * `coverage` are ordinary module names as well as ordinary build output names. A repository with
+ * `src/build/` in it lost every file inside it while the report said `filesSkipped: 0` and listed
+ * nothing, which is the one failure the coverage block exists to make impossible.
+ */
+describe('a directory traversal declines to enter', () => {
+  const repositoryWithBuild = {
+    'src/main.ts': 'export const main = (): void => undefined;\n',
+    'src/build/plan.ts': 'export const plan = (): void => undefined;\n',
+    'src/build/emit.ts': 'export const emit = (): void => undefined;\n',
+    'node_modules/left-pad/index.js': 'module.exports = 1;\n',
+  };
+
+  const scan = (trackedPaths?: ReadonlySet<string>) =>
+    collectFiles(project(repositoryWithBuild), {
+      maxFileBytes: 512 * 1024,
+      maxFiles: 500,
+      followSymlinks: false,
+      excludeDirectories: DEFAULT_EXCLUDED_DIRECTORIES,
+      excludePrefixes: [],
+      ...(trackedPaths === undefined ? {} : { trackedPaths }),
+    });
+
+  /** What `readTrackedPaths` produces: every tracked file and every directory holding one. */
+  const tracked = new Set([
+    'src',
+    'src/main.ts',
+    'src/build',
+    'src/build/plan.ts',
+    'src/build/emit.ts',
+  ]);
+
+  it('is named in coverage when the repository tracks files inside it', () => {
+    const found = scan(tracked);
+    const excluded = found.skipped.filter((entry) => entry.file === 'src/build');
+    assert.equal(
+      excluded.length,
+      1,
+      `src/build was not named among ${JSON.stringify(found.skipped)}`,
+    );
+    assert.equal(excluded[0]?.reason, 'ignored');
+    assert.match(excluded[0]?.detail ?? '', /excluded by analysis\.exclude \(build\)/);
+    assert.match(excluded[0]?.detail ?? '', /the repository tracks source inside it/);
+  });
+
+  it('is reported apart from the skip list, so a caller need not match on prose', () => {
+    assert.deepEqual(scan(tracked).excludedTracked, [
+      { path: 'src/build', rule: 'analysis.exclude (build)' },
+    ]);
+  });
+
+  /*
+   * The index decides both ways. A file it tracks is part of the repository whatever the rules say, and
+   * a directory it tracks nothing inside is derived output: naming every `node_modules` would bury the
+   * one line that matters.
+   */
+  it('is not named when the repository tracks nothing inside it', () => {
+    const found = scan(tracked);
+    assert.equal(
+      found.skipped.some((entry) => entry.file === 'node_modules'),
+      false,
+      'a directory holding no tracked file was reported as a loss',
+    );
+    assert.deepEqual(
+      found.excludedTracked.map((entry) => entry.path),
+      ['src/build'],
+    );
+  });
+
+  /* With no index there is no statement to read, so nothing is assumed and every decline is named. */
+  it('is named whatever it holds when the root is not a checkout', () => {
+    const found = scan(undefined);
+    assert.deepEqual(
+      found.skipped
+        .filter((entry) => entry.reason === 'ignored')
+        .map((entry) => entry.file)
+        .sort(),
+      ['node_modules', 'src/build'],
+    );
+    assert.deepEqual(found.excludedTracked, []);
+  });
+
+  it('leaves what it did read exactly as it was', () => {
+    assert.deepEqual(
+      scan(tracked).files.map((file) => file.path),
+      ['src/main.ts'],
+    );
+  });
+});
+
+/**
+ * A tracked file is not the same as tracked source.
+ *
+ * `.orchescope` is excluded by name and holds a manifest committed on purpose, so a rule that asked only
+ * whether the repository tracks anything inside an excluded directory reported this tool's own state
+ * directory as source it had failed to read, in the demonstration system it ships with.
+ */
+describe('an excluded directory holding no code', () => {
+  it('is not reported as source that was not read', () => {
+    const root = project({
+      '.orchescope/manifest.yaml': 'project: demo\n',
+      'src/main.ts': 'export const main = (): void => undefined;\n',
+    });
+    const found = collectFiles(root, {
+      maxFileBytes: 512 * 1024,
+      maxFiles: 500,
+      followSymlinks: false,
+      excludeDirectories: DEFAULT_EXCLUDED_DIRECTORIES,
+      excludePrefixes: [],
+      trackedPaths: new Set(['.orchescope', '.orchescope/manifest.yaml', 'src', 'src/main.ts']),
+    });
+    assert.deepEqual(found.excludedTracked, []);
+    assert.deepEqual(found.skipped, []);
+  });
+});

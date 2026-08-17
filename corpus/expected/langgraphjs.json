@@ -91,7 +91,7 @@
     "discovered": 1381,
     "inSupportedLanguages": 1165,
     "parsed": 1165,
-    "skipped": 3,
+    "skipped": 4,
     "truncated": false
   },
   "findings": {

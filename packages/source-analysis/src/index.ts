@@ -46,6 +46,7 @@ export {
   boundSkipped,
   collectFiles,
   DEFAULT_EXCLUDED_DIRECTORIES,
+  type DeclinedDirectory,
   type FileContents,
   type FileSet,
   isSkipped,
