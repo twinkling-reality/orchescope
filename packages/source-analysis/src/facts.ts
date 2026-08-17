@@ -154,6 +154,26 @@ export type ControlFlowFact = {
    */
   readonly headerNames?: readonly string[];
   /**
+   * For a loop, names it multiplies or exponentiates on each pass.
+   *
+   * A wait that grows is usually written at the call, `sleep(100 * 2 ** attempt)`, and is sometimes
+   * written beside it: `await sleep(delayMs)` followed by `delayMs *= 2` is the same backoff with the
+   * growth one statement away. The call site alone cannot tell the two apart, so the loop records which
+   * of its names grow and the reader joins them up. Without it a real exponential backoff was reported
+   * as `unknown`, which reads as a gap in the reading rather than as a fact about the code.
+   */
+  readonly growingNames?: readonly string[];
+  /**
+   * For a `try`, whether its guarded body ends the work and its handler lets it carry on.
+   *
+   * This is the shape of one attempt: a pass that succeeds returns, and a pass that fails falls through
+   * to whatever comes next. Inside a loop that repeats the same work, that is a retry and there is
+   * nothing else it can be, which is what lets a counting loop be read as re-attempting when its author
+   * called the counter `i` and wrote no wait. A handler that returns as well is a single attempt with a
+   * fallback, and a loop around it runs once.
+   */
+  readonly exitsOnSuccess?: boolean;
+  /**
    * For a loop, whether its own form limits how many passes it makes.
    *
    * `for _ in range(10)` and `for (let i = 0; i < 3; i += 1)` state a ceiling in the syntax; `while` and

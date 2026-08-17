@@ -253,6 +253,61 @@ describe('retry-around-non-idempotent-operation', () => {
     );
     assert.equal(unsafeRetryRule.evaluate(contextFor(graph)).drafts.length, 0);
   });
+
+  /**
+   * A component can stand for more than one call, and then it cannot answer for any of them.
+   *
+   * A function that posts a job and polls its status builds both addresses at run time, so both requests
+   * are one component named for that function and its class is whichever call was recorded first. Asked
+   * about the poll, it answered with the class of the POST, and a pinned repository gained a finding
+   * about a write its loop never makes.
+   */
+  it('believes the relation about which operation it repeats, over the component', () => {
+    const graph = graphWith(
+      { retry: { bounded: false, backoff: 'fixed', idempotency: 'unknown' } },
+      post,
+      { retriedEffect: 'read_only' },
+    );
+    assert.equal(unsafeRetryRule.evaluate(contextFor(graph)).drafts.length, 0);
+  });
+
+  it('still fires when the relation says the repeated call is the write', () => {
+    const graph = graphWith(
+      { retry: { bounded: false, backoff: 'fixed', idempotency: 'unknown' } },
+      post,
+      { retriedEffect: 'non_idempotent_write' },
+    );
+    assert.equal(unsafeRetryRule.evaluate(contextFor(graph)).status, 'fired');
+  });
+});
+
+/**
+ * The sentence a reader goes to the line to check.
+ *
+ * It said "a loop with a catch" whatever the relation came from, which was already untrue of an explicit
+ * retry helper and became untrue of a loop that reads the response rather than catching.
+ */
+describe('how unbounded-retry says the retry was recognised', () => {
+  const unbounded = { retry: { bounded: false, backoff: 'none', idempotency: 'unknown' } } as const;
+  const explanationFor = (metadata: Readonly<Record<string, string>>): string => {
+    const outcome = unboundedRetryRule.evaluate(contextFor(graphWith(unbounded, lookup, metadata)));
+    return outcome.drafts[0]?.explanation ?? '';
+  };
+
+  it('names the helper when the retry is a call to one', () => {
+    const explanation = explanationFor({ retryHelper: 'pRetry' });
+    assert.match(explanation, /a call to pRetry/);
+    assert.doesNotMatch(explanation, /loop with a catch/);
+  });
+
+  it('names what the loop showed when the retry is a loop', () => {
+    const explanation = explanationFor({
+      retryShape: 'loop-with-check',
+      reattemptEvidence: 'it waits with sleep before the next pass',
+    });
+    assert.match(explanation, /a loop where it waits with sleep before the next pass/);
+    assert.doesNotMatch(explanation, /catch/);
+  });
 });
 
 describe('bounded-retry-with-declared-idempotency', () => {

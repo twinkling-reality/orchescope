@@ -69,11 +69,26 @@ const retriedOperationOf = (context: RuleContext, edge: Edge): Component | undef
  * components and source locations were byte identical: from the outside it read as one problem counted
  * twice, and it doubled the medium severity count wherever it happened.
  */
+/**
+ * The class of the operation this retry repeats.
+ *
+ * The relation is asked before the component, because a component can stand for more than one call. A
+ * function that posts a job and then polls its status builds both addresses at run time, so both
+ * requests are one component named for that function; asking that component whether the polled read is
+ * safe to repeat answers with the class of the POST, and the finding names a write the loop never makes.
+ * Discovery knows which call the loop re-attempts, so where the relation says, the relation wins.
+ */
+const retriedEffectOf = (context: RuleContext, edge: Edge): SideEffectClass | undefined => {
+  const stated = edge.metadata['retriedEffect'];
+  if (typeof stated === 'string') return stated as SideEffectClass;
+  return retriedOperationOf(context, edge)?.sideEffect;
+};
+
 const retryIsUnsafe = (context: RuleContext, edge: Edge): boolean => {
   const retry = edge.policy?.retry;
   if (retry === undefined || retry.idempotency === 'declared') return false;
   if (edge.metadata['deduplicatesAtSink'] !== undefined) return false;
-  const operation = retriedOperationOf(context, edge);
+  const effect = retriedEffectOf(context, edge);
   /*
    * A component with no effect class was never classified, which is not the same as one classified
    * `unknown`. `unknown` is the answer discovery gives when it read a write shaped operation and could not
@@ -85,8 +100,8 @@ const retryIsUnsafe = (context: RuleContext, edge: Edge): boolean => {
    * `undefined` every time, so it refused on every input a field run ever gave it, and the write one hop
    * further was classified all along.
    */
-  if (operation?.sideEffect === undefined) return false;
-  return RETRY_UNSAFE_EFFECTS.includes(operation.sideEffect);
+  if (effect === undefined) return false;
+  return RETRY_UNSAFE_EFFECTS.includes(effect);
 };
 
 /**
@@ -125,7 +140,8 @@ export const unsafeRetryRule: Rule = {
       if (!retryIsUnsafe(context, edge)) continue;
       const target = retriedOperationOf(context, edge);
       if (target === undefined) continue;
-      const effect = target.sideEffect ?? 'unknown';
+      // The class the rule judged on, so the sentence a reader checks is the one that decided.
+      const effect = retriedEffectOf(context, edge) ?? 'unknown';
 
       const source = context.graph.component(edge.from);
       const record = derivedEvidence({
@@ -194,6 +210,21 @@ export const unsafeRetryRule: Rule = {
   },
 };
 
+/**
+ * How this retry was recognised, in the words of what was read.
+ *
+ * The sentence said "a loop with a catch" whatever the relation came from. That was already untrue of an
+ * explicit retry helper, which has no loop, and it became untrue of a loop that reads the response
+ * rather than catching. A reader who goes to the line and finds no catch has been told something they
+ * can check and that is wrong, in the one place the tool is asking to be trusted.
+ */
+const retryWasReadAs = (edge: Edge): string => {
+  const helper = edge.metadata['retryHelper'];
+  if (typeof helper === 'string') return `a call to ${helper}`;
+  const evidence = edge.metadata['reattemptEvidence'];
+  return typeof evidence === 'string' ? `a loop where ${evidence}` : 'a retry';
+};
+
 export const unboundedRetryRule: Rule = {
   id: 'unbounded-retry',
   category: 'reliability',
@@ -240,7 +271,7 @@ export const unboundedRetryRule: Rule = {
         confidence: CONFIDENCE_BANDS.structural,
         basis: 'discovered',
         title: `Retry of ${target?.displayName ?? edge.to} has no attempt ceiling`,
-        explanation: `The retry around ${target?.displayName ?? edge.to} was discovered as a loop with a catch and no attempt limit could be established from the source. An unbounded retry converts a persistent downstream failure into unbounded cost and an unbounded wait.`,
+        explanation: `The retry around ${target?.displayName ?? edge.to} was discovered as ${retryWasReadAs(edge)}, and no attempt limit could be established from the source. An unbounded retry converts a persistent downstream failure into unbounded cost and an unbounded wait.`,
         impact:
           'A failing dependency can consume the whole budget of a run and never surface an error.',
         components: [

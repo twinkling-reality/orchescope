@@ -66,7 +66,7 @@ const reachedBy = (
 ): ComponentIdentity | undefined => {
   const name = calleeName(call);
   const declared = name === '' ? undefined : context.bindings.lookup(file, name);
-  return declared ?? context.callSiteEffects.at(file, call);
+  return declared ?? context.callSiteEffects.at(file, call)?.identity;
 };
 
 export const implementationReachAdapter: AgentSystemAdapter = {

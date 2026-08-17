@@ -279,6 +279,17 @@ const arithmeticParts = (
       walk(asNode(field(current, 'expression')));
       return;
     }
+    /*
+     * A call inside a computed value is part of it. `100 * Math.pow(2, attempt)` says the same thing as
+     * `100 * 2 ** attempt`, and reading the multiplication while stepping over the call left the one
+     * name that makes it exponential out of the fact.
+     */
+    if (current.type === 'CallExpression' || current.type === 'NewExpression') {
+      const callee = asNode(field(current, 'callee'));
+      if (callee !== undefined) for (const segment of calleePath(callee)) names.add(segment);
+      for (const argument of nodeArray(field(current, 'arguments'))) walk(argument);
+      return;
+    }
     for (const segment of calleePath(current)) names.add(segment);
   };
   walk(node);
@@ -420,8 +431,8 @@ const LOOP_REPETITION: Readonly<Record<string, 'same_work' | 'each_item'>> = {
 /** Enough of a header to recognise a counter by the name its author gave it. */
 const MAX_HEADER_NAMES = 8;
 
-const collectIdentifiers = (node: Node | undefined, into: Set<string>): void => {
-  if (node === undefined || into.size >= MAX_HEADER_NAMES) return;
+const collectIdentifiers = (node: Node | undefined, into: Set<string>, limit: number): void => {
+  if (node === undefined || into.size >= limit) return;
   if (node.type === 'Identifier') {
     const name = field(node, 'name');
     if (typeof name === 'string') into.add(name);
@@ -430,10 +441,36 @@ const collectIdentifiers = (node: Node | undefined, into: Set<string>): void => 
   for (const key of Object.keys(node as Record<string, unknown>)) {
     const value = field(node, key);
     if (Array.isArray(value)) {
-      for (const entry of value) collectIdentifiers(asNode(entry), into);
+      for (const entry of value) collectIdentifiers(asNode(entry), into, limit);
       continue;
     }
-    collectIdentifiers(asNode(value), into);
+    collectIdentifiers(asNode(value), into, limit);
+  }
+};
+
+/**
+ * Names the loop writes to anywhere inside itself, which is how a counter advances and how a bound grows.
+ *
+ * Uncapped, unlike the header names, because this set is read for absence as well as presence. A name
+ * missing from it because a cap was reached would report a bound that grows as one that holds still, and
+ * that is the direction in which a wrong answer here costs the most.
+ */
+const collectAssignedNames = (node: Node | undefined, into: Set<string>): void => {
+  if (node === undefined) return;
+  if (node.type === 'AssignmentExpression' || node.type === 'UpdateExpression') {
+    const target = asNode(field(node, 'left')) ?? asNode(field(node, 'argument'));
+    if (target?.type === 'Identifier') {
+      const name = field(target, 'name');
+      if (typeof name === 'string') into.add(name);
+    }
+  }
+  for (const key of Object.keys(node as Record<string, unknown>)) {
+    const value = field(node, key);
+    if (Array.isArray(value)) {
+      for (const entry of value) collectAssignedNames(asNode(entry), into);
+      continue;
+    }
+    collectAssignedNames(asNode(value), into);
   }
 };
 
@@ -447,30 +484,169 @@ const collectIdentifiers = (node: Node | undefined, into: Set<string>): void => 
 const COUNTING_OPERATORS = new Set(['<', '<=', '>', '>=']);
 
 /**
+ * Whether a comparison closes, given the names the loop writes to.
+ *
+ * A comparison against a bound is only a ceiling when the two sides move apart: one of them advances and
+ * the other holds still. `while (attempt < maxAttempts)` with nothing incrementing `attempt` never ends,
+ * and neither does the same head with `maxAttempts` growing every pass, and both were read as bounded on
+ * the strength of the operator alone. An infinite retry around a POST reported as having an attempt limit
+ * is the false positive that costs the most, because the rule that would have caught it declines.
+ *
+ * Exactly one side, so the orientation does not matter: `0 < remaining` counting down is the same
+ * statement as `attempt < max` counting up. Two sides that both move is a refusal rather than a claim.
+ * They may converge, and a reader would need to know which way each one goes, which is more than the
+ * shape of the head settles.
+ */
+const comparisonCloses = (test: Node, advanced: ReadonlySet<string>): boolean => {
+  const operator = field(test, 'operator');
+  if (typeof operator !== 'string' || !COUNTING_OPERATORS.has(operator)) return false;
+  const moves = (key: string): boolean => {
+    const names = new Set<string>();
+    collectIdentifiers(asNode(field(test, key)), names, Number.POSITIVE_INFINITY);
+    return [...names].some((name) => advanced.has(name));
+  };
+  return moves('left') !== moves('right');
+};
+
+/**
+ * Whether a test closes, following the way it is joined.
+ *
+ * `while (running && attempt < max)` is bounded by its second operand whatever the first one does, since
+ * `&&` ends the loop as soon as any operand is false. `||` runs while any operand holds, so every one of
+ * them has to close. A negation is refused rather than inverted, because what a reader would have to
+ * work out is not what the head says.
+ */
+const testCloses = (test: Node, advanced: ReadonlySet<string>): boolean => {
+  if (test.type === 'BinaryExpression') return comparisonCloses(test, advanced);
+  if (test.type === 'ParenthesizedExpression') {
+    const inner = asNode(field(test, 'expression'));
+    return inner !== undefined && testCloses(inner, advanced);
+  }
+  if (test.type !== 'LogicalExpression') return false;
+  const operator = field(test, 'operator');
+  const left = asNode(field(test, 'left'));
+  const right = asNode(field(test, 'right'));
+  if (left === undefined || right === undefined) return false;
+  return operator === '&&'
+    ? testCloses(left, advanced) || testCloses(right, advanced)
+    : operator === '||' && testCloses(left, advanced) && testCloses(right, advanced);
+};
+
+/**
  * Whether the loop's own form limits how many passes it makes.
  *
- * A three part `for` with a test states a ceiling, and so does a `while` whose condition compares against
- * a bound. A `for...of` is bounded by the collection it walks. `for (;;)`, `while (true)` and a `while`
- * testing a flag do not.
+ * A `for...of` is bounded by the collection it walks. Every other loop is bounded when its head compares
+ * a counter against a bound and the body moves one of them, which is one question rather than two: a
+ * three part `for` and a `while` state a ceiling the same way, and `for (let attempt = 0; true;
+ * attempt++)` states none despite having a test in the position where a ceiling would go.
  *
  * Reading every `while` as unbounded reported a retry that declares `const max = 3` and honours it as
- * having no attempt limit, which is the accusation this rule exists to avoid making: the author wrote the
- * ceiling down and the reader was told they had not.
+ * having no attempt limit, which is the accusation this rule exists to avoid making. Reading a test as a
+ * ceiling without asking whether it can ever be false made the opposite mistake, which is worse: the
+ * reader was told an infinite retry was bounded.
  */
 const passesBoundedIn = (node: Node): boolean => {
-  if (node.type === 'ForStatement') return asNode(field(node, 'test')) !== undefined;
   if (node.type === 'ForOfStatement' || node.type === 'ForInStatement') return true;
-  if (node.type !== 'WhileStatement' && node.type !== 'DoWhileStatement') return false;
+  if (
+    node.type !== 'ForStatement' &&
+    node.type !== 'WhileStatement' &&
+    node.type !== 'DoWhileStatement'
+  ) {
+    return false;
+  }
   const test = asNode(field(node, 'test'));
-  if (test === undefined || test.type !== 'BinaryExpression') return false;
-  const operator = field(test, 'operator');
-  return typeof operator === 'string' && COUNTING_OPERATORS.has(operator);
+  if (test === undefined) return false;
+  const advanced = new Set<string>();
+  collectAssignedNames(asNode(field(node, 'update')), advanced);
+  collectAssignedNames(asNode(field(node, 'body')), advanced);
+  return testCloses(test, advanced);
+};
+
+/**
+ * Whether a statement here ends the enclosing work.
+ *
+ * A nested function is not descended into: `items.map(() => { return x })` returns from the callback and
+ * says nothing about the block holding it, and counting it would make almost every block look like one
+ * that exits.
+ */
+const endsTheWork = (node: Node | undefined): boolean => {
+  if (node === undefined) return false;
+  if (node.type === 'ReturnStatement' || node.type === 'BreakStatement') return true;
+  if (FUNCTION_TYPES.has(node.type)) return false;
+  for (const key of Object.keys(node as Record<string, unknown>)) {
+    const value = field(node, key);
+    if (Array.isArray(value)) {
+      if (value.some((entry) => endsTheWork(asNode(entry)))) return true;
+      continue;
+    }
+    if (endsTheWork(asNode(value))) return true;
+  }
+  return false;
+};
+
+const FUNCTION_TYPES = new Set([
+  'FunctionDeclaration',
+  'FunctionExpression',
+  'ArrowFunctionExpression',
+]);
+
+/** Whether a pass succeeds out of this `try` and fails through it, which is one attempt of a retry. */
+const exitsOnSuccessIn = (node: Node): boolean =>
+  endsTheWork(asNode(field(node, 'block'))) && !endsTheWork(asNode(field(node, 'handler')));
+
+/**
+ * Ways a value is made to grow by a factor rather than by a step.
+ *
+ * A wait that doubles is a backoff and a wait that gains a hundred milliseconds is not, and this is the
+ * whole of the difference in the syntax. The compound forms and the long form of the same statement,
+ * because `delayMs *= 2` and `delayMs = delayMs * 2` are one thing written two ways.
+ */
+const GROWING_ASSIGNMENTS = new Set(['*=', '**=', '<<=']);
+const GROWING_OPERATORS = new Set(['*', '**', '<<']);
+
+const growsByFactor = (node: Node, target: string): boolean => {
+  const operator = field(node, 'operator');
+  if (typeof operator !== 'string') return false;
+  if (GROWING_ASSIGNMENTS.has(operator)) return true;
+  if (operator !== '=') return false;
+  const right = asNode(field(node, 'right'));
+  if (right === undefined || right.type !== 'BinaryExpression') return false;
+  const parts = arithmeticParts(right);
+  return (
+    parts.operators.some((entry) => GROWING_OPERATORS.has(entry)) && parts.names.includes(target)
+  );
+};
+
+/** Names the loop multiplies on each pass, which is a wait growing one statement away from its call. */
+const collectGrowingNames = (node: Node | undefined, into: Set<string>): void => {
+  if (node === undefined) return;
+  if (node.type === 'AssignmentExpression') {
+    const target = asNode(field(node, 'left'));
+    const name = target?.type === 'Identifier' ? field(target, 'name') : undefined;
+    if (typeof name === 'string' && growsByFactor(node, name)) into.add(name);
+  }
+  for (const key of Object.keys(node as Record<string, unknown>)) {
+    const value = field(node, key);
+    if (Array.isArray(value)) {
+      for (const entry of value) collectGrowingNames(asNode(entry), into);
+      continue;
+    }
+    collectGrowingNames(asNode(value), into);
+  }
+};
+
+const growingNamesOf = (node: Node): readonly string[] => {
+  const names = new Set<string>();
+  collectGrowingNames(asNode(field(node, 'body')), names);
+  return [...names];
 };
 
 /** The identifiers a loop names in its own header, which is where a retry counts its attempts. */
 const headerNamesOf = (node: Node): readonly string[] => {
   const names = new Set<string>();
-  for (const key of ['init', 'test', 'update']) collectIdentifiers(asNode(field(node, key)), names);
+  for (const key of ['init', 'test', 'update']) {
+    collectIdentifiers(asNode(field(node, key)), names, MAX_HEADER_NAMES);
+  }
   return [...names];
 };
 
@@ -498,7 +674,10 @@ const traverse = (
       enclosing: frame.name,
       contains,
       ...(repeats === undefined ? {} : { repeats, passesBounded: passesBoundedIn(node) }),
-      ...(repeats === 'same_work' ? { headerNames: headerNamesOf(node) } : {}),
+      ...(repeats === 'same_work'
+        ? { headerNames: headerNamesOf(node), growingNames: growingNamesOf(node) }
+        : {}),
+      ...(kind === 'try_catch' ? { exitsOnSuccess: exitsOnSuccessIn(node) } : {}),
     });
     return;
   }

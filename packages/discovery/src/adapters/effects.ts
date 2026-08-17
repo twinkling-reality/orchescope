@@ -37,6 +37,13 @@ import {
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { callRelationKind } from '../call-relation.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
+import {
+  ATTEMPT_CEILING_NAME,
+  readSinkEvidence,
+  type SinkEvidenceIndex,
+  sinkKey,
+  sinkMetadata,
+} from '../sink-evidence.ts';
 
 /**
  * External effects: network calls, datastores, queues, retries and the operations that change something
@@ -242,18 +249,6 @@ type Found = {
    */
   unresolvedAddresses: number;
 };
-
-/**
- * Module namespace to the sentence saying how the operations defined there deduplicate their own effect.
- *
- * Keyed by namespace rather than by file path, because that is what a component identity carries and the
- * point of this map is to be asked about a call's target.
- */
-type SinkEvidence = {
-  readonly deduplicates: string | undefined;
-  readonly ceiling: string | undefined;
-};
-type Sinks = ReadonlyMap<string, SinkEvidence>;
 
 const serviceIdentity = (host: string): ComponentIdentity =>
   globalIdentity('external_service', GLOBAL_NAMESPACES.service, host);
@@ -756,7 +751,7 @@ const discoverHttp = (
     found.components += 1;
     found.files.add(module.file);
     if (host === undefined) found.unresolvedAddresses += 1;
-    context.callSiteEffects.record(module.file, call, service.identity);
+    context.callSiteEffects.record(module.file, call, service.identity, effect);
 
     builder.addEdge(
       drafts.edge({
@@ -863,79 +858,32 @@ const discoverStores = (
 };
 
 /**
- * Whether the module that defines an operation shows it deduplicating its own effect.
- *
- * "No idempotency key was found on the operation" was true of every retry Orchescope reported, because
- * nothing ever looked: the field existed and no adapter populated it. One reported finding named a call
- * whose sink derives a content addressed delivery identifier and enforces it with `ON CONFLICT DO
- * NOTHING`, which is verbatim the remediation the finding then prescribed. Looking one frame in is the
- * difference between a rule that read the code and a rule that assumed the worst about it.
- *
- * The evidence is deliberately coarse. It cannot prove the key covers the retried operation, so it is not
- * used to declare the retry safe; it is used to stop the rules asserting an absence they never checked.
- */
-const DEDUPLICATING_SQL = /\bon\s+conflict\b|\bon\s+duplicate\s+key\b|\bmerge\s+into\b/i;
-const DEDUPLICATING_NAME = /idempot|dedup|deterministic/i;
-const IDEMPOTENCY_KEY_NAME = /^idempotency[-_]?(key|token)$/i;
-const ATTEMPT_CEILING_NAME = /max_?(attempts|retries|tries)/i;
-
-const entryDeclaresKey = (entries: readonly ObjectEntryFact[], depth: number): boolean =>
-  entries.some((entry) => {
-    if (IDEMPOTENCY_KEY_NAME.test(entry.key)) return true;
-    if (depth === 0 || entry.value.kind !== 'object') return false;
-    return entryDeclaresKey(entry.value.entries, depth - 1);
-  });
-
-const idempotencyEvidenceIn = (module: ModuleFacts): string | undefined => {
-  if (module.texts.some((text) => DEDUPLICATING_SQL.test(text.value))) {
-    return 'its statement deduplicates on conflict';
-  }
-  const named = module.calls.find((call) => DEDUPLICATING_NAME.test(calleeName(call)));
-  if (named !== undefined) return `it derives a key with ${calleeName(named)}`;
-  const keyed = module.calls.some((call) =>
-    call.args.some(
-      (argument) => argument.kind === 'object' && entryDeclaresKey(argument.entries, 1),
-    ),
-  );
-  return keyed ? 'it sends an idempotency key' : undefined;
-};
-
-/**
- * Whether the module that defines an operation declares how many attempts it allows.
- *
- * The same omission as the key, in the other rule: `no attempt limit could be established from the source`
- * was reported about a codebase that declares `const DELIVERY_MAX_ATTEMPTS = 6` and enforces it with a
- * terminal status. A constant is not proof that the retry honours it, so this stops the assertion rather
- * than making the opposite one.
- */
-const ceilingEvidenceIn = (module: ModuleFacts): string | undefined => {
-  const declared = module.definitions.find((definition) =>
-    ATTEMPT_CEILING_NAME.test(definition.name),
-  );
-  return declared === undefined ? undefined : `it declares ${declared.name}`;
-};
-
-/**
- * What the sink showed, carried on the relation so a rule can decline to assert what nobody established.
- *
- * The evidence is recorded rather than resolved into `idempotency: 'declared'`, because `declared` means a
- * key was found on the operation and a name that reads like a key derivation is not that. What it supports
- * is a refusal: the rules stop claiming an absence they never checked, and say how many they left alone.
- */
-const sinkMetadata = (sink: SinkEvidence | undefined): Record<string, string> => ({
-  ...(sink?.deduplicates === undefined ? {} : { deduplicatesAtSink: sink.deduplicates }),
-  ...(sink?.ceiling === undefined ? {} : { attemptCeiling: sink.ceiling }),
-});
-
-/**
  * A ceiling the loop itself states, which is a stronger answer than one found in the sink.
  *
- * A `while` bounds nothing by its form, but a condition that names a maximum is the author writing the
- * limit down. Reported so that the rule declines to assert an absence rather than declaring the retry safe.
+ * A condition that names a maximum is the author writing the limit down, and it is worth saying which
+ * name they wrote. Only for a loop whose passes are bounded: a head that names a maximum and can never
+ * be false has not stated a ceiling, and reporting one let a rule decline about an infinite retry on the
+ * strength of the word in its condition.
  */
 const headerCeiling = (loop: ControlFlowFact): string | undefined => {
+  if (loop.passesBounded !== true) return undefined;
   const named = (loop.headerNames ?? []).find((name) => ATTEMPT_CEILING_NAME.test(name));
   return named === undefined ? undefined : `its condition names ${named}`;
+};
+
+/**
+ * Where to ask what the function performing an operation showed.
+ *
+ * A name is followed to the module and the function that define it, because that is the function whose
+ * evidence is being asked about: an alias at the call site says nothing about how the sink deduplicates.
+ * A name that resolves nowhere is asked about in the module that wrote it, which is the best this build
+ * can say and is bounded by that module rather than by the repository.
+ */
+const sinkOfName = (context: DiscoveryContext, file: string, name: string): string => {
+  const resolved = context.symbols.resolve(file, name);
+  return resolved === undefined
+    ? sinkKey(moduleNamespace(file), name)
+    : sinkKey(moduleNamespace(resolved.file), resolved.name);
 };
 
 /** The operation a retry helper wraps, when it can be named. */
@@ -957,7 +905,7 @@ const discoverRetryHelpers = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   found: Found,
-  sinks: Sinks,
+  sinks: SinkEvidenceIndex,
 ): void => {
   for (const call of module.calls) {
     if (!RETRY_HELPERS.has(calleeName(call))) continue;
@@ -971,7 +919,7 @@ const discoverRetryHelpers = (
       numberValue(findEntry(entries, 'retries')?.value) ??
       numberValue(findEntry(entries, 'attempts')?.value) ??
       numberValue(findEntry(entries, 'stop_after_attempt')?.value);
-    const sink = sinks.get(target.namespace);
+    const sink = sinks.get(sinkOfName(context, module.file, wrappedName));
     const policy: EdgePolicy = {
       retry: {
         ...(attempts === undefined ? {} : { maxAttempts: attempts }),
@@ -998,23 +946,25 @@ const discoverRetryHelpers = (
 };
 
 /**
- * The loop a `try` sits inside, in the same function.
+ * The `try` a loop guards a pass with, in the same function, when it has one.
  *
  * Containment is by line range and by scope. Line range alone matched a `try` in one function against a
  * loop in another whose range happened to span it, which is how a one shot `fetch` helper whose only
  * `try` wrapped a `JSON.parse` fallback came to be reported as a retried operation.
+ *
+ * Optional, because a `try` is one way a pass says it can fail and not the only one. A loop that reads
+ * the response and goes round again when it is not ok re-attempts exactly as much, and requiring a `try`
+ * made it invisible: the wait, the counter and the request were all there to be read.
  */
-const enclosingLoopOf = (
-  module: ModuleFacts,
-  construct: ControlFlowFact,
-): ControlFlowFact | undefined =>
+const guardedPassIn = (module: ModuleFacts, loop: ControlFlowFact): ControlFlowFact | undefined =>
   module.controlFlow.find(
     (candidate) =>
-      candidate.kind === 'loop' &&
-      candidate.enclosing === construct.enclosing &&
-      candidate.location.startLine <= construct.location.startLine &&
-      (candidate.location.endLine ?? candidate.location.startLine) >=
-        (construct.location.endLine ?? construct.location.startLine),
+      candidate.kind === 'try_catch' &&
+      candidate.contains.length > 0 &&
+      candidate.enclosing === loop.enclosing &&
+      candidate.location.startLine >= loop.location.startLine &&
+      (candidate.location.endLine ?? candidate.location.startLine) <=
+        (loop.location.endLine ?? loop.location.startLine),
   );
 
 /**
@@ -1058,19 +1008,28 @@ const ATTEMPT_NAME = /attempt|retr|tries/i;
  */
 const reattemptEvidence = (
   loop: ControlFlowFact,
-  attempted: ControlFlowFact,
+  attempted: ControlFlowFact | undefined,
 ): string | undefined => {
   if (loop.repeats !== 'same_work') return undefined;
   /*
    * Both constructs, because a wait before the next pass is written in the catch as often as in the loop
    * body, and a call belongs to the innermost construct that holds it.
    */
-  const delay = [...loop.contains, ...attempted.contains]
+  const delay = [...loop.contains, ...(attempted?.contains ?? [])]
     .map((path) => path[path.length - 1])
     .find((name) => name !== undefined && DELAY_CALLS.has(name));
   if (delay !== undefined) return `it waits with ${delay} before the next pass`;
   const counter = (loop.headerNames ?? []).find((name) => ATTEMPT_NAME.test(name));
-  return counter === undefined ? undefined : `its header counts ${counter}`;
+  if (counter !== undefined) return `its header counts ${counter}`;
+  /*
+   * The third form, and the one that needs no vocabulary from the author. A pass that returns when it
+   * works and falls through when it throws is an attempt, and a loop that repeats it is a retry whatever
+   * the counter is called. `for (let i = 0; i < 3; i++)` around a guarded POST was invisible because `i`
+   * is not a word this recognises and nothing in the loop waits.
+   */
+  return attempted?.exitsOnSuccess === true
+    ? 'a pass returns when it succeeds and falls through when it fails'
+    : undefined;
 };
 
 /**
@@ -1083,6 +1042,29 @@ const reattemptEvidence = (
 const GROWING_OPERATORS = new Set(['**', '<<']);
 
 /**
+ * The library spelling of the same statement.
+ *
+ * `Math.pow(2, attempt)` and `2 ** attempt` are one expression written for two audiences, and reading
+ * only the operator reported a textbook exponential backoff as a wait this build could not describe.
+ * Python's builtin is spelled the same way.
+ */
+const GROWING_CALLS = new Set(['pow']);
+
+/** Whether this argument to a wait says the wait grows, given the names the loop multiplies. */
+const waitGrows = (argument: ArgumentFact, grown: ReadonlySet<string>): boolean => {
+  /*
+   * A name is the third spelling and the one the call site cannot see on its own: `sleep(delayMs)` with
+   * `delayMs *= 2` beside it is the same backoff with its growth one statement away.
+   */
+  if (argument.kind === 'identifier') return grown.has(argument.name);
+  if (argument.kind !== 'arithmetic') return false;
+  return (
+    argument.operators.some((operator) => GROWING_OPERATORS.has(operator)) ||
+    argument.names.some((name) => GROWING_CALLS.has(name) || grown.has(name))
+  );
+};
+
+/**
  * How the wait between attempts is written, when a wait is written at all.
  *
  * A retry with no backoff is the dangerous shape: it re-attempts as fast as the dependency can fail, and
@@ -1093,20 +1075,14 @@ const GROWING_OPERATORS = new Set(['**', '<<']);
 const backoffOfLoop = (
   module: ModuleFacts,
   loop: ControlFlowFact,
-  attempted: ControlFlowFact,
 ): 'none' | 'fixed' | 'exponential' | 'unknown' => {
-  const waits = [...callsWithin(module, loop), ...callsWithin(module, attempted)].filter((call) =>
-    DELAY_CALLS.has(calleeName(call)),
-  );
+  const waits = callsWithin(module, loop).filter((call) => DELAY_CALLS.has(calleeName(call)));
   if (waits.length === 0) return 'none';
+  const grown = new Set(loop.growingNames ?? []);
   let fixed = false;
   for (const wait of waits) {
     for (const argument of wait.args) {
-      if (argument.kind === 'arithmetic') {
-        if (argument.operators.some((operator) => GROWING_OPERATORS.has(operator))) {
-          return 'exponential';
-        }
-      }
+      if (waitGrows(argument, grown)) return 'exponential';
       if (argument.kind === 'number') fixed = true;
     }
   }
@@ -1128,7 +1104,9 @@ const backoffOfLoop = (
  */
 type RetriedOperation = {
   readonly target: ComponentIdentity;
-  readonly sinkNamespace: string;
+  /** What this call was classified as, which the target may not answer for. */
+  readonly sideEffect: SideEffectClass | undefined;
+  readonly sinkKey: string;
   readonly symbol: string;
 };
 
@@ -1140,8 +1118,9 @@ const retriedOperation = (
   const atCallSite = context.callSiteEffects.at(module.file, call);
   if (atCallSite !== undefined) {
     return {
-      target: atCallSite,
-      sinkNamespace: moduleNamespace(module.file),
+      target: atCallSite.identity,
+      sideEffect: atCallSite.sideEffect,
+      sinkKey: sinkKey(moduleNamespace(module.file), call.enclosing),
       symbol: dotted(call.calleePath),
     };
   }
@@ -1149,7 +1128,12 @@ const retriedOperation = (
   const declared = name === '' ? undefined : context.bindings.lookup(module.file, name);
   return declared === undefined
     ? undefined
-    : { target: declared, sinkNamespace: declared.namespace, symbol: name };
+    : {
+        target: declared,
+        sideEffect: undefined,
+        sinkKey: sinkOfName(context, module.file, name),
+        symbol: name,
+      };
 };
 
 /** Calls written inside a construct, by line, which is how a call site is reached from the construct. */
@@ -1163,26 +1147,32 @@ const callsWithin = (module: ModuleFacts, construct: ControlFlowFact): readonly 
 };
 
 /**
- * A loop that re-attempts the same operation, with a try around it. Recorded as unbounded because nothing
- * in the syntax states a limit.
+ * A loop that re-attempts the same operation.
+ *
+ * The loop is the retry, so the loop is what this reads. Keying off the `try` instead made a `try` a
+ * requirement rather than a form, and a retry that reads the response and goes round again produced no
+ * relation at all.
+ *
+ * Every operation the loop performs is re-attempted, not only the ones a `try` happens to enclose. A
+ * request made before the guarded call runs again on the next pass exactly as much as the guarded one
+ * does, and the graph is being asked which operations repeat.
  */
 const discoverRetryLoops = (
   module: ModuleFacts,
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   found: Found,
-  sinks: Sinks,
+  sinks: SinkEvidenceIndex,
 ): void => {
-  for (const construct of module.controlFlow) {
-    if (construct.kind !== 'try_catch' || construct.contains.length === 0) continue;
-    const loop = enclosingLoopOf(module, construct);
-    if (loop === undefined) continue;
-    const evidence = reattemptEvidence(loop, construct);
+  for (const loop of module.controlFlow) {
+    if (loop.kind !== 'loop') continue;
+    const attempted = guardedPassIn(module, loop);
+    const evidence = reattemptEvidence(loop, attempted);
     if (evidence === undefined) continue;
 
-    const scope = construct.enclosing ?? 'module-scope';
+    const scope = loop.enclosing ?? 'module-scope';
     const drawn = new Set<string>();
-    for (const call of callsWithin(module, construct)) {
+    for (const call of callsWithin(module, loop)) {
       const operation = retriedOperation(module, context, call);
       if (operation === undefined) continue;
       const { target } = operation;
@@ -1198,24 +1188,29 @@ const discoverRetryLoops = (
             builder,
             found,
             name: scope,
-            location: construct.location,
+            location: loop.location,
             inferredFrom: 'scope containing a retry loop',
           }),
           to: target,
-          location: construct.location,
+          location: loop.location,
           symbol: `retry loop around ${operation.symbol}`,
           confidence: CONFIDENCE_BANDS.structural,
           policy: {
             retry: {
               bounded: loop.passesBounded === true,
-              backoff: backoffOfLoop(module, loop, construct),
+              backoff: backoffOfLoop(module, loop),
               idempotency: 'unknown',
             },
           },
           metadata: {
-            retryShape: 'loop-with-try',
+            retryShape: attempted === undefined ? 'loop-with-check' : 'loop-with-try',
             reattemptEvidence: evidence,
-            ...sinkMetadata(sinks.get(operation.sinkNamespace)),
+            /*
+             * What the retried call was classified as, stated here because the component it produced may
+             * stand for other calls in the same function and cannot answer for this one.
+             */
+            ...(operation.sideEffect === undefined ? {} : { retriedEffect: operation.sideEffect }),
+            ...sinkMetadata(sinks.get(operation.sinkKey)),
             ...(headerCeiling(loop) === undefined
               ? {}
               : { attemptCeiling: headerCeiling(loop) as string }),
@@ -1241,25 +1236,7 @@ export const effectsAdapter: AgentSystemAdapter = {
       files: new Set(),
       unresolvedAddresses: 0,
     };
-    /*
-     * Read before anything is judged, because the sink of a retried operation is usually in a different
-     * module from the retry, and a rule that asserts an absence has to have looked everywhere it could.
-     */
-    const sinks: Sinks = new Map(
-      context.modules
-        .filter((module) => !isTestFile(module.file))
-        .map(
-          (module) =>
-            [
-              moduleNamespace(module.file),
-              {
-                deduplicates: idempotencyEvidenceIn(module),
-                ceiling: ceilingEvidenceIn(module),
-              },
-            ] as const,
-        )
-        .filter((entry) => entry[1].deduplicates !== undefined || entry[1].ceiling !== undefined),
-    );
+    const sinks = readSinkEvidence(context.modules);
     /*
      * A test harness reaches real clients at fakes, and an effect discovered only there describes the harness
      * rather than the system. Reading them mapped one repository's `sqlite` database entirely from a `FakeD1`

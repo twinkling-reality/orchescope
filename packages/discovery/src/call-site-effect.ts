@@ -1,4 +1,4 @@
-import type { ComponentIdentity } from '@orchescope/schema';
+import type { ComponentIdentity, SideEffectClass } from '@orchescope/schema';
 import type { CallFact } from '@orchescope/source-analysis';
 
 /**
@@ -21,18 +21,36 @@ import type { CallFact } from '@orchescope/source-analysis';
  * Keyed by the call's own offset rather than by its callee path, because a function that requests two
  * different hosts writes `fetch` at both of them and they are two operations.
  */
+/**
+ * What one call site produced: the component, and how this call was classified.
+ *
+ * The class travels with the call rather than being read back off the component, because a component
+ * can stand for more than one call. A function that posts a job and then polls its status builds both
+ * addresses at run time, so both requests are one component named for that function, and asking that
+ * component what the poll does answers with the class of the POST.
+ */
+export type CallSiteOperation = {
+  readonly identity: ComponentIdentity;
+  readonly sideEffect: SideEffectClass | undefined;
+};
+
 export type CallSiteEffects = {
-  readonly record: (file: string, call: CallFact, identity: ComponentIdentity) => void;
-  readonly at: (file: string, call: CallFact) => ComponentIdentity | undefined;
+  readonly record: (
+    file: string,
+    call: CallFact,
+    identity: ComponentIdentity,
+    sideEffect?: SideEffectClass,
+  ) => void;
+  readonly at: (file: string, call: CallFact) => CallSiteOperation | undefined;
 };
 
 const key = (file: string, call: CallFact): string => `${file}#${call.offset}`;
 
 export const createCallSiteEffects = (): CallSiteEffects => {
-  const effects = new Map<string, ComponentIdentity>();
+  const effects = new Map<string, CallSiteOperation>();
   return {
-    record: (file, call, identity) => {
-      effects.set(key(file, call), identity);
+    record: (file, call, identity, sideEffect) => {
+      effects.set(key(file, call), { identity, sideEffect });
     },
     at: (file, call) => effects.get(key(file, call)),
   };

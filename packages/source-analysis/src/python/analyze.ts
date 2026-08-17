@@ -316,10 +316,88 @@ const RANGE_CALL = /^range\s*\(/;
  */
 const COUNTING_OPERATORS = new Set(['<', '<=', '>', '>=']);
 
+/**
+ * Names the loop writes to anywhere inside itself, which is how a counter advances and how a bound grows.
+ *
+ * Python spells both as an assignment, plain or augmented, and there is no increment operator to read
+ * separately. Uncapped, because the set is read for absence as well as presence and a name missing from
+ * it would report a bound that grows as one that holds still.
+ */
+const collectAssignedNames = (node: Node | null, into: Set<string>): void => {
+  if (node === null) return;
+  if (node.type === 'assignment' || node.type === 'augmented_assignment') {
+    const target = node.childForFieldName('left');
+    if (target !== null && target.type === 'identifier') into.add(target.text);
+  }
+  for (const child of node.namedChildren) collectAssignedNames(child, into);
+};
+
+const identifiersUnder = (node: Node): ReadonlySet<string> => {
+  const names = new Set<string>();
+  const walk = (candidate: Node): void => {
+    if (candidate.type === 'identifier') {
+      names.add(candidate.text);
+      return;
+    }
+    for (const child of candidate.namedChildren) walk(child);
+  };
+  walk(node);
+  return names;
+};
+
+/**
+ * Whether a `while` head closes, given the names its body writes to.
+ *
+ * A comparison against a bound is a ceiling only when the two sides move apart: one of them advances and
+ * the other holds still. `while attempt < max_attempts` with nothing incrementing `attempt` never ends,
+ * and neither does the same head with `max_attempts` growing every pass, and both were read as bounded on
+ * the strength of the operator alone.
+ *
+ * A chained comparison is refused rather than guessed at. `while 0 < attempt < limit` states a ceiling
+ * whose reading depends on which of three operands moves, and the head does not settle that.
+ */
+const comparisonCloses = (condition: Node, advanced: ReadonlySet<string>): boolean => {
+  if (!condition.children.some((child) => !child.isNamed && COUNTING_OPERATORS.has(child.type))) {
+    return false;
+  }
+  const sides = condition.namedChildren;
+  if (sides.length !== 2) return false;
+  const moves = (side: Node): boolean =>
+    [...identifiersUnder(side)].some((name) => advanced.has(name));
+  const [left, right] = sides;
+  return left !== undefined && right !== undefined && moves(left) !== moves(right);
+};
+
+/**
+ * Whether a condition closes, following the way it is joined.
+ *
+ * `while True and attempts < 10` is how one pinned repository writes a bounded poll, and reading only a
+ * bare comparison called it infinite and then accused it of retrying a write without a limit. An `and`
+ * ends the loop as soon as any operand is false, so one closing operand closes the loop; an `or` runs
+ * while any operand holds, so every one of them has to close. A negation is refused rather than
+ * inverted, because what a reader would have to work out is not what the head says.
+ */
+const conditionCloses = (condition: Node, advanced: ReadonlySet<string>): boolean => {
+  if (condition.type === 'comparison_operator') return comparisonCloses(condition, advanced);
+  if (condition.type === 'parenthesized_expression') {
+    const inner = condition.namedChildren[0];
+    return inner !== undefined && conditionCloses(inner, advanced);
+  }
+  if (condition.type !== 'boolean_operator') return false;
+  const joined = condition.children.some((child) => !child.isNamed && child.type === 'and');
+  const operands = condition.namedChildren;
+  if (operands.length === 0) return false;
+  return joined
+    ? operands.some((operand) => conditionCloses(operand, advanced))
+    : operands.every((operand) => conditionCloses(operand, advanced));
+};
+
 const whilePassesBounded = (node: Node): boolean => {
   const condition = node.childForFieldName('condition');
-  if (condition === null || condition.type !== 'comparison_operator') return false;
-  return condition.children.some((child) => !child.isNamed && COUNTING_OPERATORS.has(child.type));
+  if (condition === null) return false;
+  const advanced = new Set<string>();
+  collectAssignedNames(node.childForFieldName('body'), advanced);
+  return conditionCloses(condition, advanced);
 };
 
 const loopForm = (node: Node): { repeats: 'same_work' | 'each_item'; passesBounded: boolean } => {
@@ -352,6 +430,66 @@ const conditionNames = (node: Node): readonly string[] => {
   };
   walk(node.childForFieldName('condition'));
   return [...names];
+};
+
+/**
+ * Ways a value is made to grow by a factor rather than by a step.
+ *
+ * A wait that doubles is a backoff and a wait that gains a hundred milliseconds is not, and this is the
+ * whole of the difference in the syntax. `delay *= 2` and `delay = delay * 2` are one thing written two
+ * ways, so both are read.
+ */
+const GROWING_ASSIGNMENTS = new Set(['*=', '**=', '<<=']);
+const GROWING_OPERATORS = new Set(['*', '**', '<<']);
+
+const growsByFactor = (node: Node, target: string): boolean => {
+  if (node.type === 'augmented_assignment') {
+    return node.children.some((child) => !child.isNamed && GROWING_ASSIGNMENTS.has(child.type));
+  }
+  const right = node.childForFieldName('right');
+  if (right === null || right.type !== 'binary_operator') return false;
+  const grows = right.children.some((child) => !child.isNamed && GROWING_OPERATORS.has(child.type));
+  return grows && [...identifiersUnder(right)].includes(target);
+};
+
+/** Names the loop multiplies on each pass, which is a wait growing one statement away from its call. */
+const collectGrowingNames = (node: Node | null, into: Set<string>): void => {
+  if (node === null) return;
+  if (node.type === 'assignment' || node.type === 'augmented_assignment') {
+    const target = node.childForFieldName('left');
+    if (target !== null && target.type === 'identifier' && growsByFactor(node, target.text)) {
+      into.add(target.text);
+    }
+  }
+  for (const child of node.namedChildren) collectGrowingNames(child, into);
+};
+
+const growingNamesOf = (node: Node): readonly string[] => {
+  const names = new Set<string>();
+  collectGrowingNames(node.childForFieldName('body'), names);
+  return [...names];
+};
+
+const FUNCTION_TYPES = new Set(['function_definition', 'lambda']);
+
+/**
+ * Whether a statement here ends the enclosing work.
+ *
+ * A nested function is not descended into: a `return` inside a comprehension's lambda says nothing about
+ * the block holding it, and counting it would make almost every block look like one that exits.
+ */
+const endsTheWork = (node: Node | null): boolean => {
+  if (node === null) return false;
+  if (node.type === 'return_statement' || node.type === 'break_statement') return true;
+  if (FUNCTION_TYPES.has(node.type)) return false;
+  return node.namedChildren.some((child) => endsTheWork(child));
+};
+
+/** Whether a pass succeeds out of this `try` and fails through it, which is one attempt of a retry. */
+const exitsOnSuccessIn = (node: Node): boolean => {
+  const body = node.childForFieldName('body');
+  if (!endsTheWork(body)) return false;
+  return !node.namedChildren.some((child) => child.type === 'except_clause' && endsTheWork(child));
 };
 
 const decoratorFacts = (node: Node, context: Context): readonly DecoratorFact[] => {
@@ -428,7 +566,10 @@ const traverse = (
       enclosing: frame.name,
       contains,
       ...(form === undefined ? {} : form),
-      ...(form?.repeats === 'same_work' ? { headerNames: conditionNames(node) } : {}),
+      ...(controlKind === 'try_catch' ? { exitsOnSuccess: exitsOnSuccessIn(node) } : {}),
+      ...(form?.repeats === 'same_work'
+        ? { headerNames: conditionNames(node), growingNames: growingNamesOf(node) }
+        : {}),
     });
     return;
   }

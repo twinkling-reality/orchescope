@@ -8,7 +8,7 @@
     },
     "adapter:effects": {
       "componentsFound": 169,
-      "edgesFound": 91,
+      "edgesFound": 93,
       "filesInspected": 56,
       "status": "completed"
     },
@@ -100,14 +100,16 @@
     "byRule": {
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
-      "topology-shape": 1
+      "retry-around-non-idempotent-operation": 1,
+      "topology-shape": 1,
+      "unbounded-retry": 1
     },
     "bySeverity": {
       "info": 2,
-      "medium": 1
+      "medium": 3
     },
     "strengths": 1,
-    "total": 3
+    "total": 5
   },
   "foundNothing": [
     "mcp is imported here and its adapter found nothing"
