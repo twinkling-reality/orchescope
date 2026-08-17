@@ -64,23 +64,19 @@ export const modelEndpointForHost = (hostname: string): ModelEndpoint | undefine
 };
 
 /**
- * Paths that ask a provider to run a model, as opposed to paths that ask it for anything else.
- *
- * A provider host serves more than inference. `POST https://api.openai.com/v1/realtime/client_secrets`
- * mints an ephemeral token, and recognising it by host alone reported it as a model invocation and then
- * cut a goal telling an agent to put a request timeout on an authentication call as though it had a model
- * client to configure. Uploading a file, listing models and reading usage are the same shape.
- *
- * Stated as the operations that generate rather than as the endpoints that do not, because a list of
- * exclusions loses the race against whatever a provider ships next, and the two failure modes are not
- * equal: an inference path missing from here is a model this build does not see, which coverage can say,
- * while a token mint recognised as a model is a claim about a system that is false.
- *
- * Matched as a fragment so a version prefix, an Azure deployment segment and a Gemini method suffix all
- * pass: `/v1/chat/completions`, `/openai/deployments/gpt-4o/chat/completions` and
+ * Matched against the operation the path ends with, so a version prefix, a deployment segment and a
+ * model name in the middle all pass without letting a word elsewhere in the address decide:
+ * `/v1/chat/completions`, `/openai/deployments/gpt-4o/chat/completions` and
  * `/v1beta/models/gemini-2.5-pro:generateContent` are one operation written three ways.
+ *
+ * Read as a fragment anywhere in the address, two shapes matched that ask a provider for something else
+ * about work it already did. `/v1/messages/batches/msgbatch_1/cancel` cancels a batch and contains
+ * `messages`; `/v1/fine_tuning/jobs/ft-1/complete` finishes a training job and contains `complete`.
+ * Both were reported as model invocations, which is the claim this list exists to stop being wrong
+ * about. An operation is what a request ends with, and what precedes it says which resource it is
+ * about.
  */
-const INFERENCE_PATHS: readonly string[] = [
+const INFERENCE_OPERATIONS: readonly string[] = [
   'completions',
   'responses',
   'messages',
@@ -98,8 +94,36 @@ const INFERENCE_PATHS: readonly string[] = [
   'audio/speech',
   'audio/transcriptions',
   'audio/translations',
-  'complete',
 ];
+
+/**
+ * The one operation whose word is ordinary enough that ending a path with it settles nothing.
+ *
+ * Anthropic's deprecated text completion endpoint is `/v1/complete`, and `complete` is also how a
+ * provider spells finishing a job, an upload or a batch. So it is read only where that endpoint is: the
+ * whole of the path after the version, with nothing addressed in between.
+ */
+const COMPLETE_UNDER_VERSION = /^\/v\d[a-z0-9]*\/complete$/i;
+
+/**
+ * The segments a path is made of, with the method a Gemini or Vertex address carries after a colon read
+ * as the last one of them. A query string names arguments rather than an operation and is dropped.
+ */
+const segmentsOf = (path: string): readonly string[] => {
+  const withoutQuery = path.split(/[?#]/, 1)[0] ?? '';
+  return withoutQuery
+    .split('/')
+    .flatMap((segment) => segment.split(':'))
+    .filter((segment) => segment.length > 0)
+    .map((segment) => segment.toLowerCase());
+};
+
+/** Whether the path ends with this operation, which may itself be more than one segment. */
+const endsWithOperation = (segments: readonly string[], operation: string): boolean => {
+  const words = operation.split('/');
+  if (words.length > segments.length) return false;
+  return words.every((word, index) => segments[segments.length - words.length + index] === word);
+};
 
 /**
  * Whether a request to a provider host is asking it to run a model.
@@ -110,8 +134,9 @@ const INFERENCE_PATHS: readonly string[] = [
  * delta out of the disagreement.
  */
 export const isInferencePath = (path: string): boolean => {
-  const lowered = path.toLowerCase();
-  return INFERENCE_PATHS.some((fragment) => lowered.includes(fragment));
+  if (COMPLETE_UNDER_VERSION.test(path.split(/[?#]/, 1)[0] ?? '')) return true;
+  const segments = segmentsOf(path);
+  return INFERENCE_OPERATIONS.some((operation) => endsWithOperation(segments, operation));
 };
 
 export type ModelOperation = 'chat' | 'embeddings';

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  isInferencePath,
   modelEndpointForHost,
   modelFromPath,
   modelOperationForPath,
@@ -63,5 +64,62 @@ describe('reading the request path', () => {
   it('reads a model the provider puts in the path', () => {
     assert.equal(modelFromPath('/v1beta/models/gemini-2.5-pro:generateContent'), 'gemini-2.5-pro');
     assert.equal(modelFromPath('/v1/responses'), undefined);
+  });
+});
+
+/**
+ * Whether a request to a provider host asks it to run a model.
+ *
+ * Read as a fragment anywhere in the address, two shapes matched that ask a provider about work it has
+ * already done: `/v1/messages/batches/msgbatch_1/cancel` contains `messages` and
+ * `/v1/fine_tuning/jobs/ft-1/complete` contains `complete`. A model invocation reported where there is
+ * none is the claim this list exists to stop being wrong about, so the table is asserted whole rather
+ * than one row at a time.
+ */
+describe('isInferencePath', () => {
+  const runsAModel = [
+    '/v1/chat/completions',
+    '/v1/chat/completions?stream=true',
+    '/v1/responses',
+    '/v1/messages',
+    '/v1/embeddings',
+    '/v1/rerank',
+    '/v1/moderations',
+    '/v1/images/generations',
+    '/v1/audio/transcriptions',
+    // The deprecated Anthropic text completion endpoint, which is the whole of the path after a version.
+    '/v1/complete',
+    // A deployment segment in the middle, and a model name in the middle.
+    '/openai/deployments/gpt-4o/chat/completions',
+    '/v1beta/models/gemini-2.5-pro:generateContent',
+    '/v1/projects/p/locations/l/publishers/google/models/m:predict',
+    '/model/anthropic.claude-3/invoke',
+  ];
+
+  const doesNot = [
+    // The same host serves these, and calling any of them a model call is a claim about a system.
+    '/v1/models',
+    '/v1/files',
+    '/v1/usage',
+    '/v1/batches',
+    '/v1/realtime/client_secrets',
+    // An inference word in a position that is not the operation.
+    '/v1/messages/batches/msgbatch_1/cancel',
+    '/v1/messages/count_tokens',
+    '/v1/fine_tuning/jobs/ft-1/complete',
+  ];
+
+  it('reads the operation a path ends with', () => {
+    assert.deepEqual(
+      runsAModel.filter((path) => !isInferencePath(path)),
+      [],
+    );
+  });
+
+  it('reads nothing else on the same host as one', () => {
+    assert.deepEqual(
+      doesNot.filter((path) => isInferencePath(path)),
+      [],
+    );
   });
 });
