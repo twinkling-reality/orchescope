@@ -144,6 +144,35 @@ describe('recognising a model call that arrives as plain HTTP', () => {
     assert.equal(call?.operation, 'embeddings');
   });
 
+  /*
+   * A provider host serves more than inference. Recognising a token mint by its host reported an
+   * authentication call as a model invocation, and it would have done so on this side of the join as well,
+   * so a run and the source describing the same request would still have agreed and both been wrong.
+   */
+  it('declines a request to a provider that is not asking it to run a model', () => {
+    for (const path of [
+      '/v1/realtime/client_secrets',
+      '/v1/auth/token',
+      '/v1/files',
+      '/v1/models',
+      '/v1/organization/usage',
+    ]) {
+      assert.equal(
+        recogniseModelCall(new URL(`https://api.openai.com${path}`), undefined),
+        undefined,
+        `${path} was read as a model call`,
+      );
+    }
+  });
+
+  it('still reads an inference path behind a deployment segment', () => {
+    const call = recogniseModelCall(
+      new URL('https://api.openai.com/openai/deployments/gpt-4o/chat/completions'),
+      undefined,
+    );
+    assert.equal(call?.system, 'openai');
+  });
+
   it('leaves the model absent rather than guessing one', () => {
     const call = recogniseModelCall(new URL('https://api.anthropic.com/v1/messages'), 'not json');
     assert.equal(call?.system, 'anthropic');

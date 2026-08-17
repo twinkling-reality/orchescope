@@ -7,8 +7,8 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 35,
-      "edgesFound": 19,
+      "componentsFound": 34,
+      "edgesFound": 18,
       "filesInspected": 13,
       "status": "completed"
     },
@@ -79,9 +79,9 @@
       "agent": 292,
       "database": 2,
       "entrypoint": 17,
-      "external_service": 11,
+      "external_service": 12,
       "mcp_server": 15,
-      "model": 10,
+      "model": 9,
       "prompt": 274,
       "provider": 1,
       "tool": 125
@@ -119,15 +119,15 @@
   "name": "openai-agents-js",
   "relations": {
     "byKind": {
-      "calls_service": 12,
+      "calls_service": 13,
       "calls_tool": 79,
       "hands_off_to": 26,
-      "invokes_model": 44,
+      "invokes_model": 43,
       "provides_tool": 8,
       "queries_database": 4,
-      "served_by_provider": 3,
+      "served_by_provider": 2,
       "uses_prompt": 88
     },
-    "total": 264
+    "total": 263
   }
 }

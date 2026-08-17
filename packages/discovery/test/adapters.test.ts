@@ -2334,3 +2334,54 @@ export const two = async (): Promise<void> => {
     assert.match(effects?.detail ?? '', /constant/);
   });
 });
+
+/**
+ * A provider host serves more than inference.
+ *
+ * `POST https://api.openai.com/v1/realtime/client_secrets` mints an ephemeral token, and recognising it by
+ * host alone reported it as a model invocation, then cut a goal telling an agent to put a request timeout
+ * on an authentication call as though it had a model client to configure. The request is still a request,
+ * so it stays in the graph as one: dropping a discovered outbound call would trade a wrong answer for a
+ * missing one.
+ */
+describe('a request to a model provider', () => {
+  const scanFor = async (url: string) =>
+    (
+      await scan((workspace) => {
+        writeNodeProject(workspace, { name: 'provider-host' });
+        workspace.write(
+          'src/call.ts',
+          `export const go = async (): Promise<void> => {
+  await fetch('${url}', { method: 'POST', body: JSON.stringify({ model: 'gpt-4.1-mini' }) });
+};
+`,
+        );
+      })
+    ).ids;
+
+  it('is a model when the path asks the provider to run one', async () => {
+    const ids = await scanFor('https://api.openai.com/v1/chat/completions');
+    assert.ok(ids.includes('model:openai/gpt-4.1-mini'), `no model among ${ids.join(', ')}`);
+    assert.ok(ids.includes('provider:openai'));
+  });
+
+  it('is a service when the path asks it for something else', async () => {
+    const ids = await scanFor('https://api.openai.com/v1/realtime/client_secrets');
+    assert.ok(
+      ids.includes('external_service:api.openai.com'),
+      `the request was dropped rather than recorded: ${ids.join(', ')}`,
+    );
+    assert.equal(
+      ids.some((id) => id.startsWith('model:')),
+      false,
+      `a token mint was read as a model: ${ids.join(', ')}`,
+    );
+  });
+
+  it('reads a provider that names the operation as a method on the path', async () => {
+    const ids = await scanFor(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent',
+    );
+    assert.ok(ids.includes('model:google/gpt-4.1-mini'), `no model among ${ids.join(', ')}`);
+  });
+});

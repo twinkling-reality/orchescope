@@ -1,4 +1,5 @@
 import {
+  isInferencePath,
   modelEndpointForHost,
   modelFromPath,
   type ModelOperation,
@@ -48,6 +49,12 @@ export const modelFromBody = (body: string | undefined): string | undefined => {
 export const recogniseModelCall = (url: URL, body: string | undefined): ModelCall | undefined => {
   const endpoint = modelEndpointForHost(url.hostname);
   if (endpoint === undefined) return undefined;
+  /*
+   * A provider host serves more than inference, and a token mint is not a model call however familiar the
+   * host is. The test is shared with static discovery so that a request described by a run and the same
+   * request described by its call site cannot disagree about what it is.
+   */
+  if (!isInferencePath(url.pathname)) return undefined;
   const model = modelFromBody(body) ?? modelFromPath(url.pathname);
   return {
     system: endpoint.system,

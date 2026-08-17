@@ -63,6 +63,57 @@ export const modelEndpointForHost = (hostname: string): ModelEndpoint | undefine
   return undefined;
 };
 
+/**
+ * Paths that ask a provider to run a model, as opposed to paths that ask it for anything else.
+ *
+ * A provider host serves more than inference. `POST https://api.openai.com/v1/realtime/client_secrets`
+ * mints an ephemeral token, and recognising it by host alone reported it as a model invocation and then
+ * cut a goal telling an agent to put a request timeout on an authentication call as though it had a model
+ * client to configure. Uploading a file, listing models and reading usage are the same shape.
+ *
+ * Stated as the operations that generate rather than as the endpoints that do not, because a list of
+ * exclusions loses the race against whatever a provider ships next, and the two failure modes are not
+ * equal: an inference path missing from here is a model this build does not see, which coverage can say,
+ * while a token mint recognised as a model is a claim about a system that is false.
+ *
+ * Matched as a fragment so a version prefix, an Azure deployment segment and a Gemini method suffix all
+ * pass: `/v1/chat/completions`, `/openai/deployments/gpt-4o/chat/completions` and
+ * `/v1beta/models/gemini-2.5-pro:generateContent` are one operation written three ways.
+ */
+const INFERENCE_PATHS: readonly string[] = [
+  'completions',
+  'responses',
+  'messages',
+  'embeddings',
+  'embedcontent',
+  'generatecontent',
+  'generateanswer',
+  'predict',
+  'invoke',
+  'converse',
+  'rerank',
+  'moderations',
+  'images/generations',
+  'images/edits',
+  'audio/speech',
+  'audio/transcriptions',
+  'audio/translations',
+  'complete',
+];
+
+/**
+ * Whether a request to a provider host is asking it to run a model.
+ *
+ * Shared by both sides of the join for the reason the host table is: the shim names a span from a request
+ * and static discovery names a component from a call site, and a repository whose runtime and whose source
+ * describe the same request has to get the same answer twice. Narrowing one side alone would manufacture a
+ * delta out of the disagreement.
+ */
+export const isInferencePath = (path: string): boolean => {
+  const lowered = path.toLowerCase();
+  return INFERENCE_PATHS.some((fragment) => lowered.includes(fragment));
+};
+
 export type ModelOperation = 'chat' | 'embeddings';
 
 export const modelOperationForPath = (path: string): ModelOperation =>

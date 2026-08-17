@@ -29,6 +29,7 @@ import {
   stringValue,
 } from '@orchescope/source-analysis';
 import {
+  isInferencePath,
   type ModelEndpoint,
   modelEndpointForHost,
   modelFromPath,
@@ -187,6 +188,13 @@ export const classifyEffect = (name: string, httpMethod?: string): SideEffectCla
 const hostOf = (url: string): string | undefined => {
   const match = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]+)/i.exec(url);
   return match?.[2];
+};
+
+/** The path an address names, which is empty when the address stops at the host. */
+const pathOf = (url: string): string => {
+  const afterScheme = url.indexOf('://');
+  const slash = url.indexOf('/', afterScheme < 0 ? 0 : afterScheme + 3);
+  return slash < 0 ? '' : url.slice(slash);
 };
 
 /** The marker a template literal carries in place of each substitution. */
@@ -433,7 +441,7 @@ const discoverModelEndpoint = (input: {
   readonly client: string;
 }): void => {
   const { module, context, builder, found, call, endpoint, url } = input;
-  const path = url.slice(url.indexOf('/', url.indexOf('://') + 3));
+  const path = pathOf(url);
   const model = modelNamedAt(call) ?? modelFromPath(path) ?? 'unspecified';
   const providerIdentity = globalIdentity(
     'provider',
@@ -624,7 +632,14 @@ const discoverHttp = (
     if (request === undefined) continue;
     const { written, alias, url, host, dynamic } = request;
     const endpoint = host === undefined ? undefined : modelEndpointForHost(host);
-    if (endpoint !== undefined && url !== undefined) {
+    /*
+     * A known provider host is not enough on its own. The same host mints tokens, takes file uploads and
+     * answers usage queries, and reading those as model calls reported an authentication endpoint as a
+     * model and then offered a remediation naming a client that call site does not have. The request is
+     * still recorded, as a request: dropping a discovered outbound call would trade a wrong answer for a
+     * missing one.
+     */
+    if (endpoint !== undefined && url !== undefined && isInferencePath(pathOf(url))) {
       discoverModelEndpoint({
         module,
         context,
