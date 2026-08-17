@@ -32,6 +32,7 @@ import {
 } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from './adapter.ts';
 import { createBindingRegistry } from './bindings.ts';
+import { createCallSiteEffects } from './call-site-effect.ts';
 import { platformConfigPaths, readConfigDocuments } from './config-files.ts';
 import { createImplementationSpanRegistry } from './implementation-span.ts';
 import { DEFAULT_ADAPTERS } from './registry.ts';
@@ -279,6 +280,7 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
   const symbols = buildSymbolIndex(analysis.facts);
   const bindings = createBindingRegistry(symbols);
   const implementations = createImplementationSpanRegistry();
+  const callSiteEffects = createCallSiteEffects();
   const projectName =
     request.projectName ?? manifests.projectName ?? request.root.split('/').pop() ?? 'project';
 
@@ -290,6 +292,7 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
     symbols,
     bindings,
     implementations,
+    callSiteEffects,
     deadline: request.deadline,
   };
 

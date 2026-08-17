@@ -3,6 +3,7 @@ import type { SystemGraphBuilder } from '@orchescope/graph';
 import type { AdapterRun } from '@orchescope/schema';
 import type { ManifestSet, ModuleFacts } from '@orchescope/source-analysis';
 import type { BindingRegistry } from './bindings.ts';
+import type { CallSiteEffects } from './call-site-effect.ts';
 import type { ConfigDocument } from './config-files.ts';
 import type { ImplementationSpanRegistry } from './implementation-span.ts';
 import type { SymbolIndex } from './symbol-index.ts';
@@ -36,6 +37,18 @@ export type DiscoveryContext = {
    * here is how the two halves meet without either one knowing about the other.
    */
   readonly implementations: ImplementationSpanRegistry;
+  /**
+   * The operation each call site produced, for the calls no name stands for.
+   *
+   * `bindings` answers for a name someone declared and answers nothing for `fetch(...)` written in
+   * place, so a body whose handler makes the request itself reached nothing while the same body
+   * extracted into a named function reached the write. Two spellings of one program, one of them
+   * legible, and the illegible one is the shape the frameworks document.
+   *
+   * Kept beside `bindings` because the two answer the same question from opposite ends: a name that
+   * was declared, and a call site that declared nothing.
+   */
+  readonly callSiteEffects: CallSiteEffects;
   readonly deadline: Deadline;
 };
 

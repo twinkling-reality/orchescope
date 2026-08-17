@@ -14,7 +14,7 @@
     },
     "adapter:implementation-reach": {
       "componentsFound": 0,
-      "edgesFound": 1,
+      "edgesFound": 2,
       "filesInspected": 1,
       "status": "completed"
     },
@@ -114,12 +114,12 @@
   "name": "vercel-ai-chatbot",
   "relations": {
     "byKind": {
-      "calls_service": 17,
+      "calls_service": 18,
       "calls_tool": 5,
       "invokes_model": 6,
       "queries_database": 1,
       "uses_prompt": 1
     },
-    "total": 30
+    "total": 31
   }
 }

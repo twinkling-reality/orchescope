@@ -1,8 +1,8 @@
 import { CONFIDENCE_BANDS } from '@orchescope/domain';
-import type { SourceLocation } from '@orchescope/schema';
+import type { ComponentIdentity, SourceLocation } from '@orchescope/schema';
 import type { CallFact, ModuleFacts } from '@orchescope/source-analysis';
 import { calleeName, dotted } from '@orchescope/source-analysis';
-import type { AdapterFindings, AgentSystemAdapter } from '../adapter.ts';
+import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { callRelationKind } from '../call-relation.ts';
 import { createDrafts } from '../drafts.ts';
 import type { ImplementationSpan } from '../implementation-span.ts';
@@ -20,6 +20,10 @@ import type { ImplementationSpan } from '../implementation-span.ts';
  * the nearest named scope of a call inside it is whatever encloses the registration, which at module
  * scope is nothing at all. Containment is the only fact in the model that says the call belongs to the
  * body, and it is the fact the registration call already carries.
+ *
+ * What a contained call reaches is answered by its name where it has one and by its call site where it
+ * does not, which is the difference between a handler delegating to a declared function and a handler
+ * making the request itself.
  *
  * This runs last, because it draws relations between components other adapters declare and cannot draw
  * one to a component that does not exist yet. It declares nothing of its own.
@@ -42,6 +46,29 @@ const insideBody = (body: SourceLocation, call: CallFact): boolean =>
 const callsInside = (module: ModuleFacts, span: ImplementationSpan): readonly CallFact[] =>
   module.calls.filter((call) => insideBody(span.body, call));
 
+/**
+ * The component a call inside a body reaches.
+ *
+ * A name first, because a name is the stronger fact: it resolves across modules and it survives two
+ * functions in one file requesting different hosts. The call site answers where no name does, which is
+ * a handler that makes the request itself rather than delegating to something someone declared.
+ *
+ * That second half is the whole of a defect this join shipped with. The delegating spelling reached the
+ * write, was classified, and fired the rule; the inline spelling reached nothing and the rule reported
+ * that no consequential operation had been discovered, four lines from a POST. Which of the two an
+ * author had written decided whether a security rule could fire, and the inline one is what the
+ * frameworks document.
+ */
+const reachedBy = (
+  context: DiscoveryContext,
+  file: string,
+  call: CallFact,
+): ComponentIdentity | undefined => {
+  const name = calleeName(call);
+  const declared = name === '' ? undefined : context.bindings.lookup(file, name);
+  return declared ?? context.callSiteEffects.at(file, call);
+};
+
 export const implementationReachAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
@@ -62,9 +89,7 @@ export const implementationReachAdapter: AgentSystemAdapter = {
        */
       const drawn = new Set<string>();
       for (const call of callsInside(module, span)) {
-        const name = calleeName(call);
-        if (name === '') continue;
-        const target = context.bindings.lookup(span.file, name);
+        const target = reachedBy(context, span.file, call);
         if (target === undefined) continue;
         const key = `${target.kind}:${target.namespace}:${target.localName}`;
         /*

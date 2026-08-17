@@ -11,7 +11,6 @@ import type {
   SideEffectClass,
   SourceLocation,
 } from '@orchescope/schema';
-import type { CallSiteEffects } from '../call-site-effect.ts';
 import type {
   ArgumentFact,
   CallFact,
@@ -37,7 +36,6 @@ import {
 } from '@orchescope/traces/model-endpoints';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { callRelationKind } from '../call-relation.ts';
-import { createCallSiteEffects } from '../call-site-effect.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
 
 /**
@@ -504,6 +502,7 @@ const discoverModelEndpoint = (input: {
   );
   found.components += 2;
   found.files.add(module.file);
+  context.callSiteEffects.record(module.file, call, modelIdentity);
 
   builder.addEdge(
     drafts.edge({
@@ -527,7 +526,8 @@ const discoverModelEndpoint = (input: {
   found.edges += 2;
 };
 
-const httpMethodOf = (call: CallFact): string | undefined => {
+/** The method the call itself names, in the callee or in the options object. */
+const statedMethodOf = (call: CallFact): string | undefined => {
   const last = calleeName(call);
   if (HTTP_METHOD_NAMES.has(last) && last !== 'fetch' && last !== 'request') return last;
   const entries = objectArgument(call, 1);
@@ -580,6 +580,8 @@ const clientAliases = (module: ModuleFacts): ReadonlyMap<string, string> => {
 type RequestCall = {
   /** The callee as the source wrote it, which is what the evidence names. */
   readonly written: string;
+  /** The entry in the client table this call matched, whatever the source called it. */
+  readonly client: string;
   /** The client it resolves to, when the source reached it under another name. */
   readonly alias: string | undefined;
   /** The address as far as the source writes it, which is the whole of it only when `dynamic` is false. */
@@ -612,6 +614,7 @@ const requestAt = (
   const url = addressOf(first);
   return {
     written,
+    client: client.path,
     alias,
     url,
     host: url === undefined ? undefined : hostOf(url),
@@ -619,18 +622,83 @@ const requestAt = (
   };
 };
 
+/**
+ * The method the specification gives a request whose call site names none.
+ *
+ * `fetch(url)` is a GET, by the specification rather than by inference, and the method is what
+ * classification reads before anything else. Without it a bare read has to be judged from its address,
+ * and an address names a resource rather than an operation: `https://host/v1/payments` would be read as
+ * financial when it is a poll.
+ *
+ * Only `fetch`, and only where the address is written at the call site. `fetch(request)` carries its
+ * method on a `Request` object this build does not read, and passing an address literal is what rules
+ * that shape out. Every other client here either names the method in the callee or takes its options in
+ * a position this build has not settled: `axios({ method, url })` puts them first, and reading a default
+ * there would answer read only about a POST.
+ */
+const defaultMethodOf = (request: RequestCall): string | undefined =>
+  request.client === 'fetch' && request.url !== undefined ? 'get' : undefined;
+
+/** The method a request runs under, and whether the call site is where it was written down. */
+type RequestMethod = { readonly value: string | undefined; readonly stated: boolean };
+
+const methodOf = (call: CallFact, request: RequestCall): RequestMethod => {
+  const stated = statedMethodOf(call);
+  return stated === undefined
+    ? { value: defaultMethodOf(request), stated: false }
+    : { value: stated, stated: true };
+};
+
+/**
+ * What the call site said about its request, recorded so a reader can check it against the source.
+ *
+ * Two of these entries qualify another rather than carrying a value of their own. A method the
+ * specification supplied and an address completed at run time are both things a reader would otherwise
+ * have to take on trust, and going to the file and finding neither written there is what makes a tool
+ * look wrong in the one place it is being careful.
+ */
+const requestMetadata = (
+  request: RequestCall,
+  method: RequestMethod,
+): Record<string, string | boolean> => ({
+  client: request.written,
+  ...(request.alias === undefined ? {} : { aliasOf: request.alias }),
+  ...(method.value === undefined ? {} : { httpMethod: method.value }),
+  ...(method.value === undefined || method.stated ? {} : { httpMethodDefaulted: true }),
+  ...(request.url === undefined ? {} : { url: request.url }),
+  ...(request.dynamic ? { urlIsDynamic: true } : {}),
+});
+
+/**
+ * The name an operation carries, which is never the name of the client performing it.
+ *
+ * `classifyEffect` reads a name for what the operation does, and the fallback when the enclosing scope
+ * is anonymous was the callee: `fetch`. A library's name is not evidence about the request, and since it
+ * holds no write verb an inline handler posting to `/v1/transfers` classified `unknown` while the same
+ * body extracted into `sendTransfer` classified `non_idempotent_write`. A cosmetic refactor decided
+ * whether a security rule could fire, and the more common of the two spellings was the silent one.
+ *
+ * The address answers where no scope does. It is read after the enclosing scope, because the author's
+ * own word for the operation outranks the resource it addresses, and before the client, which stands in
+ * only when the request writes no address down.
+ */
+const operationNamedBy = (call: CallFact, request: RequestCall): string => {
+  if (call.enclosing !== undefined) return call.enclosing;
+  const path = request.url === undefined ? '' : pathOf(request.url);
+  return path === '' ? request.written : path;
+};
+
 const discoverHttp = (
   module: ModuleFacts,
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   found: Found,
-  performed: CallSiteEffects,
 ): void => {
   const aliases = clientAliases(module);
   for (const call of module.calls) {
     const request = requestAt(call, aliases);
     if (request === undefined) continue;
-    const { written, alias, url, host, dynamic } = request;
+    const { written, url, host } = request;
     const endpoint = host === undefined ? undefined : modelEndpointForHost(host);
     /*
      * A known provider host is not enough on its own. The same host mints tokens, takes file uploads and
@@ -652,8 +720,8 @@ const discoverHttp = (
       });
       continue;
     }
-    const method = httpMethodOf(call);
-    const effect = classifyEffect(call.enclosing ?? written, method);
+    const method = methodOf(call, request);
+    const effect = classifyEffect(operationNamedBy(call, request), method.value);
     const service = serviceCalledAt(module, call, host);
 
     builder.addComponent(
@@ -681,25 +749,14 @@ const discoverHttp = (
             mode: effect === 'read_only' ? 'read' : 'write',
           },
         ],
-        metadata: {
-          client: written,
-          ...(alias === undefined ? {} : { aliasOf: alias }),
-          ...(method === undefined ? {} : { httpMethod: method }),
-          /*
-           * The address and whether it is the whole of it are two facts. A template writes its host and
-           * completes the rest at run time, so recording the prefix as `url` without saying so would
-           * report a request to `https://api.stripe.com/` that nothing ever makes.
-           */
-          ...(url === undefined ? {} : { url }),
-          ...(dynamic ? { urlIsDynamic: true } : {}),
-        },
+        metadata: requestMetadata(request, method),
         tags: ['http'],
       }),
     );
     found.components += 1;
     found.files.add(module.file);
     if (host === undefined) found.unresolvedAddresses += 1;
-    performed.record(module.file, call, service.identity);
+    context.callSiteEffects.record(module.file, call, service.identity);
 
     builder.addEdge(
       drafts.edge({
@@ -710,7 +767,7 @@ const discoverHttp = (
         symbol: written,
         confidence: CONFIDENCE_BANDS.structural,
         metadata: {
-          ...(method === undefined ? {} : { httpMethod: method }),
+          ...(method.value === undefined ? {} : { httpMethod: method.value }),
           sideEffect: effect,
         },
       }),
@@ -747,6 +804,7 @@ const discoverStores = (
       );
       found.components += 1;
       found.files.add(module.file);
+      context.callSiteEffects.record(module.file, call, identity);
       builder.addEdge(
         drafts.edge({
           kind: 'queries_database',
@@ -788,6 +846,7 @@ const discoverStores = (
     );
     found.components += 1;
     found.files.add(module.file);
+    context.callSiteEffects.record(module.file, call, identity);
     builder.addEdge(
       drafts.edge({
         kind: name === 'Worker' ? 'consumes_from_queue' : 'publishes_to_queue',
@@ -1076,10 +1135,9 @@ type RetriedOperation = {
 const retriedOperation = (
   module: ModuleFacts,
   context: DiscoveryContext,
-  performed: CallSiteEffects,
   call: CallFact,
 ): RetriedOperation | undefined => {
-  const atCallSite = performed.at(module.file, call);
+  const atCallSite = context.callSiteEffects.at(module.file, call);
   if (atCallSite !== undefined) {
     return {
       target: atCallSite,
@@ -1114,7 +1172,6 @@ const discoverRetryLoops = (
   builder: SystemGraphBuilder,
   found: Found,
   sinks: Sinks,
-  performed: CallSiteEffects,
 ): void => {
   for (const construct of module.controlFlow) {
     if (construct.kind !== 'try_catch' || construct.contains.length === 0) continue;
@@ -1126,7 +1183,7 @@ const discoverRetryLoops = (
     const scope = construct.enclosing ?? 'module-scope';
     const drawn = new Set<string>();
     for (const call of callsWithin(module, construct)) {
-      const operation = retriedOperation(module, context, performed, call);
+      const operation = retriedOperation(module, context, call);
       if (operation === undefined) continue;
       const { target } = operation;
       const key = `${target.kind}:${target.namespace}:${target.localName}`;
@@ -1217,14 +1274,13 @@ export const effectsAdapter: AgentSystemAdapter = {
      * in one pass made the answer depend on which file traversal reached first, which is a property of
      * the directory listing and not of the repository.
      */
-    const performed = createCallSiteEffects();
     for (const module of audited) {
-      discoverHttp(module, context, builder, found, performed);
+      discoverHttp(module, context, builder, found);
       discoverStores(module, context, builder, found);
     }
     for (const module of audited) {
       discoverRetryHelpers(module, context, builder, found, sinks);
-      discoverRetryLoops(module, context, builder, found, sinks, performed);
+      discoverRetryLoops(module, context, builder, found, sinks);
     }
     return {
       componentsFound: found.components,

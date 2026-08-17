@@ -1989,6 +1989,303 @@ server.registerTool('delete_account', { description: 'Delete a customer account.
 });
 
 /**
+ * The same handler, written the two ways the frameworks document.
+ *
+ * The join resolved a call through the binding registry, which answers for a name someone declared and
+ * answers nothing for a request written in place. A handler delegating to a named function reached the
+ * write; a handler making the request itself reached nothing, and the rule asking whether a tool reaches
+ * a consequential operation said none had been discovered with a POST four lines inside the tool.
+ * Extracting the body into a function was the whole of the difference, and the inline spelling is the
+ * one the Vercel AI SDK writes in its own documentation.
+ *
+ * Two separate causes, and the reach was only one of them. The effect class fell back to the name of the
+ * client, `fetch`, which holds no verb and could never classify anything, so the operation stayed
+ * `unknown` and the rule would have declined even once it could see it.
+ */
+describe('a tool handler that makes its request in place', () => {
+  const payments =
+    (body: string) =>
+    (workspace: ReturnType<typeof createTempWorkspace>): void => {
+      writeNodeProject(workspace, {
+        name: 'payments-tools',
+        dependencies: { ai: '^4.0.0', zod: '^3.23.0' },
+      });
+      workspace.write(
+        'src/tools.ts',
+        `import { tool } from 'ai';
+import { z } from 'zod';
+
+${body}`,
+      );
+    };
+
+  const inline = payments(`export const wireMoney = tool({
+  description: 'Send a payment.',
+  parameters: z.object({ to: z.string() }),
+  execute: async ({ to }) => {
+    const response = await fetch('https://payments.example.com/v1/transfers', {
+      method: 'POST',
+      body: to,
+    });
+    return response.json();
+  },
+});
+`);
+
+  const delegating = payments(`const sendTransfer = async (to: string): Promise<unknown> => {
+  const response = await fetch('https://payments.example.com/v1/transfers', {
+    method: 'POST',
+    body: to,
+  });
+  return response.json();
+};
+
+export const wireMoney = tool({
+  description: 'Send a payment.',
+  parameters: z.object({ to: z.string() }),
+  execute: async ({ to }) => sendTransfer(to),
+});
+`);
+
+  /** Every classified operation the tool can reach, however many frames away it sits. */
+  const reachedByTheTool = async (
+    build: (workspace: ReturnType<typeof createTempWorkspace>) => void,
+  ): Promise<readonly string[]> => {
+    const { result } = await scan(build);
+    const reached = reachableFrom(indexGraph(result.graph), ['tool:wiremoney']);
+    return result.graph.components
+      .filter((component) => reached.has(component.id) && component.sideEffect !== undefined)
+      .map((component) => `${component.id}:${component.sideEffect}`)
+      .sort();
+  };
+
+  it('reaches the operation its own body performs', async () => {
+    const { edges } = await scan(inline);
+    assert.ok(
+      edges.includes('calls_service:tool:wiremoney->external_service:payments.example.com'),
+      `the tool reached nothing among ${edges.join(', ')}`,
+    );
+  });
+
+  /*
+   * The address is what the request says about itself when no scope names it. The client's own name is
+   * not evidence about the operation, and reading it as though it were is what left this `unknown`.
+   */
+  it('classifies the write from the address the request names', async () => {
+    const { result } = await scan(inline);
+    const service = result.graph.components.find(
+      (component) => component.id === 'external_service:payments.example.com',
+    );
+    assert.equal(service?.sideEffect, 'non_idempotent_write');
+  });
+
+  it('reaches what the same body extracted into a function reaches', async () => {
+    const spelledInline = await reachedByTheTool(inline);
+    assert.deepEqual(
+      spelledInline,
+      ['external_service:payments.example.com:non_idempotent_write'],
+      'the inline handler reached nothing consequential',
+    );
+    assert.deepEqual(
+      spelledInline,
+      await reachedByTheTool(delegating),
+      'a cosmetic refactor changed what the tool reaches',
+    );
+  });
+
+  /*
+   * A name is consulted before the call site, and this is why. The registry answers about one call site
+   * and a name answers across modules, so a handler delegating to an imported helper has to resolve to
+   * the module it imported from rather than to the other definition of that word.
+   */
+  it('resolves a delegated name to the module the handler imports it from', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'dispatch-tools',
+        dependencies: { ai: '^4.0.0', zod: '^3.23.0' },
+      });
+      workspace.write(
+        'src/billing.ts',
+        `export const dispatch = async (id: string): Promise<void> => {
+  await fetch('https://billing.example.com/v1/charges', { method: 'POST', body: id });
+};
+`,
+      );
+      workspace.write(
+        'src/mail.ts',
+        `export const dispatch = async (id: string): Promise<void> => {
+  await fetch('https://mail.example.com/v1/send', { method: 'POST', body: id });
+};
+`,
+      );
+      workspace.write(
+        'src/tools.ts',
+        `import { tool } from 'ai';
+import { z } from 'zod';
+import { dispatch } from './billing.ts';
+
+export const chargeInvoice = tool({
+  description: 'Charge an invoice.',
+  parameters: z.object({ id: z.string() }),
+  execute: async ({ id }) => dispatch(id),
+});
+`,
+      );
+    });
+    const reached = reachableFrom(indexGraph(result.graph), ['tool:chargeinvoice']);
+    assert.ok(
+      reached.has('external_service:billing.example.com'),
+      `the tool reached ${[...reached].join(', ')}`,
+    );
+    assert.ok(
+      !reached.has('external_service:mail.example.com'),
+      'the name resolved to the wrong module',
+    );
+  });
+
+  /*
+   * The gate on the POST branch is deliberate and this proves it survived. A POST is how a graph query,
+   * a remote procedure call and a search are all spelled, and calling those writes would be a confident
+   * answer to a question the method does not settle.
+   */
+  it('leaves a POST whose address names no write unclassified', async () => {
+    const { result, edges } = await scan(
+      payments(`export const askGraph = tool({
+  description: 'Query the graph.',
+  parameters: z.object({ q: z.string() }),
+  execute: async ({ q }) => {
+    const response = await fetch('https://api.example.com/graphql', { method: 'POST', body: q });
+    return response.json();
+  },
+});
+`),
+    );
+    assert.ok(
+      edges.includes('calls_service:tool:askgraph->external_service:api.example.com'),
+      `the tool reached nothing among ${edges.join(', ')}`,
+    );
+    const service = result.graph.components.find(
+      (component) => component.id === 'external_service:api.example.com',
+    );
+    assert.equal(service?.sideEffect, 'unknown');
+  });
+
+  /*
+   * A `fetch` with no init object is a GET by its specification, and saying so is what keeps the address
+   * from having to answer a question the method already settles: `/v1/payments` names a resource, and
+   * read as an operation it would report a poll as a financial one.
+   */
+  it('reads a request that states no method as the GET its specification defines', async () => {
+    const { result } = await scan(
+      payments(`export const listPayments = tool({
+  description: 'List payments.',
+  parameters: z.object({}),
+  execute: async () => {
+    const response = await fetch('https://api.example.com/v1/payments');
+    return response.json();
+  },
+});
+`),
+    );
+    const service = result.graph.components.find(
+      (component) => component.id === 'external_service:api.example.com',
+    );
+    assert.equal(service?.sideEffect, 'read_only');
+    assert.equal(service?.metadata['httpMethod'], 'get');
+    assert.equal(
+      service?.metadata['httpMethodDefaulted'],
+      true,
+      'a method the call site never wrote has to say where it came from',
+    );
+  });
+
+  /*
+   * Only `fetch`, and only there. `axios({ method, url })` puts its options in the position this build
+   * does not read, so a default applied to it would answer read only about a POST, which is the one
+   * direction a wrong answer here must never go.
+   */
+  it('supplies no default method to a client whose options it does not read', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'shipper', dependencies: { axios: '^1.7.0' } });
+      workspace.write(
+        'src/ship.ts',
+        `import axios from 'axios';
+
+export const ship = async (id: string): Promise<void> => {
+  await axios({ method: 'post', url: 'https://api.example.com/v1/shipments', data: { id } });
+};
+`,
+      );
+    });
+    const service = result.graph.components.find(
+      (component) => component.kind === 'external_service',
+    );
+    assert.ok(service !== undefined, 'the request was not discovered at all');
+    assert.notEqual(
+      service.sideEffect,
+      'read_only',
+      'a POST this build could not read was reported as a read',
+    );
+  });
+
+  /*
+   * A model reached by a plain request is a component the same call site produced, so the tool has to
+   * reach it for the same reason it has to reach a write.
+   */
+  it('reaches a model its body requests in place', async () => {
+    const { edges } = await scan(
+      payments(`export const summarise = tool({
+  description: 'Summarise text.',
+  parameters: z.object({ text: z.string() }),
+  execute: async ({ text }) => {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: text }] }),
+    });
+    return response.json();
+  },
+});
+`),
+    );
+    assert.ok(
+      edges.includes('invokes_model:tool:summarise->model:openai/gpt-4o-mini'),
+      `the tool reached no model among ${edges.join(', ')}`,
+    );
+  });
+
+  /*
+   * The registry is an index of what every call site produced, not of the requests alone. An adapter
+   * written later inherits the join rather than having to remember which half of it was wired.
+   */
+  it('reaches a datastore its body opens in place', async () => {
+    const { edges } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'cache-mcp',
+        dependencies: { '@modelcontextprotocol/sdk': '^1.0.0', redis: '^4.7.0' },
+      });
+      workspace.write(
+        'src/server.ts',
+        `import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { createClient } from 'redis';
+
+const server = new McpServer({ name: 'cache', version: '1.0.0' });
+
+server.registerTool('warm_cache', { description: 'Warm the cache.' }, async ({ key }) => {
+  const client = createClient({ url: 'redis://localhost:6379' });
+  await client.set(key, '1');
+  return { content: [] };
+});
+`,
+      );
+    });
+    assert.ok(
+      edges.includes('queries_database:tool:warm_cache->database:redis'),
+      `the tool reached no datastore among ${edges.join(', ')}`,
+    );
+  });
+});
+
+/**
  * `connect` is the word every protocol library uses for the thing every protocol library does.
  *
  * Matched on the bare callee name it made `server.connect(new StdioServerTransport())` report a SQLite
