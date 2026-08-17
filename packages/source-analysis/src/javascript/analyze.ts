@@ -245,9 +245,44 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
         ? { kind: 'unknown', nodeType: node.type }
         : argumentFact(inner, context);
     }
+    case 'BinaryExpression': {
+      const flattened = arithmeticParts(node);
+      return { kind: 'arithmetic', operators: flattened.operators, names: flattened.names };
+    }
     default:
       return { kind: 'unknown', nodeType: node.type };
   }
+};
+
+/**
+ * Every operator and every name in a computed value, with the nesting flattened away.
+ *
+ * A backoff is written as one expression and read as one fact: whether the wait grows. `base * 2 ** (n -
+ * 1)` nests exponentiation inside multiplication inside subtraction, and which of those sits at the top
+ * is an accident of precedence rather than something a reader of the graph should have to undo.
+ */
+const arithmeticParts = (
+  node: Node,
+): { readonly operators: readonly string[]; readonly names: readonly string[] } => {
+  const operators = new Set<string>();
+  const names = new Set<string>();
+  const walk = (current: Node | undefined): void => {
+    if (current === undefined) return;
+    if (current.type === 'BinaryExpression') {
+      const operator = field(current, 'operator');
+      if (typeof operator === 'string') operators.add(operator);
+      walk(asNode(field(current, 'left')));
+      walk(asNode(field(current, 'right')));
+      return;
+    }
+    if (current.type === 'ParenthesizedExpression') {
+      walk(asNode(field(current, 'expression')));
+      return;
+    }
+    for (const segment of calleePath(current)) names.add(segment);
+  };
+  walk(node);
+  return { operators: [...operators], names: [...names] };
 };
 
 const objectEntries = (node: Node, context: Context): readonly ObjectEntryFact[] => {
@@ -403,15 +438,34 @@ const collectIdentifiers = (node: Node | undefined, into: Set<string>): void => 
 };
 
 /**
+ * Operators that compare a value against a bound, as opposed to testing whether something has happened.
+ *
+ * This is the distinction between a loop that counts toward a limit and one that runs until a flag flips.
+ * `while (!done)` and `while (running)` state no ceiling and never did; `while (attempt < maxAttempts)`
+ * states exactly the ceiling a three part `for` states, in the other spelling.
+ */
+const COUNTING_OPERATORS = new Set(['<', '<=', '>', '>=']);
+
+/**
  * Whether the loop's own form limits how many passes it makes.
  *
- * A three part `for` with a test states a ceiling; `for (;;)` and `while` do not, and a `for...of` is
- * bounded by the collection it walks.
+ * A three part `for` with a test states a ceiling, and so does a `while` whose condition compares against
+ * a bound. A `for...of` is bounded by the collection it walks. `for (;;)`, `while (true)` and a `while`
+ * testing a flag do not.
+ *
+ * Reading every `while` as unbounded reported a retry that declares `const max = 3` and honours it as
+ * having no attempt limit, which is the accusation this rule exists to avoid making: the author wrote the
+ * ceiling down and the reader was told they had not.
  */
-const passesBoundedIn = (node: Node): boolean =>
-  node.type === 'ForStatement'
-    ? asNode(field(node, 'test')) !== undefined
-    : node.type === 'ForOfStatement' || node.type === 'ForInStatement';
+const passesBoundedIn = (node: Node): boolean => {
+  if (node.type === 'ForStatement') return asNode(field(node, 'test')) !== undefined;
+  if (node.type === 'ForOfStatement' || node.type === 'ForInStatement') return true;
+  if (node.type !== 'WhileStatement' && node.type !== 'DoWhileStatement') return false;
+  const test = asNode(field(node, 'test'));
+  if (test === undefined || test.type !== 'BinaryExpression') return false;
+  const operator = field(test, 'operator');
+  return typeof operator === 'string' && COUNTING_OPERATORS.has(operator);
+};
 
 /** The identifiers a loop names in its own header, which is where a retry counts its attempts. */
 const headerNamesOf = (node: Node): readonly string[] => {
@@ -672,6 +726,39 @@ const NAMING_INITIALIZERS = new Set([
   'TaggedTemplateExpression',
 ]);
 
+/**
+ * The names an initialiser takes its value from, following the operators that offer a choice of one.
+ *
+ * `??`, `||` and a ternary are how a default is written, and the default is the name that matters:
+ * `opts.fetchImpl ?? fetch` says the value is a network client whichever branch is taken. A call is not
+ * followed, because a value a function returned is not that function.
+ */
+const aliasedNames = (init: Node): readonly (readonly string[])[] => {
+  const direct = calleePath(init);
+  if (direct.length > 0) return [direct];
+  if (init.type === 'LogicalExpression' || init.type === 'BinaryExpression') {
+    const left = asNode(field(init, 'left'));
+    const right = asNode(field(init, 'right'));
+    return [
+      ...(left === undefined ? [] : aliasedNames(left)),
+      ...(right === undefined ? [] : aliasedNames(right)),
+    ];
+  }
+  if (init.type === 'ConditionalExpression') {
+    const consequent = asNode(field(init, 'consequent'));
+    const alternate = asNode(field(init, 'alternate'));
+    return [
+      ...(consequent === undefined ? [] : aliasedNames(consequent)),
+      ...(alternate === undefined ? [] : aliasedNames(alternate)),
+    ];
+  }
+  if (init.type === 'TSNonNullExpression' || init.type === 'TSAsExpression') {
+    const inner = asNode(field(init, 'expression'));
+    return inner === undefined ? [] : aliasedNames(inner);
+  }
+  return [];
+};
+
 const recordVariables = (
   node: Node,
   context: Context,
@@ -686,6 +773,7 @@ const recordVariables = (
       const callee = asNode(field(init, 'callee'));
       initializer = callee === undefined ? undefined : calleePath(callee);
     }
+    const aliasedFrom = init === undefined ? [] : aliasedNames(init);
     if (name !== undefined) {
       context.definitions.push({
         kind: 'variable',
@@ -695,6 +783,7 @@ const recordVariables = (
         decorators: [],
         location: context.index.location(context.file, declarator.start, declarator.end),
         initializer,
+        ...(aliasedFrom.length === 0 ? {} : { aliasedFrom }),
         enclosing: frame.name,
       });
     }

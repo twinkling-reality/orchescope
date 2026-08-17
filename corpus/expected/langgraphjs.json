@@ -7,9 +7,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 117,
-      "edgesFound": 62,
-      "filesInspected": 54,
+      "componentsFound": 121,
+      "edgesFound": 64,
+      "filesInspected": 56,
       "status": "completed"
     },
     "adapter:implementation-reach": {
@@ -79,12 +79,12 @@
       "agent": 414,
       "agent_group": 91,
       "database": 3,
-      "entrypoint": 56,
-      "external_service": 20,
+      "entrypoint": 58,
+      "external_service": 22,
       "prompt": 126,
       "queue": 1
     },
-    "total": 711
+    "total": 715
   },
   "discardedRelations": [],
   "files": {
@@ -114,7 +114,7 @@
   "name": "langgraphjs",
   "relations": {
     "byKind": {
-      "calls_service": 20,
+      "calls_service": 22,
       "consumes_from_queue": 1,
       "contains": 415,
       "hands_off_to": 165,
@@ -122,6 +122,6 @@
       "queries_database": 35,
       "uses_prompt": 2
     },
-    "total": 639
+    "total": 641
   }
 }

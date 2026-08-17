@@ -307,8 +307,25 @@ const RANGE_CALL = /^range\s*\(/;
  * bounded: a poll reported as having no attempt limit was bounded by `range(self.max_polling_time)` in the
  * line the finding pointed at.
  */
+/**
+ * Operators that compare a value against a bound, as opposed to testing whether something has happened.
+ *
+ * `while attempt < max_attempts` states the same ceiling `for _ in range(n)` states, and `while not done`
+ * states none. Reading every `while` as unbounded told the author of the first that they had written no
+ * attempt limit, in the line where they had written one.
+ */
+const COUNTING_OPERATORS = new Set(['<', '<=', '>', '>=']);
+
+const whilePassesBounded = (node: Node): boolean => {
+  const condition = node.childForFieldName('condition');
+  if (condition === null || condition.type !== 'comparison_operator') return false;
+  return condition.children.some((child) => !child.isNamed && COUNTING_OPERATORS.has(child.type));
+};
+
 const loopForm = (node: Node): { repeats: 'same_work' | 'each_item'; passesBounded: boolean } => {
-  if (node.type === 'while_statement') return { repeats: 'same_work', passesBounded: false };
+  if (node.type === 'while_statement') {
+    return { repeats: 'same_work', passesBounded: whilePassesBounded(node) };
+  }
   const iterable = node.childForFieldName('right');
   const overRange = iterable !== null && RANGE_CALL.test(iterable.text);
   return { repeats: overRange ? 'same_work' : 'each_item', passesBounded: true };
@@ -599,6 +616,24 @@ const recordClass = (
   if (body !== undefined) traverse(body, context, { name, awaited: false }, collecting);
 };
 
+/**
+ * The names an assignment takes its value from, when it takes it from a name rather than by calling one.
+ *
+ * `post = requests.post` and `send = custom or requests.post` are the Python spellings of the injected
+ * client, and the second is why both sides of a boolean operator are read: the default is the name that
+ * says what the value is.
+ */
+const aliasedNames = (right: Node): readonly (readonly string[])[] => {
+  if (right.type === 'identifier' || right.type === 'attribute') {
+    const path = attributePath(right);
+    return path.length === 0 ? [] : [path];
+  }
+  if (right.type === 'boolean_operator' || right.type === 'conditional_expression') {
+    return right.namedChildren.flatMap((child) => aliasedNames(child));
+  }
+  return [];
+};
+
 const recordAssignment = (
   node: Node,
   context: Context,
@@ -613,6 +648,7 @@ const recordAssignment = (
       right !== undefined && right.type === 'call'
         ? attributePath(childField(right, 'function') ?? right)
         : undefined;
+    const aliasedFrom = right === undefined ? [] : aliasedNames(right);
     context.definitions.push({
       kind: 'variable',
       name,
@@ -621,6 +657,7 @@ const recordAssignment = (
       decorators: [],
       location: location(context.file, node),
       initializer: initializer !== undefined && initializer.length > 0 ? initializer : undefined,
+      ...(aliasedFrom.length === 0 ? {} : { aliasedFrom }),
       enclosing: frame.name,
     });
   }

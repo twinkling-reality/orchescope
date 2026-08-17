@@ -7,9 +7,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 10,
-      "edgesFound": 6,
-      "filesInspected": 3,
+      "componentsFound": 13,
+      "edgesFound": 8,
+      "filesInspected": 4,
       "status": "completed"
     },
     "adapter:implementation-reach": {
@@ -76,10 +76,10 @@
   "agentSystemDetected": false,
   "components": {
     "byKind": {
-      "entrypoint": 4,
-      "external_service": 3
+      "entrypoint": 5,
+      "external_service": 4
     },
-    "total": 7
+    "total": 9
   },
   "discardedRelations": [],
   "files": {
@@ -105,8 +105,8 @@
   "name": "axios",
   "relations": {
     "byKind": {
-      "calls_service": 4
+      "calls_service": 5
     },
-    "total": 4
+    "total": 5
   }
 }

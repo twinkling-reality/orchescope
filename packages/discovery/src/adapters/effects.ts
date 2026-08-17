@@ -464,6 +464,82 @@ const httpMethodOf = (call: CallFact): string | undefined => {
   return stringValue(findEntry(entries, 'method')?.value);
 };
 
+/**
+ * Local names that stand for a client this adapter recognises.
+ *
+ * A module written so its network client can be replaced in a test assigns the client to a name first,
+ * and every adapter here matches on the callee path. `shipBatch` in one field report's target repository
+ * writes `const fetchImpl = opts.fetchImpl ?? fetch` and then calls `fetchImpl`, and the whole function
+ * was absent from the graph: no service, no method, no retry, in the module whose entire reason for
+ * being separately testable is that it holds the retry policy.
+ *
+ * Resolved once per module rather than per call, and only to a client already in the table, so this
+ * widens what a known client may be called and not what counts as one.
+ */
+const clientAliases = (module: ModuleFacts): ReadonlyMap<string, string> => {
+  const aliases = new Map<string, string>();
+  for (const definition of module.definitions) {
+    if (definition.aliasedFrom === undefined) continue;
+    for (const alias of definition.aliasedFrom) {
+      const client = HTTP_CLIENTS.find((candidate) => candidate.path === dotted(alias));
+      if (client !== undefined) aliases.set(definition.name, client.path);
+    }
+  }
+  return aliases;
+};
+
+/**
+ * Whether this call is a request, and what it says about itself.
+ *
+ * Recognising a request and recording what it reaches are two jobs, and the second one is longer. This is
+ * the first: everything that decides whether a call leaves the process at all, with the address it names
+ * when it names one.
+ *
+ * A client reached through a member, `axios.get` or `requests.post`, is a request. Any other member of the
+ * same root is not, and matching on the root alone read two things as requests that never leave the
+ * process.
+ *
+ * A promise chain repeats the root at every link, so one `fetch(url).then().then().catch()` was counted
+ * four times: as `fetch`, `fetch.then`, `fetch.then.then` and `fetch.then.then.catch`, each with its own
+ * component and edge at the same source location. A test double is configured through the same shape, so
+ * `fetch.mockResolvedValue(...)` was recorded as a call to an unresolved host, which made the heaviest
+ * edge in a scan of one repository twelve lines of mock setup in a single test file.
+ *
+ * The operation names this build already recognises are the vocabulary that separates the two.
+ */
+type RequestCall = {
+  /** The callee as the source wrote it, which is what the evidence names. */
+  readonly written: string;
+  /** The client it resolves to, when the source reached it under another name. */
+  readonly alias: string | undefined;
+  readonly url: string | undefined;
+  readonly host: string | undefined;
+};
+
+const requestAt = (
+  call: CallFact,
+  aliases: ReadonlyMap<string, string>,
+): RequestCall | undefined => {
+  /*
+   * Matched under the client's own name and recorded under the one the source wrote. A reader looking for
+   * `fetchImpl` in the file has to find `fetchImpl` in the evidence, and the alias is a fact about how
+   * this repository is put together rather than something to normalise away.
+   */
+  const written = dotted(call.calleePath);
+  const alias = aliases.get(call.calleePath[0] ?? '');
+  const path = alias === undefined ? written : dotted([alias, ...call.calleePath.slice(1)]);
+  const root = alias ?? call.calleePath[0] ?? '';
+  const client = HTTP_CLIENTS.find(
+    (candidate) =>
+      path === candidate.path ||
+      (root === candidate.path.split('.')[0] && HTTP_METHOD_NAMES.has(calleeName(call))),
+  );
+  if (client === undefined) return undefined;
+  const first = call.args[0];
+  const url = first !== undefined && first.kind === 'string' ? first.value : undefined;
+  return { written, alias, url, host: url === undefined ? undefined : hostOf(url) };
+};
+
 const discoverHttp = (
   module: ModuleFacts,
   context: DiscoveryContext,
@@ -471,37 +547,27 @@ const discoverHttp = (
   found: Found,
   performed: CallSiteEffects,
 ): void => {
+  const aliases = clientAliases(module);
   for (const call of module.calls) {
-    const path = dotted(call.calleePath);
-    const root = call.calleePath[0] ?? '';
-    /*
-     * A client reached through a member, `axios.get` or `requests.post`, is a request. Any other member of the same
-     * root is not, and matching on the root alone read two things as requests that never leave the process.
-     *
-     * A promise chain repeats the root at every link, so one `fetch(url).then().then().catch()` was counted four
-     * times: as `fetch`, `fetch.then`, `fetch.then.then` and `fetch.then.then.catch`, each with its own component
-     * and edge at the same source location. A test double is configured through the same shape, so
-     * `fetch.mockResolvedValue(...)` was recorded as a call to an unresolved host, which made the heaviest edge in
-     * a scan of one repository twelve lines of mock setup in a single test file.
-     *
-     * The operation names this build already recognises are the vocabulary that separates the two.
-     */
-    const client = HTTP_CLIENTS.find(
-      (candidate) =>
-        path === candidate.path ||
-        (root === candidate.path.split('.')[0] && HTTP_METHOD_NAMES.has(calleeName(call))),
-    );
-    if (client === undefined) continue;
-    const first = call.args[0];
-    const url = first !== undefined && first.kind === 'string' ? first.value : undefined;
-    const host = url === undefined ? undefined : hostOf(url);
+    const request = requestAt(call, aliases);
+    if (request === undefined) continue;
+    const { written, alias, url, host } = request;
     const endpoint = host === undefined ? undefined : modelEndpointForHost(host);
     if (endpoint !== undefined && url !== undefined) {
-      discoverModelEndpoint({ module, context, builder, found, call, endpoint, url, client: path });
+      discoverModelEndpoint({
+        module,
+        context,
+        builder,
+        found,
+        call,
+        endpoint,
+        url,
+        client: written,
+      });
       continue;
     }
     const method = httpMethodOf(call);
-    const effect = classifyEffect(call.enclosing ?? path, method);
+    const effect = classifyEffect(call.enclosing ?? written, method);
     const service = serviceCalledAt(module, call, host);
 
     builder.addComponent(
@@ -512,7 +578,7 @@ const discoverHttp = (
         name: service.name,
         displayName: service.displayName,
         location: call.location,
-        symbol: path,
+        symbol: written,
         confidence:
           host === undefined ? CONFIDENCE_BANDS.heuristic : CONFIDENCE_BANDS.strongStructural,
         details: {
@@ -530,7 +596,8 @@ const discoverHttp = (
           },
         ],
         metadata: {
-          client: path,
+          client: written,
+          ...(alias === undefined ? {} : { aliasOf: alias }),
           ...(method === undefined ? {} : { httpMethod: method }),
           ...(url === undefined ? { urlIsDynamic: true } : { url }),
         },
@@ -547,7 +614,7 @@ const discoverHttp = (
         from: ensureCaller(module, call, context, builder, found),
         to: service.identity,
         location: call.location,
-        symbol: path,
+        symbol: written,
         confidence: CONFIDENCE_BANDS.structural,
         metadata: {
           ...(method === undefined ? {} : { httpMethod: method }),
@@ -855,6 +922,46 @@ const reattemptEvidence = (
 };
 
 /**
+ * Operators that make a wait grow with the attempt number.
+ *
+ * Exponentiation is claimed only where the syntax exponentiates, and a shift by the counter is the same
+ * statement written for machines. A wait multiplied by the attempt grows too and is not exponential, so
+ * it stays `unknown` rather than being rounded up to the more reassuring word.
+ */
+const GROWING_OPERATORS = new Set(['**', '<<']);
+
+/**
+ * How the wait between attempts is written, when a wait is written at all.
+ *
+ * A retry with no backoff is the dangerous shape: it re-attempts as fast as the dependency can fail, and
+ * it converts one struggling service into an outage. Recorded as `none` rather than `unknown` when the
+ * loop was found by its counter and waits nowhere, because `unknown` reads as a gap in the reading and
+ * this is a fact about the code.
+ */
+const backoffOfLoop = (
+  module: ModuleFacts,
+  loop: ControlFlowFact,
+  attempted: ControlFlowFact,
+): 'none' | 'fixed' | 'exponential' | 'unknown' => {
+  const waits = [...callsWithin(module, loop), ...callsWithin(module, attempted)].filter((call) =>
+    DELAY_CALLS.has(calleeName(call)),
+  );
+  if (waits.length === 0) return 'none';
+  let fixed = false;
+  for (const wait of waits) {
+    for (const argument of wait.args) {
+      if (argument.kind === 'arithmetic') {
+        if (argument.operators.some((operator) => GROWING_OPERATORS.has(operator))) {
+          return 'exponential';
+        }
+      }
+      if (argument.kind === 'number') fixed = true;
+    }
+  }
+  return fixed ? 'fixed' : 'unknown';
+};
+
+/**
  * The operation a retried call reaches, and where to ask what that operation's own module showed.
  *
  * Two spellings of the same retry. `retry { namedPost(...) }` names something, and the name resolves to
@@ -951,7 +1058,7 @@ const discoverRetryLoops = (
           policy: {
             retry: {
               bounded: loop.passesBounded === true,
-              backoff: 'unknown',
+              backoff: backoffOfLoop(module, loop, construct),
               idempotency: 'unknown',
             },
           },

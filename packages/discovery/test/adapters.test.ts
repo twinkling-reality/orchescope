@@ -2033,3 +2033,225 @@ def open_ledger(path: str):
     assert.ok(ids.includes('database:sqlite'), `no database among ${ids.join(', ')}`);
   });
 });
+
+/**
+ * The client a module assigns to a name so a test can replace it.
+ *
+ * Every adapter here matches a client by its callee path, so a module written to be testable was the one
+ * that could not be read: `shipBatch` in one field report's target repository writes
+ * `const fetchImpl = opts.fetchImpl ?? fetch` and the whole function was absent from the graph, in the
+ * module whose entire reason for existing separately is that it holds the retry policy.
+ */
+describe('a client assigned to a local name', () => {
+  it('is still the client it was assigned from', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'injected' });
+      workspace.write(
+        'src/ship.ts',
+        `export const send = async (body: string, injected?: typeof fetch): Promise<void> => {
+  const fetchImpl = injected ?? fetch;
+  await fetchImpl('https://ingest.example.com/events', { method: 'POST', body });
+};
+`,
+      );
+    });
+    const service = result.graph.components.find(
+      (component) => component.id === 'external_service:ingest.example.com',
+    );
+    assert.ok(service !== undefined, 'the injected client reached no service');
+    assert.equal(service.metadata['httpMethod'], 'POST');
+    assert.equal(
+      service.metadata['client'],
+      'fetchImpl',
+      'the evidence should name what the source wrote, not what it resolved to',
+    );
+    assert.equal(service.metadata['aliasOf'], 'fetch');
+  });
+
+  it('is not a client when the name was assigned from something else', async () => {
+    const { ids } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'not-a-client' });
+      workspace.write(
+        'src/run.ts',
+        `const load = globalThis.structuredClone;
+
+export const copy = (value: unknown): unknown => load(value);
+`,
+      );
+    });
+    assert.deepEqual(
+      ids.filter((id) => id.startsWith('external_service:')),
+      [],
+    );
+  });
+});
+
+/**
+ * A `while` head that compares a counter against a bound states the ceiling a three part `for` states.
+ *
+ * Reading every `while` as unbounded told the author of `let n = 0; const max = 3; while (n < max)` that
+ * no attempt limit could be established from their source, three lines under the limit they established.
+ */
+describe('a while head', () => {
+  const boundedOf = async (head: string, body = 'await post();') => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'heads' });
+      workspace.write(
+        'src/loop.ts',
+        `const sleep = (ms: number): Promise<void> => new Promise((resolve) => { void ms; resolve(); });
+
+export const post = async (): Promise<void> => {
+  await fetch('https://payments.example.com/charge', { method: 'POST' });
+};
+
+export const run = async (): Promise<void> => {
+  let n = 0;
+  const max = 3;
+  let done = false;
+  void done;
+  ${head} {
+    n += 1;
+    try {
+      ${body}
+      return;
+    } catch {
+      void n;
+    }
+    await sleep(100);
+  }
+};
+`,
+      );
+    });
+    const retried = result.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
+    return retried[0]?.policy?.retry?.bounded;
+  };
+
+  it('states a ceiling when it compares a counter against a bound', async () => {
+    assert.equal(await boundedOf('while (n < max)'), true);
+  });
+
+  it('states none when it tests a flag', async () => {
+    assert.equal(await boundedOf('while (!done)'), false);
+  });
+
+  it('states none when it cannot end on its own', async () => {
+    assert.equal(await boundedOf('while (true)'), false);
+  });
+});
+
+/**
+ * How the wait between attempts is written, which is a property of the retry rather than a gate on
+ * finding one. A retry that waits the same amount every time is not the retry that waits longer, and a
+ * retry that does not wait at all re-attempts as fast as its dependency can fail.
+ */
+describe('the wait between attempts', () => {
+  const backoffOf = async (wait: string) => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'waits' });
+      workspace.write(
+        'src/send.ts',
+        `const sleep = (ms: number): Promise<void> => new Promise((resolve) => { void ms; resolve(); });
+
+export const ship = async (body: string): Promise<void> => {
+  const base = 500;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    try {
+      const res = await fetch('https://ingest.example.com/events', { method: 'POST', body });
+      if (res.ok) return;
+    } catch {
+      void attempt;
+    }
+    ${wait}
+  }
+};
+`,
+      );
+    });
+    const retried = result.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
+    assert.equal(retried.length, 1, 'the retry itself should be discovered whatever the wait');
+    return retried[0]?.policy?.retry;
+  };
+
+  it('is exponential when the syntax exponentiates', async () => {
+    assert.equal(
+      (await backoffOf('await sleep(base * 2 ** (attempt - 1));'))?.backoff,
+      'exponential',
+    );
+  });
+
+  it('is fixed when every pass waits the same', async () => {
+    assert.equal((await backoffOf('await sleep(500);'))?.backoff, 'fixed');
+  });
+
+  /*
+   * The dangerous one. A retry with no wait re-attempts as fast as the dependency can fail, which turns
+   * one struggling service into an outage, and `unknown` would read as something nobody had looked at.
+   */
+  it('is none when the loop never waits', async () => {
+    assert.equal((await backoffOf('void attempt;'))?.backoff, 'none');
+  });
+});
+
+/**
+ * The acceptance case from the 0.2.0 field report, in the shape its target repository writes it: a
+ * bounded loop, exponential backoff, a POST, no idempotency key, and an injected client.
+ */
+describe('a bounded retry around a POST through an injected client', () => {
+  const shipped = async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'collector' });
+      workspace.write(
+        'src/ship.ts',
+        `export interface ShipOptions {
+  url: string;
+  body: string;
+  maxAttempts?: number;
+  baseBackoffMs?: number;
+  fetchImpl?: typeof fetch;
+  sleep?: (ms: number) => Promise<void>;
+}
+
+const defaultSleep = async (ms: number): Promise<void> => {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+};
+
+export async function shipBatch(opts: ShipOptions): Promise<{ ok: boolean }> {
+  const maxAttempts = opts.maxAttempts ?? 4;
+  const baseBackoffMs = opts.baseBackoffMs ?? 500;
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  const sleep = opts.sleep ?? defaultSleep;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const res = await fetchImpl(opts.url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: opts.body,
+      });
+      if (res.ok) return { ok: true };
+    } catch {
+      void attempt;
+    }
+    if (attempt < maxAttempts) {
+      await sleep(baseBackoffMs * 2 ** (attempt - 1));
+    }
+  }
+  return { ok: false };
+}
+`,
+      );
+    });
+    return result.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
+  };
+
+  it('is discovered, bounded, and reported as growing its wait', async () => {
+    const retried = await shipped();
+    assert.equal(retried.length, 1, 'the retry was invisible because its client is injected');
+    const retry = retried[0]?.policy?.retry;
+    assert.equal(retry?.bounded, true, 'the for header states the ceiling');
+    assert.equal(retry?.backoff, 'exponential');
+    assert.equal(retry?.idempotency, 'unknown', 'no key is declared and none may be assumed');
+    assert.equal(retried[0]?.metadata['httpMethod'], 'POST');
+  });
+});

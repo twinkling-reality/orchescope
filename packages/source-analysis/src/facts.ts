@@ -28,6 +28,19 @@ export type ArgumentFact =
     }
   | { readonly kind: 'function' }
   | { readonly kind: 'template'; readonly value: string; readonly hasSubstitutions: boolean }
+  /**
+   * A value computed from other values, flattened to the operators used and the names read.
+   *
+   * The operator is the fact worth keeping. `sleep(base * 2 ** (attempt - 1))` is an exponential backoff
+   * and `sleep(500)` is a fixed one, and the difference is written in the syntax. Reduced to `unknown` it
+   * meant every discovered retry declared `backoff: 'unknown'`, including the ones whose growth is spelled
+   * out one line below the request they protect.
+   */
+  | {
+      readonly kind: 'arithmetic';
+      readonly operators: readonly string[];
+      readonly names: readonly string[];
+    }
   | { readonly kind: 'unknown'; readonly nodeType: string };
 
 export type ObjectEntryFact = {
@@ -83,6 +96,19 @@ export type DefinitionFact = {
   readonly location: SourceLocation;
   /** Dotted path of the initialiser call, when the definition is `const x = f(...)`. */
   readonly initializer: readonly string[] | undefined;
+  /**
+   * Names the initialiser takes its value from, when it takes it from a name rather than by calling one.
+   *
+   * `const fetchImpl = opts.fetchImpl ?? fetch` is how a module is written so that its network client can
+   * be replaced in a test, and it is the shape that made such a module invisible: adapters match a client
+   * by the callee path, `fetchImpl` is not `fetch`, and the request, its method and the retry around it
+   * were all discovered for the modules that call `fetch` directly and for no others. That inverts the
+   * incentive, because the code written to be testable is the code that cannot be seen.
+   *
+   * Every candidate is recorded rather than one. `a ?? b`, `a || b` and a ternary each offer more than one
+   * name and the syntax does not say which is taken, so choosing would be a guess where listing is a fact.
+   */
+  readonly aliasedFrom?: readonly (readonly string[])[];
   readonly enclosing: string | undefined;
 };
 
