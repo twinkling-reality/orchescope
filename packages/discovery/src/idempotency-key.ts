@@ -3,11 +3,11 @@ import type { CallFact, ObjectEntryFact } from '@orchescope/source-analysis';
 /**
  * How a repository spells an idempotency key, and the two places it can be read.
  *
- * The schema says `idempotency: 'declared'` means a key was found on the retried operation, and nothing
- * ever assigned it: all five sites that construct a retry policy wrote `'unknown'`, so
- * `bounded-retry-with-declared-idempotency` selected on a value that did not exist and reported `clear`
- * on every repository it was ever given, including ones that plainly contain the shape it describes. A
- * rule that cannot fire is worse than one that fires wrongly, because nothing in the output says so.
+ * The schema says `idempotency: 'declared'` means a key was found on the retried operation, and only a
+ * hand written manifest ever said it: all five sites that read source and construct a retry policy wrote
+ * `'unknown'`. So `bounded-retry-with-declared-idempotency` could report a strength for a repository
+ * whose author had written the answer into `.orchescope/manifest.yaml` and never for one that carries
+ * the key in the request it retries, which is the repository that earned it.
  *
  * The two readings are deliberately different in strength and are not interchangeable.
  *

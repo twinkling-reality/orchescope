@@ -431,11 +431,10 @@ def parse_document(base_url, file_path):
 /**
  * The one place `declared` can be read.
  *
- * The schema says `idempotency: 'declared'` means a key was found on the retried operation, and all five
- * sites that construct a retry policy wrote `'unknown'`. So the strength rule selecting on that value
- * could not fire on any input it had ever been given, and reported `clear` on repositories that plainly
- * contain the shape it describes. A rule that cannot fire is worse than one that fires wrongly, because
- * nothing in the output distinguishes it from one that checked.
+ * The schema says `idempotency: 'declared'` means a key was found on the retried operation, and only a
+ * hand written manifest ever said it: all five sites that read source and construct a retry policy wrote
+ * `'unknown'`. So the strength rule selecting on that value could report a repository that had written
+ * the answer into its own manifest and never one that carries the key in the request it retries.
  */
 describe('a retry around a request that carries an idempotency key', () => {
   const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {

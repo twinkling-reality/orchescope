@@ -5,9 +5,10 @@ Notable changes per released version. Nothing here is generated; a release is a 
 ## Unreleased
 
 This answers the field report against 0.3.0, from a Swift and AppKit repository with a small JavaScript and
-Python surface. Two of the report's items were withdrawn on inspection: the version labelling defect it opens
-with was a brief carrying measurements from a different repository, and the coverage arithmetic it questions is
-three different sets rather than a partition, which is a labelling problem and not a counting one.
+Python surface. Three of the report's items were withdrawn on inspection: the version labelling defect it opens
+with was a brief carrying measurements from a different repository, the coverage arithmetic it questions is three
+different sets rather than a partition, which is a labelling problem and not a counting one, and the strength rule
+it calls structurally unable to fire has been firing on the bundled demonstration system all along.
 
 Its central finding is that two separately filed defects were one, and that the tool built to fix the first one
 had never been connected to the second consumer.
@@ -63,10 +64,14 @@ whether the polled read is safe to repeat answered with the class of the POST.
 
 ### A rule says what it looked at
 
-**`bounded-retry-with-declared-idempotency` can fire.** The schema says `declared` means a key was found on the
-retried operation and all five sites that construct a retry policy wrote `unknown`, so the rule selected on a
-value that did not exist and reported `clear` on every repository it had ever seen. A key in the arguments of the
-request being repeated is that reading, and a key handed to a helper one frame away is not.
+**A key written in code counts as a declared one.** `idempotency: declared` reached the graph only from a hand
+written manifest: every adapter that reads source wrote `unknown`, so
+`bounded-retry-with-declared-idempotency` could report a strength for a repository that declares a key in
+`.orchescope/manifest.yaml` and never for one that carries the key in the request it retries. The schema says
+`declared` means a key was found on the retried operation; a key in the arguments of the request being repeated
+is that reading, and a key handed to a helper one frame away is not. The field report filed this as a rule
+structurally unable to fire, which is a third thing it got wrong: the bundled demonstration system has fired it
+from its manifest since before this work.
 
 **Six rules stopped contradicting the document they are printed in.** They said "no run has been recorded" beside
 a summary saying one had. A recorded run that produced no span is an attempt to measure and nothing else, and

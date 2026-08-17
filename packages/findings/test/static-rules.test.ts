@@ -946,8 +946,9 @@ describe('what a rule says when it had nothing to look at', () => {
   });
 
   /*
-   * The rule this one mirrors could not fire on any input it had ever been given, and said `clear`.
-   * Proving a rule capable of firing is a different test from proving it fires on the right thing.
+   * The rule this one mirrors could fire only for a repository that wrote the answer into its own
+   * manifest. Proving a rule capable of firing is a different test from proving it fires on the right
+   * thing, and this is the first half.
    */
   it('bounded-retry-with-declared-idempotency declines when no retry was discovered', () => {
     const outcome = safeRetryRule.evaluate(contextFor(buildGraph([orchestrator, refund], [])));
