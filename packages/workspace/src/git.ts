@@ -29,6 +29,52 @@ const run = (root: string, args: readonly string[]): string | undefined => {
   }
 };
 
+/**
+ * Every path git tracks, which is the answer to whether an ignored file is part of the repository.
+ *
+ * An ignore rule states an intention and the index states the outcome, and where they disagree the index
+ * is what git honours. One pinned repository ignores `*_*.md` and has committed twenty one documentation
+ * files matching it, so a traversal that read the rules alone and stopped there would drop real source
+ * that its author kept on purpose. Reading the rules without reading this is the version of the feature
+ * that removes what it was meant to preserve.
+ *
+ * The result holds every tracked file and every directory containing one, because traversal asks about
+ * both and a directory it declines to enter takes the tracked files inside it with it.
+ *
+ * The output is bounded generously because it is one line per tracked file, and a repository too large for
+ * that bound produces nothing rather than a partial list, since a partial list would silently exclude the
+ * files it failed to mention.
+ */
+export const readTrackedPaths = (root: string): ReadonlySet<string> | undefined => {
+  let output: string;
+  try {
+    output = execFileSync('git', ['ls-files', '-z'], {
+      cwd: root,
+      encoding: 'utf8',
+      timeout: 10_000,
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    });
+  } catch {
+    return undefined;
+  }
+  const kept = new Set<string>();
+  for (const path of output.split('\0')) {
+    if (path.length === 0) continue;
+    kept.add(path);
+    /*
+     * Git tracks files and not directories, and traversal asks about both. A directory holding a tracked
+     * file is kept by implication: excluding it would drop the tracked file without ever asking about it,
+     * since traversal stops at a directory it does not enter.
+     */
+    for (let slash = path.indexOf('/'); slash !== -1; slash = path.indexOf('/', slash + 1)) {
+      kept.add(path.slice(0, slash));
+    }
+  }
+  return kept;
+};
+
 export const readGitFacts = (root: string): GitFacts | undefined => {
   const inside = run(root, ['rev-parse', '--is-inside-work-tree']);
   if (inside !== 'true') return undefined;

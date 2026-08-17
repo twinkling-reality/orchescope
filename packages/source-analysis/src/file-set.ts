@@ -4,6 +4,7 @@ import { join, relative, sep } from 'node:path';
 import { OrchescopeError } from '@orchescope/domain';
 import type { SkippedFile } from '@orchescope/schema';
 import { generationDetail, generationSignal } from './generated-code.ts';
+import { type IgnoreRules, noIgnoreRules } from './ignore-rules.ts';
 import { type Language, languageOf } from './language.ts';
 
 /**
@@ -43,6 +44,22 @@ export type TraversalOptions = {
   readonly excludeDirectories: readonly string[];
   /** Additional path prefixes to exclude, repository relative. */
   readonly excludePrefixes: readonly string[];
+  /**
+   * Whether the repository's own ignore files decide what is part of it.
+   *
+   * The name list above is a guess at what those files say, and it loses to every project that puts its
+   * build output somewhere else: a repository was reported as holding dead scaffolding and generated
+   * output its author had excluded years before. Off leaves traversal reading exactly what it read before.
+   */
+  readonly respectIgnoreFiles?: boolean;
+  /**
+   * Paths the repository tracks, which override any rule that would exclude them.
+   *
+   * An ignore rule states an intention and the index states the outcome, and git honours the index. One
+   * pinned repository ignores `*_*.md` and has committed twenty one documentation files matching it.
+   * Absent when the root is not a checkout, in which case the rules are all there is to read.
+   */
+  readonly trackedPaths?: ReadonlySet<string>;
 };
 
 export const DEFAULT_EXCLUDED_DIRECTORIES: readonly string[] = [
@@ -178,8 +195,31 @@ const considerFile = (
   }
 };
 
-const walk = (root: string, current: string, options: TraversalOptions, walker: Walker): void => {
+/** The rules a directory adds, when the caller asked for them and the directory declares any. */
+const rulesWithin = (
+  current: string,
+  relativeCurrent: string,
+  options: TraversalOptions,
+  rules: IgnoreRules,
+): IgnoreRules => {
+  if (options.respectIgnoreFiles !== true) return rules;
+  try {
+    return rules.extendedWith(relativeCurrent, readFileSync(join(current, '.gitignore'), 'utf8'));
+  } catch {
+    return rules;
+  }
+};
+
+const walk = (
+  root: string,
+  current: string,
+  options: TraversalOptions,
+  walker: Walker,
+  inherited: IgnoreRules,
+): void => {
   if (walker.truncated) return;
+  const relativeCurrent = toPosix(relative(root, current));
+  const rules = rulesWithin(current, relativeCurrent, options, inherited);
   let entries: Dirent[];
   try {
     entries = readdirSync(current, { withFileTypes: true });
@@ -201,9 +241,27 @@ const walk = (root: string, current: string, options: TraversalOptions, walker: 
 
     const kind = classifyEntry(entry, absolutePath, relativePath, options, walker);
     if (kind === 'skip') continue;
+    /*
+     * Asked after the entry is known to be a directory or a file, because a pattern ending in a slash
+     * excludes only a directory and answering before that is known would apply it to both.
+     */
+    const excludedBy =
+      options.trackedPaths?.has(relativePath) === true
+        ? undefined
+        : rules.excludedBy(relativePath, kind === 'directory');
+    if (excludedBy !== undefined) {
+      if (kind === 'file') {
+        walker.skipped.push({
+          file: relativePath,
+          reason: 'ignored',
+          detail: `excluded by ${excludedBy}`,
+        });
+      }
+      continue;
+    }
     if (kind === 'directory') {
       if (options.excludeDirectories.includes(entry.name)) continue;
-      walk(root, absolutePath, options, walker);
+      walk(root, absolutePath, options, walker, rules);
       continue;
     }
 
@@ -262,7 +320,7 @@ export const collectFiles = (root: string, options: TraversalOptions): FileSet =
     extensionCounts: new Map(),
     truncated: false,
   };
-  walk(root, root, options, walker);
+  walk(root, root, options, walker, noIgnoreRules());
   return {
     root,
     files: walker.files,

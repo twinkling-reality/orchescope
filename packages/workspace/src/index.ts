@@ -6,7 +6,7 @@
 export { type ConfigLoad, DEFAULT_CONFIG, loadConfig, writeConfig } from './config.ts';
 export { DEFAULT_EXCLUDED_DIRECTORIES } from './excluded.ts';
 export { type ExcludedConfig, excludedConfig } from './committable-config.ts';
-export { type GitFacts, readGitFacts, resolveRevision } from './git.ts';
+export { type GitFacts, readGitFacts, readTrackedPaths, resolveRevision } from './git.ts';
 export {
   type ManifestTemplateResult,
   manifestTemplate,

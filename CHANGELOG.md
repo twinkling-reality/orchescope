@@ -104,6 +104,33 @@ document and the target's own output moves to standard error.
   session, so an upgrade installed while it runs changes nothing a caller can see, and an agent comparing today's audit
   against a finding it recorded last week could not tell a change in the repository from a change in the reader.
 
+### The repository decides what is part of it
+
+**Traversal reads `.gitignore`.** The fixed list of directory names it used instead is a guess at what those
+files say, and it loses to every project that puts its build output somewhere else. Nested ignore files,
+negations and anchored patterns are all read, and every file excluded this way is named in coverage with the
+rule that excluded it, so a reader who disagrees can see exactly what happened.
+
+**A file the repository tracks is kept whatever the rules say.** An ignore rule states an intention and the
+index states the outcome, and git honours the index. One pinned repository ignores `*_*.md` and has
+committed twenty one documentation files matching it, so a build that read the rules and stopped there would
+have deleted real source from its own view of that repository. Reading the rules without reading the index
+is the version of this feature that removes what it was meant to preserve.
+
+The effect is nothing at all across the pinned corpus, where the rules and the index agree everywhere. It
+shows up on a working checkout: on the reporting repository it sets aside sixteen files, among them
+`.DS_Store`, a `.env`, a `.dev.vars`, three generated `worker-configuration.d.ts` and a deprovisioned
+deployment manifest.
+
+**A provider host is asked what the request is for, not only which host it is.** `POST
+https://api.openai.com/v1/realtime/client_secrets` mints an ephemeral token, and recognising it by host
+alone reported it as a model invocation and then cut a goal telling an agent to put a request timeout on an
+authentication call. The test is stated as the operations that run a model rather than as the endpoints that
+do not, because a list of exclusions loses to whatever a provider ships next, and it lives in the table both
+sides of the join already share, so a run and a call site describing the same request cannot disagree about
+what it is. The request stays in the graph as a request: dropping a discovered outbound call would trade a
+wrong answer for a missing one.
+
 ### Upgrading
 
 **A traced command's exit code is now the target's.** If you gate on `orchescope trace` exiting 4, that gate no longer
@@ -112,6 +139,10 @@ status and nothing else. Orchescope's own codes still apply on every path that e
 
 **Anything parsing the run report from standard output has to read standard error instead.** Standard output now carries
 the traced program's output, or the JSON document, and nothing else.
+
+**A repository with untracked build output will report fewer components.** Traversal now reads the
+repository's ignore files, so anything excluded there and not tracked is no longer analysed. Coverage names
+every such file and the rule that excluded it.
 
 **Finding counts will move, in both directions.** `side-effect-approval-boundary` can now reach operations behind a tool
 handler and will report them where it previously reported nothing. Retry findings name the operation rather than the
@@ -135,7 +166,7 @@ stays at `schemaVersion` 3.
 
 ### Verification
 
-`pnpm verify` green at 814 unit and 107 end to end tests, from 782 and 103. `pnpm corpus` matches across thirteen pinned
+`pnpm verify` green at 834 unit and 107 end to end tests, from 782 and 103. `pnpm corpus` matches across thirteen pinned
 repositories, with every expectation that moved read against the cited source: the removed databases are an HTTP/2
 session, two Redis clients and a set of MCP transports; the added services are `axios` reaching its own fetch adapter
 through `let _fetch = envFetch || fetch`, two injectable clients in the LangGraph SDK, and three hosts recovered from

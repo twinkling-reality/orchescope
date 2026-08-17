@@ -19,7 +19,7 @@ import type {
 } from '@orchescope/schema';
 import { DEFAULT_EXCLUDED_DIRECTORIES, type FactCache } from '@orchescope/source-analysis';
 import { deriveTopology } from '@orchescope/traces';
-import type { Workspace } from '@orchescope/workspace';
+import { readTrackedPaths, type Workspace } from '@orchescope/workspace';
 import { resolveCapabilities } from './capabilities.ts';
 import { judgeGoal } from './goal.ts';
 import { discoverScenarios } from './scenario.ts';
@@ -345,6 +345,11 @@ export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
     discoverScenarios(workspace);
 
     const discoverPhase = workspace.progress.phase('discover', 'Discovering components');
+    /*
+     * What git keeps, which decides any disagreement with the ignore rules. Read once per audit rather than
+     * per directory, and absent when the root is not a checkout, in which case the rules are all there is.
+     */
+    const trackedPaths = readTrackedPaths(workspace.paths.root);
     const scan = await discover({
       /*
        * Parsing is the longest thing this command does and it is synchronous throughout, so without
@@ -369,6 +374,13 @@ export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
             ? config.analysis.exclude
             : DEFAULT_EXCLUDED_DIRECTORIES,
         excludePrefixes: [],
+        /*
+         * The repository's own statement about what is part of it, which is a better answer than the name
+         * list beside it and is the author's rather than this build's. A file excluded this way is named
+         * in coverage with the rule that excluded it, so a reader who disagrees can see what happened.
+         */
+        respectIgnoreFiles: true,
+        ...(trackedPaths === undefined ? {} : { trackedPaths }),
       },
       concurrency: config.analysis.concurrency,
       ...(request.cache === undefined ? {} : { cache: request.cache }),
