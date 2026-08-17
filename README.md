@@ -59,7 +59,7 @@ repository, so you can check that what you installed is what this source builds:
 ```
 pnpm install
 pnpm package                       # builds the bundle, packs, installs and audits with it
-npm install -g release/orchescope-0.2.0.tgz
+npm install -g release/orchescope-0.3.0.tgz
 ```
 
 `pnpm package` also installs the tarball into a temporary prefix and audits a project with it, so a failure there means the

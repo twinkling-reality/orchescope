@@ -4,6 +4,8 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## 0.3.0
 
+Released 2026-08-17 from npm as `orchescope@0.3.0`.
+
 This answers the field report against 0.2.0, from the same TypeScript monorepo the 0.1.0 report came from, roughly
 eighteen hundred analysed files.
 
@@ -163,6 +165,23 @@ stays at `schemaVersion` 3.
 - **An address assembled from a constant is still unresolved.** Reading `${API_BASE}${path}` needs constant propagation,
   which is a feature rather than a patch. On the reporting repository this is a hundred and four call sites, and the
   coverage block now says so.
+
+### Provenance
+
+This version was published from a laptop with `npm publish --no-provenance`, so **it carries no attestation**.
+`publishConfig` asks for provenance and the registry generates it from a workflow identity, which a laptop does
+not have, so the publish refuses until the flag says plainly that there will be none.
+
+What stands in its place is that the artifact is reproducible. `pnpm package` from this repository builds a
+tarball byte identical to the one on the registry, which was checked by downloading the published one and
+comparing:
+
+```
+sha256  ded9076b1f50a884410a20c4dd6742f802e09c95083a51eb4d6d5177de278058
+```
+
+That is a weaker guarantee than a registry attestation and it is worth naming as such. It says the bytes match
+this source; it does not say who published them.
 
 ### Verification
 
