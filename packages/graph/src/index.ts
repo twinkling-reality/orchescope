@@ -22,6 +22,7 @@ export {
   type RunSideEffects,
 } from './delta.ts';
 export { diffGraphs } from './diff.ts';
+export { sourceLocationKey } from './merge.ts';
 export type { ComponentDraft, EdgeDraft } from './drafts.ts';
 export {
   type BuiltGraph,

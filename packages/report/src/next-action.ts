@@ -26,9 +26,19 @@ export type AdapterStatus = {
  * An instruction must never wear a key that promises a pasteable command. The kind is the contract
  * every renderer and every agent payload shares.
  */
+/**
+ * Why this action is not the command the loop's own standing step carries, when it is not.
+ *
+ * Both are in the same document: `standingAt` says `measure` and its step carries `orchescope trace`,
+ * while the action says `orchescope init --manifest`. Preflight outranking the loop is the correct
+ * answer and it read as two answers, because nothing in the document said which of the two commands a
+ * reader was meant to type or what the other one was doing there.
+ */
+type Supersedes = { readonly supersedes: string };
+
 export type NextAction =
-  | { readonly kind: 'command'; readonly argv: readonly string[] }
-  | { readonly kind: 'instruction'; readonly text: string };
+  | ({ readonly kind: 'command'; readonly argv: readonly string[] } & Partial<Supersedes>)
+  | ({ readonly kind: 'instruction'; readonly text: string } & Partial<Supersedes>);
 
 export type ResolveNextActionInput = {
   readonly progress: LoopProgress;
@@ -42,10 +52,18 @@ export function resolveNextAction(input: ResolveNextActionInput): NextAction | n
    * A rejected input comes before a missing one. A manifest the validator refused is the difference
    * between an empty graph a reader can fix and one they cannot explain.
    */
+  const standing = input.progress.standingAt;
+  const supersedes =
+    standing?.command === undefined || standing.command === null
+      ? {}
+      : {
+          supersedes: `the loop stands at ${standing.id}, whose command is ${standing.command.join(' ')}, and that command cannot help until this one is done`,
+        };
   if (manifest?.status === 'failed') {
     return {
       kind: 'instruction',
       text: `correct .orchescope/manifest.yaml, then run ${auditCommand().join(' ')}`,
+      ...supersedes,
     };
   }
   /*
@@ -59,9 +77,10 @@ export function resolveNextAction(input: ResolveNextActionInput): NextAction | n
       return {
         kind: 'instruction',
         text: 'declare your components in .orchescope/manifest.yaml',
+        ...supersedes,
       };
     }
-    return { kind: 'command', argv: manifestCommand() };
+    return { kind: 'command', argv: manifestCommand(), ...supersedes };
   }
   if (input.progress.nextCommand === null) return null;
   return { kind: 'command', argv: input.progress.nextCommand };

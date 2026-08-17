@@ -8,12 +8,14 @@ import {
   findingId as makeFindingId,
 } from '@orchescope/domain';
 import type { IndexedGraph } from '@orchescope/graph';
+import { sourceLocationKey } from '@orchescope/graph';
 import type {
   Evidence,
   EvidenceId,
   Finding,
   FindingCategory,
   FindingSet,
+  SourceLocation,
   Timestamp,
 } from '@orchescope/schema';
 import { groupDrafts } from './grouping.ts';
@@ -56,6 +58,24 @@ export type EngineResult = {
 
 /** A grouped finding names many components, and a location list has to stay something a person can read. */
 const MAX_SOURCE_LOCATIONS = 10;
+
+/**
+ * One entry per place, however many components were minted there.
+ *
+ * A finding names the components it is about, and two of them are often the same line: discovery mints a
+ * frame to hold an effect and the service the effect reaches at the same call, so both carry it. Listing
+ * it twice reads as two call sites, and worse, the repeats are counted against the ceiling: nine entries
+ * for seven places and ten for eight, with the places past the tenth entry dropped to make room for
+ * duplicates of the ones already shown.
+ */
+const distinctLocations = (locations: readonly SourceLocation[]): readonly SourceLocation[] => {
+  const seen = new Map<string, SourceLocation>();
+  for (const location of locations) {
+    const key = sourceLocationKey(location);
+    if (!seen.has(key)) seen.set(key, location);
+  }
+  return [...seen.values()];
+};
 
 const draftOrder = (left: FindingDraft, right: FindingDraft): number => {
   if (left.ruleId !== right.ruleId) return left.ruleId < right.ruleId ? -1 : 1;
@@ -136,10 +156,11 @@ const toFinding = (
     impact: draft.impact,
     components: draft.components.filter((id) => componentIds.has(id)),
     edges: [...(draft.edges ?? [])],
-    sourceLocations: draft.components
-      .map((id) => input.graph.component(id))
-      .flatMap((component) => component?.sourceLocations.slice(0, 2) ?? [])
-      .slice(0, MAX_SOURCE_LOCATIONS),
+    sourceLocations: distinctLocations(
+      draft.components
+        .map((id) => input.graph.component(id))
+        .flatMap((component) => component?.sourceLocations.slice(0, 2) ?? []),
+    ).slice(0, MAX_SOURCE_LOCATIONS),
     evidence: [...evidenceIds],
     metrics: [...(draft.metrics ?? [])],
     ...(draft.recommendation === undefined ? {} : { recommendation: draft.recommendation }),

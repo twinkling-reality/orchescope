@@ -191,6 +191,20 @@ export const classifyEffect = (name: string, httpMethod?: string): SideEffectCla
   return 'unknown';
 };
 
+/**
+ * Whether the address is relative, which means the request has no external host rather than one this
+ * build could not read.
+ *
+ * `fetch("/releases.json")` was reported as `unresolved-host-wireDownload` and explained with "a base
+ * address held in a constant is the common cause", about an argument that is a fully visible string
+ * literal. There is no host in it because it is a same origin request, and saying a host could not be
+ * resolved is a confident answer to a question the source settles plainly.
+ *
+ * `//host/path` is protocol relative and does carry an authority, so a single leading slash is what
+ * separates the two.
+ */
+const isSameOrigin = (url: string): boolean => url.startsWith('/') && !url.startsWith('//');
+
 const hostOf = (url: string): string | undefined => {
   const match = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]+)/i.exec(url);
   return match?.[2];
@@ -232,6 +246,13 @@ const addressOf = (argument: ArgumentFact | undefined): string | undefined => {
   if (argument.kind !== 'template') return undefined;
   if (!argument.hasSubstitutions) return argument.value;
   const prefix = argument.value.slice(0, argument.value.indexOf(SUBSTITUTION));
+  /*
+   * A relative address has its origin complete before anything is substituted, because there is no
+   * origin in it to complete. `` `/api/history?conversation=${id}` `` says as plainly as a literal does
+   * that the request does not leave the origin, and declining it left the one shape a template most
+   * often takes reported as a host this build could not read.
+   */
+  if (isSameOrigin(prefix)) return prefix;
   const authority = /^[a-z][a-z0-9+.-]*:\/\/[^/?#]+[/?#]/i.exec(prefix);
   return authority === null ? undefined : prefix;
 };
@@ -275,16 +296,31 @@ const serviceIdentity = (host: string): ComponentIdentity =>
 const serviceCalledAt = (
   module: ModuleFacts,
   call: CallFact,
-  host: string | undefined,
+  request: RequestCall,
 ): {
   readonly identity: ComponentIdentity;
   readonly name: string;
   readonly displayName: string;
+  /** Whether this build failed to read a host, as opposed to there being none to read. */
+  readonly unresolved: boolean;
 } => {
+  const { host, url } = request;
   if (host !== undefined) {
-    return { identity: serviceIdentity(host), name: host, displayName: host };
+    return { identity: serviceIdentity(host), name: host, displayName: host, unresolved: false };
   }
   const scope = call.enclosing;
+  if (url !== undefined && isSameOrigin(url)) {
+    const name = `same-origin:${scope ?? 'module-scope'}`;
+    return {
+      identity: sourceIdentity('external_service', module.file, name),
+      name,
+      displayName:
+        scope === undefined
+          ? `the same origin, requested by ${module.file}`
+          : `the same origin, requested by ${scope}`,
+      unresolved: false,
+    };
+  }
   const name = `unresolved-host:${scope ?? 'module-scope'}`;
   return {
     identity: sourceIdentity('external_service', module.file, name),
@@ -293,6 +329,7 @@ const serviceCalledAt = (
       scope === undefined
         ? `a host ${module.file} builds at run time`
         : `the host ${scope} builds at run time`,
+    unresolved: true,
   };
 };
 
@@ -718,7 +755,7 @@ const discoverHttp = (
     }
     const method = methodOf(call, request);
     const effect = classifyEffect(operationNamedBy(call, request), method.value);
-    const service = serviceCalledAt(module, call, host);
+    const service = serviceCalledAt(module, call, request);
 
     builder.addComponent(
       drafts.sourceComponent({
@@ -751,7 +788,7 @@ const discoverHttp = (
     );
     found.components += 1;
     found.files.add(module.file);
-    if (host === undefined) found.unresolvedAddresses += 1;
+    if (service.unresolved) found.unresolvedAddresses += 1;
     context.callSiteEffects.record(module.file, call, service.identity, effect);
 
     builder.addEdge(

@@ -1,5 +1,5 @@
 import module from 'node:module';
-import { cancelledError } from '@orchescope/domain';
+import { cancelledError, OrchescopeError } from '@orchescope/domain';
 import { Command } from 'commander';
 import { auditCommand } from './commands/audit.ts';
 import {
@@ -25,6 +25,7 @@ import {
   ORCHESCOPE_VERSION,
 } from './context.ts';
 import { EXIT_CODES, exitCodeFor, jsonError, renderError } from './exit.ts';
+import { commandPaths, nearestCommand, typedCommandIn } from './unknown-command.ts';
 
 /**
  * The command line entry point.
@@ -86,7 +87,6 @@ program
   .option('--quiet', 'suppress progress output')
   .option('--color', 'force colour even when the output is not a terminal')
   .option('--no-color', 'disable colour')
-  .showHelpAfterError()
   .configureHelp({ sortSubcommands: true })
   /**
    * Running the binary with no arguments prints this list, so the list has to say where to start. Fourteen
@@ -115,8 +115,42 @@ program
     ) {
       process.exit(0);
     }
+    reportUsageError(error);
     process.exit(EXIT_CODES.user);
   });
+
+/**
+ * A caller mistake, answered in the form the caller asked for.
+ *
+ * The parser writes its own message to standard error before this runs, and under `--json` that message
+ * is the whole of what a script receives from an interface whose help says every command writes exactly
+ * one document including on failure. So the document is written here, and the parser's own text is left
+ * for the human form where it is what a reader wants.
+ */
+const reportUsageError = (error: { readonly message: string; readonly code: string }): void => {
+  const typed = typedCommandIn(error.message);
+  const nearest = typed === undefined ? undefined : nearestCommand(typed, commandPaths(program));
+  if (process.argv.includes('--json')) {
+    process.stdout.write(
+      `${JSON.stringify(
+        jsonError(
+          new OrchescopeError('INVALID_ARGUMENT', error.message.replace(/^error: /, ''), {
+            ...(nearest === undefined
+              ? {}
+              : { remediation: `Did you mean: orchescope ${nearest}` }),
+          }),
+          { command: typed ?? 'orchescope', version: ORCHESCOPE_VERSION },
+        ),
+      )}\n`,
+    );
+    return;
+  }
+  process.stderr.write(
+    nearest === undefined
+      ? `\nRun 'orchescope --help' for the list of commands.\n`
+      : `\nDid you mean: orchescope ${nearest}\n`,
+  );
+};
 
 const globals = (): GlobalOptions => program.opts<GlobalOptions>();
 

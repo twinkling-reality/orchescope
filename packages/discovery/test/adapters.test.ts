@@ -2682,3 +2682,87 @@ describe('a request to a model provider', () => {
     assert.ok(ids.includes('model:google/gpt-4.1-mini'), `no model among ${ids.join(', ')}`);
   });
 });
+
+/**
+ * An address with no host in it, because it is same origin.
+ *
+ * `fetch("/releases.json")` was reported as `unresolved-host-wireDownload` and explained with "a base
+ * address held in a constant is the common cause", about an argument that is a fully visible string
+ * literal. There is no host to resolve, which is a different fact from failing to resolve one, and the
+ * adapter counted it among the addresses it could not read.
+ */
+describe('a relative address', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writeNodeProject(workspace, { name: 'downloader' });
+    workspace.write(
+      'src/download.ts',
+      `export const wireDownload = async (): Promise<unknown> => {
+  const response = await fetch('/releases.json', { cache: 'no-store' });
+  return response.json();
+};
+`,
+    );
+  };
+
+  it('is named for the origin it reaches rather than for a host nobody could read', async () => {
+    const { result } = await scan(build);
+    const service = result.graph.components.find(
+      (component) => component.kind === 'external_service',
+    );
+    assert.match(service?.displayName ?? '', /same origin/);
+    assert.doesNotMatch(service?.displayName ?? '', /builds at run time/);
+  });
+
+  it('is not counted among the addresses this build could not resolve', async () => {
+    const { adapters } = await scan(build);
+    const effects = adapters.find((entry) => entry.adapterId === 'adapter:effects');
+    assert.equal(effects?.status, 'completed');
+    assert.equal(
+      effects?.detail,
+      undefined,
+      'a same origin request was reported as an address that could not be resolved',
+    );
+  });
+
+  /*
+   * A template completes its path at run time and its origin is complete before anything is
+   * substituted, because there is no origin in it to complete.
+   */
+  it('is read as same origin when a template completes only the path', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'history' });
+      workspace.write(
+        'src/history.ts',
+        `export const openSession = async (id: string): Promise<unknown> => {
+  const response = await fetch(\`/api/history?conversation=\${encodeURIComponent(id)}\`);
+  return response.json();
+};
+`,
+      );
+    });
+    const service = result.graph.components.find(
+      (component) => component.kind === 'external_service',
+    );
+    assert.match(service?.displayName ?? '', /same origin/);
+    assert.equal(service?.sideEffect, 'read_only');
+  });
+
+  /* A protocol relative address does carry an authority, so one leading slash is what separates them. */
+  it('is still an unread host when the address is protocol relative and built at run time', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'downloader' });
+      workspace.write(
+        'src/download.ts',
+        `export const wireDownload = async (base: string): Promise<unknown> => {
+  const response = await fetch(base + '/releases.json');
+  return response.json();
+};
+`,
+      );
+    });
+    const service = result.graph.components.find(
+      (component) => component.kind === 'external_service',
+    );
+    assert.match(service?.displayName ?? '', /builds at run time/);
+  });
+});

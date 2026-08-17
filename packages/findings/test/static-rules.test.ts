@@ -962,3 +962,72 @@ describe('what a rule says when it had nothing to look at', () => {
     assert.match(outcome.detail ?? '', /1 discovered retry examined/);
   });
 });
+
+/**
+ * One entry per place a finding points at.
+ *
+ * A finding names the components it is about, and two of them are often the same line: discovery mints a
+ * frame to hold an effect and the service that effect reaches at the same call, so both carry it. The
+ * list repeated it, which reads as two call sites, and worse, the repeats were counted against the
+ * ceiling of ten, so places past the tenth entry were dropped to make room for copies of ones already
+ * there. Nine entries for seven places, and ten for eight.
+ */
+describe('the source locations a finding lists', () => {
+  it('names each place once, however many components were minted there', () => {
+    const frame = componentDraft({
+      kind: 'entrypoint',
+      name: 'sendPayment',
+      file: 'src/pay.ts',
+      line: 12,
+      tags: ['entrypoint', INFERRED_ENTRY_POINT_TAG],
+    });
+    const service = componentDraft({
+      kind: 'external_service',
+      name: 'payments.example.com',
+      file: 'src/pay.ts',
+      line: 12,
+      sideEffect: 'non_idempotent_write',
+    });
+    /*
+     * The shape a retry around an inline request takes: discovery mints the frame and the service at the
+     * same call, and the relation runs from one to the other, so both endpoints of the finding carry the
+     * same line.
+     */
+    const graph = buildGraph(
+      [frame, service],
+      [
+        edgeDraft('calls_service', frame, service, {
+          policy: { retry: { bounded: false, backoff: 'none', idempotency: 'unknown' } },
+        } as Partial<EdgeDraft>),
+      ],
+    );
+    const result = evaluateRules({
+      scanId: 'scan_0000000000000000',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      graph: indexGraph(graph),
+      context: {
+        delta: undefined,
+        observedRuns: [],
+        silentRuns: [],
+        benchmarks: [],
+        chaosReports: [],
+        scenarios: [],
+        evidenceById: new Map(),
+      },
+      rules: [unsafeRetryRule],
+    });
+    const finding = result.findingSet.findings.find(
+      (entry) => entry.ruleId === 'retry-around-non-idempotent-operation',
+    );
+    assert.ok(finding !== undefined, 'the retry finding did not survive the engine');
+    const listed = finding.sourceLocations.map(
+      (location) => `${location.file}:${location.startLine}`,
+    );
+    assert.deepEqual(
+      listed,
+      [...new Set(listed)],
+      `a place was listed twice: ${listed.join(', ')}`,
+    );
+    assert.deepEqual(listed, ['src/pay.ts:12'], 'two components at one call are one place');
+  });
+});

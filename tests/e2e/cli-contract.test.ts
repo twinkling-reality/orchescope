@@ -135,6 +135,33 @@ describe('startup and discovery', () => {
     assert.match(result.stderr, /unknown command/i);
   });
 
+  /*
+   * `orchescope validate <goal>` answered with the whole top level help and no suggestion, and the
+   * command the caller wanted is `orchescope goal validate`, a subcommand of a subcommand that a parser
+   * searching its own level cannot find.
+   */
+  it('names the nested command a caller nearly typed', async () => {
+    const result = await run(['validate']);
+    assert.equal(result.code, EXIT.user);
+    assert.match(result.stderr, /Did you mean: orchescope goal validate/);
+    assert.doesNotMatch(result.stderr, /Start here, from the root/);
+  });
+
+  /*
+   * The help promises that every command accepts `--json` and then writes exactly one document,
+   * including on failure. On this path it wrote help text and nothing to parse.
+   */
+  it('writes one document on the unknown command path when asked for json', async () => {
+    const result = await run(['validate', '--json']);
+    assert.equal(result.code, EXIT.user);
+    const document = parsed(result);
+    assert.equal(document['ok'], false);
+    assert.equal(document['data'], null);
+    const error = document['error'] as { code: string; remediation?: string };
+    assert.equal(error.code, 'INVALID_ARGUMENT');
+    assert.match(error.remediation ?? '', /orchescope goal validate/);
+  });
+
   it('refuses an unknown option rather than ignoring it', async () => {
     const result = await run(['audit', '--not-an-option']);
     assert.equal(result.code, EXIT.user);
@@ -232,13 +259,21 @@ describe('a repository with no agent system', () => {
     const document = parsed(await run(['--cwd', root, 'audit', '--json']));
     const data = document['data'] as {
       agentSystemDetected: boolean;
-      loop: { next: { kind: string; argv?: readonly string[] } | null };
+      loop: {
+        standingAt: string | null;
+        next: { kind: string; argv?: readonly string[]; supersedes?: string } | null;
+      };
     };
     assert.equal(data.agentSystemDetected, false);
-    assert.deepEqual(data.loop.next, {
-      kind: 'command',
-      argv: ['orchescope', 'init', '--manifest'],
-    });
+    assert.equal(data.loop.next?.kind, 'command');
+    assert.deepEqual(data.loop.next?.argv, ['orchescope', 'init', '--manifest']);
+    /*
+     * The document carries two commands and used to relate them not at all: `standingAt` says `measure`
+     * and its step carries `orchescope trace`, while the action says `orchescope init --manifest`.
+     * Preflight outranking the loop is the right answer and it read as two answers.
+     */
+    assert.match(data.loop.next?.supersedes ?? '', new RegExp(`stands at ${data.loop.standingAt}`));
+    assert.match(data.loop.next?.supersedes ?? '', /orchescope trace/);
   });
 
   /*

@@ -38,6 +38,8 @@ describe('resolveNextAction', () => {
       {
         kind: 'instruction',
         text: 'correct .orchescope/manifest.yaml, then run orchescope audit',
+        supersedes:
+          'the loop stands at goal, whose command is orchescope goal create X, and that command cannot help until this one is done',
       },
     );
   });
@@ -54,7 +56,39 @@ describe('resolveNextAction', () => {
     assert.deepEqual(action, {
       kind: 'command',
       argv: ['orchescope', 'init', '--manifest'],
+      supersedes:
+        'the loop stands at measure, whose command is orchescope trace -- x, and that command cannot help until this one is done',
     });
+  });
+
+  /*
+   * Two commands sat in one document with nothing relating them: `standingAt` said `measure` and its
+   * step carried `orchescope trace`, while the action said `orchescope init --manifest`. Preflight
+   * outranking the loop is the right answer and it read as two answers.
+   */
+  it('says which loop command it is standing in front of, and why', () => {
+    const action = resolveNextAction({
+      progress: progress(
+        [step('measure', ['orchescope', 'trace', '--', 'x'])],
+        ['orchescope', 'trace', '--', 'x'],
+      ),
+      agentSystemDetected: false,
+      adapters: [],
+    });
+    assert.match(action?.supersedes ?? '', /the loop stands at measure/);
+    assert.match(action?.supersedes ?? '', /orchescope trace -- x/);
+  });
+
+  it('says nothing of the kind when it is the loop command', () => {
+    const action = resolveNextAction({
+      progress: progress(
+        [step('rerun', ['orchescope', 'test', '--scenario', 's'])],
+        ['orchescope', 'test', '--scenario', 's'],
+      ),
+      agentSystemDetected: true,
+      adapters: [],
+    });
+    assert.equal(action?.supersedes, undefined);
   });
 
   it('names the file when the manifest template is already present', () => {
