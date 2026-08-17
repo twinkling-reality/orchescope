@@ -2,6 +2,134 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
+## Unreleased
+
+This answers the field report against 0.3.0, from a Swift and AppKit repository with a small JavaScript and
+Python surface. Two of the report's items were withdrawn on inspection: the version labelling defect it opens
+with was a brief carrying measurements from a different repository, and the coverage arithmetic it questions is
+three different sets rather than a partition, which is a labelling problem and not a counting one.
+
+Its central finding is that two separately filed defects were one, and that the tool built to fix the first one
+had never been connected to the second consumer.
+
+### The join reaches a body that does its own work
+
+**A tool that makes its request in place now reaches it.** The join added in 0.3.0 resolves a call through the
+binding registry, which answers for a name someone declared and answers nothing for a request written inline. So
+a handler delegating to a named function reached the write and fired `side-effect-approval-boundary`, and the
+same body with the request inside it reached nothing and the rule reported that no consequential operation had
+been discovered, four lines from a POST. Extracting a function was the whole of the difference, and the inline
+form is the one the frameworks document. The record of what each call site produced already existed, built for
+retry discovery, and never left the adapter that made it; it is on the discovery context now and the join reads
+it. In `vercel-ai-chatbot` the weather tool makes one of its two requests each way, and only one of them was
+visible.
+
+**A client's own name is not evidence about the operation.** With no enclosing function to read, effect
+classification fell back to the callee, `fetch`, which holds no verb, so an inline `POST /v1/transfers` was
+`unknown` while the same request inside `sendTransfer` was `non_idempotent_write`. The address answers where no
+scope does. The gate that keeps `POST /graphql` out of the write class is unchanged.
+
+**A request with no method stated is the GET its specification defines**, for `fetch` and where the address is
+written at the call site. Without it an address would have to answer a question the method already settles, and
+`https://host/v1/payments` would read as financial when it is a poll. The method says when it came from the
+specification rather than from the call.
+
+### A retry is read for what it states
+
+**A head that can never be false is not a ceiling.** A `for` was bounded if it had any test and a `while` if its
+test used a relational operator, so an infinite retry against a payment endpoint was reported as bounded three
+different ways: a counter that never advances, a bound that grows every pass, and `for (let attempt = 0; true;
+attempt++)`. Both loops now ask one question, whether the head compares a counter against a bound and the body
+moves exactly one side of it, and both analysers ask it. A head joined with `and` or `&&` closes when any operand
+closes, which is how one pinned repository writes a bounded poll that was being called infinite.
+
+**A wait that grows is recognised in the three ways it is written.** `2 ** attempt`, `Math.pow(2, attempt)` and a
+`delayMs` multiplied one statement away from the `sleep` that takes it are one backoff, and only the first was
+read.
+
+**A retry is a loop, not a `try`.** Keying discovery off the `try` made it a requirement rather than a form, so a
+loop that reads the response and goes round again produced no relation at all. A pass that returns when it
+succeeds and falls through when it fails is a re-attempt whatever its counter is called, which is what makes
+`for (let i = 0; i < 3; i++)` around a guarded POST visible.
+
+**Sink evidence belongs to the function that showed it.** Read per module, any `maxAttempts` anywhere in a file
+became attempt ceiling evidence for every retry in it, so a constant in an unrelated bounded poll suppressed the
+finding for an infinite retry twenty four lines away. The rules were declining honestly and about the wrong
+function.
+
+**A relation says which operation it repeats.** A function that posts a job and then polls its status builds both
+addresses at run time, so both requests are one component named for that function, and asking that component
+whether the polled read is safe to repeat answered with the class of the POST.
+
+### A rule says what it looked at
+
+**`bounded-retry-with-declared-idempotency` can fire.** The schema says `declared` means a key was found on the
+retried operation and all five sites that construct a retry policy wrote `unknown`, so the rule selected on a
+value that did not exist and reported `clear` on every repository it had ever seen. A key in the arguments of the
+request being repeated is that reading, and a key handed to a helper one frame away is not.
+
+**Six rules stopped contradicting the document they are printed in.** They said "no run has been recorded" beside
+a summary saying one had. A recorded run that produced no span is an attempt to measure and nothing else, and
+telling the two apart is the difference between "run your system" and "make your system emit spans". Each now
+names what it could not establish rather than only that it could not.
+
+**`prompt-injection-boundary` declines rather than reporting `clear`** over a repository where no prompt
+component was built, and `topology-shape` says how much it looked at instead of printing a status word with no
+sentence at all.
+
+### The scan says what it did not read
+
+**A directory the configuration excluded is named.** `analysis.exclude` matches a path segment at any depth, and
+`build`, `out`, `target`, `vendor` and `coverage` are ordinary module names. A repository with `src/build/` in it
+lost every file inside it while the report said `filesSkipped: 0` and listed nothing. The index decides both
+ways, as it already does for ignore rules: a directory holding committed source is reported, one holding none is
+derived output, and a rule the repository wrote itself is not repeated back at it. `langgraphjs` has a committed
+`internal/build` package that was invisible.
+
+**The coverage counts say they are not a partition**, which is what a reader adding them up needs to know.
+
+### Wording a reader can check
+
+- **A relative address has no external host, rather than one this build failed to read.** `fetch("/releases.json")`
+  was reported as an unresolved host and explained with "a base address held in a constant is the common cause",
+  about an argument that is a fully visible string literal.
+- **`isInferencePath` reads the operation a path ends with.** As a fragment anywhere in the address,
+  `/v1/messages/batches/msgbatch_1/cancel` and `/v1/fine_tuning/jobs/ft-1/complete` were model invocations.
+- **Azure OpenAI and Bedrock are recognised.** They were absent on the argument that their hosts carry a
+  customer's name, which is true of the subdomain and not of the `openai.azure.com` suffix or of
+  `bedrock-runtime.<region>.amazonaws.com`. They are the two largest enterprise paths to a model, and leaving
+  them out described a repository that reaches one as an agent system containing no model.
+- **An unknown command names the one the caller nearly typed**, including a nested one, and writes a document
+  under `--json` as the help promises every command does. `orchescope validate` answered with the entire top
+  level help and no mention of `orchescope goal validate`.
+- **A finding names each place once.** Two components minted at the same call each contributed it, and the
+  repeats were spent against the ceiling of ten, so places past the tenth entry were dropped for copies of ones
+  already shown.
+- **The next action says which loop step it stands in front of**, where the two differ. `standingAt` said
+  `measure` and its step carried `orchescope trace` while the action said `orchescope init --manifest`, and
+  nothing related them.
+- **A detection sentence claims only what this reader can claim.** "Nothing looked like an agent, tool, or model"
+  is a statement about the repository; what a reader can be told is that none of the adapters here recognised
+  one, and the row below names which ones ran.
+
+### The loop reaches its end
+
+**A goal states no criterion its own plan declines to decide.** Two metric criteria were issued whatever the
+repository held, while the validation plan in the same document declined to prescribe the `compare` that would
+settle them, because no run had been recorded. An operator who did exactly what the goal asked got `not
+validated` with two criteria permanently undecided, so a goal that was in fact complete could never say so. They
+are issued when there is a baseline, which is when the comparison is prescribed, and the document says what
+recording a run would add.
+
+**A validation separates a person from a failure.** "1 of 2 criteria satisfied, 1 undecided" said the same thing
+about a criterion that failed, one nothing could judge, and one waiting for a human review to be recorded.
+
+### Known limits, unchanged
+
+Prompt injection still reads a prompt only where a framework declares one, so a prompt assembled at a raw SDK
+call site produces no component. The rule now reports `not_applicable` rather than `clear`, so it fails quietly
+and correctly, and the false negative is real.
+
 ## 0.3.0
 
 Released 2026-08-17 from npm as `orchescope@0.3.0`.

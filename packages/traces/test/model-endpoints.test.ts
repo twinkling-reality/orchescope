@@ -46,12 +46,31 @@ describe('modelEndpointForHost', () => {
   });
 
   /*
-   * A deployment host carries a customer's own name and nothing in the address says what it serves, so
-   * recognising one would be a guess rather than a reading.
+   * A customer's name sits in front of a suffix the provider owns, and the suffix is what this reads.
+   * These are the two largest enterprise paths to a model, and leaving them out described a repository
+   * that reaches one as an agent system containing no model at all.
    */
-  it('leaves a deployment host whose address says nothing alone', () => {
-    assert.equal(modelEndpointForHost('my-thing.openai.azure.com'), undefined);
-    assert.equal(modelEndpointForHost('bedrock-runtime.us-east-1.amazonaws.com'), undefined);
+  it('recognises the enterprise paths by the suffix their provider owns', () => {
+    assert.equal(modelEndpointForHost('contoso.openai.azure.com')?.provider, 'azure-openai');
+    assert.equal(
+      modelEndpointForHost('bedrock-runtime.us-east-1.amazonaws.com')?.provider,
+      'bedrock',
+    );
+    assert.equal(
+      modelEndpointForHost('bedrock-runtime-fips.eu-west-2.amazonaws.com')?.provider,
+      'bedrock',
+    );
+  });
+
+  /*
+   * Only the service prefix, never the cloud. Every other service on `amazonaws.com` is something else
+   * entirely, and a control plane host is not an inference host.
+   */
+  it('claims no other service on the same cloud', () => {
+    assert.equal(modelEndpointForHost('s3.us-east-1.amazonaws.com'), undefined);
+    assert.equal(modelEndpointForHost('dynamodb.amazonaws.com'), undefined);
+    assert.equal(modelEndpointForHost('bedrock.us-east-1.amazonaws.com'), undefined);
+    assert.equal(modelEndpointForHost('notopenai.azure.com.evil.test'), undefined);
   });
 });
 
@@ -94,6 +113,7 @@ describe('isInferencePath', () => {
     '/v1beta/models/gemini-2.5-pro:generateContent',
     '/v1/projects/p/locations/l/publishers/google/models/m:predict',
     '/model/anthropic.claude-3/invoke',
+    '/model/anthropic.claude-3/converse',
   ];
 
   const doesNot = [

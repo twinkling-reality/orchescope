@@ -106,7 +106,12 @@ describe('the refusal', () => {
   it('renders on the glance without the adapter roster', () => {
     const rendered = lines(empty, 80);
     assert.equal(rendered[0], 'orchescope-discovery  this project has 0 parts');
-    assert.match(rendered[2] ?? '', /^No agent system was detected: nothing looked like an agent/);
+    /*
+     * A claim about the repository this reader cannot make. What it can say is that none of its own
+     * adapters recognised anything, which is what the row below this one enumerates.
+     */
+    assert.match(rendered[2] ?? '', /^No agent system was detected: no adapter here recognised/);
+    assert.doesNotMatch(rendered[2] ?? '', /nothing looked like/);
     assert.equal(
       rendered.some((line) => line.startsWith('adapters')),
       false,

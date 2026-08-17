@@ -112,9 +112,21 @@ const sourceRows = (
   ];
 };
 
+/**
+ * What this build found, said as what it read rather than as what is there.
+ *
+ * "Nothing looked like an agent, tool, or model" is a claim about the repository and this reader can
+ * only make one about itself. One target held a multi agent orchestration file that spawns fourteen
+ * subagents and splices earlier output into later prompts, written against a host DSL with bare globals
+ * and no imports, so no adapter claimed it and the sentence above was the line an operator would quote
+ * back. It is the strongest sentence in the document and the least supported one.
+ *
+ * The adapters that ran are named on the row below this, so a reader who wants to know what was looked
+ * for has it. This says only that none of them recognised anything.
+ */
 const NOT_DETECTED_VARIANTS: readonly string[] = [
-  'No agent system was detected: nothing looked like an agent, a model call, a tool or an MCP server.',
-  'No agent system was detected: nothing looked like an agent, tool, or model.',
+  'No agent system was detected: no adapter here recognised an agent, a model call, a tool or an MCP server.',
+  'No agent system was detected: no adapter here recognised one.',
   'No agent system was detected.',
 ];
 

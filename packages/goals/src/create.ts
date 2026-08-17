@@ -76,12 +76,26 @@ const writePathsFor = (components: readonly Component[], finding: Finding): read
 const acceptanceCriteriaFor = (
   finding: Finding,
   validationScenarioIds: readonly string[],
+  comparable: boolean,
 ): readonly AcceptanceCriterion[] => {
   const criteria: AcceptanceCriterion[] = [];
   let sequence = 1;
   const next = (): string => `AC-${String(sequence++).padStart(2, '0')}`;
 
-  const improvement = RELATIVE_IMPROVEMENT_BY_RULE[finding.ruleId];
+  /*
+   * A metric criterion is issued only where there is a baseline to compare against.
+   *
+   * The plan already declines to prescribe `orchescope compare` when no run has been recorded, and a
+   * goal that states a criterion whose deciding command it will not name has written a term nobody can
+   * evaluate. It read as a demand rather than as a gap: an operator who did exactly what the goal asked
+   * got `not validated` with two criteria permanently undecided, so a goal that was in fact complete
+   * could never say so, and the loop this product exists to close stopped one step from the end.
+   *
+   * Omitted rather than reported not applicable at validation, because the goal document is a contract
+   * handed to an agent and the honest form of a term that cannot be evaluated is its absence. Recording
+   * a run and cutting the goal again is what brings them back, and the plan says so.
+   */
+  const improvement = comparable ? RELATIVE_IMPROVEMENT_BY_RULE[finding.ruleId] : undefined;
   if (improvement !== undefined) {
     criteria.push({
       id: next(),
@@ -95,16 +109,18 @@ const acceptanceCriteriaFor = (
     });
   }
 
-  criteria.push({
-    id: next(),
-    statement: 'task success does not decline against the baseline',
-    check: { kind: 'metric_not_worse', metric: 'successRate', tolerance: 0 },
-  });
-  criteria.push({
-    id: next(),
-    statement: 'no duplicate side effect appears in any validation run',
-    check: { kind: 'metric_not_worse', metric: 'duplicateSideEffects', tolerance: 0 },
-  });
+  if (comparable) {
+    criteria.push({
+      id: next(),
+      statement: 'task success does not decline against the baseline',
+      check: { kind: 'metric_not_worse', metric: 'successRate', tolerance: 0 },
+    });
+    criteria.push({
+      id: next(),
+      statement: 'no duplicate side effect appears in any validation run',
+      check: { kind: 'metric_not_worse', metric: 'duplicateSideEffects', tolerance: 0 },
+    });
+  }
   for (const scenarioId of validationScenarioIds) {
     criteria.push({
       id: next(),
@@ -287,7 +303,13 @@ export const createGoal = (input: CreateGoalInput): Goal => {
       input.finding.recommendation?.risk === 'unknown'
         ? 'medium'
         : (input.finding.recommendation?.risk ?? 'medium'),
-    acceptanceCriteria: [...acceptanceCriteriaFor(input.finding, input.validationScenarioIds)],
+    acceptanceCriteria: [
+      ...acceptanceCriteriaFor(
+        input.finding,
+        input.validationScenarioIds,
+        input.baselineRunIds.length > 0,
+      ),
+    ],
     validation: validationPlanFor(input),
     ...(improvement === undefined
       ? {}

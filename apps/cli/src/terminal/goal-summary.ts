@@ -19,8 +19,15 @@ export const goalSummary = (style: Style, goal: Goal): string =>
     '',
     style.bold('  Validation'),
     ...goal.validation.commands.map((entry) => `    ${entry.command.join(' ')}`),
+    /*
+     * What this goal will not decide, said where the criteria are listed. The line used to say metric
+     * criteria could not be judged yet and the goal issued them anyway, which left a reader with two
+     * terms nothing would ever settle and a goal that could not reach a completed state.
+     */
     goal.validation.baselineRunIds.length === 0
-      ? style.dim('    no baseline run recorded, so metric criteria cannot be judged yet')
+      ? style.dim(
+          '    no baseline run recorded, so this goal is decided by the rescan alone. Record a run, then cut it again to compare metrics.',
+        )
       : style.dim(`    baseline: ${goal.validation.baselineRunIds.join(', ')}`),
     '',
     style.bold('  Allowed write paths'),

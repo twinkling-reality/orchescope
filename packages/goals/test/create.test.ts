@@ -41,6 +41,7 @@ const create = (input: {
   readonly finding?: Finding;
   readonly evidence?: readonly Evidence[];
   readonly scenarioIds?: readonly string[];
+  readonly baselineRunIds?: readonly string[];
 }) =>
   createGoal({
     finding: input.finding ?? finding(),
@@ -49,7 +50,7 @@ const create = (input: {
     components: [],
     evidence: input.evidence ?? [],
     validationScenarioIds: input.scenarioIds ?? [],
-    baselineRunIds: [],
+    baselineRunIds: input.baselineRunIds ?? [],
     repetitions: 3,
   });
 
@@ -144,5 +145,45 @@ describe('createGoal, naming the finding', () => {
       ...goal.validation.commands.map((command) => command.purpose),
     ];
     for (const line of prose) assert.ok(!line.includes('OSC-REL-0003'), line);
+  });
+});
+
+/**
+ * A goal must not state a term nothing can evaluate.
+ *
+ * Two metric criteria were issued whatever the repository held, and the plan in the same document
+ * declined to prescribe the `compare` that would decide them. An operator who did exactly what the goal
+ * asked got `not validated` with those two permanently undecided, so a goal that was in fact complete
+ * could never say so, and the loop this product exists to close stopped one step from the end.
+ */
+describe('createGoal, the criteria it is willing to be judged on', () => {
+  const statements = (baselineRunIds: readonly string[]) =>
+    create({ baselineRunIds }).acceptanceCriteria.map((criterion) => criterion.statement);
+
+  it('issues no metric criterion when no run has been recorded to compare against', () => {
+    const issued = statements([]);
+    assert.deepEqual(issued, [
+      'finding retry-around-non-idempotent-operation no longer fires on a rescan',
+    ]);
+  });
+
+  it('issues them once there is a baseline, which is when the plan prescribes the comparison', () => {
+    const goal = create({ baselineRunIds: ['run_0000000000000001'] });
+    const issued = goal.acceptanceCriteria.map((criterion) => criterion.statement);
+    assert.ok(issued.some((statement) => statement.includes('task success does not decline')));
+    assert.ok(
+      goal.validation.commands.some((entry) => entry.command.includes('compare')),
+      'the command that decides them has to be prescribed alongside them',
+    );
+  });
+
+  /* The two go together: a criterion is issued exactly when its deciding command is. */
+  it('never states a criterion whose deciding command it declines to name', () => {
+    const goal = create({ baselineRunIds: [] });
+    const metric = goal.acceptanceCriteria.filter((criterion) =>
+      criterion.check.kind.startsWith('metric_'),
+    );
+    const compares = goal.validation.commands.some((entry) => entry.command.includes('compare'));
+    assert.equal(metric.length === 0, !compares);
   });
 });

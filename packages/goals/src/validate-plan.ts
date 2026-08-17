@@ -1,4 +1,4 @@
-import { formatCount } from '@orchescope/domain';
+import { agree, formatCount } from '@orchescope/domain';
 import type {
   AcceptanceCriterion,
   Comparison,
@@ -210,6 +210,29 @@ const evaluateCriterion = (
   }
 };
 
+/**
+ * What is left, in the words of why it is left.
+ *
+ * "1 of 2 criteria satisfied, 1 undecided" says the same thing about a criterion that failed, a
+ * criterion nothing could judge, and a criterion waiting for a person to look. Only the first is a
+ * reason to think the change did not work, and reading the other two as failure is what makes an
+ * operator who did everything the goal asked believe they did not.
+ */
+const awaitsAPerson = (outcome: CriterionOutcome): boolean =>
+  outcome.criterion.check.kind === 'manual_review';
+
+const outstanding = (outcomes: readonly CriterionOutcome[]): string => {
+  const failed = outcomes.filter((outcome) => outcome.decided && !outcome.satisfied).length;
+  const waiting = outcomes.filter((outcome) => !outcome.decided && awaitsAPerson(outcome)).length;
+  const unjudged = outcomes.filter((outcome) => !outcome.decided && !awaitsAPerson(outcome)).length;
+  const parts = [
+    failed === 0 ? undefined : `${failed} failed`,
+    waiting === 0 ? undefined : `${waiting} waiting for a person to record a review`,
+    unjudged === 0 ? undefined : `${unjudged} that the evidence here cannot judge`,
+  ].filter((part) => part !== undefined);
+  return parts.join(', ');
+};
+
 export const validateGoal = (goal: Goal, input: ValidationInput): GoalValidation => {
   const outcomes = goal.acceptanceCriteria.map((criterion) =>
     evaluateCriterion(criterion, { ...input, goalCreatedAt: goal.createdAt }),
@@ -223,7 +246,7 @@ export const validateGoal = (goal: Goal, input: ValidationInput): GoalValidation
     undecidedCount,
     validated,
     summary: validated
-      ? `all ${outcomes.length} acceptance criteria are satisfied`
-      : `${satisfiedCount} of ${outcomes.length} criteria satisfied, ${undecidedCount} undecided`,
+      ? `${formatCount(outcomes.length, 'acceptance criterion', 'acceptance criteria')} ${agree(outcomes.length, 'is', 'are')} satisfied`
+      : `${satisfiedCount} of ${outcomes.length} criteria satisfied, ${outstanding(outcomes)}`,
   };
 };

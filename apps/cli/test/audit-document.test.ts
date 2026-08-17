@@ -94,7 +94,7 @@ describe('the glance', () => {
       [
         'express         this project has 5 parts',
         '                read from 141 of 141 files, with no runs on record',
-        'No agent system was detected: nothing looked like an agent, tool, or model.',
+        'No agent system was detected: no adapter here recognised one.',
         '',
         'problems        no problems found',
         'nothing was reported as a problem, which is not the same as nothing being wrong',

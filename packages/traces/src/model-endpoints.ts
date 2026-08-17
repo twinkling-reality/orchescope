@@ -39,8 +39,19 @@ export type ModelEndpoint = {
  * Hosts whose traffic is a model call.
  *
  * Suffix matched, so a regional or project subdomain of the same service is recognised without listing
- * every one. Azure and Bedrock deployments are deliberately absent: their hosts carry a customer's own
- * name and nothing in the address says what it is, so recognising them would need a guess.
+ * every one.
+ *
+ * Azure and Bedrock were absent on the argument that their hosts carry a customer's own name, and that
+ * is true of the subdomain and not of the suffix. `contoso.openai.azure.com` is a customer's name in
+ * front of a suffix Microsoft owns and serves nothing else from, and
+ * `bedrock-runtime.us-east-1.amazonaws.com` carries a region rather than a customer. Suffix matching is
+ * what the rest of this table already does, and it reads those two exactly as safely as it reads a
+ * regional OpenAI subdomain. They are the two largest enterprise paths to a model, and leaving them out
+ * described such a repository as an agent system containing no model, which is the failure this table
+ * exists to prevent.
+ *
+ * `amazonaws.com` is not listed. Only the `bedrock-runtime` service prefix is, because every other
+ * service on that suffix is something else entirely, and the path is checked after the host in any case.
  */
 const BY_HOST_SUFFIX: readonly (readonly [string, ModelEndpoint])[] = [
   ['api.openai.com', { system: 'openai', provider: 'openai' }],
@@ -53,13 +64,23 @@ const BY_HOST_SUFFIX: readonly (readonly [string, ModelEndpoint])[] = [
   ['api.deepseek.com', { system: 'deepseek', provider: 'deepseek' }],
   ['api.x.ai', { system: 'xai', provider: 'xai' }],
   ['api.perplexity.ai', { system: 'perplexity', provider: 'perplexity' }],
+  ['openai.azure.com', { system: 'azure.ai.openai', provider: 'azure-openai' }],
+  ['bedrock-runtime.amazonaws.com', { system: 'aws.bedrock', provider: 'bedrock' }],
 ];
+
+/**
+ * A Bedrock host names its region between the service and the suffix, which suffix matching alone
+ * cannot see: `bedrock-runtime.us-east-1.amazonaws.com` is not a subdomain of
+ * `bedrock-runtime.amazonaws.com`. Matched on both ends rather than by listing every region.
+ */
+const BEDROCK_REGIONAL = /^bedrock-runtime(-fips)?\.[a-z0-9-]+\.amazonaws\.com$/;
 
 export const modelEndpointForHost = (hostname: string): ModelEndpoint | undefined => {
   const lowered = hostname.toLowerCase();
   for (const [suffix, endpoint] of BY_HOST_SUFFIX) {
     if (lowered === suffix || lowered.endsWith(`.${suffix}`)) return endpoint;
   }
+  if (BEDROCK_REGIONAL.test(lowered)) return { system: 'aws.bedrock', provider: 'bedrock' };
   return undefined;
 };
 

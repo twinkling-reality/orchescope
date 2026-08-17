@@ -321,6 +321,51 @@ describe('validateGoal, the whole goal', () => {
     );
     assert.equal(resolved.validated, true);
     assert.equal(resolved.undecidedCount, 0);
-    assert.match(resolved.summary, /all 2 acceptance criteria are satisfied/);
+    assert.match(resolved.summary, /2 acceptance criteria are satisfied/);
+  });
+});
+
+/**
+ * What is left, in the words of why it is left.
+ *
+ * "1 of 2 criteria satisfied, 1 undecided" said the same thing about a criterion that failed, one
+ * nothing could judge, and one waiting for a person to look. Only the first is a reason to think the
+ * change did not work, and reading the other two as failure is what makes an operator who did
+ * everything the goal asked believe they did not.
+ */
+describe('what a validation says is outstanding', () => {
+  it('separates a person from a failure', () => {
+    const goal = goalWith(
+      [
+        criterion('AC-01', { kind: 'finding_resolved', findingId: 'OSC-REL-0003' }),
+        criterion('AC-02', { kind: 'manual_review', instruction: 'look at it' }),
+      ],
+      GOAL_CREATED,
+    );
+    const validation = validateGoal(goal, input({}));
+    assert.equal(validation.validated, false);
+    assert.match(validation.summary, /1 waiting for a person to record a review/);
+    assert.doesNotMatch(validation.summary, /failed/);
+  });
+
+  it('says a criterion failed when one did', () => {
+    const goal = goalWith(
+      [criterion('AC-01', { kind: 'finding_resolved', findingId: 'OSC-REL-0003' })],
+      GOAL_CREATED,
+    );
+    const validation = validateGoal(
+      goal,
+      input({ findingStillPresent: new Set(['OSC-REL-0003']) }),
+    );
+    assert.match(validation.summary, /1 failed/);
+    assert.doesNotMatch(validation.summary, /waiting for a person/);
+  });
+
+  it('says so when the evidence here cannot judge one', () => {
+    const goal = goalWith(
+      [criterion('AC-01', { kind: 'metric_not_worse', metric: 'successRate', tolerance: 0 })],
+      GOAL_CREATED,
+    );
+    assert.match(validateGoal(goal, input({})).summary, /1 that the evidence here cannot judge/);
   });
 });
