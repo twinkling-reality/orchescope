@@ -164,7 +164,7 @@ describe('the numbers a run produced reach the report', () => {
     root = tracedProject();
     const traced = await run(['--cwd', root, 'trace', '--', 'node', 'main.js']);
     assert.equal(traced.code, 0, traced.stderr);
-    assert.match(traced.stdout, /2 span\(s\)/);
+    assert.match(traced.stderr, /2 span\(s\)/);
     const audited = await run(['--cwd', root, 'audit']);
     assert.equal(audited.code, 0, audited.stderr);
   });

@@ -123,13 +123,13 @@ describe('a traced run that collects nothing', () => {
     const root = silentProject();
     const result = await run(['--cwd', root, 'trace', '--', 'node', 'main.js']);
     assert.equal(result.code, 0, result.stderr);
-    assert.match(result.stdout, /No spans arrived/);
-    assert.match(result.stdout, /listened on http:\/\/127\.0\.0\.1:\d+/);
-    assert.match(result.stdout, /OTEL_EXPORTER_OTLP_ENDPOINT/);
-    assert.match(result.stdout, /OTEL_EXPORTER_OTLP_TRACES_ENDPOINT/);
-    assert.match(result.stdout, /gRPC/);
-    assert.match(result.stdout, /manifest\.yaml/);
-    assert.match(result.stdout, /trace --import/);
+    assert.match(result.stderr, /No spans arrived/);
+    assert.match(result.stderr, /listened on http:\/\/127\.0\.0\.1:\d+/);
+    assert.match(result.stderr, /OTEL_EXPORTER_OTLP_ENDPOINT/);
+    assert.match(result.stderr, /OTEL_EXPORTER_OTLP_TRACES_ENDPOINT/);
+    assert.match(result.stderr, /gRPC/);
+    assert.match(result.stderr, /manifest\.yaml/);
+    assert.match(result.stderr, /trace --import/);
   });
 
   it('reports the same machine readably, including the variables it set', async () => {
@@ -156,7 +156,7 @@ describe('a traced run that collects nothing', () => {
   it('does not tell the reader to open a report that has no runtime evidence in it', async () => {
     const root = silentProject();
     const result = await run(['--cwd', root, 'trace', '--', 'node', 'main.js']);
-    assert.match(result.stdout, /next: instrument the target/);
+    assert.match(result.stderr, /next: instrument the target/);
   });
 });
 
@@ -307,8 +307,8 @@ server.close();
   it('says plainly when the target is a runtime it cannot reach', async () => {
     const root = silentProject();
     const result = await run(['--cwd', root, 'trace', '--', 'python3', '-c', 'pass']);
-    assert.match(result.stdout, /not a Node process/);
-    assert.match(result.stdout, /Point its own exporter at http:\/\/127\.0\.0\.1:\d+/);
+    assert.match(result.stderr, /not a Node process/);
+    assert.match(result.stderr, /Point its own exporter at http:\/\/127\.0\.0\.1:\d+/);
   });
 });
 
@@ -457,8 +457,84 @@ if (!response.ok) throw new Error('the receiver refused the export: ' + response
     );
     const result = await run(['--cwd', root, 'trace', '--', 'node', 'main.js']);
     assert.equal(result.code, 0, result.stderr);
-    assert.match(result.stdout, /1 span\(s\) from 1 service\(s\)/);
-    assert.equal(result.stdout.includes('No spans arrived'), false);
-    assert.match(result.stdout, /next: orchescope audit/);
+    assert.match(result.stderr, /1 span\(s\) from 1 service\(s\)/);
+    assert.equal(result.stderr.includes('No spans arrived'), false);
+    assert.match(result.stderr, /next: orchescope audit/);
+  });
+});
+
+/**
+ * The contract a pipeline reads: a status that says what the target did, and a standard output stream
+ * carrying what the target wrote and nothing else.
+ *
+ * All three of these blocked continuous integration adoption together. A failing command reported 4
+ * whatever it exited with, so a step could tell that the target had failed and not how. The run report
+ * shared standard output with the traced program, so anything the caller piped arrived with a run summary
+ * in the middle of it. And under `--json` the target's output was dropped rather than moved, so an agent
+ * that traced a build to read its output got a document about the run and none of what the run said.
+ */
+describe('the contract a traced command exposes to its caller', () => {
+  /** A target that writes to both streams and exits with whatever it is told to. */
+  const noisyProject = (): string => {
+    const root = mkdtempSync(join(tmpdir(), 'orchescope-streams-'));
+    roots.push(root);
+    writeFileSync(
+      join(root, 'package.json'),
+      `${JSON.stringify({ name: 'noisy', private: true, type: 'module' })}\n`,
+    );
+    writeFileSync(
+      join(root, 'main.js'),
+      'process.stdout.write("OUT-1\\n");\nprocess.stderr.write("ERR-1\\n");\nprocess.exit(Number(process.env.RC || 0));\n',
+    );
+    return root;
+  };
+
+  const traced = async (root: string, rc: string, extra: readonly string[] = []) => {
+    try {
+      const { stdout, stderr } = await execFileAsync(
+        process.execPath,
+        [cliEntry, '--cwd', root, 'trace', ...extra, '--', process.execPath, join(root, 'main.js')],
+        {
+          cwd: repositoryRoot,
+          maxBuffer: 32 * 1024 * 1024,
+          timeout: 180_000,
+          env: { ...process.env, NO_COLOR: '1', RC: rc },
+        },
+      );
+      return { stdout, stderr, code: 0 };
+    } catch (error) {
+      const failure = error as { stdout?: string; stderr?: string; code?: number };
+      return {
+        stdout: failure.stdout ?? '',
+        stderr: failure.stderr ?? '',
+        code: failure.code ?? 1,
+      };
+    }
+  };
+
+  it('exits with the status the target exited with', async () => {
+    const root = noisyProject();
+    assert.equal((await traced(root, '3')).code, 3, 'a wrapper reports what it wrapped');
+    assert.equal((await traced(root, '0')).code, 0);
+  });
+
+  it('leaves standard output to the target alone', async () => {
+    const result = await traced(noisyProject(), '0');
+    assert.equal(result.stdout, 'OUT-1\n', 'the run report belongs on the diagnostic stream');
+    assert.match(result.stderr, /ERR-1/);
+    assert.match(result.stderr, /span\(s\) from/, 'the report should still be printed somewhere');
+  });
+
+  it('moves the target output aside under --json rather than dropping it', async () => {
+    const result = await traced(noisyProject(), '5', ['--json']);
+    assert.equal(result.code, 5);
+    const document = JSON.parse(result.stdout.trim()) as {
+      ok: boolean;
+      data: { exitCode: number };
+    };
+    assert.equal(document.ok, true, 'standard output has to stay one parseable document');
+    assert.equal(document.data.exitCode, 5);
+    assert.match(result.stderr, /OUT-1/, 'the target output was discarded rather than relocated');
+    assert.match(result.stderr, /ERR-1/);
   });
 });

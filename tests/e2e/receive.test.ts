@@ -66,6 +66,8 @@ const span = (model: string) => ({
 
 type Received = {
   readonly stdout: string;
+  /** The run report, which is a diagnostic and shares the stream the privileges notice uses. */
+  readonly stderr: string;
   readonly code: number | null;
   readonly endpoint: string;
 };
@@ -80,7 +82,11 @@ const receiveAndPost = async (root: string, args: readonly string[]): Promise<Re
     env: { ...process.env, NO_COLOR: '1' },
   });
   let stdout = '';
+  let stderr = '';
   let endpoint = '';
+  child.stderr.on('data', (chunk: Buffer) => {
+    stderr += chunk.toString();
+  });
   const listening = new Promise<string>((resolve, reject) => {
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString();
@@ -107,7 +113,7 @@ const receiveAndPost = async (root: string, args: readonly string[]): Promise<Re
   const code = await new Promise<number | null>((resolve) => {
     child.on('exit', (value) => resolve(value));
   });
-  return { stdout, code, endpoint: url };
+  return { stdout, stderr, code, endpoint: url };
 };
 
 describe('receiving spans from a system that is already running', () => {
@@ -117,8 +123,8 @@ describe('receiving spans from a system that is already running', () => {
     assert.equal(result.code, 0, result.stdout);
     assert.match(result.stdout, /Listening on http:\/\/127\.0\.0\.1:\d+ for 3s/);
     assert.match(result.stdout, /OTEL_EXPORTER_OTLP_ENDPOINT=http:\/\/127\.0\.0\.1:\d+/);
-    assert.match(result.stdout, /1 span\(s\) from 1 service\(s\)/);
-    assert.equal(result.stdout.includes('No spans arrived'), false);
+    assert.match(result.stderr, /1 span\(s\) from 1 service\(s\)/);
+    assert.equal(result.stderr.includes('No spans arrived'), false);
   });
 
   it('names its causes when the window closes with nothing in it', async () => {
@@ -127,14 +133,14 @@ describe('receiving spans from a system that is already running', () => {
       cwd: repositoryRoot,
       env: { ...process.env, NO_COLOR: '1' },
     });
-    let stdout = '';
-    child.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString();
+    let stderr = '';
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
     });
     const code = await new Promise<number | null>((resolve) => child.on('exit', resolve));
-    assert.equal(code, 0, stdout);
-    assert.match(stdout, /0 span\(s\)/);
-    assert.match(stdout, /No spans arrived/);
+    assert.equal(code, 0, stderr);
+    assert.match(stderr, /0 span\(s\)/);
+    assert.match(stderr, /No spans arrived/);
   });
 
   it('refuses a window that is not a duration, and says what one looks like', async () => {

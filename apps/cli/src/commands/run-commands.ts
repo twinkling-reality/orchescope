@@ -47,8 +47,15 @@ const writeTraceResult = (context: CommandContext, result: TraceResult): number 
       })}\n`,
     );
   } else {
-    context.stdout(`\n${context.style.bold('Run')} ${result.run.id}\n`);
-    context.stdout(
+    /*
+     * The report is a diagnostic and the traced program's output is the payload, so they go to different
+     * streams. Written to standard output it interleaved with the target's own bytes, which corrupts
+     * anything the caller pipes: `orchescope trace -- generate > out.json` produced a file with a run
+     * summary in the middle of it. It belongs beside the privileges notice, which is already on standard
+     * error for the same reason.
+     */
+    context.stderr(`\n${context.style.bold('Run')} ${result.run.id}\n`);
+    context.stderr(
       `  ${result.spanCount} span(s) from ${result.serviceNames.length || 0} service(s), status ${result.run.status}\n`,
     );
     /*
@@ -57,26 +64,47 @@ const writeTraceResult = (context: CommandContext, result: TraceResult): number 
      * that collected nothing last week collects spans today, and how to stop it.
      */
     if (result.instrumentation.injected) {
-      context.stdout(
+      context.stderr(
         context.style.dim(
           '  Orchescope loaded its own instrumentation into the target. Turn it off with runtime.autoInstrument in .orchescope/config.json.\n',
         ),
       );
     }
     if (result.spanCount === 0) {
-      context.stdout(`${noSpansLines(context.style, result)}\n`);
+      context.stderr(`${noSpansLines(context.style, result)}\n`);
     }
     if (result.targetResultProblem !== undefined) {
-      context.stdout(`${context.style.warn('!')} ${result.targetResultProblem}\n`);
+      context.stderr(`${context.style.warn('!')} ${result.targetResultProblem}\n`);
     }
-    context.stdout(
+    context.stderr(
       context.style.dim(
         `next: ${result.spanCount === 0 ? 'instrument the target, or declare it in .orchescope/manifest.yaml, then run orchescope audit' : 'orchescope audit'}\n`,
       ),
     );
   }
-  return result.run.status === 'completed' ? EXIT_CODES.success : EXIT_CODES.target;
+  return traceExitCode(result);
 };
+
+/**
+ * The status a traced command exits with.
+ *
+ * A wrapper reports what it wrapped. `orchescope trace -- npm test` replaced every failing status with a
+ * single 4, so a continuous integration step could tell that the target had failed and not how, and a
+ * suite that distinguishes its failure modes by exit code lost that distinction entirely by being
+ * measured. Propagating it is what `timeout`, `env` and `nice` do, and it is what makes this command
+ * usable in a pipeline that already reads statuses.
+ *
+ * Orchescope's own codes still apply where Orchescope itself is what failed, which is every path that
+ * throws before or instead of a target running: a refusal, an unreadable configuration, a missing
+ * environment. Those never reach here. The collision that remains is a target choosing a number this
+ * table also uses, and the caller who needs to tell them apart reads `exitCode` from `--json`, which
+ * names the target's status and nothing else.
+ *
+ * A run with no target process, from `--import` or `receive`, has no status to propagate and keeps the
+ * original meaning.
+ */
+const traceExitCode = (result: TraceResult): number =>
+  result.exitCode ?? (result.run.status === 'completed' ? EXIT_CODES.success : EXIT_CODES.target);
 
 export const traceCommand = async (
   context: CommandContext,
@@ -130,11 +158,23 @@ export const traceCommand = async (
       }
     },
     ...(options.timeout === undefined ? {} : { timeoutMs: Number.parseInt(options.timeout, 10) }),
+    /*
+     * The target's output is forwarded whether or not this command is speaking JSON. It used to be
+     * dropped entirely under `--json`, so an agent that ran a build through `trace` to read its output
+     * got a document about the run and none of what the run said, and a failing command reported nothing
+     * a caller could act on.
+     *
+     * Under `--json` standard output belongs to the document, so the target's own standard output is
+     * relocated rather than interleaved with it. A document with a build log in the middle is not a
+     * document, and the alternative on offer is silence.
+     */
     onStdout: (chunk) => {
-      if (!context.json && !context.quiet) context.stdout(chunk);
+      if (context.quiet) return;
+      if (context.json) context.stderr(chunk);
+      else context.stdout(chunk);
     },
     onStderr: (chunk) => {
-      if (!context.json && !context.quiet) context.stderr(chunk);
+      if (!context.quiet) context.stderr(chunk);
     },
   });
 

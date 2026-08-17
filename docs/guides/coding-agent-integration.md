@@ -118,6 +118,15 @@ orchescope goal show "$(python3 -c "import json;print(json.load(open('goal.json'
 Exit codes are part of the interface: `0` success, `1` findings at or above a `--fail-on` threshold, `2` a caller mistake,
 `3` refused by policy, `4` the audited system failed, `5` the environment is missing something, `130` interrupted.
 
+`orchescope trace` is the exception, and it is the one a pipeline cares about: it exits with the status the traced
+command exited with, the way `timeout` and `env` do, so a step that already reads statuses keeps reading them. The
+codes above still apply where Orchescope itself is what failed, which is every path that ends before a target runs.
+`--json` reports the target's own status as `data.exitCode` for a caller that needs the two kept apart.
+
+A traced command keeps standard output to itself. The run report is a diagnostic and goes to standard error beside the
+privileges notice, so `orchescope trace -- generate > out.json` writes the file the target wrote. Under `--json` the
+document owns standard output and the target's output moves to standard error rather than being dropped.
+
 The document has the same four keys whatever happened, and `error` is present exactly when `ok` is false:
 
 | Key | On success | On failure |
