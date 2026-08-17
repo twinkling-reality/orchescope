@@ -2,6 +2,145 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
+## Unreleased
+
+This answers the field report against 0.2.0, from the same TypeScript monorepo the 0.1.0 report came from, roughly
+eighteen hundred analysed files.
+
+Its central finding is that three separately filed defects were one defect. An external effect is attributed to the
+function that performs it, and nothing joined a declared component to the effect one frame away, so the writes were
+present and correctly classified and nothing could reach them. The rules built on that graph were not wrong about their
+own logic; they were reading the wrong node, and one of them was structurally unable to fire on any input it had ever
+been given.
+
+### The join that was missing
+
+**A tool now reaches what its handler runs.** A tool is declared by a registration call and implemented by the handler
+that call is given, and only the first was recorded. Every tool was a leaf, so `side-effect-approval-boundary`, which
+asks whether an agent, a tool or an MCP server reaches a consequential operation, answered no every time. It was
+suppressing on every input rather than reporting, which is worse than the false positives it replaced, because nothing in
+the output distinguishes a rule that checked from a rule that could not.
+
+The declaring adapter now records the source range that implements the component, because only that adapter knows which
+argument is the body, and an adapter running after it joins that range to what the calls inside it resolve to. The join is by line
+containment: an inline handler is anonymous, so the nearest named scope of a call inside it is whatever encloses the
+registration, which at module scope is nothing at all. Five adapters record spans, and any other one inherits the join
+by recording a span of its own.
+
+**A retry now names the operation it repeats.** A retry relation ends where its author wrote it, which is usually a
+helper rather than the request the helper makes. Discovery mints an entry point for that helper to hold the effect,
+nobody classifies a minted entry point, and the guard that refuses to judge an unclassified component therefore refused
+every time while the write one hop further was classified all along. The guard is unchanged. What changed is that the
+graph can be asked what a component performs, reading through the frames discovery invented and stopping at the
+components a repository declared, so a reader is told about the POST that repeats rather than about the function around
+it.
+
+**A retry around a request written in place is now visible.** Retry discovery resolved a callee through the binding
+registry, which answers for a name someone declared and answers nothing for `fetch(...)` written inline, even though that
+request had already been discovered and classified at that exact line.
+
+**A rule outcome carries the size of what it looked at.** `clear` is a claim that something was checked and was fine, and
+over an empty population that claim is not weaker than it should be, it is false: one build reported that every
+discovered retry had an attempt ceiling in a repository where it had discovered no retry at all, and a build that had
+genuinely checked a hundred said the same sentence. Nothing examined is now `not_applicable`, and either way the count
+travels.
+
+**`connect` no longer mints a SQLite database.** The name was matched bare, so `server.connect(new
+StdioServerTransport())` reported a database in a repository that has none. Across the pinned corpus this was an HTTP/2
+session in `axios`, Redis clients in `express` and one chatbot, and MCP transports throughout the OpenAI Agents SDK.
+Python's `sqlite3.connect` is still read.
+
+### Retries read what the code states
+
+**A client assigned to a name is still that client.** `const fetchImpl = opts.fetchImpl ?? fetch` is how a module is
+written so its network client can be replaced in a test, and every adapter matched on the callee path, so the module
+written to be testable was the one that could not be seen. On the reporting repository seven modules were invisible,
+including the one whose entire reason for existing separately is that it holds the retry policy: no service, no method,
+no retry, nothing. The evidence records the name the source wrote and what it resolves to, because the alias is a fact
+about the repository rather than something to normalise away.
+
+**A `while` head that compares a counter against a bound states a ceiling.** Every `while` was read as unbounded, which
+told the author of `while (attempt < maxAttempts)` that no attempt limit could be established from their source. A
+condition testing a flag still states none, because a flag says nothing about how many passes there are.
+
+**The wait between attempts is recorded rather than only required.** A discovered retry now declares whether it waits the
+same amount each pass, waits longer, or does not wait at all. Exponential is claimed only where the syntax exponentiates.
+The last of the three is the dangerous one, since it re-attempts as fast as its dependency can fail, and it used to be
+reported as `unknown`, which reads as a gap in the reading rather than as a fact about the code.
+
+### The contract a traced command exposes
+
+Three changes that a pipeline reads, and the reason this command was hard to adopt in continuous integration.
+
+**A traced command exits with the status it exited with.** Every failing status became a single 4, so a step could tell
+that the target had failed and not how, and a suite that distinguishes its failure modes by exit code lost that
+distinction by being measured. This is what `timeout`, `env` and `nice` do.
+
+**The run report moved to standard error**, beside the privileges notice, because the report is a diagnostic and the
+traced program's output is the payload. On standard output it interleaved with the target's own bytes, so
+`orchescope trace -- generate > out.json` wrote a file with a run summary in the middle of it.
+
+**`--json` no longer discards the target's output.** It was dropped entirely rather than relocated, so an agent that
+traced a build to read its output got a document about the run and none of what the run said. Standard output carries the
+document and the target's own output moves to standard error.
+
+### Detection and wording
+
+- **A host written before the first substitution is read.** `` `https://api.stripe.com/v1/charges/${id}` `` says which
+  service it reaches, and reading only plain strings made every such request a component named for the function that
+  built it. The authority has to be complete before the substitution: `` `https://api.${region}.example.com/x` `` states
+  no host, and reading one out of `https://api.` would be a confident answer to a question the source did not settle. The
+  address recorded this way is marked as a prefix rather than reported as the request.
+- **The adapter says how many addresses it could not resolve.** A base address held in a constant is the common cause and
+  following one is not something this build does, so the count and the reason are reported rather than left to be
+  inferred from a list of components named after functions.
+- **A rule agrees with its own count.** `3 consequential operations was left unreported` and `2 runs was recorded` both
+  reached readers. A tool that reasons about grammar less carefully than it reasons about evidence invites a reader to
+  weigh the rest of its output the same way.
+- **A model reached by a plain request is told to set a deadline, not to configure a client.** There is no client at that
+  call site, so the goal cut from that finding asked an agent to change something absent from the only scope it was
+  allowed to touch.
+- **The MCP audit payload names the build that produced it.** A server is started once and serves every call in a
+  session, so an upgrade installed while it runs changes nothing a caller can see, and an agent comparing today's audit
+  against a finding it recorded last week could not tell a change in the repository from a change in the reader.
+
+### Upgrading
+
+**A traced command's exit code is now the target's.** If you gate on `orchescope trace` exiting 4, that gate no longer
+fires; read the status the target actually returned, or read `data.exitCode` from `--json`, which names the target's
+status and nothing else. Orchescope's own codes still apply on every path that ends before a target runs.
+
+**Anything parsing the run report from standard output has to read standard error instead.** Standard output now carries
+the traced program's output, or the JSON document, and nothing else.
+
+**Finding counts will move, in both directions.** `side-effect-approval-boundary` can now reach operations behind a tool
+handler and will report them where it previously reported nothing. Retry findings name the operation rather than the
+enclosing function, and retries around an injected client or an inline request appear for the first time. Against the
+reporting repository the retry count rose by one and seven previously invisible modules entered the graph. A `while` loop
+that states its own ceiling is no longer reported as unbounded.
+
+**No schema changed.** The candidate counts travel in a rule's detail, the unresolved address count in the adapter's
+existing note, and the version on the MCP payload is an additive field rather than a persisted document. Configuration
+stays at `schemaVersion` 3.
+
+### Known limits, stated rather than left to be discovered
+
+- **A retry that neither waits nor counts is still invisible.** Making the wait optional rather than required would need
+  a new evidence form for an infinite loop around a `try`, and on the reporting repository all sixteen such loops are
+  streaming, paging or scanning, several inside a `try` and several returning from the body. Claiming that shape would
+  report a file tailer as an unsafe retry.
+- **An address assembled from a constant is still unresolved.** Reading `${API_BASE}${path}` needs constant propagation,
+  which is a feature rather than a patch. On the reporting repository this is a hundred and four call sites, and the
+  coverage block now says so.
+
+### Verification
+
+`pnpm verify` green at 814 unit and 107 end to end tests, from 782 and 103. `pnpm corpus` matches across thirteen pinned
+repositories, with every expectation that moved read against the cited source: the removed databases are an HTTP/2
+session, two Redis clients and a set of MCP transports; the added services are `axios` reaching its own fetch adapter
+through `let _fetch = envFetch || fetch`, two injectable clients in the LangGraph SDK, and three hosts recovered from
+template literals. Each fix carries a test that fails without it.
+
 ## 0.2.0
 
 Released 2026-08-16 from npm as `orchescope@0.2.0`.

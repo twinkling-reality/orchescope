@@ -2286,6 +2286,7 @@ export const load = async (): Promise<void> => {
   };
 
   it('names the host when the authority is finished before the first substitution', async () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the template literal is the fixture, not this string
     const service = await serviceFor('`https://api.stripe.com/v1/charges/${id}`');
     assert.equal(service?.id, 'external_service:api.stripe.com');
     assert.equal(
@@ -2300,11 +2301,13 @@ export const load = async (): Promise<void> => {
    * confident answer to a question the source did not settle, which is worse than declining.
    */
   it('declines when the substitution is inside the authority', async () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the template literal is the fixture, not this string
     const service = await serviceFor('`https://api.${region}.example.com/things`');
     assert.equal(service?.id.includes('unresolved-host'), true, `resolved to ${service?.id}`);
   });
 
   it('declines when the address begins with a substitution', async () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the template literal is the fixture, not this string
     const service = await serviceFor('`${base}/things`');
     assert.equal(service?.id.includes('unresolved-host'), true, `resolved to ${service?.id}`);
   });
