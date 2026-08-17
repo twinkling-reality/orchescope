@@ -240,6 +240,16 @@ const auditAgentSystem = async (
      */
     digest: [...risks.slice(0, maxFindings).map(findingDigest), ...nextActionDigest(next)],
     data: {
+      /*
+       * The build that produced this answer.
+       *
+       * A server is started once and then serves every call in a session, so an upgrade installed while
+       * it runs changes nothing a caller can see: the old build keeps answering and nothing in the
+       * response says which one is speaking. An agent comparing today's audit against a finding it
+       * recorded last week has no way to tell a real change in the repository from a change in the
+       * reader, and the command line has carried this in every document since the first release.
+       */
+      orchescopeVersion: context.orchescopeVersion,
       scanId: result.scanId,
       reportId: result.bundle.reportId,
       agentSystemDetected: result.agentSystemDetected,

@@ -341,6 +341,27 @@ describe('the agent interface over stdio', () => {
   });
 
   /*
+   * A server is started once and serves every call in a session, so an upgrade installed while it runs
+   * changes nothing a caller can see: the old build keeps answering and nothing in the response says
+   * which one is speaking. An agent comparing today's audit against a finding it recorded last week
+   * cannot then tell a change in the repository from a change in the reader.
+   */
+  it('says which build produced the audit, as every command line document already does', async () => {
+    const response = await client.request('tools/call', {
+      name: 'audit_agent_system',
+      arguments: {},
+    });
+    const result = response['result'] as Message | undefined;
+    assert.ok(result !== undefined, `audit produced no result: ${JSON.stringify(response)}`);
+    const data = result['structuredContent'] as { orchescopeVersion?: string };
+    assert.match(
+      data.orchescopeVersion ?? '',
+      /^\d+\.\d+\.\d+/,
+      `the payload does not name the build: ${JSON.stringify(Object.keys(data))}`,
+    );
+  });
+
+  /*
    * The scenario files are on disk before anything asks about them, so the first audit of a repository has
    * to see them. It did not: reading them was the caller's job, the command line did it and this interface
    * did not, and an agent whose first call is an audit was told that a repository holding three scenarios

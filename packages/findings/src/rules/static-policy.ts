@@ -1,5 +1,6 @@
 import {
   absenceEvidence,
+  agree,
   CONFIDENCE_BANDS,
   derivedEvidence,
   formatCount,
@@ -188,7 +189,7 @@ export const unsafeRetryRule: Rule = {
         ? drafts.length === 0
           ? 'no retry was found in front of an operation whose repeat could not be ruled out'
           : undefined
-        : `${formatCount(unassertable.length, 'retry', 'retries')} was left unreported because the operation it calls deduplicates its own effect: ${[...new Set(unassertable)].join(', ')}`,
+        : `${formatCount(unassertable.length, 'retry', 'retries')} ${agree(unassertable.length, 'was', 'were')} left unreported because the operation it calls deduplicates its own effect: ${[...new Set(unassertable)].join(', ')}`,
     );
   },
 };
@@ -265,10 +266,10 @@ export const unboundedRetryRule: Rule = {
     const notes = [
       leftToTheOtherRule === 0
         ? undefined
-        : `${formatCount(leftToTheOtherRule, 'unbounded retry', 'unbounded retries')} sits in front of an operation whose repeat cannot be ruled out, which retry-around-non-idempotent-operation reports instead`,
+        : `${formatCount(leftToTheOtherRule, 'unbounded retry', 'unbounded retries')} ${agree(leftToTheOtherRule, 'sits', 'sit')} in front of an operation whose repeat cannot be ruled out, which retry-around-non-idempotent-operation reports instead`,
       unassertable.length === 0
         ? undefined
-        : `${formatCount(unassertable.length, 'retry', 'retries')} was left unreported because the operation it calls declares its own ceiling: ${[...new Set(unassertable)].join(', ')}`,
+        : `${formatCount(unassertable.length, 'retry', 'retries')} ${agree(unassertable.length, 'was', 'were')} left unreported because the operation it calls declares its own ceiling: ${[...new Set(unassertable)].join(', ')}`,
       retries > 0 && drafts.length === 0 && leftToTheOtherRule === 0 && unassertable.length === 0
         ? 'every discovered retry had an attempt ceiling'
         : undefined,
@@ -312,6 +313,37 @@ export const missingTimeoutRule: Rule = {
         },
       ]);
     }
+    /*
+     * The remediation has to name something the reader has.
+     *
+     * A model behind a published package is configured at its client, and one reached by a plain request
+     * has no client at all: `fetch(url, { method: 'POST' })` takes a signal and nothing else. Telling the
+     * second reader to set a timeout at the client names a thing that does not exist in the file the
+     * finding points at, and the goal cut from it asks an agent to change something it cannot find,
+     * inside the only scope it is allowed to touch. How the model was reached is recorded at discovery,
+     * so the answer is read rather than assumed.
+     */
+    const timeoutRemediation = (target: Component | undefined) =>
+      target?.metadata['reachedOver'] === 'http'
+        ? {
+            summary: 'Give the request a deadline, since there is no client to configure.',
+            steps: [
+              'Choose a timeout from the observed p95 latency plus headroom.',
+              'Pass an abort signal that expires after it to the request itself.',
+            ],
+            effort: 'small' as const,
+            risk: 'low' as const,
+          }
+        : {
+            summary: 'Set an explicit request timeout on the model client or the call site.',
+            steps: [
+              'Choose a timeout from the observed p95 latency plus headroom.',
+              'Set it at the client.',
+            ],
+            effort: 'small' as const,
+            risk: 'low' as const,
+          };
+
     // Grouped by the model rather than reported per relation: five callers of one untimed model is one problem with
     // five call sites, and five findings would bury the rest of the report.
     const byModel = new Map<string, typeof missing>();
@@ -341,15 +373,7 @@ export const missingTimeoutRule: Rule = {
         components: [...callers, ...(target === undefined ? [] : [target.id])],
         edges: edges.map((edge) => edge.id),
         evidence: edges.flatMap((edge) => edge.evidence.slice(0, 2)) as EvidenceId[],
-        recommendation: {
-          summary: 'Set an explicit request timeout on the model client or the call site.',
-          steps: [
-            'Choose a timeout from the observed p95 latency plus headroom.',
-            'Set it at the client.',
-          ],
-          effort: 'small' as const,
-          risk: 'low' as const,
-        },
+        recommendation: timeoutRemediation(target),
         goalEligible: true,
         goalReason: 'One configuration value with a static check.',
         tags: ['timeout'],
@@ -406,7 +430,7 @@ export const approvalBoundaryRule: Rule = {
     const declined =
       unreached === 0
         ? undefined
-        : `${formatCount(unreached, 'consequential operation')} was left unreported because no agent, tool or MCP server in this repository reaches it`;
+        : `${formatCount(unreached, 'consequential operation')} ${agree(unreached, 'was', 'were')} left unreported because no agent, tool or MCP server in this repository ${agree(unreached, 'reaches', 'reach')} it`;
     if (risky.length === 0) return notApplicable(declined ?? 'nothing reachable was consequential');
 
     const drafts: FindingDraft[] = [];

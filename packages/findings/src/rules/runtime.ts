@@ -1,4 +1,10 @@
-import { CONFIDENCE_BANDS, derivedEvidence, formatCount, metricEvidence } from '@orchescope/domain';
+import {
+  agree,
+  CONFIDENCE_BANDS,
+  derivedEvidence,
+  formatCount,
+  metricEvidence,
+} from '@orchescope/domain';
 import type { ComponentId, Evidence, EvidenceId } from '@orchescope/schema';
 import {
   clear,
@@ -539,7 +545,7 @@ const noObservationDraft = (
     title:
       silent === 0
         ? 'No runtime evidence has been collected'
-        : `${formatCount(silent, 'run')} was recorded and produced no spans`,
+        : `${formatCount(silent, 'run')} ${agree(silent, 'was', 'were')} recorded and produced no spans`,
     explanation:
       silent === 0
         ? 'Every claim in this report comes from source and configuration analysis. Whether the declared system behaves as declared is unknown until a run is observed.'

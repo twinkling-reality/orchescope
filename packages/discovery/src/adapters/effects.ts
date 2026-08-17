@@ -480,7 +480,17 @@ const discoverModelEndpoint = (input: {
         modelId: model,
         streaming: false,
       },
-      metadata: { callSite: input.client, operation: modelOperationForPath(path) },
+      /*
+       * How the model is reached, recorded where it is known rather than guessed at later. A model
+       * behind a published package has a client object to configure and one reached by a plain request
+       * has no such thing, and a rule that cannot tell them apart wrote a remediation naming a client
+       * that does not exist, which is a goal an agent cannot complete inside its own scope.
+       */
+      metadata: {
+        callSite: input.client,
+        reachedOver: 'http',
+        operation: modelOperationForPath(path),
+      },
       tags: ['model-endpoint'],
     }),
   );

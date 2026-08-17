@@ -10,6 +10,7 @@ import type { Rule, RuleContext } from '../src/rule.ts';
 import {
   approvalBoundaryRule,
   architectureShapeRule,
+  missingTimeoutRule,
   safeRetryRule,
   unboundedRetryRule,
   unsafeRetryRule,
@@ -774,5 +775,74 @@ describe('the two retry rules together', () => {
     const outcome = unboundedRetryRule.evaluate(contextFor(graphWith(bounded, lookup)));
     assert.equal(outcome.status, 'clear');
     assert.match(outcome.detail ?? '', /1 retry examined/);
+  });
+});
+
+/**
+ * A sentence a rule writes about what it decided not to report.
+ *
+ * `3 consequential operations was left unreported` and `2 runs was recorded` both reached readers. A tool
+ * that reasons about grammar less carefully than it reasons about evidence invites a reader to weigh the
+ * rest of its output the same way.
+ */
+describe('the sentence a rule writes about what it left alone', () => {
+  const declinedFor = (count: number) => {
+    const writes = Array.from({ length: count }, (_unused, index) =>
+      componentDraft({
+        kind: 'external_service',
+        name: `writer-${index}`,
+        file: `src/write-${index}.ts`,
+        sideEffect: 'destructive',
+      }),
+    );
+    /* Reachable from nothing, which is the population this rule declines to report on. */
+    return approvalBoundaryRule.evaluate(contextFor(buildGraph(writes, []))).detail ?? '';
+  };
+
+  it('agrees with a count of one', () => {
+    assert.match(declinedFor(1), /1 consequential operation was left unreported/);
+    assert.match(declinedFor(1), /repository reaches it/);
+  });
+
+  it('agrees with a count of more than one', () => {
+    assert.match(declinedFor(3), /3 consequential operations were left unreported/);
+    assert.match(declinedFor(3), /repository reach it/);
+  });
+});
+
+/**
+ * A remediation has to name something the reader has.
+ *
+ * A model behind a published package is configured at its client. One reached by a plain request has no
+ * client at all, and telling that reader to set a timeout at the client names a thing absent from the file
+ * the finding points at, so the goal cut from it asks an agent to change something it cannot find.
+ */
+describe('the fix offered for a model call with no timeout', () => {
+  const stepsFor = (metadata: Record<string, string>) => {
+    const caller = componentDraft({ kind: 'agent', name: 'planner', file: 'src/plan.ts' });
+    const model = componentDraft({
+      kind: 'model',
+      name: 'openai/gpt-4.1-mini',
+      file: 'src/plan.ts',
+      metadata,
+    });
+    const outcome = missingTimeoutRule.evaluate(
+      contextFor(buildGraph([caller, model], [edgeDraft('invokes_model', caller, model)])),
+    );
+    return outcome.drafts[0]?.recommendation;
+  };
+
+  it('names the abort signal when the model is reached by a plain request', () => {
+    const recommendation = stepsFor({ reachedOver: 'http' });
+    assert.match(recommendation?.summary ?? '', /no client to configure/);
+    assert.ok(
+      recommendation?.steps.some((step) => /abort signal/.test(step)),
+      `no achievable step among ${JSON.stringify(recommendation?.steps)}`,
+    );
+  });
+
+  it('names the client when there is one to configure', () => {
+    const recommendation = stepsFor({});
+    assert.ok(recommendation?.steps.some((step) => /Set it at the client/.test(step)));
   });
 });
