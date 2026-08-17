@@ -1,6 +1,7 @@
 import { moduleNamespace } from '@orchescope/domain';
-import type { ModuleFacts, ObjectEntryFact } from '@orchescope/source-analysis';
+import type { ModuleFacts } from '@orchescope/source-analysis';
 import { calleeName, isTestFile } from '@orchescope/source-analysis';
+import { entryDeclaresKey } from './idempotency-key.ts';
 
 /**
  * What the function performing an operation showed about repeating it.
@@ -40,16 +41,8 @@ export const sinkKey = (namespace: string, scope: string | undefined): string =>
 
 const DEDUPLICATING_SQL = /\bon\s+conflict\b|\bon\s+duplicate\s+key\b|\bmerge\s+into\b/i;
 const DEDUPLICATING_NAME = /idempot|dedup|deterministic/i;
-const IDEMPOTENCY_KEY_NAME = /^idempotency[-_]?(key|token)$/i;
 /** How a repository spells an attempt ceiling, read both where it is declared and where it is tested. */
 export const ATTEMPT_CEILING_NAME = /max_?(attempts|retries|tries)/i;
-
-const entryDeclaresKey = (entries: readonly ObjectEntryFact[], depth: number): boolean =>
-  entries.some((entry) => {
-    if (IDEMPOTENCY_KEY_NAME.test(entry.key)) return true;
-    if (depth === 0 || entry.value.kind !== 'object') return false;
-    return entryDeclaresKey(entry.value.entries, depth - 1);
-  });
 
 type Draft = { deduplicates?: string; ceiling?: string };
 

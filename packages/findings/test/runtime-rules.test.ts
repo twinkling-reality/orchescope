@@ -6,7 +6,15 @@ import type { ReconciliationDelta, RunRecord } from '@orchescope/schema';
 import { buildGraph, componentDraft } from '@orchescope/testkit';
 import { evaluateRules } from '../src/engine.ts';
 import { fired, type Rule, type RuleContext } from '../src/rule.ts';
-import { observabilityCoverageRule } from '../src/rules/runtime.ts';
+import { broadPermissionRule } from '../src/rules/static-policy.ts';
+import {
+  latencyConcentrationRule,
+  observabilityCoverageRule,
+  repeatedContextRule,
+  sequentialIndependentCallsRule,
+  tokenConcentrationRule,
+  unreliableRelationRule,
+} from '../src/rules/runtime.ts';
 
 /**
  * Coverage claims must carry evidence or refuse honestly.
@@ -264,5 +272,62 @@ describe('a draft that claims an observed basis with nothing observed', () => {
     const result = evaluate(true);
     assert.equal(result.findingSet.findings.length, 1);
     assert.equal(result.findingSet.findings[0]?.basis, 'observed');
+  });
+});
+
+/**
+ * A rule that needs measurement, in a document that says a run was recorded.
+ *
+ * Six rules printed "no run has been recorded" beside a summary saying `runCount: 1`. The sentence
+ * contradicts the page it is on, and it routes an operator to `orchescope trace` when the run already
+ * landed and the instrumentation did not. Those are different next actions.
+ */
+describe('a rule with nothing measured to read', () => {
+  const silent: RunRecord = { id: 'run_0000000000000002' } as RunRecord;
+
+  const contextWith = (silentRuns: readonly RunRecord[]): RuleContext => ({
+    graph: indexed(),
+    delta: undefined,
+    observedRuns: [],
+    silentRuns,
+    benchmarks: [],
+    chaosReports: [],
+    scenarios: [],
+    evidenceById: new Map(),
+  });
+
+  const rules = [
+    sequentialIndependentCallsRule,
+    latencyConcentrationRule,
+    tokenConcentrationRule,
+    repeatedContextRule,
+    unreliableRelationRule,
+    broadPermissionRule,
+  ];
+
+  it('says no run has been recorded only when none has', () => {
+    for (const rule of rules) {
+      const outcome = rule.evaluate(contextWith([]));
+      assert.equal(outcome.status, 'insufficient_evidence', rule.id);
+      assert.match(outcome.detail ?? '', /^no run has been recorded, so /, rule.id);
+    }
+  });
+
+  it('says the run produced no span when one was recorded and measured nothing', () => {
+    for (const rule of rules) {
+      const outcome = rule.evaluate(contextWith([silent]));
+      assert.equal(outcome.status, 'insufficient_evidence', rule.id);
+      assert.match(outcome.detail ?? '', /1 run produced no span/, rule.id);
+      assert.doesNotMatch(
+        outcome.detail ?? '',
+        /no run has been recorded/,
+        `${rule.id} contradicted a document that records one run`,
+      );
+    }
+  });
+
+  it('names what each of them could not establish, rather than only that it could not', () => {
+    const subjects = rules.map((rule) => rule.evaluate(contextWith([])).detail ?? '');
+    assert.equal(new Set(subjects).size, rules.length, 'two rules gave the same reason');
   });
 });

@@ -427,3 +427,94 @@ def parse_document(base_url, file_path):
     assert.notEqual(service[0]?.sideEffect, 'read_only');
   });
 });
+
+/**
+ * The one place `declared` can be read.
+ *
+ * The schema says `idempotency: 'declared'` means a key was found on the retried operation, and all five
+ * sites that construct a retry policy wrote `'unknown'`. So the strength rule selecting on that value
+ * could not fire on any input it had ever been given, and reported `clear` on repositories that plainly
+ * contain the shape it describes. A rule that cannot fire is worse than one that fires wrongly, because
+ * nothing in the output distinguishes it from one that checked.
+ */
+describe('a retry around a request that carries an idempotency key', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writeNodeProject(workspace, { name: 'keyed-retry' });
+    workspace.write(
+      'src/pay.js',
+      `const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export async function chargeWithKey(amount, key) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await fetch('https://payments.example.com/v1/charges', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: amount,
+      });
+    } catch {
+      await sleep(100);
+    }
+  }
+}
+
+export async function chargeWithoutKey(amount) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await fetch('https://billing.example.com/v1/charges', { method: 'POST', body: amount });
+    } catch {
+      await sleep(100);
+    }
+  }
+}
+`,
+    );
+  };
+
+  const retryTo = async (host: string) => {
+    const result = await scan(build);
+    return result.graph.edges.find(
+      (edge) => edge.policy?.retry !== undefined && edge.to === `external_service:${host}`,
+    )?.policy?.retry;
+  };
+
+  it('is declared, because the key is on the request and not one frame away', async () => {
+    assert.equal((await retryTo('payments.example.com'))?.idempotency, 'declared');
+  });
+
+  it('is unknown when the same request carries no key', async () => {
+    assert.equal((await retryTo('billing.example.com'))?.idempotency, 'unknown');
+  });
+
+  /*
+   * A named helper is handed the key and what it does with it is a frame this build has not read, so the
+   * operation has not been shown to declare one. `declared` is a claim about the request that leaves the
+   * process.
+   */
+  it('is unknown when the key is passed to a helper rather than to the request', async () => {
+    const result = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'delegated-key' });
+      workspace.write(
+        'src/pay.js',
+        `const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export const postCharge = async (amount, options) =>
+  fetch('https://payments.example.com/v1/charges', { method: 'POST', body: amount, ...options });
+
+export async function chargeWithKey(amount, key) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await postCharge(amount, { headers: { 'Idempotency-Key': key } });
+    } catch {
+      await sleep(100);
+    }
+  }
+}
+`,
+      );
+    });
+    const retried = result.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
+    assert.ok(retried.length > 0, 'the retry was not discovered at all');
+    for (const edge of retried) assert.notEqual(edge.policy?.retry?.idempotency, 'declared');
+  });
+});

@@ -13,7 +13,7 @@ import type {
 } from '@orchescope/schema';
 import { resolveByRuntimeName, taskLevelComponents } from '../attribution.ts';
 import {
-  clear,
+  examined,
   type FindingDraft,
   fired,
   insufficient,
@@ -443,7 +443,14 @@ export const resilienceRule: Rule = {
         );
       }
     }
-    return drafts.length === 0 ? clear('no chaos outcome was recorded') : fired(drafts);
+    /*
+     * A suite that ran and recorded no outcome measured nothing, which is not the same as a suite whose
+     * outcomes were all fine. `clear` said the second about the first.
+     */
+    return examined(drafts, {
+      count: context.chaosReports.reduce((total, report) => total + report.outcomes.length, 0),
+      singular: 'injected fault',
+    });
   },
 };
 

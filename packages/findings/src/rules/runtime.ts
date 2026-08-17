@@ -12,6 +12,7 @@ import {
   fired,
   insufficient,
   notApplicable,
+  nothingObserved,
   type Rule,
 } from '../rule.ts';
 
@@ -77,7 +78,9 @@ export const sequentialIndependentCallsRule: Rule = {
   category: 'performance',
   summary: 'Sibling operations that never overlapped despite having no observed dependency.',
   evaluate: (context) => {
-    if (context.observedRuns.length === 0) return insufficient('no run has been recorded');
+    if (context.observedRuns.length === 0) {
+      return nothingObserved(context, 'the order operations ran in');
+    }
     const toolEdges = context.graph
       .edgesOfKind('calls_tool')
       .filter((edge) => edge.observation !== undefined && edge.observation.executionCount > 0);
@@ -194,7 +197,7 @@ export const latencyConcentrationRule: Rule = {
   category: 'performance',
   summary: 'One component holding most of the measured self time.',
   evaluate: (context) => {
-    if (context.observedRuns.length === 0) return insufficient('no run has been recorded');
+    if (context.observedRuns.length === 0) return nothingObserved(context, 'where the time went');
     const totals = aggregateByComponent(context);
     const overall = [...totals.values()].reduce((total, entry) => total + entry.selfDurationMs, 0);
     if (overall <= 0) return insufficient('no self time was recorded');
@@ -268,7 +271,9 @@ export const tokenConcentrationRule: Rule = {
   category: 'cost',
   summary: 'One component holding most of the token usage.',
   evaluate: (context) => {
-    if (context.observedRuns.length === 0) return insufficient('no run has been recorded');
+    if (context.observedRuns.length === 0) {
+      return nothingObserved(context, 'which component spent the tokens');
+    }
     const totals = aggregateByComponent(context);
     const overall = [...totals.values()].reduce(
       (total, entry) => total + entry.inputTokens + entry.outputTokens,
@@ -333,7 +338,9 @@ export const repeatedContextRule: Rule = {
   summary:
     'Several workers receiving similarly large inputs, consistent with a shared full context.',
   evaluate: (context) => {
-    if (context.observedRuns.length === 0) return insufficient('no run has been recorded');
+    if (context.observedRuns.length === 0) {
+      return nothingObserved(context, 'how much context each worker received');
+    }
     const totals = aggregateByComponent(context);
     const agents = [...totals.values()]
       .map((entry) => ({ entry, component: context.graph.component(entry.componentId) }))
@@ -426,7 +433,8 @@ export const unreliableRelationRule: Rule = {
   category: 'reliability',
   summary: 'A call whose observed error rate is high enough to matter.',
   evaluate: (context) => {
-    if (context.observedRuns.length === 0) return insufficient('no run has been recorded');
+    if (context.observedRuns.length === 0)
+      return nothingObserved(context, 'how often a call failed');
     const drafts: FindingDraft[] = [];
     for (const edge of context.graph.graph.edges) {
       const observation = edge.observation;

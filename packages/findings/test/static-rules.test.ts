@@ -11,6 +11,7 @@ import {
   approvalBoundaryRule,
   architectureShapeRule,
   missingTimeoutRule,
+  promptInjectionBoundaryRule,
   safeRetryRule,
   unboundedRetryRule,
   unsafeRetryRule,
@@ -899,5 +900,65 @@ describe('the fix offered for a model call with no timeout', () => {
   it('names the client when there is one to configure', () => {
     const recommendation = stepsFor({});
     assert.ok(recommendation?.steps.some((step) => /Set it at the client/.test(step)));
+  });
+});
+
+/**
+ * A status word is a claim, and over an empty population it is a false one.
+ *
+ * `clear` says this was checked and was fine. Said about a repository where the adapter built no prompt
+ * component at all, it reports a limit of this build as a property of the repository, and every sibling
+ * rule with an empty population says `not_applicable` in the same document.
+ */
+describe('what a rule says when it had nothing to look at', () => {
+  const promptDraft = (interpolates: boolean) =>
+    componentDraft({
+      kind: 'prompt',
+      name: 'system',
+      file: 'src/prompt.ts',
+      details: { for: 'prompt', interpolatesUntrustedInput: interpolates },
+    });
+
+  it('prompt-injection-boundary declines rather than reporting clear', () => {
+    const outcome = promptInjectionBoundaryRule.evaluate(
+      contextFor(buildGraph([orchestrator], [])),
+    );
+    assert.equal(outcome.status, 'not_applicable');
+  });
+
+  it('prompt-injection-boundary is clear only once it has a prompt to be clear about', () => {
+    const outcome = promptInjectionBoundaryRule.evaluate(
+      contextFor(buildGraph([orchestrator, promptDraft(true)], [])),
+    );
+    assert.equal(outcome.status, 'clear');
+    assert.match(outcome.detail ?? '', /1 prompt interpolates a value/);
+  });
+
+  it('topology-shape says how much it looked at rather than nothing at all', () => {
+    const outcome = architectureShapeRule.evaluate(contextFor(buildGraph([orchestrator], [])));
+    assert.notEqual(outcome.status, 'fired');
+    assert.match(outcome.detail ?? '', /1 declared component examined/);
+  });
+
+  it('topology-shape declines on a graph with nothing declared in it', () => {
+    const outcome = architectureShapeRule.evaluate(contextFor(buildGraph([], [])));
+    assert.equal(outcome.status, 'not_applicable');
+  });
+
+  /*
+   * The rule this one mirrors could not fire on any input it had ever been given, and said `clear`.
+   * Proving a rule capable of firing is a different test from proving it fires on the right thing.
+   */
+  it('bounded-retry-with-declared-idempotency declines when no retry was discovered', () => {
+    const outcome = safeRetryRule.evaluate(contextFor(buildGraph([orchestrator, refund], [])));
+    assert.equal(outcome.status, 'not_applicable');
+  });
+
+  it('bounded-retry-with-declared-idempotency counts the retries it passed', () => {
+    const outcome = safeRetryRule.evaluate(
+      contextFor(graphWith({ retry: { bounded: true, backoff: 'fixed', idempotency: 'unknown' } })),
+    );
+    assert.equal(outcome.status, 'clear');
+    assert.match(outcome.detail ?? '', /1 discovered retry examined/);
   });
 });

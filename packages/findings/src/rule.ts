@@ -136,6 +136,25 @@ export const insufficient = (detail: string): RuleOutcome => ({
   detail,
 });
 
+/**
+ * The outcome of a rule that needs measured evidence and has none.
+ *
+ * "No run has been recorded" was printed by six rules in a document whose own summary said one run had
+ * been. It is wrong twice: it contradicts the page it is on, and it sends an operator back to
+ * `orchescope trace` when the run already landed and what failed was the instrumentation. A recorded run
+ * that produced no span is evidence of an attempt to measure and of nothing else, and telling the two
+ * apart is the difference between "run your system" and "make your system emit spans".
+ *
+ * The subject is a noun phrase naming what this rule would have established, so the sentence says what
+ * was lost rather than only that something was.
+ */
+export const nothingObserved = (context: RuleContext, subject: string): RuleOutcome =>
+  insufficient(
+    context.silentRuns.length === 0
+      ? `no run has been recorded, so ${subject} cannot be established`
+      : `${formatCount(context.silentRuns.length, 'run')} produced no span, and a run that measured nothing cannot establish ${subject}`,
+  );
+
 export const fired = (drafts: readonly FindingDraft[], detail?: string): RuleOutcome =>
   drafts.length === 0
     ? clear(detail)

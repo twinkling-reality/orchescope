@@ -22,6 +22,7 @@ import {
   type FindingDraft,
   fired,
   notApplicable,
+  nothingObserved,
   type Rule,
   type RuleContext,
 } from '../rule.ts';
@@ -62,14 +63,6 @@ const retriedOperationOf = (context: RuleContext, edge: Edge): Component | undef
 };
 
 /**
- * Whether this retry sits in front of an operation whose repeat cannot be ruled out.
- *
- * Shared by the two retry rules so that one cannot start reporting a call site the other has stopped
- * reporting. In all three repositories where both fired across a thirty six repository sweep, their
- * components and source locations were byte identical: from the outside it read as one problem counted
- * twice, and it doubled the medium severity count wherever it happened.
- */
-/**
  * The class of the operation this retry repeats.
  *
  * The relation is asked before the component, because a component can stand for more than one call. A
@@ -84,6 +77,14 @@ const retriedEffectOf = (context: RuleContext, edge: Edge): SideEffectClass | un
   return retriedOperationOf(context, edge)?.sideEffect;
 };
 
+/**
+ * Whether this retry sits in front of an operation whose repeat cannot be ruled out.
+ *
+ * Shared by the two retry rules so that one cannot start reporting a call site the other has stopped
+ * reporting. In all three repositories where both fired across a thirty six repository sweep, their
+ * components and source locations were byte identical: from the outside it read as one problem counted
+ * twice, and it doubled the medium severity count wherever it happened.
+ */
 const retryIsUnsafe = (context: RuleContext, edge: Edge): boolean => {
   const retry = edge.policy?.retry;
   if (retry === undefined || retry.idempotency === 'declared') return false;
@@ -410,7 +411,7 @@ export const missingTimeoutRule: Rule = {
         tags: ['timeout'],
       };
     });
-    return fired(drafts);
+    return examined(drafts, { count: modelEdges.length, singular: 'model invocation' });
   },
 };
 
@@ -556,8 +557,14 @@ export const promptInjectionBoundaryRule: Rule = {
           component.details?.for === 'prompt' &&
           component.details.interpolatesUntrustedInput === true,
       );
+    /*
+     * Nothing to look at is not the same answer as nothing wrong. This said `clear` on a repository
+     * where the adapter had built no prompt component at all, which reads as checked and fine, and the
+     * limit that produced it is this build's rather than the repository's: a prompt assembled at a raw
+     * SDK call site is not one this reads.
+     */
     if (prompts.length === 0) {
-      return clear('no prompt was discovered that interpolates a value at run time');
+      return notApplicable('no prompt was discovered that interpolates a value at run time');
     }
 
     const untrustedSources = [
@@ -567,7 +574,7 @@ export const promptInjectionBoundaryRule: Rule = {
     ];
     if (untrustedSources.length === 0) {
       return clear(
-        'prompts interpolate values, and no retrieval or tool output was discovered as a source',
+        `${formatCount(prompts.length, 'prompt')} ${agree(prompts.length, 'interpolates', 'interpolate')} a value, and no retrieval or tool output was discovered as a source`,
       );
     }
 
@@ -612,7 +619,7 @@ export const promptInjectionBoundaryRule: Rule = {
       requiresHumanReview: true,
       tags: ['prompt-injection'],
     }));
-    return fired(drafts);
+    return examined(drafts, { count: prompts.length, singular: 'interpolated prompt' });
   },
 };
 
@@ -771,7 +778,15 @@ export const architectureShapeRule: Rule = {
         },
       ]);
     }
-    return fired(drafts);
+    /*
+     * The population is the declared components whose arrangement this reads. Reported without one, the
+     * outcome was the bare word `clear` and no sentence at all, which says the same thing about a
+     * repository holding a hundred well arranged components and about one holding nothing.
+     */
+    return examined(drafts, {
+      count: context.graph.graph.components.length,
+      singular: 'declared component',
+    });
   },
 };
 
@@ -781,12 +796,7 @@ export const broadPermissionRule: Rule = {
   summary: 'A declared permission that observed behaviour did not need.',
   evaluate: (context) => {
     if (context.observedRuns.length === 0) {
-      return {
-        status: 'insufficient_evidence',
-        detail:
-          'permission breadth is only meaningful against observed use, and no run has been recorded',
-        drafts: [],
-      };
+      return nothingObserved(context, 'which of the declared permissions was needed');
     }
     const drafts: FindingDraft[] = [];
     let holders = 0;
@@ -907,7 +917,7 @@ export const unusedConfiguredToolRule: Rule = {
       goalReason: 'Wiring or deleting a tool is a decision for the owner.',
       tags: ['dead-configuration'],
     }));
-    return fired(drafts);
+    return examined(drafts, { count: tools.length, singular: 'discovered tool' });
   },
 };
 
@@ -923,17 +933,13 @@ export const safeRetryRule: Rule = {
   category: 'reliability',
   summary: 'A retry that is bounded and whose operation declares an idempotency key.',
   evaluate: (context) => {
-    const safe = context.graph.graph.edges.filter((edge) => {
+    const retries = context.graph.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
+    const safe = retries.filter((edge) => {
       const retry = edge.policy?.retry;
       return retry?.bounded === true && retry.idempotency === 'declared';
     });
-    if (safe.length === 0) {
-      return context.graph.graph.edges.some((edge) => edge.policy?.retry !== undefined)
-        ? clear('no retry declares both a ceiling and an idempotency key')
-        : notApplicable('no retry policy was discovered');
-    }
 
-    return fired(
+    return examined(
       safe.map((edge) => {
         const target = context.graph.component(edge.to);
         const source = context.graph.component(edge.from);
@@ -962,6 +968,8 @@ export const safeRetryRule: Rule = {
           tags: ['positive', 'retry', 'idempotency'],
         };
       }),
+      { count: retries.length, singular: 'discovered retry', plural: 'discovered retries' },
+      'no retry declares both a ceiling and a key on the operation it repeats',
     );
   },
 };

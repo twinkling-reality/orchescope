@@ -37,6 +37,7 @@ import {
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { callRelationKind } from '../call-relation.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
+import { keyDeclaredAt } from '../idempotency-key.ts';
 import {
   ATTEMPT_CEILING_NAME,
   readSinkEvidence,
@@ -1106,6 +1107,13 @@ type RetriedOperation = {
   readonly target: ComponentIdentity;
   /** What this call was classified as, which the target may not answer for. */
   readonly sideEffect: SideEffectClass | undefined;
+  /**
+   * Whether the request being repeated carries an idempotency key of its own.
+   *
+   * The schema says `declared` means a key was found on the retried operation, and only the call site
+   * can prove that: a key one frame away is evidence that stops a rule accusing and is not the claim.
+   */
+  readonly keyed: boolean;
   readonly sinkKey: string;
   readonly symbol: string;
 };
@@ -1120,6 +1128,7 @@ const retriedOperation = (
     return {
       target: atCallSite.identity,
       sideEffect: atCallSite.sideEffect,
+      keyed: keyDeclaredAt(call),
       sinkKey: sinkKey(moduleNamespace(module.file), call.enclosing),
       symbol: dotted(call.calleePath),
     };
@@ -1131,6 +1140,11 @@ const retriedOperation = (
     : {
         target: declared,
         sideEffect: undefined,
+        /*
+         * A named helper is handed the key and what it does with it is a frame this build has not read,
+         * so the operation has not been shown to declare one.
+         */
+        keyed: false,
         sinkKey: sinkOfName(context, module.file, name),
         symbol: name,
       };
@@ -1199,7 +1213,7 @@ const discoverRetryLoops = (
             retry: {
               bounded: loop.passesBounded === true,
               backoff: backoffOfLoop(module, loop),
-              idempotency: 'unknown',
+              idempotency: operation.keyed ? 'declared' : 'unknown',
             },
           },
           metadata: {
