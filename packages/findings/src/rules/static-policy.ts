@@ -10,11 +10,20 @@ import {
   degrees,
   type IndexedGraph,
   isControlFlowKind,
+  operationsPerformedBy,
   reachableFrom,
   unreachableComponents,
 } from '@orchescope/graph';
 import type { Component, Edge, EvidenceId, SideEffectClass } from '@orchescope/schema';
-import { clear, type FindingDraft, fired, notApplicable, type Rule } from '../rule.ts';
+import {
+  clear,
+  examined,
+  type FindingDraft,
+  fired,
+  notApplicable,
+  type Rule,
+  type RuleContext,
+} from '../rule.ts';
 
 /**
  * Rules that read the declared model only.
@@ -33,10 +42,23 @@ const RETRY_UNSAFE_EFFECTS: readonly SideEffectClass[] = [
   'unknown',
 ];
 
-const targetOf = (
-  context: { graph: { component: (id: string) => Component | undefined } },
-  edge: Edge,
-) => context.graph.component(edge.to);
+/**
+ * The operation a retry is actually wrapped around.
+ *
+ * A retry relation ends where the author wrote it, which is often a helper rather than the request the
+ * helper makes. That helper is a frame discovery invented to hold the effect, so the graph is asked what
+ * the frame performs and the answer is the operation. Both retry rules and the finding they write use
+ * this, so a reader is told the POST that repeats rather than the name of the function around it.
+ */
+const retriedOperationOf = (context: RuleContext, edge: Edge): Component | undefined => {
+  const operations = operationsPerformedBy(context.graph, edge.to);
+  return (
+    operations.find(
+      (operation) =>
+        operation.sideEffect !== undefined && RETRY_UNSAFE_EFFECTS.includes(operation.sideEffect),
+    ) ?? operations[0]
+  );
+};
 
 /**
  * Whether this retry sits in front of an operation whose repeat cannot be ruled out.
@@ -46,23 +68,24 @@ const targetOf = (
  * components and source locations were byte identical: from the outside it read as one problem counted
  * twice, and it doubled the medium severity count wherever it happened.
  */
-const retryIsUnsafe = (
-  context: { graph: { component: (id: string) => Component | undefined } },
-  edge: Edge,
-): boolean => {
+const retryIsUnsafe = (context: RuleContext, edge: Edge): boolean => {
   const retry = edge.policy?.retry;
   if (retry === undefined || retry.idempotency === 'declared') return false;
   if (edge.metadata['deduplicatesAtSink'] !== undefined) return false;
-  const target = targetOf(context, edge);
+  const operation = retriedOperationOf(context, edge);
   /*
    * A component with no effect class was never classified, which is not the same as one classified
    * `unknown`. `unknown` is the answer discovery gives when it read a write shaped operation and could not
    * tell; absent is the answer it gives when nothing asked. Reading the second as the first reported a
    * polled HTTP read as an operation that might not be safe to repeat, because the enclosing function it
    * named was an inferred entry point that no classifier had ever looked at.
+   *
+   * The guard stands and the question in front of it changed. Asked about the frame it was answered
+   * `undefined` every time, so it refused on every input a field run ever gave it, and the write one hop
+   * further was classified all along.
    */
-  if (target?.sideEffect === undefined) return false;
-  return RETRY_UNSAFE_EFFECTS.includes(target.sideEffect);
+  if (operation?.sideEffect === undefined) return false;
+  return RETRY_UNSAFE_EFFECTS.includes(operation.sideEffect);
 };
 
 /**
@@ -88,16 +111,18 @@ export const unsafeRetryRule: Rule = {
   evaluate: (context) => {
     const drafts: FindingDraft[] = [];
     const unassertable: string[] = [];
+    let retries = 0;
     for (const edge of context.graph.graph.edges) {
       const retry = edge.policy?.retry;
       if (retry === undefined) continue;
+      retries += 1;
       const deduplicates = sinkShowed(edge, 'deduplicatesAtSink');
       if (deduplicates !== undefined) {
         unassertable.push(deduplicates);
         continue;
       }
       if (!retryIsUnsafe(context, edge)) continue;
-      const target = targetOf(context, edge);
+      const target = retriedOperationOf(context, edge);
       if (target === undefined) continue;
       const effect = target.sideEffect ?? 'unknown';
 
@@ -156,13 +181,14 @@ export const unsafeRetryRule: Rule = {
         tags: ['retry', 'idempotency'],
       });
     }
-    return fired(
+    return examined(
       drafts,
+      { count: retries, singular: 'retry', plural: 'retries' },
       unassertable.length === 0
         ? drafts.length === 0
           ? 'no retry was found in front of an operation whose repeat could not be ruled out'
           : undefined
-        : `${formatCount(unassertable.length, 'retry')} was left unreported because the operation it calls deduplicates its own effect: ${[...new Set(unassertable)].join(', ')}`,
+        : `${formatCount(unassertable.length, 'retry', 'retries')} was left unreported because the operation it calls deduplicates its own effect: ${[...new Set(unassertable)].join(', ')}`,
     );
   },
 };
@@ -175,9 +201,16 @@ export const unboundedRetryRule: Rule = {
     const drafts: FindingDraft[] = [];
     const unassertable: string[] = [];
     let leftToTheOtherRule = 0;
+    /*
+     * Every discovered retry, not only the ones with no ceiling. The population is what the rule looked
+     * at, and a bounded retry is a retry this rule read and passed.
+     */
+    let retries = 0;
     for (const edge of context.graph.graph.edges) {
       const retry = edge.policy?.retry;
-      if (retry === undefined || retry.bounded) continue;
+      if (retry === undefined) continue;
+      retries += 1;
+      if (retry.bounded) continue;
       /*
        * One call site, one finding. `retry-around-non-idempotent-operation` already reports this edge, at a
        * higher severity, and its remediation covers the ceiling as well: attach a key or remove the retry.
@@ -192,7 +225,7 @@ export const unboundedRetryRule: Rule = {
         unassertable.push(bounded);
         continue;
       }
-      const target = context.graph.component(edge.to);
+      const target = retriedOperationOf(context, edge) ?? context.graph.component(edge.to);
       const source = context.graph.component(edge.from);
       drafts.push({
         ruleId: 'unbounded-retry',
@@ -232,15 +265,19 @@ export const unboundedRetryRule: Rule = {
     const notes = [
       leftToTheOtherRule === 0
         ? undefined
-        : `${formatCount(leftToTheOtherRule, 'unbounded retry')} sits in front of an operation whose repeat cannot be ruled out, which retry-around-non-idempotent-operation reports instead`,
+        : `${formatCount(leftToTheOtherRule, 'unbounded retry', 'unbounded retries')} sits in front of an operation whose repeat cannot be ruled out, which retry-around-non-idempotent-operation reports instead`,
       unassertable.length === 0
         ? undefined
-        : `${formatCount(unassertable.length, 'retry')} was left unreported because the operation it calls declares its own ceiling: ${[...new Set(unassertable)].join(', ')}`,
-      drafts.length === 0 && leftToTheOtherRule === 0 && unassertable.length === 0
+        : `${formatCount(unassertable.length, 'retry', 'retries')} was left unreported because the operation it calls declares its own ceiling: ${[...new Set(unassertable)].join(', ')}`,
+      retries > 0 && drafts.length === 0 && leftToTheOtherRule === 0 && unassertable.length === 0
         ? 'every discovered retry had an attempt ceiling'
         : undefined,
     ].filter((note): note is string => note !== undefined);
-    return fired(drafts, notes.length === 0 ? undefined : notes.join('; '));
+    return examined(
+      drafts,
+      { count: retries, singular: 'retry', plural: 'retries' },
+      notes.length === 0 ? undefined : notes.join('; '),
+    );
   },
 };
 
@@ -697,13 +734,19 @@ export const broadPermissionRule: Rule = {
       };
     }
     const drafts: FindingDraft[] = [];
+    let holders = 0;
     for (const component of context.graph.graph.components) {
       const writePermissions = component.permissions.filter(
         (permission) => permission.mode === 'write',
       );
       if (writePermissions.length === 0) continue;
-      if (component.presence.runtime && component.metadata['observedSideEffect'] === true) continue;
       if (!component.presence.runtime) continue;
+      /*
+       * Counted here rather than at the write permission, because a component that never ran is not one
+       * this rule matched against observed use and passed. It is one there was nothing to match.
+       */
+      holders += 1;
+      if (component.metadata['observedSideEffect'] === true) continue;
 
       const record = absenceEvidence({
         producer: PRODUCER,
@@ -747,8 +790,13 @@ export const broadPermissionRule: Rule = {
         tags: ['permissions', 'least-privilege'],
       });
     }
-    return fired(
+    return examined(
       drafts,
+      {
+        count: holders,
+        singular: 'component that ran holding write access',
+        plural: 'components that ran holding write access',
+      },
       drafts.length === 0 ? 'every write permission was matched by observed use' : undefined,
     );
   },
@@ -767,7 +815,13 @@ export const unusedConfiguredToolRule: Rule = {
           .incoming(tool.id)
           .some((edge) => isControlFlowKind(edge.kind) || edge.kind === 'provides_tool'),
     );
-    if (orphans.length === 0) return clear('every discovered tool has at least one caller');
+    if (orphans.length === 0) {
+      return examined(
+        [],
+        { count: tools.length, singular: 'tool' },
+        'every discovered tool has a caller',
+      );
+    }
 
     const drafts: FindingDraft[] = orphans.map((tool) => ({
       ruleId: 'configured-tool-has-no-caller',

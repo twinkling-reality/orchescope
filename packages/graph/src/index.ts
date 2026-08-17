@@ -11,6 +11,7 @@ export {
   entryPoints,
   isControlFlowKind,
   isObservableKind,
+  operationsPerformedBy,
   reachableFrom,
   unreachableComponents,
 } from './analysis.ts';

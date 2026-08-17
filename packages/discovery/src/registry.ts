@@ -1,6 +1,7 @@
 import type { AgentSystemAdapter } from './adapter.ts';
 import { crewAiAdapter } from './adapters/crewai.ts';
 import { effectsAdapter } from './adapters/effects.ts';
+import { implementationReachAdapter } from './adapters/implementation-reach.ts';
 import { langGraphAdapter } from './adapters/langgraph.ts';
 import { manifestAdapter } from './adapters/manifest.ts';
 import { mcpAdapter } from './adapters/mcp.ts';
@@ -18,6 +19,10 @@ import { workersBindingsAdapter } from './adapters/workers-bindings.ts';
  * be drawn once both endpoints exist in the binding registry. Configuration adapters run first because
  * configuration is the most reliable evidence available, then framework adapters, then the cross cutting
  * adapters that attach effects and prompts to whatever was found.
+ *
+ * `implementation-reach` is last for the same reason, one level up: it joins a declared component to
+ * the operations its body reaches, and the operation at the far end of that join is usually a component
+ * `effects` mints while attributing a write to the function performing it.
  */
 export const DEFAULT_ADAPTERS: readonly AgentSystemAdapter[] = [
   mcpAdapter,
@@ -31,6 +36,7 @@ export const DEFAULT_ADAPTERS: readonly AgentSystemAdapter[] = [
   modelSdkAdapter,
   effectsAdapter,
   promptsAdapter,
+  implementationReachAdapter,
 ];
 
 export const adapterById = (id: string): AgentSystemAdapter | undefined =>

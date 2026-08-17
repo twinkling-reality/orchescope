@@ -33,6 +33,7 @@ import {
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from './adapter.ts';
 import { createBindingRegistry } from './bindings.ts';
 import { platformConfigPaths, readConfigDocuments } from './config-files.ts';
+import { createImplementationSpanRegistry } from './implementation-span.ts';
 import { DEFAULT_ADAPTERS } from './registry.ts';
 import { buildSymbolIndex } from './symbol-index.ts';
 
@@ -277,6 +278,7 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
 
   const symbols = buildSymbolIndex(analysis.facts);
   const bindings = createBindingRegistry(symbols);
+  const implementations = createImplementationSpanRegistry();
   const projectName =
     request.projectName ?? manifests.projectName ?? request.root.split('/').pop() ?? 'project';
 
@@ -287,6 +289,7 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
     configs: configs.documents,
     symbols,
     bindings,
+    implementations,
     deadline: request.deadline,
   };
 

@@ -7,10 +7,16 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 154,
-      "edgesFound": 82,
-      "filesInspected": 58,
+      "componentsFound": 117,
+      "edgesFound": 62,
+      "filesInspected": 54,
       "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:langgraph": {
       "componentsFound": 1240,
@@ -72,13 +78,13 @@
     "byKind": {
       "agent": 414,
       "agent_group": 91,
-      "database": 4,
-      "entrypoint": 72,
+      "database": 3,
+      "entrypoint": 56,
       "external_service": 20,
       "prompt": 126,
       "queue": 1
     },
-    "total": 728
+    "total": 711
   },
   "discardedRelations": [],
   "files": {
@@ -91,14 +97,16 @@
   "findings": {
     "byRule": {
       "observability-coverage": 1,
+      "retry-around-non-idempotent-operation": 1,
       "topology-shape": 1
     },
     "bySeverity": {
       "info": 1,
-      "low": 1
+      "low": 1,
+      "medium": 1
     },
     "strengths": 0,
-    "total": 2
+    "total": 3
   },
   "foundNothing": [],
   "kind": "agent_system",
@@ -111,9 +119,9 @@
       "contains": 415,
       "hands_off_to": 165,
       "publishes_to_queue": 1,
-      "queries_database": 55,
+      "queries_database": 35,
       "uses_prompt": 2
     },
-    "total": 659
+    "total": 639
   }
 }

@@ -1,3 +1,4 @@
+import { isInferredEntryPoint } from '@orchescope/domain';
 import type { Component, ComponentId, EdgeKind } from '@orchescope/schema';
 import type { IndexedGraph } from './indexed-graph.ts';
 
@@ -51,6 +52,13 @@ export const degrees = (index: IndexedGraph): readonly DegreeStats[] =>
  * entry points, groups and agents are all candidates, because a repository may have an explicit entry point, an
  * orchestrator nobody calls, or both. When every candidate has an inbound relation, which happens in a fully cyclic
  * topology, all candidates are treated as roots rather than reporting the whole system unreachable.
+ *
+ * A frame discovery invented is a root whether or not something calls it, which is the one exception. It was
+ * never a root because nothing pointed at it: it is a function, and a function that one caller in this
+ * repository happens to reach is still a way into the module that exports it. Testing it by inbound relations
+ * would mean that joining a tool to the handler it runs, which is new information and strictly more of it,
+ * demoted the frames holding that repository's writes and reported more of the system as unreachable than
+ * before the join existed. A graph does not become less connected by gaining a relation.
  */
 export const entryPoints = (index: IndexedGraph): readonly Component[] => {
   const candidates = [
@@ -61,6 +69,7 @@ export const entryPoints = (index: IndexedGraph): readonly Component[] => {
   if (candidates.length === 0) return [];
   const roots = candidates.filter(
     (candidate) =>
+      isInferredEntryPoint(candidate) ||
       !index
         .incoming(candidate.id)
         .some(
@@ -87,6 +96,48 @@ export const reachableFrom = (
     }
   }
   return seen;
+};
+
+/**
+ * The classified operations a component performs, read through the frames discovery invented.
+ *
+ * An effect is attributed to the function that performs it, and when that function produced no
+ * component of its own discovery mints an entry point to hold it. Asking `edge.to` for its effect class
+ * therefore asks the frame, which nobody ever classified, and gets `undefined`: not "this is safe" but
+ * "nobody looked". A rule reading that as an answer stops one hop short of the write.
+ *
+ * A frame is transparent here and a declared component is not. Seeing through a frame is not reaching
+ * further into the system, it is finishing the sentence discovery started: `namedPost` is the name of a
+ * line of code, and the POST it performs is the operation. A tool or an agent is a boundary its author
+ * declared, so traversal stops there and the caller is left to refuse rather than to reach past it.
+ *
+ * The first classified component along each path wins, because that is the operation the relation
+ * describes. Frames are revisited at most once, since a function that retries by calling itself is a
+ * cycle in this projection and is one of the shapes this exists to read.
+ */
+export const operationsPerformedBy = (
+  index: IndexedGraph,
+  componentId: ComponentId,
+): readonly Component[] => {
+  const operations: Component[] = [];
+  const seen = new Set<ComponentId>();
+  const stack: ComponentId[] = [componentId];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === undefined || seen.has(current)) continue;
+    seen.add(current);
+    const component = index.component(current);
+    if (component === undefined) continue;
+    if (component.sideEffect !== undefined) {
+      operations.push(component);
+      continue;
+    }
+    if (!isInferredEntryPoint(component)) continue;
+    for (const edge of index.outgoing(current)) {
+      if (isControlFlowKind(edge.kind)) stack.push(edge.to);
+    }
+  }
+  return operations;
 };
 
 /**

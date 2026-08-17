@@ -56,6 +56,7 @@ export type ComponentFixture = {
   readonly sideEffect?: ComponentDraft['sideEffect'];
   readonly metadata?: ComponentDraft['metadata'];
   readonly permissions?: ComponentDraft['permissions'];
+  readonly tags?: ComponentDraft['tags'];
   readonly discoveredBy?: string;
 };
 
@@ -80,6 +81,7 @@ export const componentDraft = (fixture: ComponentFixture): ComponentDraft => {
     ...(fixture.sideEffect === undefined ? {} : { sideEffect: fixture.sideEffect }),
     ...(fixture.metadata === undefined ? {} : { metadata: fixture.metadata }),
     ...(fixture.permissions === undefined ? {} : { permissions: fixture.permissions }),
+    ...(fixture.tags === undefined ? {} : { tags: fixture.tags }),
   };
 };
 

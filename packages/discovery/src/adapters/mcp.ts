@@ -309,6 +309,13 @@ const discoverDecoratedTools = (
       files.add(decorated.module.file);
       context.bindings.register(decorated.module.file, decorated.definition.name, identity);
       context.bindings.register(decorated.module.file, toolName, identity);
+      // A decorated tool states its body exactly: the definition the decorator is attached to.
+      context.implementations.record({
+        identity,
+        file: decorated.module.file,
+        body: decorated.definition.location,
+        symbol: `@${owner}.${method} ${decorated.definition.name}`,
+      });
 
       builder.addEdge(
         drafts.edge({
@@ -372,6 +379,17 @@ const discoverTools = (
     files.add(match.module.file);
     const toolIdentity = sourceIdentity('tool', match.module.file, toolName);
     context.bindings.register(match.module.file, toolName, toolIdentity);
+    /*
+     * The registration call is the tool's body: the handler is an argument to it, and an inline
+     * function argument carries no location of its own. What that body reaches is the tool's own
+     * behaviour, and nothing joined the two until it was recorded here.
+     */
+    context.implementations.record({
+      identity: toolIdentity,
+      file: match.module.file,
+      body: match.call.location,
+      symbol: `${dotted(match.call.calleePath)}("${toolName}")`,
+    });
 
     const server = servers.find((candidate) => candidate.module.file === match.module.file);
     if (server === undefined) continue;

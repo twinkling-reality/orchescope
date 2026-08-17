@@ -7,10 +7,16 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 9,
-      "edgesFound": 5,
+      "componentsFound": 7,
+      "edgesFound": 4,
       "filesInspected": 3,
       "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:langgraph": {
       "componentsFound": 0,
@@ -73,7 +79,7 @@
       "agent": 5,
       "approval_boundary": 1,
       "database": 1,
-      "entrypoint": 4,
+      "entrypoint": 3,
       "external_service": 1,
       "memory": 1,
       "model": 2,
@@ -83,7 +89,7 @@
       "side_effect": 1,
       "tool": 6
     },
-    "total": 32
+    "total": 31
   },
   "discardedRelations": [],
   "files": {
@@ -126,11 +132,11 @@
       "invokes_model": 3,
       "performs_side_effect": 1,
       "publishes_to_queue": 2,
-      "queries_database": 2,
+      "queries_database": 1,
       "queries_retrieval": 1,
       "reads_memory": 1,
       "writes_memory": 1
     },
-    "total": 25
+    "total": 24
   }
 }

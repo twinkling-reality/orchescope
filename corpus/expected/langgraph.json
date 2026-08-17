@@ -7,9 +7,15 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 61,
-      "edgesFound": 34,
-      "filesInspected": 23,
+      "componentsFound": 44,
+      "edgesFound": 25,
+      "filesInspected": 15,
+      "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
       "status": "completed"
     },
     "adapter:langgraph": {
@@ -73,13 +79,13 @@
       "agent": 462,
       "agent_group": 61,
       "database": 2,
-      "entrypoint": 27,
+      "entrypoint": 19,
       "external_service": 4,
       "prompt": 295,
       "queue": 1,
       "tool": 3
     },
-    "total": 855
+    "total": 847
   },
   "discardedRelations": [],
   "files": {
@@ -114,9 +120,9 @@
       "contains": 450,
       "hands_off_to": 175,
       "publishes_to_queue": 9,
-      "queries_database": 14,
+      "queries_database": 6,
       "uses_prompt": 2
     },
-    "total": 657
+    "total": 649
   }
 }

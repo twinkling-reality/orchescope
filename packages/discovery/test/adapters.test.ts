@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, describe, it } from 'node:test';
 import { createDeadline, fixedClock } from '@orchescope/domain';
+import { indexGraph, operationsPerformedBy, reachableFrom } from '@orchescope/graph';
 import { DEFAULT_EXCLUDED_DIRECTORIES } from '@orchescope/source-analysis';
 import { createTempWorkspace, writeNodeProject, writePythonProject } from '@orchescope/testkit';
 import { discover } from '../src/discover.ts';
@@ -1759,6 +1760,45 @@ export const chargeWithRetry = async (): Promise<void> => {
     assert.match(String(retried[0]?.metadata['reattemptEvidence'] ?? ''), /waits with sleep/);
   });
 
+  /*
+   * The plainer of the two spellings, and the one that could not be seen.
+   *
+   * Retry discovery resolved a callee through the binding registry, which answers for a name someone
+   * declared and answers nothing for a request written in place. A repository that injects its client so
+   * it can be tested was therefore more legible than one that calls `fetch` directly, which is the wrong
+   * way round: the request had already been discovered and classified at that exact line.
+   */
+  it('is a retry when the request is written inline in the try', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'inline' });
+      workspace.write(
+        'src/send.ts',
+        `const sleep = (ms: number): Promise<void> => new Promise((resolve) => { void ms; resolve(); });
+
+export const chargeWithRetry = async (body: string): Promise<void> => {
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    try {
+      const response = await fetch('https://payments.example.com/charge', { method: 'POST', body });
+      if (response.ok) return;
+    } catch {
+      void attempt;
+    }
+    await sleep(500);
+  }
+};
+`,
+      );
+    });
+    const retried = result.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
+    assert.equal(retried.length, 1, 'an inline request inside a retry loop is a retried operation');
+    assert.equal(
+      retried[0]?.to,
+      'external_service:payments.example.com',
+      'the retry names the request the loop repeats, not the scope holding it',
+    );
+    assert.equal(retried[0]?.policy?.retry?.bounded, true);
+  });
+
   it('is a retry when the header counts attempts', async () => {
     const { result } = await scan((workspace) => {
       writeNodeProject(workspace, { name: 'counts' });
@@ -1864,5 +1904,132 @@ export const enqueueDelivery = async (): Promise<void> => {
     const retried = result.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
     assert.ok(retried.length > 0);
     assert.equal(retried[0]?.metadata['deduplicatesAtSink'], undefined);
+  });
+});
+
+/**
+ * What a declared component's body runs.
+ *
+ * A tool is declared by a registration call and implemented by the handler that call is given, and only
+ * the first was ever recorded. That left every tool a leaf, so the write its handler performs sat one
+ * frame away with nothing pointing at it, and the rule asking whether a model can reach a consequential
+ * operation answered no on every repository it was given.
+ */
+describe('a tool handler that performs a write', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writeNodeProject(workspace, {
+      name: 'billing-mcp',
+      dependencies: { '@modelcontextprotocol/sdk': '^1.0.0' },
+    });
+    workspace.write(
+      'src/accounts.ts',
+      `export const deleteAccount = async (id: string): Promise<void> => {
+  await fetch(\`https://api.example.com/accounts/\${id}\`, { method: 'DELETE' });
+};
+`,
+    );
+    workspace.write(
+      'src/server.ts',
+      `import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { deleteAccount } from './accounts.ts';
+
+const server = new McpServer({ name: 'billing', version: '1.0.0' });
+
+server.registerTool('delete_account', { description: 'Delete a customer account.' }, async ({ id }) => {
+  await deleteAccount(id);
+  return { content: [] };
+});
+`,
+    );
+  };
+
+  it('joins the tool to the scope its handler calls', async () => {
+    const { edges } = await scan(build);
+    assert.ok(
+      edges.some((edge) => edge.startsWith('calls_service:tool:delete_account->entrypoint:')),
+      `the tool reached nothing among ${edges.join(', ')}`,
+    );
+  });
+
+  it('leaves the write reachable from the tool that performs it', async () => {
+    const { result } = await scan(build);
+    const graph = indexGraph(result.graph);
+    const reached = reachableFrom(graph, ['tool:delete_account']);
+    const destructive = result.graph.components.filter(
+      (component) => component.sideEffect === 'destructive',
+    );
+    assert.equal(destructive.length, 1, 'the DELETE should still be classified destructive');
+    assert.ok(
+      reached.has(destructive[0]?.id ?? ''),
+      `the destructive operation is not reachable from the tool: ${[...reached].join(', ')}`,
+    );
+  });
+
+  /*
+   * The frame is the name of a line of code, so the operation behind it is what a rule asking about the
+   * relation needs. A tool is a boundary its author declared and traversal stops there.
+   */
+  it('reads the operation the frame performs, and stops at a declared component', async () => {
+    const { result } = await scan(build);
+    const graph = indexGraph(result.graph);
+    const frame = result.graph.components.find(
+      (component) => component.kind === 'entrypoint' && component.displayName === 'deleteAccount',
+    );
+    assert.ok(frame !== undefined, 'no frame was minted for the function performing the write');
+    assert.deepEqual(
+      operationsPerformedBy(graph, frame.id).map((operation) => operation.sideEffect),
+      ['destructive'],
+    );
+    assert.deepEqual(
+      operationsPerformedBy(graph, 'tool:delete_account'),
+      [],
+      'a tool is a boundary, not a frame to read through',
+    );
+  });
+});
+
+/**
+ * `connect` is the word every protocol library uses for the thing every protocol library does.
+ *
+ * Matched on the bare callee name it made `server.connect(new StdioServerTransport())` report a SQLite
+ * database in a repository that has none, and then rooted a component nothing else in the graph touched.
+ */
+describe('a call named connect', () => {
+  it('is not a database when it is a server taking a transport', async () => {
+    const { ids } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'stdio-server',
+        dependencies: { '@modelcontextprotocol/sdk': '^1.0.0' },
+      });
+      workspace.write(
+        'src/server.ts',
+        `import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+
+const server = new McpServer({ name: 'probe', version: '1.0.0' });
+await server.connect(new StdioServerTransport());
+`,
+      );
+    });
+    assert.ok(
+      !ids.includes('database:sqlite'),
+      `a transport was read as a database among ${ids.join(', ')}`,
+    );
+  });
+
+  it('is a database when the module making the call is sqlite3', async () => {
+    const { ids } = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'ledger', dependencies: [] });
+      workspace.write(
+        'src/ledger.py',
+        `import sqlite3
+
+
+def open_ledger(path: str):
+    return sqlite3.connect(path)
+`,
+      );
+    });
+    assert.ok(ids.includes('database:sqlite'), `no database among ${ids.join(', ')}`);
   });
 });

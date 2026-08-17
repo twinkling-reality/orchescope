@@ -14,6 +14,7 @@ export {
 } from './review.ts';
 export {
   clear,
+  examined,
   type FindingDraft,
   fired,
   insufficient,

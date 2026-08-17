@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { INFERRED_ENTRY_POINT_TAG } from '@orchescope/domain';
 import type { EdgeDraft } from '@orchescope/graph';
 import { indexGraph } from '@orchescope/graph';
 import type { EdgePolicy, SystemGraph } from '@orchescope/schema';
@@ -52,6 +53,39 @@ const graphWith = (
       } as Partial<EdgeDraft>),
     ],
   );
+
+const post = componentDraft({
+  kind: 'external_service',
+  name: 'payments.example.com',
+  file: 'src/pay.ts',
+  sideEffect: 'non_idempotent_write',
+});
+
+/**
+ * The shape every retry in the field takes: a loop around a helper, and the request inside the helper.
+ *
+ * The frame carries the tag discovery puts on an entry point it minted rather than read, which is what
+ * makes it transparent to the question "what does this retry actually repeat".
+ */
+const retryThroughFrame = (operation: ReturnType<typeof componentDraft>): SystemGraph => {
+  const frame = componentDraft({
+    kind: 'entrypoint',
+    name: 'sendPayment',
+    file: 'src/pay.ts',
+    tags: ['entrypoint', INFERRED_ENTRY_POINT_TAG],
+  });
+  return buildGraph(
+    [orchestrator, frame, operation],
+    [
+      edgeDraft('calls_service', orchestrator, frame, {
+        policy: {
+          retry: { maxAttempts: 3, bounded: true, backoff: 'fixed', idempotency: 'absent' },
+        },
+      } as Partial<EdgeDraft>),
+      edgeDraft('calls_service', frame, operation),
+    ],
+  );
+};
 
 const contextFor = (graph: SystemGraph): RuleContext => ({
   graph: indexGraph(graph),
@@ -169,6 +203,54 @@ describe('retry-around-non-idempotent-operation', () => {
   it('stays quiet when there is no retry at all', () => {
     const outcome = unsafeRetryRule.evaluate(contextFor(graphWith(undefined)));
     assert.equal(outcome.drafts.length, 0);
+  });
+
+  /*
+   * A retry ends where the author wrote it, which is usually a helper rather than the request the helper
+   * makes. Discovery mints a frame for that helper to hold the effect, nobody classifies a frame, and the
+   * guard refusing to judge an unclassified component therefore refused on every input a field run gave
+   * it while the write one hop further was classified `non_idempotent_write` all along.
+   */
+  it('reads the operation behind the frame the retry names', () => {
+    const outcome = unsafeRetryRule.evaluate(contextFor(retryThroughFrame(post)));
+    assert.equal(outcome.status, 'fired');
+    assert.equal(outcome.drafts.length, 1);
+    assert.ok(
+      outcome.drafts[0]?.title.includes('payments.example.com'),
+      `the finding named the frame rather than the operation: ${outcome.drafts[0]?.title}`,
+    );
+    assert.ok(outcome.drafts[0]?.components.includes('external_service:payments.example.com'));
+  });
+
+  it('still refuses when nothing behind the frame was ever classified', () => {
+    const unclassified = componentDraft({
+      kind: 'external_service',
+      name: 'payments.example.com',
+      file: 'src/pay.ts',
+    });
+    const outcome = unsafeRetryRule.evaluate(contextFor(retryThroughFrame(unclassified)));
+    assert.equal(outcome.drafts.length, 0, 'absent is not the same answer as unknown');
+  });
+
+  it('does not read through a component the repository declared', () => {
+    /*
+     * A frame is the name of a line of code and a tool is a boundary its author declared. Reading past
+     * the second would attribute an operation to a component whose contract is that it decides for
+     * itself what to do.
+     */
+    const declared = componentDraft({ kind: 'tool', name: 'pay', file: 'src/pay.ts' });
+    const graph = buildGraph(
+      [orchestrator, declared, post],
+      [
+        edgeDraft('calls_tool', orchestrator, declared, {
+          policy: {
+            retry: { maxAttempts: 3, bounded: true, backoff: 'fixed', idempotency: 'absent' },
+          },
+        } as Partial<EdgeDraft>),
+        edgeDraft('calls_service', declared, post),
+      ],
+    );
+    assert.equal(unsafeRetryRule.evaluate(contextFor(graph)).drafts.length, 0);
   });
 });
 
@@ -671,5 +753,26 @@ describe('the two retry rules together', () => {
     );
     assert.deepEqual(outcome.drafts, []);
     assert.match(outcome.detail ?? '', /declares its own ceiling/);
+  });
+
+  /*
+   * `clear` is a claim: this was checked and was fine. Over an empty population that claim is not weaker
+   * than it should be, it is false. One build reported that every discovered retry had an attempt ceiling
+   * in a repository where the rule had discovered no retry at all, and a build that had genuinely checked
+   * a hundred of them said the same sentence.
+   */
+  it('does not report an empty population as a population it checked', () => {
+    const outcome = unboundedRetryRule.evaluate(contextFor(graphWith(undefined)));
+    assert.equal(outcome.status, 'not_applicable');
+    assert.match(outcome.detail ?? '', /no retry was examined/);
+  });
+
+  it('says how many it looked at when it looked at some and found them well formed', () => {
+    const bounded: EdgePolicy = {
+      retry: { maxAttempts: 3, bounded: true, backoff: 'fixed', idempotency: 'unknown' },
+    };
+    const outcome = unboundedRetryRule.evaluate(contextFor(graphWith(bounded, lookup)));
+    assert.equal(outcome.status, 'clear');
+    assert.match(outcome.detail ?? '', /1 retry examined/);
   });
 });

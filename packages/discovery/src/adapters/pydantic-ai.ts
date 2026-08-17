@@ -216,6 +216,12 @@ const addTools = (
       components += 1;
       context.bindings.register(decorated.module.file, decorated.definition.name, identity);
       context.bindings.register(decorated.module.file, name, identity);
+      context.implementations.record({
+        identity,
+        file: decorated.module.file,
+        body: decorated.definition.location,
+        symbol: `@${owner}.${method} ${decorated.definition.name}`,
+      });
 
       const policy = retryPolicy(attempts);
       builder.addEdge(

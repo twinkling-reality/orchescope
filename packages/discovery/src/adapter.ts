@@ -4,6 +4,7 @@ import type { AdapterRun } from '@orchescope/schema';
 import type { ManifestSet, ModuleFacts } from '@orchescope/source-analysis';
 import type { BindingRegistry } from './bindings.ts';
 import type { ConfigDocument } from './config-files.ts';
+import type { ImplementationSpanRegistry } from './implementation-span.ts';
 import type { SymbolIndex } from './symbol-index.ts';
 
 /**
@@ -27,6 +28,14 @@ export type DiscoveryContext = {
   readonly symbols: SymbolIndex;
   /** Shared mapping from a local variable to the component it produced. */
   readonly bindings: BindingRegistry;
+  /**
+   * Source ranges an adapter recorded as the body of a component it declared.
+   *
+   * An adapter that reads a declaration is the only one that knows which argument is the body, and a
+   * later adapter is the only one that can see every component the body reaches. Recording the span
+   * here is how the two halves meet without either one knowing about the other.
+   */
+  readonly implementations: ImplementationSpanRegistry;
   readonly deadline: Deadline;
 };
 

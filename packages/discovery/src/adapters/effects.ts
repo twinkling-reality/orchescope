@@ -1,4 +1,4 @@
-import { CONFIDENCE_BANDS, moduleNamespace } from '@orchescope/domain';
+import { CONFIDENCE_BANDS, INFERRED_ENTRY_POINT_TAG, moduleNamespace } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type {
   ComponentIdentity,
@@ -6,6 +6,7 @@ import type {
   SideEffectClass,
   SourceLocation,
 } from '@orchescope/schema';
+import type { CallSiteEffects } from '../call-site-effect.ts';
 import type {
   CallFact,
   ControlFlowFact,
@@ -28,6 +29,8 @@ import {
   modelOperationForPath,
 } from '@orchescope/traces/model-endpoints';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
+import { callRelationKind } from '../call-relation.ts';
+import { createCallSiteEffects } from '../call-site-effect.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
 
 /**
@@ -66,16 +69,43 @@ const HTTP_METHOD_NAMES = new Set([
   'stream',
 ]);
 
-const DATASTORE_CLIENTS: readonly { readonly names: readonly string[]; readonly store: string }[] =
-  [
-    { names: ['PrismaClient'], store: 'prisma' },
-    { names: ['Pool', 'Client'], store: 'postgres' },
-    { names: ['createClient'], store: 'redis' },
-    { names: ['MongoClient'], store: 'mongodb' },
-    { names: ['create_engine', 'sessionmaker'], store: 'sqlalchemy' },
-    { names: ['connect'], store: 'sqlite' },
-    { names: ['DatabaseSync'], store: 'sqlite' },
-  ];
+/**
+ * Datastore clients, by the name that constructs one.
+ *
+ * `connect` carries `receivers`, and it is the only entry here that has to. Every other name in this
+ * table is a constructor nobody writes by accident; `connect` is a word any protocol library uses for
+ * the thing every protocol library does, and matching it bare made `server.connect(new
+ * StdioServerTransport())` report a SQLite database in a repository that has none. A receiver is
+ * required rather than a package, because the call this entry exists for is Python's
+ * `sqlite3.connect(path)` and Python names the module at the call site.
+ */
+const DATASTORE_CLIENTS: readonly {
+  readonly names: readonly string[];
+  readonly receivers?: readonly string[];
+  readonly store: string;
+}[] = [
+  { names: ['PrismaClient'], store: 'prisma' },
+  { names: ['Pool', 'Client'], store: 'postgres' },
+  { names: ['createClient'], store: 'redis' },
+  { names: ['MongoClient'], store: 'mongodb' },
+  { names: ['create_engine', 'sessionmaker'], store: 'sqlalchemy' },
+  { names: ['connect'], receivers: ['sqlite3'], store: 'sqlite' },
+  { names: ['DatabaseSync'], store: 'sqlite' },
+];
+
+/** Whether the call reaches a client through the receiver the entry requires, when it requires one. */
+const datastoreCallMatches = (
+  candidate: (typeof DATASTORE_CLIENTS)[number],
+  call: CallFact,
+): boolean => {
+  if (!candidate.names.includes(calleeName(call))) return false;
+  if (candidate.receivers === undefined) return true;
+  const receiver = call.calleePath[call.calleePath.length - 2];
+  return (
+    (receiver !== undefined && candidate.receivers.includes(receiver)) ||
+    (call.origin !== undefined && candidate.receivers.includes(call.origin.module))
+  );
+};
 
 const QUEUE_CLIENTS: readonly { readonly names: readonly string[]; readonly queue: string }[] = [
   { names: ['Queue', 'Worker', 'FlowProducer'], queue: 'bullmq' },
@@ -245,7 +275,7 @@ const ensureScope = (input: {
       symbol: name,
       confidence: CONFIDENCE_BANDS.structural,
       metadata: { inferredFrom: input.inferredFrom },
-      tags: ['entrypoint'],
+      tags: ['entrypoint', INFERRED_ENTRY_POINT_TAG],
     }),
   );
   found.components += 1;
@@ -439,6 +469,7 @@ const discoverHttp = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   found: Found,
+  performed: CallSiteEffects,
 ): void => {
   for (const call of module.calls) {
     const path = dotted(call.calleePath);
@@ -508,6 +539,7 @@ const discoverHttp = (
     );
     found.components += 1;
     found.files.add(module.file);
+    performed.record(module.file, call, service.identity);
 
     builder.addEdge(
       drafts.edge({
@@ -535,7 +567,7 @@ const discoverStores = (
 ): void => {
   for (const call of module.calls) {
     const name = calleeName(call);
-    const store = DATASTORE_CLIENTS.find((candidate) => candidate.names.includes(name));
+    const store = DATASTORE_CLIENTS.find((candidate) => datastoreCallMatches(candidate, call));
     if (store !== undefined) {
       const identity = globalIdentity('database', GLOBAL_NAMESPACES.datastore, store.store);
       builder.addComponent(
@@ -731,7 +763,7 @@ const discoverRetryHelpers = (
     };
     builder.addEdge(
       drafts.edge({
-        kind: target.kind === 'tool' ? 'calls_tool' : 'calls_service',
+        kind: callRelationKind(target.kind),
         from: ensureCaller(module, call, context, builder, found),
         to: target,
         location: call.location,
@@ -823,6 +855,56 @@ const reattemptEvidence = (
 };
 
 /**
+ * The operation a retried call reaches, and where to ask what that operation's own module showed.
+ *
+ * Two spellings of the same retry. `retry { namedPost(...) }` names something, and the name resolves to
+ * the component that call produced. `retry { fetch(...) }` names nothing, and the request has still
+ * been discovered and classified at that exact line, so the call site answers where the name cannot.
+ * Only the first was ever resolved, which made the plainer of the two invisible.
+ *
+ * The sink namespace travels separately because it stops agreeing with the target once the target is a
+ * host: `api.stripe.com` is one component wherever it is called from, so its identity carries a global
+ * namespace and no module. Asking that namespace what the sink showed would find nothing and the rules
+ * would resume asserting an absence nobody checked.
+ */
+type RetriedOperation = {
+  readonly target: ComponentIdentity;
+  readonly sinkNamespace: string;
+  readonly symbol: string;
+};
+
+const retriedOperation = (
+  module: ModuleFacts,
+  context: DiscoveryContext,
+  performed: CallSiteEffects,
+  call: CallFact,
+): RetriedOperation | undefined => {
+  const atCallSite = performed.at(module.file, call);
+  if (atCallSite !== undefined) {
+    return {
+      target: atCallSite,
+      sinkNamespace: moduleNamespace(module.file),
+      symbol: dotted(call.calleePath),
+    };
+  }
+  const name = calleeName(call);
+  const declared = name === '' ? undefined : context.bindings.lookup(module.file, name);
+  return declared === undefined
+    ? undefined
+    : { target: declared, sinkNamespace: declared.namespace, symbol: name };
+};
+
+/** Calls written inside a construct, by line, which is how a call site is reached from the construct. */
+const callsWithin = (module: ModuleFacts, construct: ControlFlowFact): readonly CallFact[] => {
+  const endLine = construct.location.endLine ?? construct.location.startLine;
+  return module.calls.filter(
+    (call) =>
+      call.location.startLine >= construct.location.startLine &&
+      (call.location.endLine ?? call.location.startLine) <= endLine,
+  );
+};
+
+/**
  * A loop that re-attempts the same operation, with a try around it. Recorded as unbounded because nothing
  * in the syntax states a limit.
  */
@@ -832,6 +914,7 @@ const discoverRetryLoops = (
   builder: SystemGraphBuilder,
   found: Found,
   sinks: Sinks,
+  performed: CallSiteEffects,
 ): void => {
   for (const construct of module.controlFlow) {
     if (construct.kind !== 'try_catch' || construct.contains.length === 0) continue;
@@ -841,14 +924,17 @@ const discoverRetryLoops = (
     if (evidence === undefined) continue;
 
     const scope = construct.enclosing ?? 'module-scope';
-    for (const path of construct.contains) {
-      const name = path[path.length - 1];
-      if (name === undefined) continue;
-      const target = context.bindings.lookup(module.file, name);
-      if (target === undefined) continue;
+    const drawn = new Set<string>();
+    for (const call of callsWithin(module, construct)) {
+      const operation = retriedOperation(module, context, performed, call);
+      if (operation === undefined) continue;
+      const { target } = operation;
+      const key = `${target.kind}:${target.namespace}:${target.localName}`;
+      if (drawn.has(key)) continue;
+      drawn.add(key);
       builder.addEdge(
         drafts.edge({
-          kind: target.kind === 'tool' ? 'calls_tool' : 'calls_service',
+          kind: callRelationKind(target.kind),
           from: ensureScope({
             module,
             context,
@@ -860,7 +946,7 @@ const discoverRetryLoops = (
           }),
           to: target,
           location: construct.location,
-          symbol: `retry loop around ${name}`,
+          symbol: `retry loop around ${operation.symbol}`,
           confidence: CONFIDENCE_BANDS.structural,
           policy: {
             retry: {
@@ -872,7 +958,7 @@ const discoverRetryLoops = (
           metadata: {
             retryShape: 'loop-with-try',
             reattemptEvidence: evidence,
-            ...sinkMetadata(sinks.get(target.namespace)),
+            ...sinkMetadata(sinks.get(operation.sinkNamespace)),
             ...(headerCeiling(loop) === undefined
               ? {}
               : { attemptCeiling: headerCeiling(loop) as string }),
@@ -912,17 +998,28 @@ export const effectsAdapter: AgentSystemAdapter = {
         )
         .filter((entry) => entry[1].deduplicates !== undefined || entry[1].ceiling !== undefined),
     );
-    for (const module of context.modules) {
-      /*
-       * A test harness reaches real clients at fakes, and an effect discovered only there describes the harness
-       * rather than the system. Reading them mapped one repository's `sqlite` database entirely from a `FakeD1`
-       * over `node:sqlite` while its real database binding stayed absent from the graph.
-       */
-      if (isTestFile(module.file)) continue;
-      discoverHttp(module, context, builder, found);
+    /*
+     * A test harness reaches real clients at fakes, and an effect discovered only there describes the harness
+     * rather than the system. Reading them mapped one repository's `sqlite` database entirely from a `FakeD1`
+     * over `node:sqlite` while its real database binding stayed absent from the graph.
+     */
+    const audited = context.modules.filter((module) => !isTestFile(module.file));
+    /*
+     * Effects before retries, across every module rather than within each one.
+     *
+     * A retry resolves to the operation the retried call performs, and that operation is usually
+     * discovered in the module defining the function rather than in the module retrying it. Reading both
+     * in one pass made the answer depend on which file traversal reached first, which is a property of
+     * the directory listing and not of the repository.
+     */
+    const performed = createCallSiteEffects();
+    for (const module of audited) {
+      discoverHttp(module, context, builder, found, performed);
       discoverStores(module, context, builder, found);
+    }
+    for (const module of audited) {
       discoverRetryHelpers(module, context, builder, found, sinks);
-      discoverRetryLoops(module, context, builder, found, sinks);
+      discoverRetryLoops(module, context, builder, found, sinks, performed);
     }
     return {
       componentsFound: found.components,

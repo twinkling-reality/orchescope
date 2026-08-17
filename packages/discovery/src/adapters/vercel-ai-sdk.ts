@@ -97,6 +97,13 @@ const discoverToolDefinitions = (
     components += 1;
     files.add(match.module.file);
     context.bindings.register(match.module.file, name, identity);
+    // The call holds the tool's `execute`, so what runs when the tool is invoked is written inside it.
+    context.implementations.record({
+      identity,
+      file: match.module.file,
+      body: match.call.location,
+      symbol: `tool(${name})`,
+    });
   }
   return components;
 };

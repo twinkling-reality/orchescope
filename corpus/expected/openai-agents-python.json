@@ -7,9 +7,15 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 91,
-      "edgesFound": 50,
-      "filesInspected": 28,
+      "componentsFound": 51,
+      "edgesFound": 30,
+      "filesInspected": 17,
+      "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
       "status": "completed"
     },
     "adapter:langgraph": {
@@ -72,7 +78,7 @@
     "byKind": {
       "agent": 620,
       "database": 2,
-      "entrypoint": 41,
+      "entrypoint": 22,
       "external_service": 4,
       "mcp_server": 21,
       "model": 15,
@@ -81,7 +87,7 @@
       "queue": 1,
       "tool": 318
     },
-    "total": 1393
+    "total": 1374
   },
   "discardedRelations": [],
   "files": {
@@ -97,15 +103,16 @@
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
       "prompt-injection-boundary": 1,
+      "retry-around-non-idempotent-operation": 1,
       "topology-shape": 2
     },
     "bySeverity": {
       "info": 1,
       "low": 3,
-      "medium": 2
+      "medium": 3
     },
     "strengths": 0,
-    "total": 6
+    "total": 7
   },
   "foundNothing": [],
   "kind": "agent_system",
@@ -120,10 +127,10 @@
       "invokes_model": 34,
       "provides_tool": 11,
       "publishes_to_queue": 12,
-      "queries_database": 26,
+      "queries_database": 6,
       "served_by_provider": 1,
       "uses_prompt": 2
     },
-    "total": 226
+    "total": 206
   }
 }

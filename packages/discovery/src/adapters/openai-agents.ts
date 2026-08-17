@@ -76,6 +76,13 @@ const registerTools = (
       context.bindings.register(match.module.file, definition.name, identity);
     }
     context.bindings.register(match.module.file, declaredName, identity);
+    // The call holds the tool's `execute`, so what runs when the tool is invoked is written inside it.
+    context.implementations.record({
+      identity,
+      file: match.module.file,
+      body: match.call.location,
+      symbol: `tool(${declaredName})`,
+    });
   }
 
   for (const decorated of decoratedDefinitions(context.modules, ['function_tool'], PACKAGES)) {
@@ -107,6 +114,12 @@ const registerTools = (
     components += 1;
     context.bindings.register(decorated.module.file, decorated.definition.name, identity);
     context.bindings.register(decorated.module.file, declaredName, identity);
+    context.implementations.record({
+      identity,
+      file: decorated.module.file,
+      body: decorated.definition.location,
+      symbol: `@function_tool ${decorated.definition.name}`,
+    });
   }
 
   return { components };

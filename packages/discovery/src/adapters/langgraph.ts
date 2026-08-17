@@ -321,6 +321,18 @@ const discoverReactAgents = (
         );
         components += 1;
         context.bindings.register(module.file, toolName, toolIdentity);
+        /*
+         * Only where the tool is a function this module defines. The fallback location is the agent
+         * construction call, which names the tool and is not what runs when it is invoked.
+         */
+        if (declaration !== undefined) {
+          context.implementations.record({
+            identity: toolIdentity,
+            file: module.file,
+            body: declaration.location,
+            symbol: `tools: ${toolName}`,
+          });
+        }
       }
       if (toolIdentity === undefined) continue;
       builder.addEdge(

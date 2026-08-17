@@ -1,3 +1,4 @@
+import { formatCount } from '@orchescope/domain';
 import type { IndexedGraph } from '@orchescope/graph';
 import type {
   BenchmarkReport,
@@ -139,3 +140,40 @@ export const fired = (drafts: readonly FindingDraft[], detail?: string): RuleOut
   drafts.length === 0
     ? clear(detail)
     : { status: 'fired', drafts, ...(detail === undefined ? {} : { detail }) };
+
+/**
+ * The outcome of a rule that looked at a population, reported against the size of that population.
+ *
+ * `fired` with nothing to report becomes `clear`, and `clear` is a claim: this was checked and was
+ * fine. Over an empty population that claim is not weaker than it should be, it is false. One build
+ * reported that every discovered retry had an attempt ceiling in a repository where the rule had
+ * discovered no retry at all, and a build that had genuinely checked a hundred of them said the same
+ * sentence. The two are opposite results and nothing in the document distinguished them.
+ *
+ * Nothing was examined is `not_applicable`: the rule had no subject, which is a different fact about the
+ * repository from the rule having a subject and finding it well formed. Either way the count travels, so
+ * a reader is told the size of what was looked at rather than asked to infer it from a silence.
+ *
+ * The count is carried on the outcome rather than in each rule's wording so that a rule written later
+ * inherits it, and it reaches the reader through `detail` because the size of a rule's population is a
+ * sentence about this scan and not a new field in a persisted document.
+ */
+export type Population = {
+  readonly count: number;
+  readonly singular: string;
+  /** Passed rather than derived, for the reason `formatCount` states. */
+  readonly plural?: string;
+};
+
+export const examined = (
+  drafts: readonly FindingDraft[],
+  population: Population,
+  detail?: string,
+): RuleOutcome => {
+  if (drafts.length > 0) {
+    return { status: 'fired', drafts, ...(detail === undefined ? {} : { detail }) };
+  }
+  if (population.count === 0) return notApplicable(`no ${population.singular} was examined`);
+  const counted = `${formatCount(population.count, population.singular, population.plural)} examined`;
+  return clear(detail === undefined ? counted : `${detail}, ${counted}`);
+};

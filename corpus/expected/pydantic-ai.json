@@ -7,9 +7,15 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 40,
-      "edgesFound": 22,
-      "filesInspected": 15,
+      "componentsFound": 33,
+      "edgesFound": 18,
+      "filesInspected": 13,
+      "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 1,
+      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:langgraph": {
@@ -72,7 +78,7 @@
     "byKind": {
       "agent": 426,
       "database": 2,
-      "entrypoint": 18,
+      "entrypoint": 15,
       "external_service": 6,
       "mcp_server": 5,
       "model": 16,
@@ -80,7 +86,7 @@
       "provider": 6,
       "tool": 502
     },
-    "total": 1731
+    "total": 1728
   },
   "discardedRelations": [],
   "files": {
@@ -112,13 +118,13 @@
   "relations": {
     "byKind": {
       "calls_service": 6,
-      "calls_tool": 471,
+      "calls_tool": 472,
       "invokes_model": 65,
       "provides_tool": 31,
-      "queries_database": 12,
+      "queries_database": 9,
       "served_by_provider": 12,
       "uses_prompt": 1
     },
-    "total": 598
+    "total": 596
   }
 }
