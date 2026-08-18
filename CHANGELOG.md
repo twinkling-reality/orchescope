@@ -4,6 +4,72 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### A component only a test declares
+
+The invariant that a developer's tooling is not the system under audit already existed here, in
+`partOfAuditedSystem`, written when a `.mcp.json` naming somebody's editor server was read as a
+declaration and the reachability rule then raised a finding because nothing in the repository could
+reach it. Four adapters out of thirteen honoured it. The other nine were most of the graph.
+
+Measured, per adapter, components whose every source location is a test file: `pydantic-ai` 835 of
+903, `openai-agents` on its Python repository 662 of 899 and `mcp` beside it 54 of 71, `langgraph` 448
+of 526 in Python and 410 of 505 in JavaScript, `crewai` 302 of 323. The same adapter reads the
+JavaScript OpenAI Agents repository at 36 of 425, so this is not a property of an adapter but of what
+a framework's own tests do, which is instantiate the framework.
+
+It is not only frameworks. `pydantic-deepagents`, an application, reports sixteen agents and ten of
+them are in `tests/`: three copies of one `_make_test_agent` helper, four called `agent`, and two that
+are local variables in a test about teams, named `kwargs` and `team`. None of the ten carries a single
+relation. The headline that repository prints is `this scan found 16 agents`.
+
+**They are marked rather than dropped.** A test that declares an agent has declared one, and a count
+that silently omits it answers a question nobody asked. `Component.declaredInTest` and
+`Edge.declaredInTest` are new optional fields, present only where true; `coverage.componentsDeclaredInTest`
+says how many; and the terminal document carries a `set aside` row beside the gaps, because a reader
+who sees sixteen agents named above and six judged below is owed the difference. **That is three
+published document changes, the third, fourth and fifth since 0.5.0** after
+`coverage.adapters[].languages` and `coverage.filesTracked`. All three are optional, so a consumer
+reading the old shape is unaffected and no document version moves.
+
+The mark is derived where the source locations from every adapter meet, in the graph builder, and
+never in an adapter. Either half asked alone gives the wrong answer: a fixture read on its own says
+the system does not declare the component, and the module it exercises read on its own says no test
+does. Deriving it centrally is also what stops this being honoured by nine adapters next time, and a
+check enumerated from the registry now scans each adapter's fixture twice, once where the system lives
+and once where its tests live, with the first scan proving the second is measuring something.
+
+The thirteen reach the invariant two ways and both are right for what they read. An adapter that would
+record a false fact still declines to read the file: a test harness reaches the same clients the system
+reaches and it reaches them at fakes, so a `FakeD1` over `node:sqlite` is not a database the repository
+has. An adapter that would record a true fact about something out of scope reads it and marks it.
+
+**A narrowed population is worth less than nothing if the rule then reports the wrong reason for the
+emptiness.** `configured-tool-has-no-caller` said "no tool was discovered", which is false on
+`langgraph`, whose only three tools are `get_weather` doubles under `libs/prebuilt/tests`. It now says
+three were discovered and a test file declares every one of them. The first version of that sentence
+derived its count as the whole population minus the audited one and was wrong on the first repository
+it met: on `gpt-researcher` the one source declined over is an MCP server from a `.mcp.json`, with no
+source location at all, and the sentence blamed a test file for an exclusion no test file had anything
+to do with. Fixtures are counted now, and the cause is claimed only where it accounts for the whole
+emptiness.
+
+Three pinned repositories move and every line of the diff is a finding, since nothing leaves the graph.
+On `langgraph` `prompt-injection-boundary` stops firing: its two interpolating prompts are Docker
+configuration templates in `langgraph_cli/config.py` and all three untrusted sources it joined them
+against are those `get_weather` fixtures. `configured-tool-has-no-caller` goes from `clear` to
+`not_applicable` there for the same reason, which changes no finding count and does change what the
+rule claims to have checked. On `pydantic-ai` the unreachable half of `topology-shape` goes, and all
+thirty six components it reported are MCP fixtures in `tests/mcp_server.py`, `tests/test_mcp.py` and
+`tests/example_modules/mcp_server.py`. On `gpt-researcher` `prompt-injection-boundary` stops firing
+because its only untrusted source is that editor's MCP server, which is the pre-existing exclusion
+reaching a rule that had never consulted it.
+
+Where the rule keeps firing it says something a reader can use. `configured-tool-has-no-caller` on
+`openai-agents-python` went from 228 of 318 tools with no caller to 14 of 78.
+
+`components.declaredInTest` is pinned in the corpus, because the totals do not move when the marking
+does and a marking that quietly stopped working would otherwise show as nothing at all.
+
 ### Every value a rule reads, and the thing that writes it
 
 0.5.0 added a check that reads the relation policy fields out of the schema and asserts a scan can
@@ -37,10 +103,10 @@ noticed: it is a claim of coverage with nothing behind it rather than a wrong nu
 either an adapter that produces the kind or removing it from the schema, and both are decisions for
 the maintainer.
 
-One pinned number moves, and it is this repository counting itself. `packages/discovery` is pinned as
-a `not_agent_system` entry, and the narrower check it used to hold now sits beside the one that proves
-a rule clearable, so 35 files are discovered where 36 were. Its ceiling of zero components is
-unchanged, and nothing moves across the other fifteen measured entries.
+Nothing moves across the pinned repositories. `packages/discovery` is pinned as a `not_agent_system`
+entry and counts this repository's own files, so moving the narrower check out of it to sit beside the
+one that proves a rule clearable took its count down by one, and the per adapter check the next section
+adds put it back. Its ceiling of zero components is unchanged.
 
 ### Three applications in the corpus, where there was one
 

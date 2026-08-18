@@ -90,6 +90,7 @@
       "prompt": 7,
       "tool": 5
     },
+    "declaredInTest": 0,
     "total": 52
   },
   "discardedRelations": [],

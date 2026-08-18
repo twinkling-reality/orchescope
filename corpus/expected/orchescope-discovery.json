@@ -82,13 +82,14 @@
   "agentSystemDetected": false,
   "components": {
     "byKind": {},
+    "declaredInTest": 0,
     "total": 0
   },
   "discardedRelations": [],
   "files": {
-    "discovered": 35,
-    "inSupportedLanguages": 34,
-    "parsed": 34,
+    "discovered": 36,
+    "inSupportedLanguages": 35,
+    "parsed": 35,
     "skipped": 0,
     "truncated": false
   },

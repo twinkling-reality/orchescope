@@ -92,6 +92,7 @@
       "provider": 6,
       "tool": 502
     },
+    "declaredInTest": 873,
     "total": 1345
   },
   "discardedRelations": [],
@@ -107,15 +108,15 @@
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
       "prompt-injection-boundary": 1,
-      "topology-shape": 2
+      "topology-shape": 1
     },
     "bySeverity": {
       "info": 1,
-      "low": 2,
+      "low": 1,
       "medium": 2
     },
     "strengths": 0,
-    "total": 5
+    "total": 4
   },
   "foundNothing": [],
   "kind": "agent_system",

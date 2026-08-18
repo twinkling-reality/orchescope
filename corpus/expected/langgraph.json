@@ -91,6 +91,7 @@
       "queue": 1,
       "tool": 3
     },
+    "declaredInTest": 448,
     "total": 753
   },
   "discardedRelations": [],
@@ -104,16 +105,14 @@
   "findings": {
     "byRule": {
       "observability-coverage": 1,
-      "prompt-injection-boundary": 1,
       "topology-shape": 1
     },
     "bySeverity": {
       "info": 1,
-      "low": 1,
-      "medium": 1
+      "low": 1
     },
     "strengths": 0,
-    "total": 3
+    "total": 2
   },
   "foundNothing": [],
   "kind": "agent_system",

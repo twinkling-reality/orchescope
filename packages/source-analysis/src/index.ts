@@ -66,4 +66,3 @@ export {
   readManifests,
 } from './manifests.ts';
 export { probePythonParser, resetPythonParser } from './python/runtime.ts';
-export { isTestFile } from './test-files.ts';

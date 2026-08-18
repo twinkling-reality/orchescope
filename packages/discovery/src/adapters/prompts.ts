@@ -1,7 +1,7 @@
-import { CONFIDENCE_BANDS, identityKey, sha256Hex } from '@orchescope/domain';
+import { CONFIDENCE_BANDS, identityKey, isTestFile, sha256Hex } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type { ArgumentFact, ModuleFacts, TextFact } from '@orchescope/source-analysis';
-import { isTestFile } from '@orchescope/source-analysis';
+
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { createDrafts, sourceIdentity } from '../drafts.ts';
 

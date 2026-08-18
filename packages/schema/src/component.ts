@@ -219,6 +219,24 @@ export const Component = Type.Object(
     discoveredBy: Type.Array(NonEmptyString(), { minItems: 1 }),
     sourceLocations: Type.Array(SourceLocation),
     configLocations: Type.Array(ConfigLocation),
+    /**
+     * True when every source location that declares this component is a test file.
+     *
+     * A developer's tooling is not the system under audit, which is an invariant this repository already
+     * held and honoured in four adapters out of thirteen. On the frameworks it reads, most of the graph is
+     * the framework's own test suite: 835 of 903 pydantic-ai components, 662 of 899 openai-agents ones,
+     * and on one application built with pydantic-ai, ten of the sixteen agents it reported were named in
+     * `tests/`, three of them copies of one `_make_test_agent` helper.
+     *
+     * Marked rather than dropped, because a test that declares an agent really does declare one and a
+     * count that silently omits it answers a question nobody asked. What a scan read stays in the graph
+     * and says what it is, and the rules whose population is the system under audit exclude it.
+     *
+     * Every location and not the first, because a component declared in a test and in the source it tests
+     * is part of the system. Absent rather than false where it does not apply, so a component with no
+     * source location at all, which is what a manifest and a trace both produce, states nothing.
+     */
+    declaredInTest: Type.Optional(Type.Literal(true)),
     evidence: Type.Array(EvidenceId),
     details: Type.Optional(ComponentDetails),
     sideEffect: Type.Optional(SideEffectClass),

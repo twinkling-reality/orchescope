@@ -1,12 +1,16 @@
 /**
- * What could not be looked at.
+ * What the findings below were not asked about.
  *
  * `Not inspected` and `Input problems` were two blocks answering one question with two vocabularies and
  * two ceilings, one of which was no ceiling at all. They are one region with one key here, and the key
  * is what a reader greps for across a whole corpus.
  *
- * This region answers a shape question, which kinds of thing were not read, rather than an inventory
- * question. The inventory is in the machine readable document, which is why a row states a
+ * Mostly that is what could not be looked at. One row is what was looked at and set aside: a component
+ * only a test declares is read, counted in the headline and left out of the rules, and a reader who sees
+ * sixteen agents named above and six of them judged below is owed the difference.
+ *
+ * This region answers a shape question, which kinds of thing the rules did not see, rather than an
+ * inventory question. The inventory is in the machine readable document, which is why a row states a
  * classification and never the paragraph behind it.
  */
 
@@ -177,6 +181,31 @@ const configurationRow = (coverage: Coverage): readonly Row[] => {
   ];
 };
 
+/**
+ * Components the scan read and the rules did not judge.
+ *
+ * The headline counts what the scan found and the findings below judge the system under audit, and on a
+ * repository whose tests declare agents those are two different numbers. One application built on
+ * pydantic-ai reports sixteen agents where ten are named in `tests/`, three of them copies of one
+ * `_make_test_agent`, so a reader comparing the headline against the findings is looking at a difference
+ * nothing else in this document explains.
+ *
+ * Absent rather than zero where nothing was set aside, because a row saying none is a row a reader has
+ * to read on every repository to learn nothing.
+ */
+const testDeclaredRow = (coverage: Coverage): readonly Row[] => {
+  const components = coverage.componentsDeclaredInTest ?? 0;
+  if (components <= 0) return [];
+  return [
+    {
+      kind: 'keyed',
+      key: 'gap',
+      state: '. set aside',
+      text: `${components} ${components === 1 ? 'component' : 'components'} only a test declares, not judged`,
+    } as const,
+  ];
+};
+
 const truncatedRow = (coverage: Coverage): readonly Row[] =>
   coverage.truncated
     ? [
@@ -200,6 +229,7 @@ export const gapRegion = (coverage: Coverage, layout: Layout): Region => {
     ...skippedRows(coverage),
     ...unsupportedRows(coverage),
     ...configurationRow(coverage),
+    ...testDeclaredRow(coverage),
   ];
   const keyed = entries.filter((row) => row.kind === 'keyed');
   if (keyed.length <= ROW_CEILING) return entries;

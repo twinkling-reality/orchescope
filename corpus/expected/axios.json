@@ -85,6 +85,7 @@
       "entrypoint": 5,
       "external_service": 4
     },
+    "declaredInTest": 0,
     "total": 9
   },
   "discardedRelations": [],

@@ -1,4 +1,4 @@
-import { CONFIDENCE_BANDS, INFERRED_ENTRY_POINT_TAG } from '@orchescope/domain';
+import { CONFIDENCE_BANDS, INFERRED_ENTRY_POINT_TAG, isTestFile } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type { ComponentIdentity } from '@orchescope/schema';
 import type { CallFact, ModuleFacts } from '@orchescope/source-analysis';
@@ -6,7 +6,6 @@ import {
   calleeName,
   dotted,
   findEntry,
-  isTestFile,
   objectArgument,
   stringValue,
 } from '@orchescope/source-analysis';

@@ -93,6 +93,14 @@ export const Edge = Type.Object(
     discoveredBy: Type.Array(NonEmptyString(), { minItems: 1 }),
     sourceLocations: Type.Array(SourceLocation),
     configLocations: Type.Array(ConfigLocation),
+    /**
+     * True when every source location that declares this relation is a test file.
+     *
+     * Read the same way as the field of the same name on a component, and carried separately because a
+     * relation between two components the system declares can still be one only a test draws. A rule
+     * whose population is relations rather than components asks this one.
+     */
+    declaredInTest: Type.Optional(Type.Literal(true)),
     evidence: Type.Array(EvidenceId),
     policy: Type.Optional(EdgePolicy),
     observation: Type.Optional(EdgeObservation),

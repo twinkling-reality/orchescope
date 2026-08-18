@@ -1,6 +1,6 @@
-import { moduleNamespace } from '@orchescope/domain';
+import { isTestFile, moduleNamespace } from '@orchescope/domain';
 import type { ModuleFacts } from '@orchescope/source-analysis';
-import { calleeName, isTestFile } from '@orchescope/source-analysis';
+import { calleeName } from '@orchescope/source-analysis';
 import { entryDeclaresKey } from './idempotency-key.ts';
 
 /**

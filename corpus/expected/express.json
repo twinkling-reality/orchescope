@@ -85,6 +85,7 @@
       "database": 1,
       "entrypoint": 2
     },
+    "declaredInTest": 0,
     "total": 3
   },
   "discardedRelations": [],

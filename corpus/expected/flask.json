@@ -86,6 +86,7 @@
       "entrypoint": 2,
       "queue": 1
     },
+    "declaredInTest": 0,
     "total": 4
   },
   "discardedRelations": [],

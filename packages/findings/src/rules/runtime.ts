@@ -6,6 +6,7 @@ import {
   metricEvidence,
 } from '@orchescope/domain';
 import type { ComponentId, Evidence, EvidenceId } from '@orchescope/schema';
+import { auditedComponents } from './audited-population.ts';
 import {
   clear,
   type FindingDraft,
@@ -599,7 +600,9 @@ export const observabilityCoverageRule: Rule = {
   summary: 'How much of the declared system any run has exercised.',
   evaluate: (context) => {
     if (context.delta === undefined || context.observedRuns.length === 0) {
-      const named = context.graph.graph.components.slice(0, 5).map((component) => component.id);
+      const named = auditedComponents(context.graph)
+        .slice(0, 5)
+        .map((component) => component.id);
       if (named.length === 0) {
         return insufficient('no declared components exist to ground a coverage claim');
       }
@@ -609,7 +612,7 @@ export const observabilityCoverageRule: Rule = {
     if (rate === undefined) return insufficient('no exercise rate could be computed');
     const coverage = context.delta.coverage;
     if (rate >= 0.8) {
-      const exercised = context.graph.graph.components
+      const exercised = auditedComponents(context.graph)
         .filter((component) => component.presence.static && component.presence.runtime)
         .map((component) => component.id)
         .slice(0, 10);

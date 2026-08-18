@@ -2,6 +2,7 @@ import {
   CONFIDENCE_BANDS,
   formatCount,
   INFERRED_ENTRY_POINT_TAG,
+  isTestFile,
   moduleNamespace,
 } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
@@ -22,7 +23,6 @@ import {
   calleeName,
   dotted,
   findEntry,
-  isTestFile,
   numberValue,
   objectArgument,
   stringValue,

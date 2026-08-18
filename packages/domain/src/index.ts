@@ -121,3 +121,4 @@ export {
   standardDeviation,
   summarize,
 } from './statistics.ts';
+export { isTestFile } from './test-files.ts';

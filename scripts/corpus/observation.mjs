@@ -56,6 +56,15 @@ export const observationOf = (entry, audit, bundle, exercise) => {
     components: {
       total: bundle.graph.components.length,
       byKind: sortedCounts(bundle.graph.components.map((component) => component.kind)),
+      /*
+       * How many of the total the rules leave out, which is the difference between what this scan found
+       * and what it judged. Pinned because it is a number nothing else here would catch moving: the
+       * totals above do not change when the marking does, since a component a test declares stays in the
+       * graph, so a marking that silently stopped working would show as nothing at all.
+       */
+      declaredInTest: bundle.graph.components.filter(
+        (component) => component.declaredInTest === true,
+      ).length,
     },
     relations: {
       total: bundle.graph.edges.length,

@@ -168,6 +168,15 @@ export const ScanCoverage = Type.Object(
       ),
     ),
     adapters: Type.Array(AdapterRun),
+    /**
+     * How many discovered components every source location of which is a test file.
+     *
+     * The rules whose population is the system under audit leave these out, so without the count a reader
+     * is shown a smaller answer than the scan produced and nothing says why. It belongs beside the other
+     * disclosures rather than in the component totals, because it is a statement about what was read and
+     * not about what the repository declares.
+     */
+    componentsDeclaredInTest: Type.Optional(NonNegativeInt),
     unsupported: Type.Array(UnsupportedArea),
     durationMs: Type.Number({ minimum: 0 }),
     /** True when analysis was cut short by a deadline or a resource limit. */

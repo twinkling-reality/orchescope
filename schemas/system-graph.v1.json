@@ -130,6 +130,10 @@
             },
             "type": "array"
           },
+          "declaredInTest": {
+            "const": true,
+            "type": "boolean"
+          },
           "description": {
             "maxLength": 1000,
             "type": "string"
@@ -1005,6 +1009,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "componentsDeclaredInTest": {
+          "minimum": 0,
+          "type": "integer"
+        },
         "durationMs": {
           "minimum": 0,
           "type": "number"
@@ -1243,6 +1251,10 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "declaredInTest": {
+            "const": true,
+            "type": "boolean"
           },
           "discoveredBy": {
             "items": {

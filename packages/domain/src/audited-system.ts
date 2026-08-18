@@ -10,12 +10,21 @@ import type { Component } from '@orchescope/schema';
  * no tool and no model, and the reachability rule then raised a finding against that repository because
  * nothing in it could reach the server the developer's editor talks to.
  *
- * The vocabulary is here rather than beside either consumer because both the detection flag and the
- * topology rule ask the same question, and a repository that answers it one way for one of them and the
- * other way for the other is exactly how that contradiction got reported as a finding.
+ * A component only a test declares is the same distinction and the larger half of it. A test suite is
+ * written by whoever works on the repository, for them, and what it declares is exercised by nothing the
+ * repository ships. On the frameworks this build reads it is most of the graph, and on one application
+ * built with pydantic-ai it was ten of the sixteen agents reported, three of them copies of one
+ * `_make_test_agent` helper and two of them local variables in a test about teams.
+ *
+ * The vocabulary is here rather than beside any consumer because the detection flag, the topology rule and
+ * every rule whose population is the system rather than the repository ask the same question, and a
+ * repository that answers it one way for one of them and the other way for the other is exactly how that
+ * contradiction got reported as a finding.
  *
  * What this excludes stays in the graph. A developer's tooling is a true fact about a repository, and
- * hiding it would trade one wrong answer for a missing one.
+ * hiding it would trade one wrong answer for a missing one. `coverage.componentsDeclaredInTest` says how
+ * many were set aside, because a population quietly smaller than the graph is a number with no whole.
  */
 export const partOfAuditedSystem = (component: Component): boolean =>
+  component.declaredInTest !== true &&
   !(component.details?.for === 'mcp_server' && component.details.role === 'developer_tooling');

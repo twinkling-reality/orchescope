@@ -17,6 +17,14 @@ import {
   unreachableComponents,
 } from '@orchescope/graph';
 import type { Component, Edge, EvidenceId, SideEffectClass } from '@orchescope/schema';
+import {
+  auditedComponents,
+  auditedComponentsOfKind,
+  auditedEdges,
+  auditedEdgesOfKind,
+  declaredInTestCount,
+  narrowedAway,
+} from './audited-population.ts';
 import type { RemediationVariants } from './remediation-variant.ts';
 import {
   examined,
@@ -145,7 +153,7 @@ export const unsafeRetryRule: Rule = {
     const drafts: FindingDraft[] = [];
     const unassertable: string[] = [];
     let retries = 0;
-    for (const edge of context.graph.graph.edges) {
+    for (const edge of auditedEdges(context.graph)) {
       const retry = edge.policy?.retry;
       if (retry === undefined) continue;
       retries += 1;
@@ -268,7 +276,7 @@ export const unboundedRetryRule: Rule = {
      * at, and a bounded retry is a retry this rule read and passed.
      */
     let retries = 0;
-    for (const edge of context.graph.graph.edges) {
+    for (const edge of auditedEdges(context.graph)) {
       const retry = edge.policy?.retry;
       if (retry === undefined) continue;
       retries += 1;
@@ -428,8 +436,16 @@ export const missingTimeoutRule: Rule = {
   category: 'reliability',
   summary: 'A model invocation with no timeout in the declared configuration.',
   evaluate: (context) => {
-    const modelEdges = context.graph.edgesOfKind('invokes_model');
-    if (modelEdges.length === 0) return notApplicable('no model invocation was discovered');
+    const discovered = context.graph.edgesOfKind('invokes_model');
+    const modelEdges = auditedEdgesOfKind(context.graph, 'invokes_model');
+    if (modelEdges.length === 0) {
+      const narrowed = narrowedAway(discovered, 'model invocation');
+      return notApplicable(
+        narrowed === undefined
+          ? 'no model invocation was discovered'
+          : `${narrowed}, so nothing was examined`,
+      );
+    }
     const missing = modelEdges.filter((edge) => !declaresDeadline(edge));
     if (missing.length === 0) {
       const evidence = modelEdges.flatMap((edge) => edge.evidence.slice(0, 1)) as EvidenceId[];
@@ -536,7 +552,7 @@ const MODEL_DRIVEN_KINDS: readonly string[] = ['agent', 'agent_group', 'mcp_serv
 const modelReachable = (graph: IndexedGraph): ReadonlySet<string> =>
   reachableFrom(
     graph,
-    graph.graph.components
+    auditedComponents(graph)
       .filter((component) => MODEL_DRIVEN_KINDS.includes(component.kind))
       .map((component) => component.id),
   );
@@ -566,7 +582,7 @@ export const approvalBoundaryRule: Rule = {
   category: 'security',
   summary: 'Whether an operation with an external effect is guarded by an approval boundary.',
   evaluate: (context) => {
-    const consequential = context.graph.graph.components.filter(
+    const consequential = auditedComponents(context.graph).filter(
       (component) =>
         component.sideEffect === 'financial' ||
         component.sideEffect === 'destructive' ||
@@ -689,13 +705,11 @@ export const promptInjectionBoundaryRule: Rule = {
   category: 'security',
   summary: 'Places where content Orchescope cannot vouch for reaches a prompt.',
   evaluate: (context) => {
-    const prompts = context.graph
-      .componentsOfKind('prompt')
-      .filter(
-        (component) =>
-          component.details?.for === 'prompt' &&
-          component.details.interpolatesUntrustedInput === true,
-      );
+    const prompts = auditedComponentsOfKind(context.graph, 'prompt').filter(
+      (component) =>
+        component.details?.for === 'prompt' &&
+        component.details.interpolatesUntrustedInput === true,
+    );
     /*
      * Nothing to look at is not the same answer as nothing wrong. This said `clear` on a repository
      * where the adapter had built no prompt component at all, which reads as checked and fine, and the
@@ -706,10 +720,15 @@ export const promptInjectionBoundaryRule: Rule = {
       return notApplicable('no prompt was discovered that interpolates a value at run time');
     }
 
-    const untrustedSources = [
+    const discoveredSources = [
       ...context.graph.componentsOfKind('retrieval'),
       ...context.graph.componentsOfKind('tool'),
       ...context.graph.componentsOfKind('mcp_server'),
+    ];
+    const untrustedSources = [
+      ...auditedComponentsOfKind(context.graph, 'retrieval'),
+      ...auditedComponentsOfKind(context.graph, 'tool'),
+      ...auditedComponentsOfKind(context.graph, 'mcp_server'),
     ];
     /*
      * The second population, and the same defect the first one had.
@@ -724,8 +743,22 @@ export const promptInjectionBoundaryRule: Rule = {
      * interpolated prompt is a boundary to review, or one of them is empty and this looked at nothing.
      */
     if (untrustedSources.length === 0) {
+      /*
+       * The emptiness has two causes and they are not the same answer. A scope limit is this build not
+       * claiming the client, and the sentence has said so since 0.5.0. A source set that exists and is
+       * entirely fixtures is the repository saying something, and reporting it as nothing discovered would
+       * be false: on `langgraph` all three sources are test fixtures, and this rule was firing on them.
+       */
+      const inTests = declaredInTestCount(discoveredSources);
+      const only = `the only ${formatCount(discoveredSources.length, 'source')} discovered for one to carry`;
+      const emptiness =
+        discoveredSources.length === 0
+          ? 'no retrieval, tool or server output was discovered for one to carry, so nothing was examined as a source; a retrieval client this build has no adapter for looks the same here as a repository that retrieves nothing'
+          : inTests === discoveredSources.length
+            ? `${only} ${agree(discoveredSources.length, 'is', 'are')} declared in a test file, so nothing the system itself reads was examined as a source`
+            : `${only} ${agree(discoveredSources.length, 'does', 'do')} not belong to the system under audit, so nothing the system itself reads was examined as a source`;
       return notApplicable(
-        `${formatCount(prompts.length, 'prompt')} ${agree(prompts.length, 'interpolates', 'interpolate')} a value and no retrieval, tool or server output was discovered for one to carry, so nothing was examined as a source; a retrieval client this build has no adapter for looks the same here as a repository that retrieves nothing`,
+        `${formatCount(prompts.length, 'prompt')} ${agree(prompts.length, 'interpolates', 'interpolate')} a value and ${emptiness}`,
       );
     }
 
@@ -895,10 +928,11 @@ export const architectureShapeRule: Rule = {
      * endorsement of an agent system that was never found, so the claim requires an agent and a relation between
      * components before it is made.
      */
-    const hasAgent = context.graph.graph.components.some(
+    const audited = auditedComponents(context.graph);
+    const hasAgent = audited.some(
       (component) => component.kind === 'agent' || component.kind === 'agent_group',
     );
-    if (drafts.length === 0 && hasAgent && context.graph.graph.edges.length > 0) {
+    if (drafts.length === 0 && hasAgent && auditedEdges(context.graph).length > 0) {
       return fired([
         {
           ruleId: 'topology-shape',
@@ -910,8 +944,8 @@ export const architectureShapeRule: Rule = {
           title: 'The declared topology is reachable, acyclic and narrow',
           explanation: `Every declared component is reachable from an entry point, the control flow contains no cycle, and no agent coordinates more than eight downstream operations.`,
           impact: 'The system can be reasoned about one path at a time.',
-          components: context.graph.graph.components.slice(0, 5).map((component) => component.id),
-          evidence: context.graph.graph.components
+          components: audited.slice(0, 5).map((component) => component.id),
+          evidence: audited
             .slice(0, 3)
             .flatMap((component) => component.evidence.slice(0, 1)) as EvidenceId[],
           goalEligible: false,
@@ -926,7 +960,7 @@ export const architectureShapeRule: Rule = {
      * repository holding a hundred well arranged components and about one holding nothing.
      */
     return examined(drafts, {
-      count: context.graph.graph.components.length,
+      count: audited.length,
       singular: 'declared component',
     });
   },
@@ -942,7 +976,7 @@ export const broadPermissionRule: Rule = {
     }
     const drafts: FindingDraft[] = [];
     let holders = 0;
-    for (const component of context.graph.graph.components) {
+    for (const component of auditedComponents(context.graph)) {
       const writePermissions = component.permissions.filter(
         (permission) => permission.mode === 'write',
       );
@@ -1014,8 +1048,19 @@ export const unusedConfiguredToolRule: Rule = {
   category: 'maintainability',
   summary: 'A tool that exists in the declared model with nothing calling it.',
   evaluate: (context) => {
-    const tools = context.graph.componentsOfKind('tool');
-    if (tools.length === 0) return notApplicable('no tool was discovered');
+    const discovered = context.graph.componentsOfKind('tool');
+    const tools = auditedComponentsOfKind(context.graph, 'tool');
+    if (tools.length === 0) {
+      /*
+       * Two different repositories, and one sentence used to cover both. On `langgraph` the only three
+       * tools this build finds are `get_weather` fixtures under `libs/prebuilt/tests`, and saying no tool
+       * was discovered there is false about a repository whose tests are full of them.
+       */
+      const narrowed = narrowedAway(discovered, 'tool');
+      return notApplicable(
+        narrowed === undefined ? 'no tool was discovered' : `${narrowed}, so nothing was examined`,
+      );
+    }
     const orphans = tools.filter(
       (tool) =>
         !context.graph
@@ -1075,7 +1120,7 @@ export const safeRetryRule: Rule = {
   category: 'reliability',
   summary: 'A retry that is bounded and whose operation declares an idempotency key.',
   evaluate: (context) => {
-    const retries = context.graph.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
+    const retries = auditedEdges(context.graph).filter((edge) => edge.policy?.retry !== undefined);
     const safe = retries.filter((edge) => {
       const retry = edge.policy?.retry;
       return retry?.bounded === true && retry.idempotency === 'declared';

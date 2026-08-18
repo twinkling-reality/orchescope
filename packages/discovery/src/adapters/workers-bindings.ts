@@ -1,4 +1,4 @@
-import { CONFIDENCE_BANDS } from '@orchescope/domain';
+import { CONFIDENCE_BANDS, isTestFile } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type {
   ComponentIdentity,
@@ -7,7 +7,7 @@ import type {
   SourceLocation,
 } from '@orchescope/schema';
 import type { ArgumentFact, ModuleFacts } from '@orchescope/source-analysis';
-import { isTestFile } from '@orchescope/source-analysis';
+
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { asRecord, asString, type ConfigDocument, jsonPointer } from '../config-files.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
