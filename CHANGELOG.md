@@ -158,9 +158,16 @@ This version was published from a laptop with `npm publish --no-provenance`, so 
 `publishConfig` asks for provenance and the registry generates it from a workflow identity, which a laptop does
 not have, so the publish refuses until the flag says plainly that there will be none.
 
-What stands in its place is that the artifact is reproducible: `pnpm package` from this repository builds the
-tarball that was published. That is a weaker guarantee than a registry attestation and it is worth naming as
-such. It says the bytes match this source; it does not say who published them.
+What stands in its place is that the artifact is reproducible. `pnpm package` from this repository builds a
+tarball byte identical to the one on the registry, which was checked by downloading the published one and
+comparing:
+
+```
+sha256  830954e1560432d3c5a68884ad4f3883dfce149d189292de916cdaed9488fd55
+```
+
+That is a weaker guarantee than a registry attestation and it is worth naming as such. It says the bytes match
+this source; it does not say who published them.
 
 ## 0.3.0
 
