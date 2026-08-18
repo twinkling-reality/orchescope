@@ -17,7 +17,6 @@ import {
 } from '@orchescope/graph';
 import type { Component, Edge, EvidenceId, SideEffectClass } from '@orchescope/schema';
 import {
-  clear,
   examined,
   type FindingDraft,
   fired,
@@ -591,9 +590,21 @@ export const promptInjectionBoundaryRule: Rule = {
       ...context.graph.componentsOfKind('tool'),
       ...context.graph.componentsOfKind('mcp_server'),
     ];
+    /*
+     * The second population, and the same defect the first one had.
+     *
+     * This rule joins two sets and it was reporting an all clear having looked in one of them. `clear`
+     * says this was checked and was fine, and said over a source set nobody could look in, it answers a
+     * security question that was never asked. A retrieval client no adapter in this build claims
+     * produces exactly this emptiness: a retrieval application whose search results reach its prompt
+     * four lines from where the prompt is built reads here as a repository that retrieves nothing.
+     *
+     * There is no `clear` left in this rule, which is right. Either both populations exist and every
+     * interpolated prompt is a boundary to review, or one of them is empty and this looked at nothing.
+     */
     if (untrustedSources.length === 0) {
-      return clear(
-        `${formatCount(prompts.length, 'prompt')} ${agree(prompts.length, 'interpolates', 'interpolate')} a value, and no retrieval or tool output was discovered as a source`,
+      return notApplicable(
+        `${formatCount(prompts.length, 'prompt')} ${agree(prompts.length, 'interpolates', 'interpolate')} a value and no retrieval, tool or server output was discovered for one to carry, so nothing was examined as a source; a retrieval client this build has no adapter for looks the same here as a repository that retrieves nothing`,
       );
     }
 

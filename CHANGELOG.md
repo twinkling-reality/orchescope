@@ -4,6 +4,26 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### A security rule stopped reporting an all clear over a set it could not see into
+
+`prompt-injection-boundary` joins two populations, prompts and the sources whose content nobody can
+vouch for, and 0.4.0 taught it to decline over an empty first one. The second was still answering
+`clear`, which says this was checked and was fine. Said about a source set the build cannot look into it
+answers a question nobody asked, and it is the most reassuring word in the document attached to the least
+examined claim in it. The field report's target is a retrieval application whose search results reach
+`build_conversation` four lines from where the prompt is assembled, and it read here as a repository that
+retrieves nothing, because no adapter in this build claims Azure AI Search.
+
+The outcome names both populations and the limit that produced the emptiness, so a reader is told that a
+retrieval client with no adapter looks the same here as a repository that retrieves nothing. Not
+recognising that client is a scope limit and is now reported as one; reporting an all clear because of it
+was a false statement about the repository.
+
+There is no `clear` branch left in this rule, and none anywhere in the static policy rules: every one of
+them now reports through `examined`, which carries the size of what was looked at. Either both
+populations exist and each interpolated prompt is a boundary to review, or one is empty and the rule
+looked at nothing.
+
 ### A deadline reaches the relation the call declares it for
 
 `EdgePolicy.timeoutMs` is what `model-call-without-timeout` filters on, and nothing that reads source had

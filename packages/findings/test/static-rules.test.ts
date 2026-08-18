@@ -979,12 +979,35 @@ describe('what a rule says when it had nothing to look at', () => {
     assert.equal(outcome.status, 'not_applicable');
   });
 
-  it('prompt-injection-boundary is clear only once it has a prompt to be clear about', () => {
+  /*
+   * This asserted `clear` until a retrieval application showed what the word costs. The rule joins two
+   * populations and 0.4.0 taught it to decline over an empty first one; the second was still answering
+   * an all clear having looked in a set it could not see into. A repository whose search results reach
+   * its prompt four lines away reads here as one that retrieves nothing, because no adapter in this
+   * build claims its search client.
+   */
+  it('prompt-injection-boundary declines over a source population it could not look in', () => {
     const outcome = promptInjectionBoundaryRule.evaluate(
       contextFor(buildGraph([orchestrator, promptDraft(true)], [])),
     );
-    assert.equal(outcome.status, 'clear');
+    assert.equal(outcome.status, 'not_applicable');
     assert.match(outcome.detail ?? '', /1 prompt interpolates a value/);
+    assert.match(outcome.detail ?? '', /no adapter for/);
+  });
+
+  it('prompt-injection-boundary fires once both populations are there', () => {
+    const outcome = promptInjectionBoundaryRule.evaluate(
+      contextFor(buildGraph([orchestrator, promptDraft(true), lookup], [])),
+    );
+    assert.equal(outcome.status, 'fired');
+    assert.equal(outcome.drafts[0]?.polarity, 'risk');
+  });
+
+  it('prompt-injection-boundary stays quiet about a prompt that interpolates nothing', () => {
+    const outcome = promptInjectionBoundaryRule.evaluate(
+      contextFor(buildGraph([orchestrator, promptDraft(false), lookup], [])),
+    );
+    assert.equal(outcome.status, 'not_applicable');
   });
 
   it('topology-shape says how much it looked at rather than nothing at all', () => {
