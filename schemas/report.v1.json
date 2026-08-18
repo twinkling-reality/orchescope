@@ -4945,30 +4945,6 @@
                     "minimum": 0,
                     "type": "number"
                   },
-                  "ecosystem": {
-                    "anyOf": [
-                      {
-                        "const": "javascript",
-                        "type": "string"
-                      },
-                      {
-                        "const": "python",
-                        "type": "string"
-                      },
-                      {
-                        "const": "configuration",
-                        "type": "string"
-                      },
-                      {
-                        "const": "manifest",
-                        "type": "string"
-                      },
-                      {
-                        "const": "runtime",
-                        "type": "string"
-                      }
-                    ]
-                  },
                   "edgesFound": {
                     "minimum": 0,
                     "type": "integer"
@@ -4976,6 +4952,13 @@
                   "filesInspected": {
                     "minimum": 0,
                     "type": "integer"
+                  },
+                  "languages": {
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "type": "array"
                   },
                   "status": {
                     "anyOf": [
@@ -4997,7 +4980,7 @@
                 "required": [
                   "adapterId",
                   "adapterVersion",
-                  "ecosystem",
+                  "languages",
                   "componentsFound",
                   "edgesFound",
                   "filesInspected",

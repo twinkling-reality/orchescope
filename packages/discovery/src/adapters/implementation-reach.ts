@@ -72,7 +72,6 @@ const reachedBy = (
 export const implementationReachAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
-  ecosystem: 'javascript',
   // A body is a convention of the language, not a package.
   packages: [],
   appliesTo: (context) => context.implementations.all().length > 0,
@@ -125,6 +124,6 @@ export const implementationReachAdapter: AgentSystemAdapter = {
         files.add(span.file);
       }
     }
-    return { componentsFound: 0, edgesFound: edges, filesInspected: files.size };
+    return { componentsFound: 0, edgesFound: edges, filesInspected: [...files] };
   },
 };

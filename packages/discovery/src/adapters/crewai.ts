@@ -265,7 +265,6 @@ const discoverFromSource = (
 export const crewAiAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
-  ecosystem: 'python',
   packages: PACKAGES,
   appliesTo: (context) =>
     projectUses(context, PACKAGES) ||
@@ -278,7 +277,7 @@ export const crewAiAdapter: AgentSystemAdapter = {
     return {
       componentsFound: fromConfig.components + fromSource.components,
       edgesFound: fromConfig.edges + fromSource.edges,
-      filesInspected: fromSource.files.size + context.configs.length,
+      filesInspected: [...fromSource.files, ...context.configs.map((entry) => entry.path)],
     };
   },
 };

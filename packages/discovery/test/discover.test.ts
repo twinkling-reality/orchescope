@@ -157,6 +157,24 @@ const runDiscovery = async () => {
   }
 };
 
+/** One scan of a workspace the caller built, for the cases that need their own repository. */
+const scanWorkspace = async (workspace: ReturnType<typeof createTempWorkspace>) => {
+  const clock = fixedClock(Date.parse('2026-01-01T00:00:00.000Z'), 1);
+  const handle = createDeadline(30_000, clock.monotonicMs);
+  try {
+    return await discover({
+      root: workspace.root,
+      orchescopeVersion: '0.1.0',
+      clock,
+      deadline: handle,
+      traversal,
+      concurrency: 4,
+    });
+  } finally {
+    handle.dispose();
+  }
+};
+
 after(() => {
   for (const workspace of workspaces) workspace.dispose();
 });
@@ -291,6 +309,52 @@ describe('static discovery', () => {
  * The three unsupported areas have three different owners, and the corpus harness holds them apart, so the
  * discriminator each one carries is asserted here rather than left to be read out of the prose.
  */
+/**
+ * What an adapter read, measured from the files rather than declared on the adapter.
+ *
+ * The fact model is language neutral, so one adapter covers a framework in both ecosystems and any
+ * ecosystem it declared in advance was wrong for half the repositories it ran on. Six of twelve declared
+ * `javascript`, so a Python majority repository was told by its own coverage block, adapter by adapter,
+ * that JavaScript had been read.
+ */
+describe('the languages an adapter run reports', () => {
+  it('are the ones its files are written in', async () => {
+    const workspace = createTempWorkspace('orchescope-languages-');
+    workspaces.push(workspace);
+    writePythonProject(workspace, { name: 'python-only', dependencies: ['openai'] });
+    workspace.write(
+      'src/ask.py',
+      `from openai import AsyncOpenAI
+
+client = AsyncOpenAI()
+
+
+async def answer(prompt: str):
+    return await client.chat.completions.create(model="gpt-4o", messages=[])
+`,
+    );
+    const result = await scanWorkspace(workspace);
+    const modelSdk = result.graph.coverage.adapters.find(
+      (entry) => entry.adapterId === 'adapter:model-sdk',
+    );
+    assert.equal(modelSdk?.status, 'completed');
+    assert.deepEqual(modelSdk?.languages, ['python']);
+  });
+
+  it('are empty for an adapter that did not apply, rather than a language it never read', async () => {
+    const workspace = createTempWorkspace('orchescope-languages-none-');
+    workspaces.push(workspace);
+    writePythonProject(workspace, { name: 'python-only', dependencies: ['openai'] });
+    workspace.write('src/ask.py', 'value = 1\n');
+    const result = await scanWorkspace(workspace);
+    const idle = result.graph.coverage.adapters.find(
+      (entry) => entry.adapterId === 'adapter:langgraph',
+    );
+    assert.equal(idle?.status, 'not_applicable');
+    assert.deepEqual(idle?.languages, []);
+  });
+});
+
 describe('a relation whose endpoint the adapter never added', () => {
   const scanWithAdapter = async (adapter: AgentSystemAdapter) => {
     const workspace = createTempWorkspace('orchescope-discard-');
@@ -317,7 +381,6 @@ describe('a relation whose endpoint the adapter never added', () => {
   const stub = (discoverEdge: boolean): AgentSystemAdapter => ({
     id: 'adapter:stub',
     version: '1',
-    ecosystem: 'javascript',
     packages: [],
     appliesTo: () => true,
     discover: (_context, builder) => {
@@ -329,7 +392,7 @@ describe('a relation whose endpoint the adapter never added', () => {
       if (discoverEdge) {
         builder.addEdge(edgeDraft('calls_tool', agent, missing, { discoveredBy: 'adapter:stub' }));
       }
-      return { componentsFound: 1, edgesFound: discoverEdge ? 1 : 0, filesInspected: 1 };
+      return { componentsFound: 1, edgesFound: discoverEdge ? 1 : 0, filesInspected: ['src/x.ts'] };
     },
   });
 

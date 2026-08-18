@@ -244,15 +244,14 @@ const addTools = (
 export const pydanticAiAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
-  ecosystem: 'python',
   packages: PACKAGES,
   appliesTo: (context) => projectUses(context, PACKAGES),
   discover: (context, builder): AdapterFindings => {
     const agents = addAgents(context, builder);
     const tools = addTools(context, builder, agents.agents);
-    const filesInspected = context.modules.filter((module) =>
-      module.imports.some((entry) => PACKAGES.includes(entry.module)),
-    ).length;
+    const filesInspected = context.modules
+      .filter((module) => module.imports.some((entry) => PACKAGES.includes(entry.module)))
+      .map((module) => module.file);
     return {
       componentsFound: agents.components + tools.components,
       edgesFound: agents.edges + tools.edges,

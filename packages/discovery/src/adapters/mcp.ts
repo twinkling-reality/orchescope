@@ -426,7 +426,6 @@ const discoverFromSdk = (
 export const mcpAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
-  ecosystem: 'configuration',
   packages: SDK_PACKAGES,
   appliesTo: (context) =>
     projectUses(context, SDK_PACKAGES) ||
@@ -440,7 +439,7 @@ export const mcpAdapter: AgentSystemAdapter = {
     return {
       componentsFound: fromConfig.components + fromSdk.components,
       edgesFound: fromSdk.edges,
-      filesInspected: fromSdk.files.size + context.configs.length,
+      filesInspected: [...fromSdk.files, ...context.configs.map((entry) => entry.path)],
       ...(fromConfig.unresolved === 0
         ? {}
         : {

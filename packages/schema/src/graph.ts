@@ -47,7 +47,16 @@ export const AdapterRun = Type.Object(
   {
     adapterId: NonEmptyString(),
     adapterVersion: NonEmptyString(),
-    ecosystem: literals(['javascript', 'python', 'configuration', 'manifest', 'runtime'] as const),
+    /**
+     * The languages of the files this run actually inspected.
+     *
+     * Measured rather than declared. The field it replaces was a constant on the adapter, so an adapter
+     * covering both ecosystems had to pick one and six of them picked `javascript`: a Python majority
+     * repository read its coverage block and was told, per adapter, that JavaScript had been read. The
+     * fact model is language neutral by design, which is exactly why an adapter cannot answer this and
+     * only the scan can.
+     */
+    languages: Type.Array(NonEmptyString()),
     componentsFound: NonNegativeInt,
     edgesFound: NonNegativeInt,
     filesInspected: NonNegativeInt,

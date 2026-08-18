@@ -224,7 +224,6 @@ const usesBinding = (
 export const workersBindingsAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
-  ecosystem: 'configuration',
   // A deployment manifest is a convention of the platform, not a package the repository depends on.
   packages: [],
   appliesTo: (context) => context.configs.some(isWorkersManifest),
@@ -291,6 +290,6 @@ export const workersBindingsAdapter: AgentSystemAdapter = {
       }
     }
 
-    return { componentsFound: components, edgesFound: edges, filesInspected: files.size };
+    return { componentsFound: components, edgesFound: edges, filesInspected: [...files] };
   },
 };

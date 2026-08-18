@@ -262,7 +262,6 @@ const discoverGenerationCalls = (
 export const vercelAiSdkAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
-  ecosystem: 'javascript',
   packages: PACKAGES,
   appliesTo: (context) => projectUses(context, PACKAGES),
   discover: (context, builder): AdapterFindings => {
@@ -272,7 +271,7 @@ export const vercelAiSdkAdapter: AgentSystemAdapter = {
     return {
       componentsFound: tools + generations.components,
       edgesFound: generations.edges,
-      filesInspected: files.size,
+      filesInspected: [...files],
     };
   },
 };

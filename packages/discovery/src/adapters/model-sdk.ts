@@ -319,7 +319,6 @@ const registerModelCalls = (
 export const modelSdkAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
-  ecosystem: 'javascript',
   packages: ALL_PACKAGES,
   appliesTo: (context) => projectUses(context, ALL_PACKAGES),
   discover: (context, builder): AdapterFindings => {
@@ -331,7 +330,7 @@ export const modelSdkAdapter: AgentSystemAdapter = {
     return {
       componentsFound: found.components,
       edgesFound: found.edges,
-      filesInspected: found.files.size,
+      filesInspected: [...found.files],
     };
   },
 };

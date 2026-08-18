@@ -1439,7 +1439,6 @@ const discoverDecoratedRetries = (
 export const effectsAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
-  ecosystem: 'javascript',
   // A side effect is a convention, not a package.
   packages: [],
   appliesTo: (context) => context.modules.length > 0,
@@ -1477,7 +1476,7 @@ export const effectsAdapter: AgentSystemAdapter = {
     return {
       componentsFound: found.components,
       edgesFound: found.edges,
-      filesInspected: found.files.size,
+      filesInspected: [...found.files],
       ...(found.unresolvedAddresses === 0
         ? {}
         : {

@@ -380,20 +380,19 @@ const discoverModule = (
 export const langGraphAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
-  ecosystem: 'javascript',
   packages: PACKAGES,
   appliesTo: (context) => projectUses(context, PACKAGES),
   discover: (context, builder): AdapterFindings => {
     let components = 0;
     let edges = 0;
-    let filesInspected = 0;
+    const inspected: string[] = [];
     for (const module of context.modules) {
       if (!importsAny(module, PACKAGES)) continue;
-      filesInspected += 1;
+      inspected.push(module.file);
       const result = discoverModule(module, context, builder);
       components += result.components;
       edges += result.edges;
     }
-    return { componentsFound: components, edgesFound: edges, filesInspected };
+    return { componentsFound: components, edgesFound: edges, filesInspected: [...inspected] };
   },
 };

@@ -1,6 +1,5 @@
 import type { Deadline } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
-import type { AdapterRun } from '@orchescope/schema';
 import type { ManifestSet, ModuleFacts } from '@orchescope/source-analysis';
 import type { BindingRegistry } from './bindings.ts';
 import type { CallSiteEffects } from './call-site-effect.ts';
@@ -55,7 +54,14 @@ export type DiscoveryContext = {
 export type AdapterFindings = {
   readonly componentsFound: number;
   readonly edgesFound: number;
-  readonly filesInspected: number;
+  /**
+   * The files this run inspected, by path.
+   *
+   * Paths rather than a count, because the languages a run read are a fact about those files and an
+   * adapter is the wrong thing to ask: one adapter covers a framework in both ecosystems, so any answer
+   * it could give in advance is wrong for half the repositories it runs on.
+   */
+  readonly filesInspected: readonly string[];
   readonly note?: string;
   /**
    * Set when an input the project wrote on purpose could not be used, for example a manifest the schema
@@ -68,7 +74,6 @@ export type AdapterFindings = {
 export type AgentSystemAdapter = {
   readonly id: string;
   readonly version: string;
-  readonly ecosystem: AdapterRun['ecosystem'];
   /**
    * The packages this adapter claims to read, which is a coverage claim rather than a matcher.
    *

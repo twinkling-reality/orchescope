@@ -217,6 +217,15 @@ const discardedRelations = (discarded: readonly DiscardedEdge[]): readonly Unsup
   }));
 };
 
+/**
+ * The languages an adapter run read, from the files it says it inspected.
+ *
+ * Sorted so two scans of one repository produce the same document, which is what lets a corpus
+ * expectation be committed beside the repository it measures.
+ */
+const languagesOf = (files: readonly string[]): string[] =>
+  [...new Set(files.map((file) => languageOf(file)))].sort();
+
 const runAdapter = (
   adapter: AgentSystemAdapter,
   context: DiscoveryContext,
@@ -227,7 +236,6 @@ const runAdapter = (
   const base = {
     adapterId: adapter.id,
     adapterVersion: adapter.version,
-    ecosystem: adapter.ecosystem,
   };
   if (!adapter.appliesTo(context)) {
     return {
@@ -235,6 +243,7 @@ const runAdapter = (
       componentsFound: 0,
       edgesFound: 0,
       filesInspected: 0,
+      languages: [],
       durationMs: monotonicMs() - startedAt,
       status: 'not_applicable',
     };
@@ -250,17 +259,22 @@ const runAdapter = (
       componentsFound: 0,
       edgesFound: 0,
       filesInspected: 0,
+      languages: [],
       durationMs: monotonicMs() - startedAt,
       status: 'failed',
       detail: failure.message.slice(0, 500),
     };
   }
+  const read = {
+    filesInspected: findings.filesInspected.length,
+    languages: languagesOf(findings.filesInspected),
+  };
   if (findings.problem !== undefined) {
     return {
       ...base,
+      ...read,
       componentsFound: findings.componentsFound,
       edgesFound: findings.edgesFound,
-      filesInspected: findings.filesInspected,
       durationMs: monotonicMs() - startedAt,
       status: 'failed',
       detail: findings.problem.slice(0, 500),
@@ -268,9 +282,9 @@ const runAdapter = (
   }
   return {
     ...base,
+    ...read,
     componentsFound: findings.componentsFound,
     edgesFound: findings.edgesFound,
-    filesInspected: findings.filesInspected,
     durationMs: monotonicMs() - startedAt,
     status: 'completed',
     ...(findings.note === undefined ? {} : { detail: findings.note }),

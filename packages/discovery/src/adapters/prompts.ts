@@ -178,7 +178,6 @@ const addPrompt = (
 export const promptsAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
-  ecosystem: 'javascript',
   // A prompt literal belongs to no package.
   packages: [],
   appliesTo: (context) => context.modules.some((module) => module.texts.length > 0),
@@ -189,7 +188,7 @@ export const promptsAdapter: AgentSystemAdapter = {
       return {
         componentsFound: 0,
         edgesFound: 0,
-        filesInspected: 0,
+        filesInspected: [],
         note: 'no model or agent was discovered, so no string literal was treated as a prompt',
       };
     }
@@ -210,6 +209,6 @@ export const promptsAdapter: AgentSystemAdapter = {
       }
     }
 
-    return { componentsFound: components, edgesFound: edges, filesInspected: files.size };
+    return { componentsFound: components, edgesFound: edges, filesInspected: [...files] };
   },
 };

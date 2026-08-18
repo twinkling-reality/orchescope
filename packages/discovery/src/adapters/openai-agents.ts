@@ -375,16 +375,15 @@ const registerAgents = (
 export const openAiAgentsAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
-  ecosystem: 'javascript',
   packages: PACKAGES,
   appliesTo: (context) => projectUses(context, PACKAGES),
   discover: (context, builder): AdapterFindings => {
     const tools = registerTools(context, builder);
     const servers = registerMcpServers(context, builder);
     const agents = registerAgents(context, builder);
-    const filesInspected = context.modules.filter((module) =>
-      module.imports.some((entry) => PACKAGES.includes(entry.module)),
-    ).length;
+    const filesInspected = context.modules
+      .filter((module) => module.imports.some((entry) => PACKAGES.includes(entry.module)))
+      .map((module) => module.file);
     return {
       componentsFound: tools.components + servers.components + agents.components,
       edgesFound: agents.edges,

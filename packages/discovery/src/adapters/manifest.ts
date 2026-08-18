@@ -122,7 +122,6 @@ const addDeclaredEdges = (
 export const manifestAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
-  ecosystem: 'manifest',
   // The manifest is a file this repository writes, not a package it depends on.
   packages: [],
   appliesTo: (context) =>
@@ -130,7 +129,7 @@ export const manifestAdapter: AgentSystemAdapter = {
   discover: (context, builder): AdapterFindings => {
     const document = context.configs.find((candidate) => MANIFEST_PATHS.includes(candidate.path));
     if (document === undefined) {
-      return { componentsFound: 0, edgesFound: 0, filesInspected: 0 };
+      return { componentsFound: 0, edgesFound: 0, filesInspected: [] };
     }
     const validated = validateDocument(
       ManifestSchema,
@@ -142,7 +141,7 @@ export const manifestAdapter: AgentSystemAdapter = {
       return {
         componentsFound: 0,
         edgesFound: 0,
-        filesInspected: 1,
+        filesInspected: [document.path],
         problem: `${document.path} is not a valid manifest: ${formatIssues(validated.issues)}`,
       };
     }
@@ -153,7 +152,7 @@ export const manifestAdapter: AgentSystemAdapter = {
     return {
       componentsFound: manifest.components.length,
       edgesFound: addDeclaredEdges(manifest, context, builder, document.path),
-      filesInspected: 1,
+      filesInspected: [document.path],
     };
   },
 };

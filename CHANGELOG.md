@@ -4,6 +4,24 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### An adapter says what it read, not what it is about
+
+**This is the one change in this release that alters a published document.** `coverage.adapters[].ecosystem`
+is gone and `coverage.adapters[].languages` is there instead. A consumer reading the old field finds
+nothing; a consumer validating against `schemas/report.v1.json` or `schemas/system-graph.v1.json` needs
+the new file. Nothing inside the product read the field, and no stored scan is validated on read, so an
+existing `.orchescope` directory keeps working.
+
+The field was a constant declared on the adapter. The fact model is language neutral on purpose, which
+is what lets one adapter cover a framework in both ecosystems, so any ecosystem an adapter named in
+advance was wrong for half the repositories it ran on: six of the twelve said `javascript`, including the
+two that read `openai-agents-python` and the Python `langgraph`. A Python majority repository was told by
+its own coverage block, adapter by adapter, that JavaScript had been read.
+
+An adapter now reports the files it inspected rather than how many, and the scan reads their languages
+off the paths. `model-sdk` on a Python repository says `python`, `effects` says `python, typescript`, and
+an adapter that did not apply says nothing rather than naming a language it never opened.
+
 ### The checks that would have found the last four reports
 
 Four field reports have now filed the same defect under four names, and every one of them arrived because
