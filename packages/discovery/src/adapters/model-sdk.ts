@@ -12,6 +12,12 @@ import {
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
 import { importsAny, moduleMatches, projectUses } from '../matching.ts';
+import {
+  clientTimeoutMs,
+  type DeclaredDeadline,
+  deadlineOfRelation,
+  modelCallDeadline,
+} from '../model-deadline.ts';
 
 /**
  * Raw model SDK usage.
@@ -72,12 +78,31 @@ const matchesMethod = (call: CallFact, methods: readonly string[]): string | und
 
 type Discovered = { components: number; edges: number; files: Set<string> };
 
+/** The variable a construction was assigned to, which is the name every later call reaches it by. */
+const variableHolding = (module: ModuleFacts, call: CallFact): string | undefined =>
+  module.definitions.find(
+    (definition) =>
+      definition.kind === 'variable' &&
+      definition.initializer !== undefined &&
+      dotted(definition.initializer) === dotted(call.calleePath),
+  )?.name;
+
+/**
+ * The deadline each client variable in one module was constructed with.
+ *
+ * Resolved within the module that constructs the client and no further. A repository that builds its
+ * client once and hands it to whatever needs it, which is how the larger Python applications are
+ * written, gives a call site no syntactic route back to the construction, and following a constructor
+ * parameter across files would be an answer the source has not settled. Where the client cannot be
+ * resolved this contributes nothing, the relation carries no deadline, and the rule keeps saying so.
+ */
 const registerProviderClients = (
   module: ModuleFacts,
   builder: SystemGraphBuilder,
   context: DiscoveryContext,
   found: Discovered,
-): void => {
+): ReadonlyMap<string, number> => {
+  const deadlines = new Map<string, number>();
   for (const provider of PROVIDERS) {
     if (!importsAny(module, provider.packages)) continue;
     for (const call of module.calls) {
@@ -86,7 +111,7 @@ const registerProviderClients = (
       const resolved =
         call.origin !== undefined && moduleMatches(call.origin.module, provider.packages);
       const entries = objectArgument(call);
-      const timeout = numberValue(findEntry(entries, 'timeout')?.value);
+      const timeout = clientTimeoutMs(call, module.language);
       const baseUrlFromConfig =
         stringValue(findEntry(entries, 'baseURL')?.value) ??
         stringValue(findEntry(entries, 'base_url')?.value);
@@ -112,104 +137,167 @@ const registerProviderClients = (
       );
       found.components += 1;
       found.files.add(module.file);
-      const definitionName = module.definitions.find(
-        (definition) =>
-          definition.kind === 'variable' &&
-          definition.initializer !== undefined &&
-          dotted(definition.initializer) === dotted(call.calleePath),
-      )?.name;
+      const definitionName = variableHolding(module, call);
       if (definitionName !== undefined) {
         context.bindings.register(module.file, definitionName, providerIdentity(provider.provider));
+        if (timeout !== undefined) deadlines.set(definitionName, timeout);
       }
     }
   }
+  return deadlines;
+};
+
+/** The name a call reaches its client by, which is the callee path with the method suffix removed. */
+const clientReceiver = (call: CallFact, method: string): string =>
+  dotted(call.calleePath.slice(0, call.calleePath.length - method.split('.').length));
+
+type ModelCall = {
+  readonly call: CallFact;
+  readonly provider: (typeof PROVIDERS)[number];
+  readonly method: string;
+  readonly model: string;
+  readonly deadline: DeclaredDeadline | undefined;
+};
+
+const modelCallsIn = (
+  module: ModuleFacts,
+  clientDeadlines: ReadonlyMap<string, number>,
+): readonly ModelCall[] => {
+  const calls: ModelCall[] = [];
+  for (const provider of PROVIDERS) {
+    if (!importsAny(module, provider.packages)) continue;
+    for (const call of module.calls) {
+      const method = matchesMethod(call, provider.methods);
+      if (method === undefined) continue;
+      calls.push({
+        call,
+        provider,
+        method,
+        model: stringValue(findEntry(objectArgument(call), 'model')?.value) ?? 'unspecified',
+        deadline: modelCallDeadline(
+          call,
+          module.language,
+          clientDeadlines.get(clientReceiver(call, method)),
+        ),
+      });
+    }
+  }
+  return calls;
+};
+
+/**
+ * The deadline each relation may claim, keyed by the caller and model it joins.
+ *
+ * Computed across the module before any edge is written, because a relation stands for every call one
+ * function makes to one model and the answer is a property of that set rather than of whichever call
+ * was read last.
+ */
+const relationDeadlines = (calls: readonly ModelCall[]): ReadonlyMap<string, DeclaredDeadline> => {
+  const grouped = new Map<string, (DeclaredDeadline | undefined)[]>();
+  for (const entry of calls) {
+    if (entry.call.enclosing === undefined) continue;
+    const key = `${entry.call.enclosing} ${entry.provider.provider}/${entry.model}`;
+    const bucket = grouped.get(key);
+    if (bucket === undefined) grouped.set(key, [entry.deadline]);
+    else bucket.push(entry.deadline);
+  }
+  const declared = new Map<string, DeclaredDeadline>();
+  for (const [key, deadlines] of grouped) {
+    const deadline = deadlineOfRelation(deadlines);
+    if (deadline !== undefined) declared.set(key, deadline);
+  }
+  return declared;
 };
 
 const registerModelCalls = (
   module: ModuleFacts,
   builder: SystemGraphBuilder,
   found: Discovered,
+  clientDeadlines: ReadonlyMap<string, number>,
 ): void => {
-  for (const provider of PROVIDERS) {
-    if (!importsAny(module, provider.packages)) continue;
-    for (const call of module.calls) {
-      const method = matchesMethod(call, provider.methods);
-      if (method === undefined) continue;
-      const entries = objectArgument(call);
-      const model = stringValue(findEntry(entries, 'model')?.value) ?? 'unspecified';
-      const maxTokens =
-        numberValue(findEntry(entries, 'max_tokens')?.value) ??
-        numberValue(findEntry(entries, 'maxTokens')?.value) ??
-        numberValue(findEntry(entries, 'max_output_tokens')?.value);
-      const temperature = numberValue(findEntry(entries, 'temperature')?.value);
-      const streaming = method.includes('stream') || findEntry(entries, 'stream') !== undefined;
+  const modelCalls = modelCallsIn(module, clientDeadlines);
+  const declared = relationDeadlines(modelCalls);
+  for (const { call, provider, method, model } of modelCalls) {
+    const entries = objectArgument(call);
+    const maxTokens =
+      numberValue(findEntry(entries, 'max_tokens')?.value) ??
+      numberValue(findEntry(entries, 'maxTokens')?.value) ??
+      numberValue(findEntry(entries, 'max_output_tokens')?.value);
+    const temperature = numberValue(findEntry(entries, 'temperature')?.value);
+    const streaming = method.includes('stream') || findEntry(entries, 'stream') !== undefined;
 
+    builder.addComponent(
+      drafts.sourceComponent({
+        kind: 'model',
+        identity: modelIdentity(provider.provider, model),
+        file: module.file,
+        name: `${provider.provider}/${model}`,
+        location: call.location,
+        symbol: dotted(call.calleePath),
+        confidence: CONFIDENCE_BANDS.deterministic,
+        details: {
+          for: 'model',
+          provider: provider.provider,
+          modelId: model,
+          streaming,
+          ...(temperature === undefined ? {} : { temperature }),
+          ...(maxTokens === undefined ? {} : { maxOutputTokens: maxTokens }),
+        },
+        metadata: { callSite: dotted(call.calleePath), operation: method },
+        tags: ['model-sdk'],
+      }),
+    );
+    found.components += 1;
+    found.files.add(module.file);
+
+    builder.addEdge(
+      drafts.edge({
+        kind: 'served_by_provider',
+        from: modelIdentity(provider.provider, model),
+        to: providerIdentity(provider.provider),
+        location: call.location,
+        symbol: dotted(call.calleePath),
+      }),
+    );
+    found.edges += 1;
+
+    // The caller is attributed to its enclosing function, recorded as an entry point when the
+    // repository has no framework declared agent to attach the call to.
+    const enclosing = call.enclosing;
+    if (enclosing !== undefined) {
+      const callerIdentity = sourceIdentity('agent', module.file, enclosing);
+      const deadline = declared.get(`${enclosing} ${provider.provider}/${model}`);
       builder.addComponent(
         drafts.sourceComponent({
-          kind: 'model',
-          identity: modelIdentity(provider.provider, model),
+          kind: 'agent',
           file: module.file,
-          name: `${provider.provider}/${model}`,
+          name: enclosing,
           location: call.location,
-          symbol: dotted(call.calleePath),
-          confidence: CONFIDENCE_BANDS.deterministic,
-          details: {
-            for: 'model',
-            provider: provider.provider,
-            modelId: model,
-            streaming,
-            ...(temperature === undefined ? {} : { temperature }),
-            ...(maxTokens === undefined ? {} : { maxOutputTokens: maxTokens }),
-          },
-          metadata: { callSite: dotted(call.calleePath), operation: method },
-          tags: ['model-sdk'],
+          symbol: enclosing,
+          confidence: CONFIDENCE_BANDS.heuristic,
+          details: { for: 'agent', role: 'unspecified', framework: 'hand-written' },
+          metadata: { inferredFrom: 'model call site' },
+          tags: ['hand-written-loop'],
         }),
       );
       found.components += 1;
-      found.files.add(module.file);
-
       builder.addEdge(
         drafts.edge({
-          kind: 'served_by_provider',
-          from: modelIdentity(provider.provider, model),
-          to: providerIdentity(provider.provider),
+          kind: 'invokes_model',
+          from: callerIdentity,
+          to: modelIdentity(provider.provider, model),
           location: call.location,
           symbol: dotted(call.calleePath),
+          confidence: CONFIDENCE_BANDS.structural,
+          ...(deadline === undefined
+            ? {}
+            : {
+                policy: { timeoutMs: deadline.timeoutMs },
+                metadata: { timeoutDeclaredAt: deadline.declaredAt },
+              }),
         }),
       );
       found.edges += 1;
-
-      // The caller is attributed to its enclosing function, recorded as an entry point when the
-      // repository has no framework declared agent to attach the call to.
-      const enclosing = call.enclosing;
-      if (enclosing !== undefined) {
-        const callerIdentity = sourceIdentity('agent', module.file, enclosing);
-        builder.addComponent(
-          drafts.sourceComponent({
-            kind: 'agent',
-            file: module.file,
-            name: enclosing,
-            location: call.location,
-            symbol: enclosing,
-            confidence: CONFIDENCE_BANDS.heuristic,
-            details: { for: 'agent', role: 'unspecified', framework: 'hand-written' },
-            metadata: { inferredFrom: 'model call site' },
-            tags: ['hand-written-loop'],
-          }),
-        );
-        found.components += 1;
-        builder.addEdge(
-          drafts.edge({
-            kind: 'invokes_model',
-            from: callerIdentity,
-            to: modelIdentity(provider.provider, model),
-            location: call.location,
-            symbol: dotted(call.calleePath),
-            confidence: CONFIDENCE_BANDS.structural,
-          }),
-        );
-        found.edges += 1;
-      }
     }
   }
 };
@@ -223,8 +311,8 @@ export const modelSdkAdapter: AgentSystemAdapter = {
   discover: (context, builder): AdapterFindings => {
     const found: Discovered = { components: 0, edges: 0, files: new Set() };
     for (const module of context.modules) {
-      registerProviderClients(module, builder, context, found);
-      registerModelCalls(module, builder, found);
+      const clientDeadlines = registerProviderClients(module, builder, context, found);
+      registerModelCalls(module, builder, found, clientDeadlines);
     }
     return {
       componentsFound: found.components,

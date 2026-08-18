@@ -4,6 +4,33 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### A deadline reaches the relation the call declares it for
+
+`EdgePolicy.timeoutMs` is what `model-call-without-timeout` filters on, and nothing that reads source had
+ever written it: the only producer in the repository was a hand written manifest. The rule fired on every
+repository with a model call in it, the goal cut from it asked for a timeout at the client or the call
+site, and neither answered it, because the answer had nowhere to go. A field report added `timeout=60.0`
+to all five call sites its goal named, rescanned, was told nothing had changed, added it to the client
+construction as well, and was told the same. This is the mirror of the defect 0.4.0 fixed in the other
+polarity, where a strength could be earned only by writing the answer into a manifest, and it is worse:
+an operator who does exactly what the goal asks gets `not validated`.
+
+A model invocation now carries the deadline its own call declares, and where the client can be resolved,
+the one its client declares, with the relation recording which of the two it read. The two are different
+facts and a reader acting on either needs to know which they have: a timeout on the client covers every
+call made through it, and a timeout on a call covers that call and leaves its neighbours undefended.
+
+The unit is read rather than copied. The Python clients for `openai` and `anthropic` hand the value to
+httpx and take seconds; their JavaScript clients take milliseconds. `timeout=60.0` had been recorded as
+sixty milliseconds, which reconciliation would have read as a deadline every call it observed had
+overrun.
+
+Two limits, stated rather than guessed past. A client is resolved within the module that constructs it
+and no further, so an application that builds its client once and hands it to whatever needs it gives the
+call site no route back and the relation carries nothing. And a relation standing for several calls
+claims a deadline only when every call it stands for declares one, because a function that times one of
+its two calls has not given the relation a deadline.
+
 ### A note beside an argument was counted as one
 
 The parser reports a comment as a named child of an argument list, and a `**` splat was being counted as

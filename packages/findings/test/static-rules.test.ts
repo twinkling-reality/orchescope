@@ -904,6 +904,59 @@ describe('the fix offered for a model call with no timeout', () => {
 });
 
 /**
+ * A rule that could not be cleared.
+ *
+ * `EdgePolicy.timeoutMs` is what this rule filters on, and until the deadline join every adapter that
+ * reads source wrote it nowhere: the only producer in the repository was a hand written manifest. So the
+ * rule fired on every repository with a model call in it and no change to any source file, in any
+ * language, could answer it, while the goal cut from it asked for exactly that change. A rule needs a
+ * test that fires it, a test that proves it stays quiet without evidence, and a test that proves it can
+ * be cleared at all. It is the third that was missing, and the third is the one that fails without the
+ * join.
+ */
+describe('model-call-without-timeout', () => {
+  const planner = componentDraft({ kind: 'agent', name: 'planner', file: 'src/plan.ts' });
+  const model = componentDraft({
+    kind: 'model',
+    name: 'openai/gpt-4.1-mini',
+    file: 'src/plan.ts',
+  });
+  const invocation = (extra: Partial<EdgeDraft>) =>
+    contextFor(buildGraph([planner, model], [edgeDraft('invokes_model', planner, model, extra)]));
+
+  it('fires when the relation declares no deadline', () => {
+    const outcome = missingTimeoutRule.evaluate(invocation({}));
+    assert.equal(outcome.status, 'fired');
+    assert.equal(outcome.drafts[0]?.polarity, 'risk');
+  });
+
+  it('declines when no model invocation was discovered', () => {
+    const outcome = missingTimeoutRule.evaluate(contextFor(buildGraph([planner], [])));
+    assert.equal(outcome.status, 'not_applicable');
+  });
+
+  it('is cleared by a deadline on the relation', () => {
+    const outcome = missingTimeoutRule.evaluate(invocation({ policy: { timeoutMs: 60_000 } }));
+    assert.equal(outcome.drafts[0]?.polarity, 'strength');
+  });
+
+  it('says whether the deadline was written at the call or at its client', () => {
+    const outcome = missingTimeoutRule.evaluate(
+      invocation({
+        policy: { timeoutMs: 60_000 },
+        metadata: { timeoutDeclaredAt: 'client' },
+      }),
+    );
+    assert.match(outcome.drafts[0]?.explanation ?? '', /1 at the client/);
+  });
+
+  it('says nothing about where a deadline was written when the relation does not record it', () => {
+    const outcome = missingTimeoutRule.evaluate(invocation({ policy: { timeoutMs: 60_000 } }));
+    assert.doesNotMatch(outcome.drafts[0]?.explanation ?? '', /call site|client/);
+  });
+});
+
+/**
  * A status word is a claim, and over an empty population it is a false one.
  *
  * `clear` says this was checked and was fine. Said about a repository where the adapter built no prompt

@@ -309,6 +309,210 @@ export async function answer(prompt: string) {
 });
 
 /**
+ * The deadline a model call declares.
+ *
+ * A rule that filters on `EdgePolicy.timeoutMs` could not be cleared by any change to any source file,
+ * in any language, because nothing that reads source had ever written that field: the only producer in
+ * the repository was a hand written manifest. A field report added a timeout at every call site the goal
+ * named and then at the client as well, rescanned, and was told nothing had changed.
+ *
+ * Each case here has its pair, because the two ecosystems spell this differently in both of the ways
+ * that matter. Python takes seconds among the keyword arguments; JavaScript takes milliseconds in a
+ * second request options argument. One fixture would have proved the reading works for whichever half
+ * its author wrote.
+ */
+describe('a deadline a model call declares', () => {
+  const timeoutOf = (
+    result: Awaited<ReturnType<typeof scan>>['result'],
+    from: string,
+  ): { readonly ms: number | undefined; readonly declaredAt: unknown } => {
+    const edge = result.graph.edges.find(
+      (entry) => entry.kind === 'invokes_model' && entry.from === from,
+    );
+    assert.ok(edge !== undefined, `no invokes_model edge from ${from}`);
+    return { ms: edge.policy?.timeoutMs, declaredAt: edge.metadata['timeoutDeclaredAt'] };
+  };
+
+  it('reads a Python call site timeout as the seconds its SDK takes', async () => {
+    const { result } = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'deadline-py', dependencies: ['openai>=1.40'] });
+      workspace.write(
+        'app/embeddings.py',
+        `from openai import AsyncOpenAI
+
+client = AsyncOpenAI(api_key="k")
+
+
+async def compute_embedding(text: str):
+    return await client.embeddings.create(
+        model="text-embedding-3-large", input=text, timeout=60.0
+    )
+`,
+      );
+    });
+    assert.deepEqual(timeoutOf(result, 'agent:compute_embedding'), {
+      ms: 60_000,
+      declaredAt: 'call site',
+    });
+  });
+
+  it('reads a JavaScript call site timeout from the request options, in milliseconds', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'deadline-js', dependencies: { openai: '^6.0.0' } });
+      workspace.write(
+        'src/answer.ts',
+        `import OpenAI from 'openai';
+
+const client = new OpenAI();
+
+export async function answer(prompt: string) {
+  return client.chat.completions.create(
+    { model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }] },
+    { timeout: 5000 },
+  );
+}
+`,
+      );
+    });
+    assert.deepEqual(timeoutOf(result, 'agent:answer'), { ms: 5000, declaredAt: 'call site' });
+  });
+
+  it('carries the deadline of the client a call goes through', async () => {
+    const { result } = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'client-deadline-py', dependencies: ['openai>=1.40'] });
+      workspace.write(
+        'app/embeddings.py',
+        `from openai import AsyncOpenAI
+
+client = AsyncOpenAI(api_key="k", timeout=30.0)
+
+
+async def compute_embedding(text: str):
+    return await client.embeddings.create(model="text-embedding-3-large", input=text)
+`,
+      );
+    });
+    assert.deepEqual(timeoutOf(result, 'agent:compute_embedding'), {
+      ms: 30_000,
+      declaredAt: 'client',
+    });
+  });
+
+  it('prefers the timeout on the call to the one on its client', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'both-js', dependencies: { openai: '^6.0.0' } });
+      workspace.write(
+        'src/answer.ts',
+        `import OpenAI from 'openai';
+
+const client = new OpenAI({ timeout: 30000 });
+
+export async function answer(prompt: string) {
+  return client.chat.completions.create(
+    { model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }] },
+    { timeout: 5000 },
+  );
+}
+`,
+      );
+    });
+    assert.deepEqual(timeoutOf(result, 'agent:answer'), { ms: 5000, declaredAt: 'call site' });
+  });
+
+  it('carries nothing when the client was constructed in another module', async () => {
+    const { result } = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'injected-py', dependencies: ['openai>=1.40'] });
+      workspace.write(
+        'app/clients.py',
+        `from openai import AsyncOpenAI
+
+client = AsyncOpenAI(api_key="k", timeout=30.0)
+`,
+      );
+      workspace.write(
+        'app/embeddings.py',
+        `from openai import AsyncOpenAI
+
+
+class Embedder:
+    def __init__(self, openai_client: AsyncOpenAI):
+        self.openai_client = openai_client
+
+    async def compute_embedding(self, text: str):
+        return await self.openai_client.embeddings.create(
+            model="text-embedding-3-large", input=text
+        )
+`,
+      );
+    });
+    assert.deepEqual(timeoutOf(result, 'agent:compute_embedding'), {
+      ms: undefined,
+      declaredAt: undefined,
+    });
+  });
+
+  it('carries nothing when the timeout is not a number the source states', async () => {
+    const { result } = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'computed-py', dependencies: ['openai>=1.40'] });
+      workspace.write(
+        'app/embeddings.py',
+        `import httpx
+from openai import AsyncOpenAI
+
+client = AsyncOpenAI(api_key="k", timeout=httpx.Timeout(30.0))
+
+
+async def compute_embedding(text: str):
+    return await client.embeddings.create(model="text-embedding-3-large", input=text)
+`,
+      );
+    });
+    assert.deepEqual(timeoutOf(result, 'agent:compute_embedding'), {
+      ms: undefined,
+      declaredAt: undefined,
+    });
+  });
+
+  it('declines to give a relation a deadline when one of its calls has none', async () => {
+    const { result } = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'partial-py', dependencies: ['openai>=1.40'] });
+      workspace.write(
+        'app/answers.py',
+        `from openai import AsyncOpenAI
+
+client = AsyncOpenAI(api_key="k")
+
+
+async def answer(text: str):
+    await client.chat.completions.create(model="gpt-4o", messages=[], timeout=30.0)
+    return await client.chat.completions.create(model="gpt-4o", messages=[])
+`,
+      );
+    });
+    assert.deepEqual(timeoutOf(result, 'agent:answer'), { ms: undefined, declaredAt: undefined });
+  });
+
+  it('carries the longest deadline when the calls a relation stands for disagree', async () => {
+    const { result } = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'widest-py', dependencies: ['openai>=1.40'] });
+      workspace.write(
+        'app/answers.py',
+        `from openai import AsyncOpenAI
+
+client = AsyncOpenAI(api_key="k")
+
+
+async def answer(text: str):
+    await client.chat.completions.create(model="gpt-4o", messages=[], timeout=30.0)
+    return await client.chat.completions.create(model="gpt-4o", messages=[], timeout=90.0)
+`,
+      );
+    });
+    assert.deepEqual(timeoutOf(result, 'agent:answer'), { ms: 90_000, declaredAt: 'call site' });
+  });
+});
+
+/**
  * LangGraph in Python.
  *
  * The fixture is written the way the library's own documentation writes it: `add_node(fn)` takes the function's

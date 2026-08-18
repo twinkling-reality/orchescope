@@ -314,6 +314,24 @@ export const unboundedRetryRule: Rule = {
   },
 };
 
+/**
+ * Where the deadlines a set of relations carry were written.
+ *
+ * The two cover different populations and a reader acting on this needs to know which they have: a
+ * timeout on the client governs every call made through it, so one line covers work nobody has written
+ * yet, while a timeout on a call governs that call and leaves its neighbours undefended. Absent where
+ * the relation came from a manifest, which states the number and not where the code says it.
+ */
+const deadlineOrigins = (edges: readonly Edge[]): string | undefined => {
+  const atCallSite = edges.filter((edge) => edge.metadata['timeoutDeclaredAt'] === 'call site');
+  const atClient = edges.filter((edge) => edge.metadata['timeoutDeclaredAt'] === 'client');
+  const parts = [
+    atCallSite.length === 0 ? undefined : `${atCallSite.length} at the call site`,
+    atClient.length === 0 ? undefined : `${atClient.length} at the client`,
+  ].filter((part): part is string => part !== undefined);
+  return parts.length === 0 ? undefined : parts.join(' and ');
+};
+
 export const missingTimeoutRule: Rule = {
   id: 'model-call-without-timeout',
   category: 'reliability',
@@ -324,6 +342,7 @@ export const missingTimeoutRule: Rule = {
     const missing = modelEdges.filter((edge) => edge.policy?.timeoutMs === undefined);
     if (missing.length === 0) {
       const evidence = modelEdges.flatMap((edge) => edge.evidence.slice(0, 1)) as EvidenceId[];
+      const origins = deadlineOrigins(modelEdges);
       return fired([
         {
           ruleId: 'model-call-without-timeout',
@@ -333,7 +352,7 @@ export const missingTimeoutRule: Rule = {
           confidence: CONFIDENCE_BANDS.strongStructural,
           basis: 'discovered',
           title: 'Every discovered model invocation declares a timeout',
-          explanation: `All ${formatCount(modelEdges.length, 'model call')} carry an explicit timeout, so a hung provider cannot stall a run indefinitely.`,
+          explanation: `All ${formatCount(modelEdges.length, 'model call')} carry an explicit timeout${origins === undefined ? '' : `, ${origins}`}, so a hung provider cannot stall a run indefinitely.`,
           impact:
             'A slow or hanging provider fails fast instead of consuming the whole run budget.',
           components: modelEdges.map((edge) => edge.from),
