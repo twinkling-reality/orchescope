@@ -1,0 +1,129 @@
+{
+  "adapters": {
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 6,
+      "edgesFound": 3,
+      "filesInspected": 2,
+      "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 19,
+      "edgesFound": 12,
+      "filesInspected": 4,
+      "status": "completed"
+    },
+    "adapter:prompts": {
+      "componentsFound": 15,
+      "edgesFound": 0,
+      "filesInspected": 4,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:search-index": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": true,
+  "components": {
+    "byKind": {
+      "agent": 8,
+      "entrypoint": 3,
+      "external_service": 2,
+      "prompt": 14,
+      "queue": 1,
+      "tool": 11
+    },
+    "total": 39
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 35,
+    "inSupportedLanguages": 30,
+    "parsed": 30,
+    "skipped": 0,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "configured-tool-has-no-caller": 1,
+      "observability-coverage": 1,
+      "prompt-injection-boundary": 1,
+      "topology-shape": 1
+    },
+    "bySeverity": {
+      "info": 1,
+      "low": 2,
+      "medium": 1
+    },
+    "strengths": 0,
+    "total": 4
+  },
+  "foundNothing": [],
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "openai-cs-agents-demo",
+  "relations": {
+    "byKind": {
+      "calls_service": 2,
+      "calls_tool": 12,
+      "publishes_to_queue": 1
+    },
+    "total": 15
+  }
+}

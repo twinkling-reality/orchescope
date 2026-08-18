@@ -4,6 +4,22 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### Three applications in the corpus, where there was one
+
+The corpus pinned six frameworks and one third party application. Every field report so far has been an
+application, which is the plainest available explanation for why they kept finding things thirteen pinned
+repositories did not: the frameworks are measured continuously and the systems built with them were not.
+
+`gpt-researcher` is a LangGraph application at 763 files where five adapters contribute at once.
+`open-deep-research` is 45 files carrying a LangGraph application, an Azure search client and a model call
+with no declared deadline, and it is the only pinned repository that reaches a search index, so the
+`retrieval` component kind now has a producer outside a fixture. `openai-cs-agents-demo` is 43 files whose
+findings were checked against the source by hand: `baggage_tool` is defined in `tools.py` and named in no
+agent's tool list, so both rules that report it are right.
+
+`pydantic-deepagents` was scanned and not pinned. It reports sixteen agents and ten of them are in
+`tests/`, so what it would record today is a number a decision about test files would change.
+
 ### A prompt only a test writes
 
 `prompt-injection-boundary` fired on 91 prompts on one field report's target, and several of the source

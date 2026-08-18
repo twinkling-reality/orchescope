@@ -1,0 +1,135 @@
+{
+  "adapters": {
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 5,
+      "edgesFound": 4,
+      "filesInspected": 1,
+      "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 30,
+      "edgesFound": 31,
+      "filesInspected": 8,
+      "status": "completed"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 29,
+      "edgesFound": 3,
+      "filesInspected": 7,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:search-index": {
+      "componentsFound": 4,
+      "edgesFound": 2,
+      "filesInspected": 1,
+      "status": "completed"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": true,
+  "components": {
+    "byKind": {
+      "agent": 23,
+      "agent_group": 3,
+      "entrypoint": 4,
+      "external_service": 1,
+      "model": 1,
+      "prompt": 29,
+      "provider": 1,
+      "retrieval": 1
+    },
+    "total": 63
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 27,
+    "inSupportedLanguages": 22,
+    "parsed": 22,
+    "skipped": 0,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "model-call-without-timeout": 1,
+      "observability-coverage": 1,
+      "topology-shape": 1
+    },
+    "bySeverity": {
+      "info": 2,
+      "medium": 1
+    },
+    "strengths": 1,
+    "total": 3
+  },
+  "foundNothing": [
+    "mcp is imported here and its adapter found nothing"
+  ],
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "open-deep-research",
+  "relations": {
+    "byKind": {
+      "calls_service": 1,
+      "contains": 23,
+      "hands_off_to": 8,
+      "invokes_model": 1,
+      "queries_retrieval": 2,
+      "served_by_provider": 1,
+      "uses_prompt": 3
+    },
+    "total": 39
+  }
+}

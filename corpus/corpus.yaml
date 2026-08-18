@@ -178,6 +178,41 @@ repositories:
       imports the MCP SDK in source while the MCP adapter reads configuration files, and that gap is reported as a
       blind spot rather than hidden.
 
+  - name: gpt-researcher
+    source: git
+    url: https://github.com/assafelovic/gpt-researcher.git
+    commit: 5d84d2f5553e70a2765a8ff3a0d2672d60437ce8
+    kind: agent_system
+    why: >-
+      An application built on a framework this build claims, which is the shape every other agent_system entry here
+      is not: six of them are the frameworks themselves, and their graphs are mostly their own test suites. Every
+      field report so far has been an application, which is why they found what this corpus did not. Five adapters
+      contribute here at once, langgraph beside effects, prompts, mcp and model-sdk, so a reader that stops
+      recognising an application while still recognising its framework's own repository shows up as a diff.
+
+  - name: open-deep-research
+    source: git
+    url: https://github.com/langchain-ai/open_deep_research.git
+    commit: 1b7d2e80db9faa586165c60e09096dbbfd483a64
+    kind: agent_system
+    why: >-
+      The only pinned repository that reaches a search index, so it is what stops the retrieval component kind
+      going back to having no producer outside a fixture. Small and dense rather than large: 45 files carrying a
+      LangGraph application, an Azure search client and a model call with no declared deadline, which is three
+      readers joined on one graph in a repository a person can read in an afternoon.
+
+  - name: openai-cs-agents-demo
+    source: git
+    url: https://github.com/openai/openai-cs-agents-demo.git
+    commit: bd7bfca0f5abf50529370814c3e7c88542011925
+    kind: agent_system
+    why: >-
+      Two findings on this repository were checked against the source by hand and are true: baggage_tool is defined
+      in tools.py and named in no agent's tool list, so configured-tool-has-no-caller and the unreachable half of
+      topology-shape are both right about it. A rule loosened until it stops seeing that, or tightened until it
+      reports the tools that are wired, moves this entry. Forty three files, so the whole of what it claims can be
+      read against the source.
+
   - name: flask
     source: git
     url: https://github.com/pallets/flask.git
