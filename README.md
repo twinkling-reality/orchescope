@@ -59,7 +59,7 @@ repository, so you can check that what you installed is what this source builds:
 ```
 pnpm install
 pnpm package                       # builds the bundle, packs, installs and audits with it
-npm install -g release/orchescope-0.4.0.tgz
+npm install -g release/orchescope-0.5.0.tgz
 ```
 
 `pnpm package` also installs the tarball into a temporary prefix and audits a project with it, so a failure there means the
@@ -109,8 +109,8 @@ Every command accepts `--json` and then writes exactly one JSON document to stan
 document has the same four keys whatever happened, so a caller never special cases an outcome:
 
 ```json
-{ "ok": true, "command": "audit", "version": "0.4.0", "data": { "…": "…" } }
-{ "ok": false, "command": "audit", "version": "0.4.0", "data": null, "error": { "code": "…", "category": "…", "message": "…" } }
+{ "ok": true, "command": "audit", "version": "0.5.0", "data": { "…": "…" } }
+{ "ok": false, "command": "audit", "version": "0.5.0", "data": null, "error": { "code": "…", "category": "…", "message": "…" } }
 ```
 
 Exit codes are part of the interface: `0` success, `1` findings at or above a `--fail-on` threshold, `2` a caller mistake,
@@ -192,7 +192,8 @@ Only what is tested is claimed. Each of these has an adapter exercised by tests 
 | CrewAI (Python) | `Agent(...)`, `Crew(...)`, `config/agents.yaml` including the model its `llm` field names |
 | Pydantic AI (Python) | `Agent('provider:model', ...)`, `@agent.tool` and `@agent.tool_plain`, `retries`, `requires_approval`, `output_type` |
 | Vercel AI SDK (JavaScript and TypeScript) | `generateText`, `tool(...)`, `maxSteps` |
-| Model SDKs | OpenAI, Anthropic and compatible clients, including base URL overrides |
+| Model SDKs | OpenAI, Anthropic and compatible clients, including base URL overrides and a request timeout read at the client or the call site |
+| Tenacity (Python) | `AsyncRetrying(...)` iterated in a loop and `@retry(...)` over a function, with the ceiling from `stop_after_attempt` and the wait from `wait_exponential` and `wait_random_exponential` |
 | Model Context Protocol | `.mcp.json`, `.vscode/mcp.json`, and `FastMCP` including `from mcp.server import` and the `@mcp.tool()` decorator |
 | Cloudflare Workers bindings | `wrangler.toml` anywhere in the workspace: `d1_databases` and `kv_namespaces`, joined to the code by the binding name |
 | OpenTelemetry | OTLP over HTTP, protobuf and JSON, `gen_ai.*` attributes |

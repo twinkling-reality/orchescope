@@ -2,7 +2,21 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
-## Unreleased
+## 0.5.0
+
+Released 2026-08-18 from npm as `orchescope@0.5.0`, published locally with `npm publish --no-provenance`,
+so this release carries no registry attestation.
+
+This answers the fourth field report, against a retrieval application built on Azure OpenAI: 655 files,
+Python majority with a TypeScript frontend. Two of its six items were withdrawn on inspection, one of
+them measured against both this build and the published 0.4.0 before it was withdrawn.
+
+**Finding counts will move on Python repositories, and the coverage block has changed shape.** Retries
+declared with tenacity are discovered where none were before, so a repository that reported no retry may
+now report several. Agents and models named in calls that carry a comment or a passthrough are named
+rather than counted anonymously, which merges duplicates: across the pinned corpus `openai-agents-python`
+goes from 620 agents to 617 and from 15 models to 18. And `coverage.adapters[].ecosystem` is replaced by
+`coverage.adapters[].languages`, which is the only change here that alters a published document.
 
 ### An adapter says what it read, not what it is about
 
