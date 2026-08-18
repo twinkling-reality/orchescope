@@ -4,6 +4,39 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### A retry a library declares, rather than one the code shapes
+
+Every retry reading here worked from shape: same work each pass, a counter in the header, a wait before
+the next one. Tenacity states the whole policy in its arguments and neither form it documents has a shape
+to read. `async for attempt in AsyncRetrying(...)` is syntactically an iteration over an object, so each
+pass looked like it took the next item, and `@retry(...)` above a function is no loop at all. The field
+report's target wraps fifteen attempts with exponential backoff around its embedding and image describe
+calls, and all three retry rules reported that no retry had been examined.
+
+Both forms are read now, and what tenacity states is taken as stated: `stop_after_attempt(15)` is a
+ceiling of fifteen and `wait_random_exponential` is exponential backoff, in a way that a counter called
+`i` and a `sleep` of unknown growth never are. The two defaults are read the same way, because the
+library documents them: a retry with no `stop` retries forever, and one with no `wait` re-attempts as
+fast as its dependency can fail.
+
+A `stop` this build does not recognise is recorded as bounded with no count. Reading it as unbounded
+would accuse a repository on the strength of a spelling nobody here knew, which is the one direction a
+reader cannot check.
+
+**The retry had to be able to reach a model call.** The index of what each call site produced is
+documented as complete, and the model SDK adapter had never written to it, so a retry around
+`client.embeddings.create(...)` resolved to nothing: the callee is a method path no binding stands for
+and the model component it produced was recorded nowhere a second reader could find. The loop was read
+and the operation was not, so no relation was drawn at all. This is the same join 0.4.0 opened for a body
+that makes its own request, with the model half never connected. In `pydantic-ai` it also makes the
+declared `retrieve` tool in the RAG example reach the embedding call written inside it, which is one
+relation nothing had drawn.
+
+On the report's target this moves three retry rules from `not_applicable` over nothing to `clear` over
+three examined retries, each carrying its fifteen attempt ceiling and its exponential wait. Two further
+tenacity retries in that repository are still invisible, for a reason that is not tenacity: they wrap
+`aiohttp` session requests, which no client table here claims.
+
 ### A security rule stopped reporting an all clear over a set it could not see into
 
 `prompt-injection-boundary` joins two populations, prompts and the sources whose content nobody can

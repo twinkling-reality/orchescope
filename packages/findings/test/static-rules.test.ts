@@ -309,6 +309,20 @@ describe('how unbounded-retry says the retry was recognised', () => {
     assert.match(explanation, /a loop where it waits with sleep before the next pass/);
     assert.doesNotMatch(explanation, /catch/);
   });
+
+  /*
+   * A decorated function has no loop and no helper call, so both of the sentences above would send a
+   * reader to a line holding neither.
+   */
+  it('names the declaration when a library stated the retry', () => {
+    const explanation = explanationFor({
+      retryShape: 'decorated-function',
+      retryDeclaration: "a function decorated with tenacity's retry",
+      reattemptEvidence: "a function decorated with tenacity's retry",
+    });
+    assert.match(explanation, /discovered as a function decorated with tenacity's retry/);
+    assert.doesNotMatch(explanation, /a loop where/);
+  });
 });
 
 describe('bounded-retry-with-declared-idempotency', () => {

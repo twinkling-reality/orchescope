@@ -14,8 +14,8 @@
     },
     "adapter:implementation-reach": {
       "componentsFound": 0,
-      "edgesFound": 1,
-      "filesInspected": 1,
+      "edgesFound": 2,
+      "filesInspected": 2,
       "status": "completed"
     },
     "adapter:langgraph": {
@@ -119,12 +119,12 @@
     "byKind": {
       "calls_service": 6,
       "calls_tool": 472,
-      "invokes_model": 65,
+      "invokes_model": 66,
       "provides_tool": 31,
       "queries_database": 9,
       "served_by_provider": 12,
       "uses_prompt": 1
     },
-    "total": 596
+    "total": 597
   }
 }

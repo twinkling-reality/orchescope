@@ -212,6 +212,7 @@ const relationDeadlines = (calls: readonly ModelCall[]): ReadonlyMap<string, Dec
 const registerModelCalls = (
   module: ModuleFacts,
   builder: SystemGraphBuilder,
+  context: DiscoveryContext,
   found: Discovered,
   clientDeadlines: ReadonlyMap<string, number>,
 ): void => {
@@ -249,6 +250,19 @@ const registerModelCalls = (
     );
     found.components += 1;
     found.files.add(module.file);
+    /*
+     * What this call site produced, for whatever asks later what a line of code reaches.
+     *
+     * The index is documented as complete and this adapter had never written to it, so a retry around
+     * `client.embeddings.create(...)` resolved to nothing: the callee is a method path no binding stands
+     * for, and the model component it produced was recorded nowhere a second reader could find it. Three
+     * retry rules reported that no retry had been examined on a repository that wraps fifteen attempts
+     * around exactly that call.
+     *
+     * No effect class travels with it. A model invocation is not a write and nobody has classified it,
+     * and absent is the answer that says so.
+     */
+    context.callSiteEffects.record(module.file, call, modelIdentity(provider.provider, model));
 
     builder.addEdge(
       drafts.edge({
@@ -312,7 +326,7 @@ export const modelSdkAdapter: AgentSystemAdapter = {
     const found: Discovered = { components: 0, edges: 0, files: new Set() };
     for (const module of context.modules) {
       const clientDeadlines = registerProviderClients(module, builder, context, found);
-      registerModelCalls(module, builder, found, clientDeadlines);
+      registerModelCalls(module, builder, context, found, clientDeadlines);
     }
     return {
       componentsFound: found.components,

@@ -219,6 +219,13 @@ export const unsafeRetryRule: Rule = {
  * can check and that is wrong, in the one place the tool is asking to be trusted.
  */
 const retryWasReadAs = (edge: Edge): string => {
+  /*
+   * A retry a library declares says what it is outright, and neither of the other two sentences fits it:
+   * a decorated function has no loop and no helper call, and describing one as "a loop where" would send
+   * a reader to a line that holds neither.
+   */
+  const declaration = edge.metadata['retryDeclaration'];
+  if (typeof declaration === 'string') return declaration;
   const helper = edge.metadata['retryHelper'];
   if (typeof helper === 'string') return `a call to ${helper}`;
   const evidence = edge.metadata['reattemptEvidence'];

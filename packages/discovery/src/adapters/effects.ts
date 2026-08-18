@@ -36,6 +36,13 @@ import {
 } from '@orchescope/traces/model-endpoints';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { callRelationKind } from '../call-relation.ts';
+import {
+  constructedRetry,
+  type DeclaredRetry,
+  decoratedRetry,
+  namesRetryConstructor,
+  usesTenacity,
+} from '../declared-retry.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
 import { keyDeclaredAt } from '../idempotency-key.ts';
 import {
@@ -1114,7 +1121,9 @@ const backoffOfLoop = (
   module: ModuleFacts,
   loop: ControlFlowFact,
 ): 'none' | 'fixed' | 'exponential' | 'unknown' => {
-  const waits = callsWithin(module, loop).filter((call) => DELAY_CALLS.has(calleeName(call)));
+  const waits = callsWithin(module, loop.location).filter((call) =>
+    DELAY_CALLS.has(calleeName(call)),
+  );
   if (waits.length === 0) return 'none';
   const grown = new Set(loop.growingNames ?? []);
   let fixed = false;
@@ -1187,14 +1196,171 @@ const retriedOperation = (
       };
 };
 
-/** Calls written inside a construct, by line, which is how a call site is reached from the construct. */
-const callsWithin = (module: ModuleFacts, construct: ControlFlowFact): readonly CallFact[] => {
-  const endLine = construct.location.endLine ?? construct.location.startLine;
+/** Calls written inside a span, by line, which is how a call site is reached from a construct. */
+const callsWithin = (module: ModuleFacts, span: SourceLocation): readonly CallFact[] => {
+  const endLine = span.endLine ?? span.startLine;
   return module.calls.filter(
     (call) =>
-      call.location.startLine >= construct.location.startLine &&
+      call.location.startLine >= span.startLine &&
       (call.location.endLine ?? call.location.startLine) <= endLine,
   );
+};
+
+/**
+ * The tenacity construction a loop iterates, when it iterates one.
+ *
+ * Asked of what the loop directly contains rather than of its line range, because these loops nest: the
+ * `async for attempt in AsyncRetrying(...)` in the field report's target sits inside a `for batch in
+ * batches`, and a range would attribute the retry to both. The construction is then found by line so its
+ * arguments can be read, which is where the ceiling and the wait are written.
+ */
+const iteratedRetryOf = (
+  module: ModuleFacts,
+  loop: ControlFlowFact,
+): { readonly declared: DeclaredRetry; readonly call: CallFact } | undefined => {
+  if (!loop.contains.some((path) => namesRetryConstructor(path))) return undefined;
+  for (const call of callsWithin(module, loop.location)) {
+    const declared = constructedRetry(call);
+    if (declared !== undefined) return { declared, call };
+  }
+  return undefined;
+};
+
+/**
+ * How a loop says it re-attempts, which is two questions and not one.
+ *
+ * A loop can say it by its shape, which is what a counter, a wait and a pass that returns on success
+ * amount to; or it can iterate an object that states the policy outright, which is what tenacity's
+ * `AsyncRetrying` is. The declaration is asked first, because a loop over one says nothing in its own
+ * shape: each pass takes the next item from an iterator, which is exactly what separates an iteration
+ * from a re-attempt everywhere else here.
+ */
+type LoopRetry = {
+  readonly evidence: string;
+  readonly shape: string;
+  /** The policy a library stated, when one did, which answers for the ceiling and the wait as well. */
+  readonly declared: DeclaredRetry | undefined;
+  /** The construction, which is the one call inside the loop that is not an operation being repeated. */
+  readonly construction: CallFact | undefined;
+};
+
+const loopRetryOf = (
+  module: ModuleFacts,
+  loop: ControlFlowFact,
+  declaresRetries: boolean,
+): LoopRetry | undefined => {
+  const iterated = declaresRetries ? iteratedRetryOf(module, loop) : undefined;
+  if (iterated !== undefined) {
+    return {
+      evidence: iterated.declared.declaredAs,
+      shape: 'loop-over-declared-retry',
+      declared: iterated.declared,
+      construction: iterated.call,
+    };
+  }
+  const attempted = guardedPassIn(module, loop);
+  const evidence = reattemptEvidence(loop, attempted);
+  if (evidence === undefined) return undefined;
+  return {
+    evidence,
+    shape: attempted === undefined ? 'loop-with-check' : 'loop-with-try',
+    declared: undefined,
+    construction: undefined,
+  };
+};
+
+/**
+ * What a retry was read as, gathered before any relation is drawn.
+ *
+ * The three forms differ only in how the retry announces itself: a loop's own shape, a policy object the
+ * loop iterates, or a decorator above a function. What each one repeats, and the relation that says so,
+ * are the same afterwards, so they are settled here once and drawn once.
+ */
+type RetryReading = {
+  readonly shape: string;
+  readonly evidence: string;
+  /** Present when a library stated the policy, so a rule can say which one rather than "a loop". */
+  readonly declaration: string | undefined;
+  readonly bounded: boolean;
+  readonly maxAttempts: number | undefined;
+  readonly backoff: NonNullable<EdgePolicy['retry']>['backoff'];
+  /** A ceiling the author wrote in the loop head, which is evidence a rule declines on rather than a bound. */
+  readonly ceiling: string | undefined;
+};
+
+/**
+ * The relation each operation inside a retry gets.
+ *
+ * Every operation performed inside the span is re-attempted, not only the ones a `try` happens to
+ * enclose: a request made before the guarded call runs again on the next pass exactly as much as the
+ * guarded one does, and the graph is being asked which operations repeat. One relation per distinct
+ * operation, because a loop calling the same host twice repeats one thing.
+ */
+const drawRetriedOperations = (input: {
+  readonly module: ModuleFacts;
+  readonly context: DiscoveryContext;
+  readonly builder: SystemGraphBuilder;
+  readonly found: Found;
+  readonly sinks: SinkEvidenceIndex;
+  readonly span: SourceLocation;
+  readonly scopeName: string;
+  readonly inferredFrom: string;
+  readonly symbolPrefix: string;
+  readonly reading: RetryReading;
+  /** The call that states the retry, which is not one of the operations it repeats. */
+  readonly declaringCall: CallFact | undefined;
+}): void => {
+  const { module, context, builder, found, sinks, span, reading } = input;
+  const drawn = new Set<string>();
+  for (const call of callsWithin(module, span)) {
+    if (call === input.declaringCall) continue;
+    const operation = retriedOperation(module, context, call);
+    if (operation === undefined) continue;
+    const { target } = operation;
+    const key = `${target.kind}:${target.namespace}:${target.localName}`;
+    if (drawn.has(key)) continue;
+    drawn.add(key);
+    builder.addEdge(
+      drafts.edge({
+        kind: callRelationKind(target.kind),
+        from: ensureScope({
+          module,
+          context,
+          builder,
+          found,
+          name: input.scopeName,
+          location: span,
+          inferredFrom: input.inferredFrom,
+        }),
+        to: target,
+        location: span,
+        symbol: `${input.symbolPrefix}${operation.symbol}`,
+        confidence: CONFIDENCE_BANDS.structural,
+        policy: {
+          retry: {
+            ...(reading.maxAttempts === undefined ? {} : { maxAttempts: reading.maxAttempts }),
+            bounded: reading.bounded,
+            backoff: reading.backoff,
+            idempotency: operation.keyed ? 'declared' : 'unknown',
+          },
+        },
+        metadata: {
+          retryShape: reading.shape,
+          reattemptEvidence: reading.evidence,
+          ...(reading.declaration === undefined ? {} : { retryDeclaration: reading.declaration }),
+          /*
+           * What the retried call was classified as, stated here because the component it produced may
+           * stand for other calls in the same function and cannot answer for this one.
+           */
+          ...(operation.sideEffect === undefined ? {} : { retriedEffect: operation.sideEffect }),
+          ...sinkMetadata(sinks.get(operation.sinkKey)),
+          ...(reading.ceiling === undefined ? {} : { attemptCeiling: reading.ceiling }),
+        },
+      }),
+    );
+    found.edges += 1;
+    found.files.add(module.file);
+  }
 };
 
 /**
@@ -1203,10 +1369,6 @@ const callsWithin = (module: ModuleFacts, construct: ControlFlowFact): readonly 
  * The loop is the retry, so the loop is what this reads. Keying off the `try` instead made a `try` a
  * requirement rather than a form, and a retry that reads the response and goes round again produced no
  * relation at all.
- *
- * Every operation the loop performs is re-attempted, not only the ones a `try` happens to enclose. A
- * request made before the guarded call runs again on the next pass exactly as much as the guarded one
- * does, and the graph is being asked which operations repeat.
  */
 const discoverRetryLoops = (
   module: ModuleFacts,
@@ -1215,61 +1377,79 @@ const discoverRetryLoops = (
   found: Found,
   sinks: SinkEvidenceIndex,
 ): void => {
+  const declaresRetries = usesTenacity(module);
   for (const loop of module.controlFlow) {
     if (loop.kind !== 'loop') continue;
-    const attempted = guardedPassIn(module, loop);
-    const evidence = reattemptEvidence(loop, attempted);
-    if (evidence === undefined) continue;
+    const read = loopRetryOf(module, loop, declaresRetries);
+    if (read === undefined) continue;
+    drawRetriedOperations({
+      module,
+      context,
+      builder,
+      found,
+      sinks,
+      span: loop.location,
+      scopeName: loop.enclosing ?? 'module-scope',
+      inferredFrom: 'scope containing a retry loop',
+      symbolPrefix: 'retry loop around ',
+      declaringCall: read.construction,
+      reading: {
+        shape: read.shape,
+        evidence: read.evidence,
+        declaration: read.declared?.declaredAs,
+        bounded: read.declared?.bounded ?? loop.passesBounded === true,
+        maxAttempts: read.declared?.maxAttempts,
+        backoff: read.declared?.backoff ?? backoffOfLoop(module, loop),
+        ceiling: headerCeiling(loop),
+      },
+    });
+  }
+};
 
-    const scope = loop.enclosing ?? 'module-scope';
-    const drawn = new Set<string>();
-    for (const call of callsWithin(module, loop)) {
-      const operation = retriedOperation(module, context, call);
-      if (operation === undefined) continue;
-      const { target } = operation;
-      const key = `${target.kind}:${target.namespace}:${target.localName}`;
-      if (drawn.has(key)) continue;
-      drawn.add(key);
-      builder.addEdge(
-        drafts.edge({
-          kind: callRelationKind(target.kind),
-          from: ensureScope({
-            module,
-            context,
-            builder,
-            found,
-            name: scope,
-            location: loop.location,
-            inferredFrom: 'scope containing a retry loop',
-          }),
-          to: target,
-          location: loop.location,
-          symbol: `retry loop around ${operation.symbol}`,
-          confidence: CONFIDENCE_BANDS.structural,
-          policy: {
-            retry: {
-              bounded: loop.passesBounded === true,
-              backoff: backoffOfLoop(module, loop),
-              idempotency: operation.keyed ? 'declared' : 'unknown',
-            },
-          },
-          metadata: {
-            retryShape: attempted === undefined ? 'loop-with-check' : 'loop-with-try',
-            reattemptEvidence: evidence,
-            /*
-             * What the retried call was classified as, stated here because the component it produced may
-             * stand for other calls in the same function and cannot answer for this one.
-             */
-            ...(operation.sideEffect === undefined ? {} : { retriedEffect: operation.sideEffect }),
-            ...sinkMetadata(sinks.get(operation.sinkKey)),
-            ...(headerCeiling(loop) === undefined
-              ? {}
-              : { attemptCeiling: headerCeiling(loop) as string }),
-          },
-        }),
-      );
-      found.edges += 1;
-    }
+/**
+ * A function whose decorator declares the retry, which is the form tenacity documents first.
+ *
+ * There is no loop to read here and no shape to recognise: the policy is written above the function and
+ * every operation the body performs is what repeats. `DecoratorFact` already carried it, and nothing had
+ * ever asked.
+ *
+ * Bounded by the definition's own line range, so a nested function declares its own retry and not its
+ * parent's.
+ */
+const discoverDecoratedRetries = (
+  module: ModuleFacts,
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+  found: Found,
+  sinks: SinkEvidenceIndex,
+): void => {
+  if (!usesTenacity(module)) return;
+  for (const definition of module.definitions) {
+    const declared = definition.decorators
+      .map((decorator) => decoratedRetry(module, decorator))
+      .find((candidate) => candidate !== undefined);
+    if (declared === undefined) continue;
+    drawRetriedOperations({
+      module,
+      context,
+      builder,
+      found,
+      sinks,
+      span: definition.location,
+      scopeName: definition.name,
+      inferredFrom: 'function whose decorator declares a retry',
+      symbolPrefix: 'retried ',
+      declaringCall: undefined,
+      reading: {
+        shape: 'decorated-function',
+        evidence: declared.declaredAs,
+        declaration: declared.declaredAs,
+        bounded: declared.bounded,
+        maxAttempts: declared.maxAttempts,
+        backoff: declared.backoff,
+        ceiling: undefined,
+      },
+    });
   }
 };
 
@@ -1309,6 +1489,7 @@ export const effectsAdapter: AgentSystemAdapter = {
     for (const module of audited) {
       discoverRetryHelpers(module, context, builder, found, sinks);
       discoverRetryLoops(module, context, builder, found, sinks);
+      discoverDecoratedRetries(module, context, builder, found, sinks);
     }
     return {
       componentsFound: found.components,

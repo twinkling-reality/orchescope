@@ -303,6 +303,183 @@ def counter_advances(body):
 });
 
 /**
+ * A retry a library declares rather than one the code shapes.
+ *
+ * Everything above reads a retry from its shape: same work each pass, a counter, a wait. Tenacity states
+ * the policy in its arguments and neither form it documents has a shape to read. `async for attempt in
+ * AsyncRetrying(...)` is syntactically an iteration over an object, so each pass looked like it took the
+ * next item, and `@retry(...)` is no loop at all. A retrieval application wrapping fifteen attempts
+ * around a model call had all three retry rules report that no retry had been examined.
+ *
+ * The table is asserted whole, for the reason the tables above are: every defect here was a row that was
+ * silently missing or silently wrong.
+ */
+describe('a retry tenacity declares', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writePythonProject(workspace, { name: 'declared-retry', dependencies: ['httpx', 'tenacity'] });
+    workspace.write(
+      'src/declared.py',
+      `import httpx
+from tenacity import (
+    AsyncRetrying,
+    retry,
+    stop_after_attempt,
+    stop_never,
+    wait_fixed,
+    wait_random_exponential,
+)
+
+
+async def iterated(body):
+    async for attempt in AsyncRetrying(
+        wait=wait_random_exponential(min=15, max=60),
+        stop=stop_after_attempt(15),
+    ):
+        with attempt:
+            return httpx.post("https://iterated.example.com/v1/charges", data=body)
+
+
+@retry(stop=stop_after_attempt(max_attempt_number=3), wait=wait_fixed(2))
+def decorated(body):
+    return httpx.post("https://decorated.example.com/v1/charges", data=body)
+
+
+@retry
+def bare(body):
+    return httpx.post("https://bare.example.com/v1/charges", data=body)
+
+
+async def never_stops(body):
+    async for attempt in AsyncRetrying(stop=stop_never, wait=wait_fixed(1)):
+        with attempt:
+            return httpx.post("https://never-stops.example.com/v1/charges", data=body)
+
+
+def not_a_retry(rows):
+    for row in rows:
+        httpx.post("https://iteration.example.com/v1/rows", data=row)
+`,
+    );
+  };
+
+  /*
+   * Two of these are tenacity's documented defaults and both are the dangerous answer: no `stop` retries
+   * forever, and no `wait` re-attempts as fast as the dependency can fail. They are read as facts about
+   * the code rather than as gaps in this reading, because that is what the library says they mean.
+   */
+  const expected = [
+    'iterated.example.com bounded=true backoff=exponential attempts=15',
+    'decorated.example.com bounded=true backoff=fixed attempts=3',
+    'bare.example.com bounded=false backoff=none attempts=none',
+    'never-stops.example.com bounded=false backoff=fixed attempts=none',
+  ].sort();
+
+  it('reads the ceiling and the wait each form states, with no row missing', async () => {
+    const result = await scan(build);
+    const rows = result.graph.edges
+      .filter((edge) => edge.policy?.retry !== undefined)
+      .map((edge) => {
+        const retry = edge.policy?.retry as Retry & { maxAttempts?: number };
+        return `${edge.to.replace('external_service:', '')} bounded=${retry.bounded} backoff=${retry.backoff} attempts=${retry.maxAttempts ?? 'none'}`;
+      })
+      .sort();
+    assert.deepEqual(rows, expected);
+  });
+
+  it('leaves a plain iteration alone in a module that does use tenacity', async () => {
+    const result = await scan(build);
+    const iteration = result.graph.edges.find((edge) => edge.to.includes('iteration.example.com'));
+    assert.ok(iteration !== undefined, 'the request itself should still be discovered');
+    assert.equal(iteration.policy?.retry, undefined);
+  });
+
+  it('says which declaration it read, so a rule can name it', async () => {
+    const result = await scan(build);
+    const declared = result.graph.edges.find((edge) => edge.to.includes('iterated.example.com'));
+    assert.equal(declared?.metadata['retryDeclaration'], "a loop over tenacity's AsyncRetrying");
+    const decorated = result.graph.edges.find((edge) => edge.to.includes('decorated.example.com'));
+    assert.equal(
+      decorated?.metadata['retryDeclaration'],
+      "a function decorated with tenacity's retry",
+    );
+  });
+});
+
+/**
+ * `retry` is a word, and only tenacity's means this.
+ *
+ * The decorator carries no shape to check, so the only thing separating a retry policy from any other
+ * decorator called `retry` is where it came from. A module that never imports tenacity is not declaring
+ * a tenacity retry however it spells its decorators.
+ */
+describe('a decorator called retry that is not tenacity', () => {
+  it('declares nothing', async () => {
+    const result = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'other-retry', dependencies: ['httpx'] });
+      workspace.write(
+        'src/other.py',
+        `import httpx
+from retrying import retry
+
+
+@retry
+def send(body):
+    return httpx.post("https://other.example.com/v1/charges", data=body)
+`,
+      );
+    });
+    const edge = result.graph.edges.find((entry) => entry.to.includes('other.example.com'));
+    assert.ok(edge !== undefined, 'the request itself should still be discovered');
+    assert.equal(edge.policy?.retry, undefined);
+  });
+});
+
+/**
+ * The retried operation, when the thing being retried is a model call.
+ *
+ * The index of what each call site produced is documented as complete and the model SDK adapter had
+ * never written to it, so a retry around `client.embeddings.create(...)` resolved to nothing: the callee
+ * is a method path no binding stands for. The loop was read, the operation was not, and no relation was
+ * drawn at all.
+ */
+describe('a declared retry around a model call', () => {
+  it('reaches the model, which is what makes the retry visible to a rule', async () => {
+    const result = await scan((workspace) => {
+      writePythonProject(workspace, {
+        name: 'retried-model',
+        dependencies: ['openai', 'tenacity'],
+      });
+      workspace.write(
+        'src/embed.py',
+        `from openai import AsyncOpenAI
+from tenacity import AsyncRetrying, stop_after_attempt, wait_random_exponential
+
+client = AsyncOpenAI()
+
+
+async def compute_embedding(text):
+    async for attempt in AsyncRetrying(
+        wait=wait_random_exponential(min=15, max=60),
+        stop=stop_after_attempt(15),
+    ):
+        with attempt:
+            return await client.embeddings.create(model="text-embedding-3-large", input=text)
+`,
+      );
+    });
+    const edge = result.graph.edges.find(
+      (entry) => entry.policy?.retry !== undefined && entry.to.startsWith('model:'),
+    );
+    assert.ok(
+      edge !== undefined,
+      `no retry reached a model, among ${result.graph.edges.map((entry) => `${entry.kind}:${entry.to}`).join(', ')}`,
+    );
+    assert.equal(edge.policy?.retry?.maxAttempts, 15);
+    assert.equal(edge.policy?.retry?.backoff, 'exponential');
+  });
+});
+
+/**
  * Evidence belongs to the function that showed it.
  *
  * Read per module, any `maxAttempts` anywhere in a file became attempt ceiling evidence for every retry
