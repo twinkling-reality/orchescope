@@ -5,7 +5,15 @@ Notable changes per released version. Nothing here is generated; a release is a 
 ## 0.5.0
 
 Released 2026-08-18 from npm as `orchescope@0.5.0`, published locally with `npm publish --no-provenance`,
-so this release carries no registry attestation.
+so this release carries no registry attestation. `pnpm package` builds from this tag a tarball byte
+identical to the one on the registry, which was checked by downloading the published one and comparing:
+
+```
+sha256  7f39e071649e2c00e161aa2ec6b22d87ba9d18b8cbaafd5e2fa371943d6deb03
+```
+
+That is a weaker guarantee than a registry attestation and it is worth naming as such. It says the bytes
+match this source; it does not say who published them.
 
 This answers the fourth field report, against a retrieval application built on Azure OpenAI: 655 files,
 Python majority with a TypeScript frontend. Two of its six items were withdrawn on inspection, one of
