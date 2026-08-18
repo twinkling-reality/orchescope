@@ -73,6 +73,26 @@ npm install -g orchescope
 orchescope doctor
 ```
 
+Check that the registry has what this source builds, and record the answer in the changelog rather than asserting it:
+
+```
+npm pack orchescope@<version>
+shasum -a 256 orchescope-<version>.tgz          # against the sha256 pnpm package printed
+```
+
+Then create the GitHub release, because the README tells a stranger it exists:
+
+```
+gh release create v<version> \
+  release/orchescope-<version>.tgz \
+  release/orchescope-<version>.tgz.sha256 \
+  --title "orchescope <version>" --notes-file <the changelog section>
+```
+
+The install section says "the same archive is attached to every release with its sha256 beside it", and a reader who
+follows that to an empty releases page has been told something untrue by the front page of the project. This step is
+here because it was not, and it lapsed for two versions without anything noticing.
+
 Then read the install section of the README as a stranger would and correct anything the publish has just made untrue.
 `release/release-summary.json` records `published: false` because the script that wrote it published nothing; it is not a
 claim about the registry.
