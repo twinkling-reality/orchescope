@@ -60,7 +60,7 @@ describe('the glance', () => {
     assert.equal(
       render(detected),
       [
-        'demo            this project has 5 agents, 7 tools and 2 models',
+        'demo            this scan found 5 agents, 7 tools and 2 models',
         '                read from 23 of 23 files, with 1 run on record',
         '',
         'problems        1 serious, 1 medium, worst first',
@@ -92,7 +92,7 @@ describe('the glance', () => {
     assert.equal(
       render(undetected),
       [
-        'express         this project has 5 parts',
+        'express         this scan found 5 parts',
         '                read from 141 of 141 files, with no runs on record',
         'No agent system was detected: no adapter here recognised one.',
         '',

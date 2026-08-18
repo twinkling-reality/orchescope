@@ -1,13 +1,19 @@
 /**
- * What this repository is, and what was read to say so.
+ * What this build read here, and what it read to say so.
  *
- * Line one is the project name and what the project turned out to contain. A bare part count is a size
- * rather than a description: "33 parts found" tells a reader nothing that "5 agents, 7 tools and 2
- * models" does not tell them better, and it leaves the name in column one looking like a mode rather
- * than like the thing being described, which is what "demo" read as. Line two is coverage and how much
- * runtime evidence exists, because a count with no denominator is a claim about a whole nobody
- * measured, and because whether anything has ever run is the fact that decides what the rest of this
- * document is able to say.
+ * Line one is the project name and what the scan found in it. A bare part count is a size rather than a
+ * description: "33 parts found" tells a reader nothing that "5 agents, 7 tools and 2 models" does not
+ * tell them better, and it leaves the name in column one looking like a mode rather than like the thing
+ * being described, which is what "demo" read as. Line two is coverage and how much runtime evidence
+ * exists, because a count with no denominator is a claim about a whole nobody measured, and because
+ * whether anything has ever run is the fact that decides what the rest of this document is able to say.
+ *
+ * It says what the scan found rather than what the project has, and the difference is the whole product.
+ * One field report's target wires MCP tool calls, human approval and a tool registry, and this build
+ * claims none of the framework its agent runtime is written in: the graph held the periphery, and the
+ * line said the project had one agent and twenty tools. Every number here is true of the scan and the
+ * sentence has to be true of the same thing, which is the identical correction the coverage block's
+ * adapter languages needed.
  */
 
 import { formatCount } from '@orchescope/domain';
@@ -54,7 +60,7 @@ const inventory = (result: AuditResult): string => {
  */
 const headlineVariants = (result: AuditResult): readonly string[] => {
   const found = inventory(result);
-  return [`this project has ${found}`, found];
+  return [`this scan found ${found}`, found];
 };
 
 /**

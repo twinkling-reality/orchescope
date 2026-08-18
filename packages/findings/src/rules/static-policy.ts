@@ -581,11 +581,17 @@ export const approvalBoundaryRule: Rule = {
     /*
      * Named rather than dropped. An operation this declines to report is one it looked at and decided was
      * out of scope, and a reader who cannot see that has been told less than was known.
+     *
+     * What it declines over is the graph, not the repository. Reachability is computed across what this
+     * scan discovered, so on a repository whose agent runtime no adapter here claims, the sentence said
+     * that nothing in the repository reaches these operations while the repository wired tool calls, an
+     * approval step and a registry that all do. The count is true of the graph and the sentence has to be
+     * about the same thing.
      */
     const declined =
       unreached === 0
         ? undefined
-        : `${formatCount(unreached, 'consequential operation')} ${agree(unreached, 'was', 'were')} left unreported because no agent, tool or MCP server in this repository ${agree(unreached, 'reaches', 'reach')} it`;
+        : `${formatCount(unreached, 'consequential operation')} ${agree(unreached, 'was', 'were')} left unreported because nothing this scan discovered as an agent, tool or MCP server reaches ${agree(unreached, 'it', 'them')}`;
     if (risky.length === 0) return notApplicable(declined ?? 'nothing reachable was consequential');
 
     const drafts: FindingDraft[] = [];
@@ -800,7 +806,7 @@ const unreachableDrafts = (graph: IndexedGraph): readonly FindingDraft[] => {
     },
     basis: 'discovered',
     title: `${component.displayName} cannot be reached from any entry point`,
-    explanation: `No entry point declared in this repository reaches ${component.id} through control flow. That has three causes and this rule cannot tell them apart: the wiring is missing, the component is left over, or the entry point is outside this repository, which is what a library looks like. ${unreachable.length} of the ${candidates.length} components that participate in control flow are in this state.`,
+    explanation: `No entry point this scan discovered reaches ${component.id} through control flow. That has four causes and this rule cannot tell them apart: the wiring is missing, the component is left over, the entry point is outside this repository, which is what a library looks like, or the entry point is one no adapter here recognised. ${unreachable.length} of the ${candidates.length} components that participate in control flow are in this state.`,
     impact:
       'A component the declared graph cannot reach is one a reader cannot follow, and it is where dead configuration hides.',
     components: [component.id],

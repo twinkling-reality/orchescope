@@ -18,7 +18,7 @@ const lines = (
 describe('the headline', () => {
   it('describes the project by what is in it, then says what was read', () => {
     assert.deepEqual(lines(auditResult({}), 80), [
-      'demo            this project has 5 agents, 7 tools and 2 models',
+      'demo            this scan found 5 agents, 7 tools and 2 models',
       '                read from 23 of 23 files, with no runs on record',
     ]);
   });
@@ -26,18 +26,18 @@ describe('the headline', () => {
   it('names only the kinds that are present', () => {
     assert.equal(
       lines(auditResult({ componentKinds: { agent: 3 } }), 80)[0],
-      'demo            this project has 3 agents',
+      'demo            this scan found 3 agents',
     );
     assert.equal(
       lines(auditResult({ componentKinds: { tool: 1, model: 4 } }), 80)[0],
-      'demo            this project has 1 tool and 4 models',
+      'demo            this scan found 1 tool and 4 models',
     );
   });
 
   it('falls back to a part count when none of the three kinds were found', () => {
     assert.equal(
       lines(auditResult({ componentKinds: {}, componentCount: 12 }), 80)[0],
-      'demo            this project has 12 parts',
+      'demo            this scan found 12 parts',
     );
   });
 
@@ -82,7 +82,7 @@ describe('the headline', () => {
 describe('verbose', () => {
   it('adds the graph counts to the line that already carries coverage', () => {
     assert.deepEqual(lines(auditResult({}), 80, true), [
-      'demo            this project has 5 agents, 7 tools and 2 models',
+      'demo            this scan found 5 agents, 7 tools and 2 models',
       '                33 parts and 32 links; 23 of 23 files read; no runs on record',
     ]);
   });
@@ -105,7 +105,7 @@ describe('the refusal', () => {
 
   it('renders on the glance without the adapter roster', () => {
     const rendered = lines(empty, 80);
-    assert.equal(rendered[0], 'orchescope-discovery  this project has 0 parts');
+    assert.equal(rendered[0], 'orchescope-discovery  this scan found 0 parts');
     /*
      * A claim about the repository this reader cannot make. What it can say is that none of its own
      * adapters recognised anything, which is what the row below this one enumerates.

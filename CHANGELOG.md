@@ -4,6 +4,32 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### A sentence about the graph, said as a sentence about the graph
+
+`side-effect-approval-boundary` declined with "18 consequential operations were left unreported because
+no agent, tool or MCP server in this repository reaches it". The count is true of the graph this scan
+produced and the sentence was about the repository, and on the field report's target the repository wires
+MCP tool calls, an approval step and a tool registry that all reach those operations. What this build
+could not do was recognise the framework they are written in, which is a fact about this build.
+
+The human headline had the same shape. It said "this project has 1 agent, 20 tools and 1 model" where
+every number in it is what discovery found, so it now says "this scan found" instead. That is the same
+correction the coverage block's adapter languages needed in 0.5.0: a partial reading presented as a
+property of the repository.
+
+The sweep found a third. `topology-shape` said "No entry point declared in this repository reaches this
+component through control flow" and listed three causes it could not tell apart, none of which was an
+entry point no adapter here recognised. It says what the scan discovered, and names the fourth cause.
+The orphan tool rule was already saying the true thing and is unchanged.
+
+The declining sentence also had two words disagreeing with two different nouns. The verb belongs to a
+subject that is singular in every version of the sentence and the object belongs to the operations, so
+agreeing both with the count printed "no agent, tool or MCP server reach it" whenever more than one was
+declined.
+
+Nothing moves across the thirteen pinned repositories: no count changes, only what the sentences claim to
+be counting.
+
 ### A deadline a request states
 
 `model-call-without-timeout` printed one remediation for a model behind a client and another for a model

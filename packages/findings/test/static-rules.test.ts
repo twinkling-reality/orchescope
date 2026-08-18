@@ -660,7 +660,10 @@ describe('side-effect-approval-boundary reachability', () => {
     );
     assert.equal(outcome.status, 'fired');
     assert.match(outcome.detail ?? '', /1 consequential operation was left unreported/);
-    assert.match(outcome.detail ?? '', /no agent, tool or MCP server/);
+    assert.match(
+      outcome.detail ?? '',
+      /nothing this scan discovered as an agent, tool or MCP server/,
+    );
   });
 
   /*
@@ -854,6 +857,11 @@ describe('the two retry rules together', () => {
  * `3 consequential operations was left unreported` and `2 runs was recorded` both reached readers. A tool
  * that reasons about grammar less carefully than it reasons about evidence invites a reader to weigh the
  * rest of its output the same way.
+ *
+ * Two things have to agree here and they agree with different nouns. The verb belongs to the subject,
+ * which is singular in every version of this sentence, and the object belongs to the operations, which
+ * are as many as were declined. Agreeing both with the count read as `no agent, tool or MCP server reach
+ * it` whenever more than one was declined, which is wrong twice in five words.
  */
 describe('the sentence a rule writes about what it left alone', () => {
   const declinedFor = (count: number) => {
@@ -871,12 +879,12 @@ describe('the sentence a rule writes about what it left alone', () => {
 
   it('agrees with a count of one', () => {
     assert.match(declinedFor(1), /1 consequential operation was left unreported/);
-    assert.match(declinedFor(1), /repository reaches it/);
+    assert.match(declinedFor(1), /reaches it$/);
   });
 
   it('agrees with a count of more than one', () => {
     assert.match(declinedFor(3), /3 consequential operations were left unreported/);
-    assert.match(declinedFor(3), /repository reach it/);
+    assert.match(declinedFor(3), /reaches them$/);
   });
 });
 
