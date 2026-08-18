@@ -73,7 +73,9 @@ Rules the tooling enforces:
 ## Testing expectations
 
 - `node:test` with `node:assert/strict`. No test framework dependency.
-- A new rule needs a test that fires it and a test that proves it stays quiet without evidence.
+- A new rule needs a test that fires it and a test that proves it stays quiet without evidence. A rule a
+  goal can be cut from needs a third: a repository its own remediation clears, in
+  `tests/e2e/goal-eligible-rules.test.ts`. The first two pass for a rule nothing can ever answer.
 - A new adapter needs a fixture repository and a test asserting the components, the relations and the evidence.
 - Waits are event driven. A test that sleeps to fix flakiness will be rejected.
 - Time and randomness come from `fixedClock` and `seededRng` in tests, never from the platform.

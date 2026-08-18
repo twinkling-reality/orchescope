@@ -141,6 +141,40 @@ export const operationsPerformedBy = (
 };
 
 /**
+ * The declared components that reach this operation.
+ *
+ * The mirror of `operationsPerformedBy` and it obeys the same rule about what is transparent: a frame
+ * discovery invented to hold an effect is walked through, and a component the repository declared is an
+ * answer. A rule asking who can reach a write wants the tool or the agent that decides to, not the name
+ * of the function the write happens to sit inside.
+ *
+ * A rule that asks this is usually asking whether every route to an operation is guarded, so an empty
+ * answer means nothing declared reaches it rather than that everything does. The caller decides what to
+ * make of that; this reports what the graph says.
+ */
+export const declaredCallersOf = (
+  index: IndexedGraph,
+  componentId: ComponentId,
+): readonly Component[] => {
+  const callers: Component[] = [];
+  const seen = new Set<ComponentId>();
+  const stack: ComponentId[] = [componentId];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === undefined || seen.has(current)) continue;
+    seen.add(current);
+    for (const edge of index.incoming(current)) {
+      if (!isControlFlowKind(edge.kind)) continue;
+      const caller = index.component(edge.from);
+      if (caller === undefined) continue;
+      if (isInferredEntryPoint(caller)) stack.push(caller.id);
+      else callers.push(caller);
+    }
+  }
+  return callers;
+};
+
+/**
  * Components that no declared entry point can reach. A configured tool nobody can call is a real
  * finding, so this returns the components rather than a count.
  */

@@ -135,6 +135,23 @@ const datastoreCallMatches = (
   );
 };
 
+/**
+ * The options object among a call's arguments, which these libraries put last rather than at a position.
+ *
+ * `new Queue(name, opts)` and `new Worker(name, processor, opts)` are the same library and the options
+ * sit at different indexes, so reading a fixed one answered for the first and never for the second.
+ * `concurrency` is a worker option, so the only field this reads was the one it could never reach: the
+ * schema carried a relation field that nothing reading source could produce, which is the same shape as
+ * a rule nothing can clear.
+ */
+const optionsOf = (call: CallFact): readonly ObjectEntryFact[] => {
+  for (let index = call.args.length - 1; index >= 1; index -= 1) {
+    const argument = call.args[index];
+    if (argument?.kind === 'object') return argument.entries;
+  }
+  return [];
+};
+
 const QUEUE_CLIENTS: readonly { readonly names: readonly string[]; readonly queue: string }[] = [
   { names: ['Queue', 'Worker', 'FlowProducer'], queue: 'bullmq' },
   { names: ['Celery'], queue: 'celery' },
@@ -830,8 +847,7 @@ const discoverStores = (
     const first = call.args[0];
     const queueName = first !== undefined && first.kind === 'string' ? first.value : queue.queue;
     const identity = globalIdentity('queue', GLOBAL_NAMESPACES.queue, queueName);
-    const entries = objectArgument(call, 1);
-    const concurrency = numberValue(findEntry(entries, 'concurrency')?.value);
+    const concurrency = numberValue(findEntry(optionsOf(call), 'concurrency')?.value);
     builder.addComponent(
       drafts.sourceComponent({
         kind: 'queue',

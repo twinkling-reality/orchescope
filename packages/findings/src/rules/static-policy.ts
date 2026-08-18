@@ -8,6 +8,7 @@ import {
 } from '@orchescope/domain';
 import {
   controlFlowCycles,
+  declaredCallersOf,
   degrees,
   type IndexedGraph,
   isControlFlowKind,
@@ -453,6 +454,29 @@ export const missingTimeoutRule: Rule = {
  * its own right: a tool exists to be called by a model, whether or not this repository has wired one to
  * it yet, and a declared tool nobody has connected is the subject of a different rule.
  */
+/**
+ * Whether every declared caller that reaches this operation has to be approved first.
+ *
+ * The remediation this rule prints says to mark the tool as needing approval, and the operation the
+ * finding names is usually not the tool: it is the write the tool performs, one frame further in. Asked
+ * of the write alone, an approval declared on the tool answers nothing, so an operator who did exactly
+ * what the finding asked got the same finding back on the next scan, which is the loop failure this
+ * product exists to close.
+ *
+ * Every caller rather than any, because the risk is a model reaching this operation without a decision.
+ * A second tool that reaches the same write and declares no approval is that risk in full, whatever the
+ * first one declares. Nothing declared reaching it is not an approval either.
+ */
+const approvedCallersOf = (context: RuleContext, component: Component): boolean => {
+  const callers = declaredCallersOf(context.graph, component.id);
+  return (
+    callers.length > 0 &&
+    callers.every(
+      (caller) => caller.details?.for === 'tool' && caller.details.approvalRequired === true,
+    )
+  );
+};
+
 const MODEL_DRIVEN_KINDS: readonly string[] = ['agent', 'agent_group', 'mcp_server', 'tool'];
 
 const modelReachable = (graph: IndexedGraph): ReadonlySet<string> =>
@@ -499,8 +523,9 @@ export const approvalBoundaryRule: Rule = {
         component.details?.for === 'tool' && component.details.approvalRequired === true;
       const incoming = context.graph.incoming(component.id);
       const guardedByPolicy = incoming.some((edge) => edge.policy?.requiresApproval === true);
+      const behindApprovedCallers = approvedCallersOf(context, component);
 
-      if (guarded || requiresApproval || guardedByPolicy) {
+      if (guarded || requiresApproval || guardedByPolicy || behindApprovedCallers) {
         drafts.push({
           ruleId: 'side-effect-approval-boundary',
           category: 'security',
@@ -513,7 +538,7 @@ export const approvalBoundaryRule: Rule = {
           confidence: CONFIDENCE_BANDS.strongStructural,
           basis: 'discovered',
           title: `${component.displayName} is behind an approval boundary`,
-          explanation: `${component.displayName} has effect class ${component.sideEffect} and is guarded: ${guarded ? 'an approval gate was discovered' : requiresApproval ? 'the tool declares that approval is required' : 'the calling policy declares that approval is required'}.`,
+          explanation: `${component.displayName} has effect class ${component.sideEffect} and is guarded: ${guarded ? 'an approval gate was discovered' : requiresApproval ? 'the tool declares that approval is required' : guardedByPolicy ? 'the calling policy declares that approval is required' : 'every tool that reaches it declares that approval is required'}.`,
           impact:
             'The risky operation cannot run without an explicit decision, which is the correct shape.',
           components: [component.id],

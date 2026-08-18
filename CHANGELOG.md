@@ -4,6 +4,42 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### The checks that would have found the last four reports
+
+Four field reports have now filed the same defect under four names, and every one of them arrived because
+a person ran the product on their own repository and noticed an answer that was too quiet. Nothing here
+had ever asked whether its own invariants held, so the tool's self diagnosis was being done by its users,
+one report at a time.
+
+**Every rule a goal can be cut from is now proved clearable.** A rule needs a test that fires it and a
+test that proves it stays quiet without evidence, and both of those pass for a rule nothing can ever
+answer: `model-call-without-timeout` filtered on a field no adapter reading source had written, so it
+fired on every repository with a model call in it and no edit to any file could clear it. Each of the
+five goal eligible static rules now carries a repository that fires it and the same repository with the
+remediation the finding itself prints applied, run through the real command line.
+
+It found one on its first run. `side-effect-approval-boundary` names the write a tool performs, and its
+remediation says to mark the tool as needing approval, which is a different component one frame away. An
+operator who did exactly what the finding asked got the finding back. A consequential operation is now
+guarded when every declared caller that reaches it requires approval, walked through the frames discovery
+invented and stopping at the components the repository declared. Every caller rather than any, because a
+second tool reaching the same write with no approval is the whole risk.
+
+**The relation policy fields are checked against what reading source can produce.** The properties come
+from the schema rather than from a list, so a field added later is a field this asks about. It found a
+second one immediately: `concurrency` is a worker option and the queue reader took its options from a
+fixed argument position, which is where `new Queue(name, opts)` puts them and not where
+`new Worker(name, processor, opts)` does. The only field that reader looked for was the one it could
+never reach. Options are read where these libraries put them, which is last.
+
+**The two analysers are checked against each other.** The fact model claims that `new Agent({ name })`
+and `Agent(name=...)` are one shape, and that claim is what lets one adapter cover a framework in both
+ecosystems. Three defects this cycle were one analyser disagreeing with the other about a shape they both
+meet constantly, and each was found by accident while somebody was chasing something else. Five pairs now
+assert the reduction, written the way each language writes it rather than transliterated.
+
+`AGENTS.md` and `CONTRIBUTING.md` now ask for the third test by name.
+
 ### An address whose tail the source settles
 
 An authority has to be finished before the first substitution, and that rule is right: reading a host out
