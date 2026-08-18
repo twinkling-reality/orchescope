@@ -46,6 +46,14 @@ import {
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
 import { keyDeclaredAt } from '../idempotency-key.ts';
 import {
+  addressOf,
+  hostOf,
+  hostToAskAbout,
+  isSameOrigin,
+  pathOf,
+  statedHostOf,
+} from '../request-address.ts';
+import {
   ATTEMPT_CEILING_NAME,
   readSinkEvidence,
   type SinkEvidenceIndex,
@@ -198,72 +206,6 @@ export const classifyEffect = (name: string, httpMethod?: string): SideEffectCla
   return 'unknown';
 };
 
-/**
- * Whether the address is relative, which means the request has no external host rather than one this
- * build could not read.
- *
- * `fetch("/releases.json")` was reported as `unresolved-host-wireDownload` and explained with "a base
- * address held in a constant is the common cause", about an argument that is a fully visible string
- * literal. There is no host in it because it is a same origin request, and saying a host could not be
- * resolved is a confident answer to a question the source settles plainly.
- *
- * `//host/path` is protocol relative and does carry an authority, so a single leading slash is what
- * separates the two.
- */
-const isSameOrigin = (url: string): boolean => url.startsWith('/') && !url.startsWith('//');
-
-const hostOf = (url: string): string | undefined => {
-  const match = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]+)/i.exec(url);
-  return match?.[2];
-};
-
-/** The path an address names, which is empty when the address stops at the host. */
-const pathOf = (url: string): string => {
-  const afterScheme = url.indexOf('://');
-  const slash = url.indexOf('/', afterScheme < 0 ? 0 : afterScheme + 3);
-  return slash < 0 ? '' : url.slice(slash);
-};
-
-/** The marker a template literal carries in place of each substitution. */
-// biome-ignore lint/suspicious/noTemplateCurlyInString: this is the marker the fact model records
-const SUBSTITUTION = '${...}';
-
-/**
- * The address a request names, from a literal or from the part of a template written before it computes
- * anything.
- *
- * A repository that builds its URLs writes the host down as often as not: `` `https://api.stripe.com/${id}` ``
- * says exactly which service it reaches, and reading only plain strings turned every one of those into a
- * component named after the function that built it. Two requests to one host became two services, and a
- * reader was asked to act on a host nobody had named.
- *
- * The authority has to be finished before the first substitution. `` `https://api.${region}.example.com/x` ``
- * has a prefix of `https://api.` and reading a host out of that would invent `api.`, which is worse than
- * declining: it is a confident answer to a question the source did not settle. A terminator after the
- * authority is what proves the host is whole.
- *
- * This reads the hosts a repository wrote and not the ones it assembles. `` `${API_BASE}${path}` `` begins
- * with a substitution and states nothing at all here, which is the common shape in a codebase with one
- * configured base URL; following that constant is a separate piece of work and the adapter says how many
- * requests it left unresolved rather than implying it read them.
- */
-const addressOf = (argument: ArgumentFact | undefined): string | undefined => {
-  if (argument === undefined) return undefined;
-  if (argument.kind === 'string') return argument.value;
-  if (argument.kind !== 'template') return undefined;
-  if (!argument.hasSubstitutions) return argument.value;
-  const prefix = argument.value.slice(0, argument.value.indexOf(SUBSTITUTION));
-  /*
-   * A relative address has its origin complete before anything is substituted, because there is no
-   * origin in it to complete. `` `/api/history?conversation=${id}` `` says as plainly as a literal does
-   * that the request does not leave the origin, and declining it left the one shape a template most
-   * often takes reported as a host this build could not read.
-   */
-  if (isSameOrigin(prefix)) return prefix;
-  const authority = /^[a-z][a-z0-9+.-]*:\/\/[^/?#]+[/?#]/i.exec(prefix);
-  return authority === null ? undefined : prefix;
-};
-
 type Found = {
   components: number;
   edges: number;
@@ -313,7 +255,18 @@ const serviceCalledAt = (
 } => {
   const { host, url } = request;
   if (host !== undefined) {
-    return { identity: serviceIdentity(host), name: host, displayName: host, unresolved: false };
+    /*
+     * A host read from its tail is one component wherever it is called from, exactly as a host written
+     * whole is: every request to `*.openai.azure.com` in a repository reaches one service. What differs
+     * is what a reader can check, so the name carries the wildcard and the sentence says where it came
+     * from rather than presenting a pattern as an address somebody wrote.
+     */
+    return {
+      identity: serviceIdentity(host),
+      name: host,
+      displayName: request.hostFromTail ? `${host}, whose subdomain is built at run time` : host,
+      unresolved: false,
+    };
   }
   const scope = call.enclosing;
   if (url !== undefined && isSameOrigin(url)) {
@@ -627,6 +580,14 @@ type RequestCall = {
   /** The address as far as the source writes it, which is the whole of it only when `dynamic` is false. */
   readonly url: string | undefined;
   readonly host: string | undefined;
+  /**
+   * Whether the host is stated around what the address substitutes rather than written whole.
+   *
+   * `` `https://${service}.openai.azure.com` `` settles its tail and not its head, so the host carries a
+   * wildcard where the label goes. A reader deciding whether to act on it needs to know which of the two
+   * they have, and the component says so rather than reading like a host somebody wrote down.
+   */
+  readonly hostFromTail: boolean;
   /** Whether the address is completed at run time, so the recorded url is a prefix and not the request. */
   readonly dynamic: boolean;
 };
@@ -652,12 +613,17 @@ const requestAt = (
   if (client === undefined) return undefined;
   const first = call.args[0];
   const url = addressOf(first);
+  const stated =
+    url === undefined
+      ? statedHostOf(first, (host) => modelEndpointForHost(hostToAskAbout(host)) !== undefined)
+      : undefined;
   return {
     written,
     client: client.path,
     alias,
-    url,
-    host: url === undefined ? undefined : hostOf(url),
+    url: url ?? stated?.url,
+    host: url === undefined ? stated?.host : hostOf(url),
+    hostFromTail: stated !== undefined,
     dynamic: first?.kind !== 'string',
   };
 };
@@ -707,6 +673,7 @@ const requestMetadata = (
   ...(method.value === undefined || method.stated ? {} : { httpMethodDefaulted: true }),
   ...(request.url === undefined ? {} : { url: request.url }),
   ...(request.dynamic ? { urlIsDynamic: true } : {}),
+  ...(request.hostFromTail ? { hostReadFromTail: true } : {}),
 });
 
 /**
@@ -739,7 +706,7 @@ const discoverHttp = (
     const request = requestAt(call, aliases);
     if (request === undefined) continue;
     const { written, url, host } = request;
-    const endpoint = host === undefined ? undefined : modelEndpointForHost(host);
+    const endpoint = host === undefined ? undefined : modelEndpointForHost(hostToAskAbout(host));
     /*
      * A known provider host is not enough on its own. The same host mints tokens, takes file uploads and
      * answers usage queries, and reading those as model calls reported an authentication endpoint as a

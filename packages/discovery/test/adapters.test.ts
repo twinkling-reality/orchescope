@@ -1729,6 +1729,130 @@ export const viaSdk = () =>
  * effect class that could be right for at most one of them. It was also the subject of a medium severity
  * finding in three of twenty three projects, which asked a reader to act on a component nobody can name.
  */
+/**
+ * A host whose tail is written and whose head is not.
+ *
+ * The rule that an authority has to be finished before the first substitution is about the head, and it
+ * is right: nothing here reads a host out of `https://api.`. It says nothing about the other end of the
+ * address, and the two enterprise paths to a model are written that way. A repository posting to
+ * `` f"https://{service}.openai.azure.com/..." `` reported no host at all, so the model it calls fifteen
+ * times a minute appeared nowhere in its graph.
+ *
+ * The near miss is the point of the pair. A tail is only worth a name where something knows that tail
+ * serves one thing; `example.com` is as complete a tail as any other and naming a service after it would
+ * merge every host under a domain into one component.
+ */
+describe('an address whose suffix is written', () => {
+  it('reports the Azure OpenAI model a templated host reaches', async () => {
+    const result = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'azure-hand-rolled', dependencies: ['httpx'] });
+      workspace.write(
+        'src/ask.py',
+        `import httpx
+
+
+async def ask(service: str, deployment: str, prompt: str):
+    return httpx.post(
+        f"https://{service}.openai.azure.com/openai/deployments/{deployment}/chat/completions",
+        json={"model": "gpt-4o", "messages": [{"role": "user", "content": prompt}]},
+    )
+`,
+      );
+    });
+    assert.ok(
+      result.ids.includes('provider:azure-openai'),
+      `expected the Azure provider in ${result.ids.join(', ')}`,
+    );
+    assert.ok(result.ids.includes('model:azure-openai/gpt-4o'), `in ${result.ids.join(', ')}`);
+  });
+
+  it('reports the Bedrock model a regional host reaches, whose region sits in the middle', async () => {
+    const result = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'bedrock-hand-rolled', dependencies: ['httpx'] });
+      workspace.write(
+        'src/ask.py',
+        `import httpx
+
+
+async def ask(region: str, model_id: str, prompt: str):
+    return httpx.post(
+        f"https://bedrock-runtime.{region}.amazonaws.com/model/{model_id}/invoke",
+        json={"prompt": prompt},
+    )
+`,
+      );
+    });
+    assert.ok(
+      result.ids.includes('provider:bedrock'),
+      `expected the Bedrock provider in ${result.ids.join(', ')}`,
+    );
+  });
+
+  it('says the subdomain was built at run time rather than presenting a pattern as an address', async () => {
+    const result = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'azure-named', dependencies: ['httpx'] });
+      workspace.write(
+        'src/ask.py',
+        `import httpx
+
+
+async def ask(service: str, prompt: str):
+    return httpx.post(
+        f"https://{service}.openai.azure.com/openai/v1/chat/completions",
+        json={"model": "gpt-4o", "messages": []},
+    )
+`,
+      );
+    });
+    const provider = result.result.graph.components.find(
+      (component) => component.id === 'provider:azure-openai',
+    );
+    assert.match(String(provider?.metadata['endpoint'] ?? ''), /openai\.azure\.com/);
+  });
+
+  it('still reports no host for a tail that identifies nothing', async () => {
+    const result = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'unknown-tail', dependencies: ['httpx'] });
+      workspace.write(
+        'src/ask.py',
+        `import httpx
+
+
+async def ask(region: str, body):
+    return httpx.post(f"https://api.{region}.example.com/x", json=body)
+`,
+      );
+    });
+    assert.ok(
+      result.ids.some((id) => id.startsWith('external_service:unresolved-host')),
+      `expected an unresolved host in ${result.ids.join(', ')}`,
+    );
+    assert.ok(
+      !result.ids.some((id) => id.includes('example.com')),
+      `a tail nothing recognises was named as a service in ${result.ids.join(', ')}`,
+    );
+  });
+
+  it('refuses an address whose tail is itself substituted', async () => {
+    const result = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'open-tail', dependencies: ['httpx'] });
+      workspace.write(
+        'src/ask.py',
+        `import httpx
+
+
+async def ask(tld: str, body):
+    return httpx.post(f"https://api.openai.{tld}", json=body)
+`,
+      );
+    });
+    assert.ok(
+      !result.ids.some((id) => id.includes('openai.')),
+      `a host with an unwritten tail was named in ${result.ids.join(', ')}`,
+    );
+  });
+});
+
 describe('a host the source does not write down', () => {
   const dynamicHosts = (ids: readonly string[]) =>
     ids.filter((id) => id.startsWith('external_service:unresolved-host'));

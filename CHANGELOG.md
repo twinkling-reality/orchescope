@@ -4,6 +4,30 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### An address whose tail the source settles
+
+An authority has to be finished before the first substitution, and that rule is right: reading a host out
+of `https://api.` would be a confident answer to a question the source did not settle. It is a rule about
+the head of an address, and it was being applied to addresses that settle the other end. The two
+enterprise paths to a model are both written that way, `` f"https://{service}.openai.azure.com" `` and
+`` f"https://bedrock-runtime.{region}.amazonaws.com" ``, and each reported no host at all.
+
+A host stated around what the address substitutes is now read, as a separate reading rather than as a
+relaxation of the first one. What it takes is the text written after the last thing the address computes,
+and the authority still has to end in text the author wrote: `` f"https://api.openai.{tld}" `` settles its
+tail no more than `https://api.` settles its head, and is refused for the same reason.
+
+A tail is only worth a name where something knows that tail serves one thing. `example.com` is as
+complete a tail as any other and naming a service after it would merge every host under a domain into one
+component, so the endpoint table decides, which is what it already matches on. A repository posting to
+`` f"https://api.{region}.example.com/x" `` still reports no host.
+
+The component carries the wildcard the source implies rather than a host nobody wrote:
+`*.openai.azure.com`, with the reason beside it. `serviceCalledAt` distinguished a host read whole, a same
+origin request and one it could not read, and this is the fourth case rather than a pretence at the first.
+
+Nothing moves across the thirteen pinned repositories: none of them writes a host this way.
+
 ### A retry a library declares, rather than one the code shapes
 
 Every retry reading here worked from shape: same work each pass, a counter in the header, a wait before
