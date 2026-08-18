@@ -54,6 +54,14 @@ export type ScanRequest = {
   readonly clock: Clock;
   readonly deadline: Deadline;
   readonly traversal: TraversalOptions;
+  /**
+   * How many files the index lists, when the root is a checkout.
+   *
+   * Read by the caller that also supplies `traversal.trackedPaths`, because the two come from one reading
+   * of the index and a second one could disagree with it. It is the repository's own statement of what it
+   * contains, which is the only whole the counts this scan chooses can be checked against.
+   */
+  readonly trackedFileCount?: number;
   readonly concurrency: number;
   readonly cache?: FactCache;
   readonly adapters?: readonly AgentSystemAdapter[];
@@ -353,6 +361,7 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
 
   const coverage: ScanCoverage = {
     filesDiscovered: fileSet.files.length,
+    ...(request.trackedFileCount === undefined ? {} : { filesTracked: request.trackedFileCount }),
     /*
      * Files refused before analysis count too. A Python file too large to read is a file this build claims to read
      * and did not, and leaving it out of the denominator would report every such repository as fully parsed.

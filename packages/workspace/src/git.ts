@@ -39,13 +39,23 @@ const run = (root: string, args: readonly string[]): string | undefined => {
  * that removes what it was meant to preserve.
  *
  * The result holds every tracked file and every directory containing one, because traversal asks about
- * both and a directory it declines to enter takes the tracked files inside it with it.
+ * both and a directory it declines to enter takes the tracked files inside it with it. The file count
+ * comes back beside it rather than as the size of that set, which counts the implied directories too, and
+ * beside it rather than from a second `git ls-files`, so coverage cannot report a whole that disagrees
+ * with the set traversal was given.
  *
  * The output is bounded generously because it is one line per tracked file, and a repository too large for
  * that bound produces nothing rather than a partial list, since a partial list would silently exclude the
  * files it failed to mention.
  */
-export const readTrackedPaths = (root: string): ReadonlySet<string> | undefined => {
+export type TrackedPaths = {
+  /** Every tracked file, and every directory holding one. */
+  readonly paths: ReadonlySet<string>;
+  /** How many of them are files, which is what the index actually lists. */
+  readonly fileCount: number;
+};
+
+export const readTrackedPaths = (root: string): TrackedPaths | undefined => {
   let output: string;
   try {
     output = execFileSync('git', ['ls-files', '-z'], {
@@ -60,9 +70,11 @@ export const readTrackedPaths = (root: string): ReadonlySet<string> | undefined 
     return undefined;
   }
   const kept = new Set<string>();
+  let fileCount = 0;
   for (const path of output.split('\0')) {
     if (path.length === 0) continue;
     kept.add(path);
+    fileCount += 1;
     /*
      * Git tracks files and not directories, and traversal asks about both. A directory holding a tracked
      * file is kept by implication: excluding it would drop the tracked file without ever asking about it,
@@ -72,7 +84,7 @@ export const readTrackedPaths = (root: string): ReadonlySet<string> | undefined 
       kept.add(path.slice(0, slash));
     }
   }
-  return kept;
+  return { paths: kept, fileCount };
 };
 
 export const readGitFacts = (root: string): GitFacts | undefined => {

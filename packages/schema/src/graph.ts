@@ -126,6 +126,18 @@ export const ScanCoverage = Type.Object(
      */
     filesDiscovered: NonNegativeInt,
     /**
+     * How many files the index lists, which is the only whole a reader can check the rest against.
+     *
+     * Absent where the root is not a checkout, because then nothing states what the repository is and a
+     * count of what traversal happened to reach would be this build marking its own paper.
+     *
+     * Every other count here is a population this build chose. This one is the repository's own, so it is
+     * what makes the difference between them visible: on one field report's target, 4224 tracked against
+     * 4043 discovered leaves 181 files that no count in this block reached, 176 of them in extensions the
+     * language map does not name and so counted nowhere at all.
+     */
+    filesTracked: Type.Optional(NonNegativeInt),
+    /**
      * How many of the discovered files are in a language this build reads.
      *
      * Without it, `filesParsed` over `filesDiscovered` reads as a coverage rate and measures something else: a

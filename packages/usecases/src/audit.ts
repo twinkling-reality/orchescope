@@ -349,7 +349,7 @@ export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
      * What git keeps, which decides any disagreement with the ignore rules. Read once per audit rather than
      * per directory, and absent when the root is not a checkout, in which case the rules are all there is.
      */
-    const trackedPaths = readTrackedPaths(workspace.paths.root);
+    const tracked = readTrackedPaths(workspace.paths.root);
     const scan = await discover({
       /*
        * Parsing is the longest thing this command does and it is synchronous throughout, so without
@@ -380,8 +380,9 @@ export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
          * in coverage with the rule that excluded it, so a reader who disagrees can see what happened.
          */
         respectIgnoreFiles: true,
-        ...(trackedPaths === undefined ? {} : { trackedPaths }),
+        ...(tracked === undefined ? {} : { trackedPaths: tracked.paths }),
       },
+      ...(tracked === undefined ? {} : { trackedFileCount: tracked.fileCount }),
       concurrency: config.analysis.concurrency,
       ...(request.cache === undefined ? {} : { cache: request.cache }),
       ...(workspace.git === undefined ? {} : { git: workspace.git }),

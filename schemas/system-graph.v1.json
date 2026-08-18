@@ -1025,6 +1025,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "filesTracked": {
+          "minimum": 0,
+          "type": "integer"
+        },
         "languages": {
           "items": {
             "additionalProperties": false,

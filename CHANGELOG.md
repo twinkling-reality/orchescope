@@ -32,9 +32,13 @@ them from.
 Naming the denominator cost seven columns and pushed the verbose line past eighty, where what fell off
 the end was whether anything had ever run. That line sheds its verb before it sheds a fact.
 
-Still not said: how many tracked files are in formats nothing here records. That number reaches the
-coverage block only as the language markers it recognises, so 176 of this target's files are counted
-nowhere in the document.
+**`coverage.filesTracked` is new, and it is the second published document change since 0.5.0.** It is an
+optional integer, so a consumer reading the old shape is unaffected and no document version moves. It
+holds how many files the index lists, absent where the root is not a checkout, because then nothing states
+what the repository is and a count of what traversal happened to reach would be this build marking its own
+paper. It is the only whole the counts this scan chooses can be checked against: 4224 tracked against 4043
+discovered says plainly that 181 files were reached by no count in the block, 176 of them in extensions the
+language map does not name and so counted nowhere else at all.
 
 ### A run that produced spans, described as producing none
 
