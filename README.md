@@ -194,6 +194,7 @@ Only what is tested is claimed. Each of these has an adapter exercised by tests 
 | Vercel AI SDK (JavaScript and TypeScript) | `generateText`, `tool(...)`, `maxSteps` |
 | Model SDKs | OpenAI, Anthropic and compatible clients, including base URL overrides and a request timeout read at the client or the call site |
 | Tenacity (Python) | `AsyncRetrying(...)` iterated in a loop and `@retry(...)` over a function, with the ceiling from `stop_after_attempt` and the wait from `wait_exponential` and `wait_random_exponential` |
+| Azure AI Search (Python and JavaScript) | `SearchClient(index_name=...)` and `KnowledgeBaseRetrievalClient`, joined to the function that queries them, as the retrieval source a prompt injection boundary is measured against |
 | Model Context Protocol | `.mcp.json`, `.vscode/mcp.json`, and `FastMCP` including `from mcp.server import` and the `@mcp.tool()` decorator |
 | Cloudflare Workers bindings | `wrangler.toml` anywhere in the workspace: `d1_databases` and `kv_namespaces`, joined to the code by the binding name |
 | OpenTelemetry | OTLP over HTTP, protobuf and JSON, `gen_ai.*` attributes |

@@ -60,6 +60,12 @@
       "filesInspected": 0,
       "status": "not_applicable"
     },
+    "adapter:search-index": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
     "adapter:vercel-ai-sdk": {
       "componentsFound": 23,
       "edgesFound": 14,

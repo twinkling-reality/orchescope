@@ -2,6 +2,29 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
+## Unreleased
+
+### A search index is a retrieval source
+
+`retrieval` was a component kind nothing produced. `prompt-injection-boundary` reads it as one of the
+three sources whose content nobody can vouch for, so on any repository the rule had two thirds of its
+population available and a retrieval application read as one that retrieves nothing. The field report's
+target is exactly that: its search results reach the prompt four lines from where the prompt is built,
+and the rule reported that no source had been discovered. 0.5.0 made the rule decline instead of claiming
+an all clear, which was the honest half of the answer; this is the other half.
+
+Azure AI Search is claimed, with a fixture. An index is named for what the source names it, so two call
+sites querying one index are one component, and a query through a client this build could not resolve
+reaches the service under its own name rather than being dropped. A search is a read whatever the index
+does internally, so it carries `read_only` and no rule asking about consequential operations reports it.
+A client built in a test harness is not a retrieval source: `conftest.py` in the report's target builds
+one with every field blank, which is a fixture.
+
+On that repository `prompt-injection-boundary` now fires where it declined, naming the index and the
+prompt that interpolates.
+
+Nothing moves across the thirteen pinned repositories: none of them uses this SDK.
+
 ## 0.5.0
 
 Released 2026-08-18 from npm as `orchescope@0.5.0`, published locally with `npm publish --no-provenance`,

@@ -60,6 +60,12 @@
       "filesInspected": 0,
       "status": "not_applicable"
     },
+    "adapter:search-index": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
     "adapter:vercel-ai-sdk": {
       "componentsFound": 0,
       "edgesFound": 0,
@@ -80,9 +86,9 @@
   },
   "discardedRelations": [],
   "files": {
-    "discovered": 35,
-    "inSupportedLanguages": 34,
-    "parsed": 34,
+    "discovered": 36,
+    "inSupportedLanguages": 35,
+    "parsed": 35,
     "skipped": 0,
     "truncated": false
   },

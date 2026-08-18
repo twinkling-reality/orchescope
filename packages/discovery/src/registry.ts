@@ -9,6 +9,7 @@ import { modelSdkAdapter } from './adapters/model-sdk.ts';
 import { openAiAgentsAdapter } from './adapters/openai-agents.ts';
 import { promptsAdapter } from './adapters/prompts.ts';
 import { pydanticAiAdapter } from './adapters/pydantic-ai.ts';
+import { searchIndexAdapter } from './adapters/search-index.ts';
 import { vercelAiSdkAdapter } from './adapters/vercel-ai-sdk.ts';
 import { workersBindingsAdapter } from './adapters/workers-bindings.ts';
 
@@ -34,6 +35,7 @@ export const DEFAULT_ADAPTERS: readonly AgentSystemAdapter[] = [
   pydanticAiAdapter,
   vercelAiSdkAdapter,
   modelSdkAdapter,
+  searchIndexAdapter,
   effectsAdapter,
   promptsAdapter,
   implementationReachAdapter,
