@@ -127,9 +127,18 @@ const calleePath = (callee: Node): readonly string[] => {
   return [];
 };
 
-const templateValue = (node: Node): { value: string; hasSubstitutions: boolean } => {
+/** Enough of a template to recognise which prompt it is splicing. */
+const MAX_SUBSTITUTED_NAMES = 8;
+
+const templateValue = (
+  node: Node,
+): { value: string; hasSubstitutions: boolean; substitutedNames: readonly string[] } => {
   const quasis = nodeArray(field(node, 'quasis'));
   const expressions = nodeArray(field(node, 'expressions'));
+  const substituted = new Set<string>();
+  for (const expression of expressions) {
+    collectIdentifiers(expression, substituted, MAX_SUBSTITUTED_NAMES);
+  }
   const parts: string[] = [];
   for (const quasi of quasis) {
     const cooked = asNode(field(quasi, 'value'));
@@ -143,8 +152,12 @@ const templateValue = (node: Node): { value: string; hasSubstitutions: boolean }
       }
     }
   }
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: this is the marker recorded in place of a substitution
-  return { value: parts.join('${...}'), hasSubstitutions: expressions.length > 0 };
+  return {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: this is the marker recorded in place of a substitution
+    value: parts.join('${...}'),
+    hasSubstitutions: expressions.length > 0,
+    substitutedNames: [...substituted],
+  };
 };
 
 type Context = {
@@ -196,6 +209,7 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
         kind: 'template',
         value: template.value,
         hasSubstitutions: template.hasSubstitutions,
+        substitutedNames: template.substitutedNames,
       };
     }
     case 'Identifier': {
