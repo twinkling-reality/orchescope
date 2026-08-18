@@ -2,6 +2,29 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
+## Unreleased
+
+### A prompt written in one place and assembled in another
+
+The field report's last item said prompt injection cannot see a prompt built at a raw SDK call site. That is
+not so: a template holding the instructions is discovered wherever it is written, including inside
+`client.chat.completions.create({ messages: [...] })`. What was not seen is the shape beside it, which is the
+common one: the instructions hoisted into a constant and the untrusted value spliced in where the message is
+built. Read one literal at a time, the constant interpolates nothing and the template that splices it is twenty
+characters long, so it is neither a prompt nor long enough to be recorded at all. The prompt was reported as
+taking no run time value while the value went in four lines away, and `prompt-injection-boundary` said no such
+prompt had been discovered.
+
+A template now records which names it substitutes, and a prompt is interpolated when its own literal takes a
+value or when something splices it together with one. The template has to name something besides the prompt,
+since a template naming only the prompt is the same prompt under another name.
+
+Only a name whose whole value is the text counts. The corpus caught two prompts this would otherwise have
+marked: a prompt is named for whatever holds it, and `const agent = new Agent({ instructions: '...' })` names
+its prompt `agent`, so a template splicing `agent` into a message puts nothing into the instructions. Across
+thirteen pinned repositories and two thousand three hundred and seventy nine prompt components, this moves
+nothing.
+
 ## 0.4.0
 
 Released 2026-08-17 from npm as `orchescope@0.4.0`.
@@ -144,9 +167,10 @@ about a criterion that failed, one nothing could judge, and one waiting for a hu
 
 ### Known limits, unchanged
 
-Prompt injection still reads a prompt only where a framework declares one, so a prompt assembled at a raw SDK
-call site produces no component. The rule now reports `not_applicable` rather than `clear`, so it fails quietly
-and correctly, and the false negative is real.
+Prompt injection reads a prompt that interpolates a value only where that value enters the literal itself. A
+prompt assembled from a constant and a substitution somewhere else is recorded as taking no run time value. The
+rule now reports `not_applicable` rather than `clear`, so it fails quietly and correctly, and the false negative
+is real.
 
 `analysis.exclude` still removes what it matches. This version reports the removal and does not undo it, because
 a project that vendors its dependencies on purpose wants exactly that exclusion and only its owner knows which

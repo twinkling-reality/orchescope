@@ -66,6 +66,26 @@ const stringLiteralValue = (node: Node): string | undefined => {
 const hasInterpolation = (node: Node): boolean =>
   namedChildren(node).some((child) => child.type === 'interpolation');
 
+/** Enough of an f-string to recognise which prompt it is splicing. */
+const MAX_SUBSTITUTED_NAMES = 8;
+
+/** The names an f-string substitutes, which is what says how a value was assembled. */
+const substitutedNamesIn = (node: Node): readonly string[] => {
+  const names = new Set<string>();
+  const walk = (candidate: Node): void => {
+    if (names.size >= MAX_SUBSTITUTED_NAMES) return;
+    if (candidate.type === 'identifier') {
+      names.add(candidate.text);
+      return;
+    }
+    for (const child of candidate.namedChildren) walk(child);
+  };
+  for (const child of namedChildren(node)) {
+    if (child.type === 'interpolation') walk(child);
+  }
+  return [...names];
+};
+
 const attributePath = (node: Node): readonly string[] => {
   if (node.type === 'identifier') return [node.text];
   if (node.type === 'attribute') {
@@ -104,7 +124,12 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
       const value = stringLiteralValue(node);
       if (value === undefined) return { kind: 'unknown', nodeType: node.type };
       return hasInterpolation(node)
-        ? { kind: 'template', value, hasSubstitutions: true }
+        ? {
+            kind: 'template',
+            value,
+            hasSubstitutions: true,
+            substitutedNames: substitutedNamesIn(node),
+          }
         : { kind: 'string', value };
     }
     case 'integer':

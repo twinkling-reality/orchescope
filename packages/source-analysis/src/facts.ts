@@ -27,7 +27,20 @@ export type ArgumentFact =
       readonly args: readonly ArgumentFact[];
     }
   | { readonly kind: 'function' }
-  | { readonly kind: 'template'; readonly value: string; readonly hasSubstitutions: boolean }
+  | {
+      readonly kind: 'template';
+      readonly value: string;
+      readonly hasSubstitutions: boolean;
+      /**
+       * The names this template substitutes, which is what says how a value was assembled.
+       *
+       * A prompt written as a constant and spliced into a message at the call site is two literals that
+       * each say nothing on their own: the constant interpolates nothing, and the template that puts the
+       * untrusted value beside it is too short to be a prompt. What the template names is the only thing
+       * that puts the two halves back together.
+       */
+      readonly substitutedNames?: readonly string[];
+    }
   /**
    * A value computed from other values, flattened to the operators used and the names read.
    *
@@ -123,6 +136,17 @@ export type TextFact = {
   readonly value: string;
   readonly approximateTokens: number;
   readonly hasSubstitutions: boolean;
+  /**
+   * The names this template substitutes, when it substitutes any.
+   *
+   * A prompt is often written as a constant and assembled somewhere else, and reading each literal on its
+   * own loses the assembly: the constant interpolates nothing and the template that splices it is too
+   * short to be a prompt, so the prompt was recorded as one that takes no run time value while the value
+   * went in four lines away. What a template names is what lets the two halves be put back together.
+   *
+   * Bounded, because a template can substitute as much as anyone cares to put in it.
+   */
+  readonly substitutedNames?: readonly string[];
   readonly location: SourceLocation;
   /** The name this text belongs to: the constant or property holding it, or the function it is written inside. */
   readonly enclosing: string | undefined;

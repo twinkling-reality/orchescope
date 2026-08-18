@@ -1,6 +1,6 @@
 import { CONFIDENCE_BANDS, identityKey, sha256Hex } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
-import type { TextFact } from '@orchescope/source-analysis';
+import type { ArgumentFact, ModuleFacts, TextFact } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { createDrafts, sourceIdentity } from '../drafts.ts';
 
@@ -46,6 +46,69 @@ const looksLikePrompt = (text: string): boolean => {
 };
 
 /**
+ * The names a template splices in beside at least one other value.
+ *
+ * One name and nothing else is the same value under another name, and nothing enters it.
+ */
+const splicedAlongsideAnother = (argument: ArgumentFact): readonly string[] => {
+  if (argument.kind !== 'template' || !argument.hasSubstitutions) return [];
+  const names = argument.substitutedNames ?? [];
+  return names.length > 1 ? names : [];
+};
+
+/** Arguments written inside this one, which is where a message sits: an array holding objects. */
+const nestedArguments = (argument: ArgumentFact): readonly ArgumentFact[] => {
+  if (argument.kind === 'object') return argument.entries.map((entry) => entry.value);
+  if (argument.kind === 'array') return argument.items;
+  if (argument.kind === 'call') return argument.args;
+  return [];
+};
+
+/**
+ * Prompts this module assembles with something else at the point of use.
+ *
+ * A prompt is as often written as a constant and spliced into a message as it is written where it is sent,
+ * and reading each literal on its own loses the join: the constant interpolates nothing and the template
+ * that puts the untrusted value beside it is twenty characters long, so it is not a prompt and is not even
+ * recorded as a text. The prompt was reported as one that takes no run time value while the value went in
+ * four lines away, and the rule that asks about exactly that said no such prompt had been discovered.
+ *
+ * The template has to name something besides the prompt. `` `${SYSTEM}` `` is the same prompt under
+ * another name and nothing enters it; `` `${SYSTEM}\n\n${retrieved}` `` is the shape this is looking for.
+ *
+ * Read from call arguments rather than from the text list, because that is where such a template is: it is
+ * an argument to the request that sends it, and it is too short to be recorded as a text of its own.
+ */
+const splicedWithOtherValues = (module: ModuleFacts): ReadonlySet<string> => {
+  /*
+   * Only a name whose whole value is the text. A prompt is named for whatever holds it, which is a
+   * constant holding the string in the shape this is looking for and is the enclosing function or the
+   * object around it otherwise. `const agent = new Agent({ instructions: '...' })` names its prompt
+   * `agent`, and a template that splices `agent` into a log line puts nothing into the instructions;
+   * a docstring inside `def tool(...)` is named `tool` and is not a value anyone splices at all.
+   * A definition with no initialising call is the one whose value is the literal itself. An object
+   * literal assigned to a constant is not told apart from a string by that test, and the corpus produced
+   * none: the shapes it produced were an initialising call and a docstring inside a function.
+   */
+  const holdsTheTextItself = new Set(
+    module.definitions
+      .filter(
+        (definition) => definition.kind === 'variable' && definition.initializer === undefined,
+      )
+      .map((definition) => definition.name),
+  );
+  const spliced = new Set<string>();
+  const walk = (argument: ArgumentFact): void => {
+    for (const name of splicedAlongsideAnother(argument)) {
+      if (holdsTheTextItself.has(name)) spliced.add(name);
+    }
+    for (const nested of nestedArguments(argument)) walk(nested);
+  };
+  for (const call of module.calls) for (const argument of call.args) walk(argument);
+  return spliced;
+};
+
+/**
  * Records one prompt and, when the enclosing scope produced a component, the relation from that component to it.
  *
  * A second prompt inside the same scope resolves to the first prompt rather than to an owner, so the identity is
@@ -57,6 +120,7 @@ const addPrompt = (
   builder: SystemGraphBuilder,
   file: string,
   text: TextFact,
+  spliced: ReadonlySet<string>,
 ): { readonly edges: number } => {
   const name = text.enclosing ?? `prompt-line-${text.location.startLine}`;
   const identity = sourceIdentity('prompt', file, name);
@@ -72,9 +136,20 @@ const addPrompt = (
         for: 'prompt',
         textHash: sha256Hex(text.value),
         approximateTokens: text.approximateTokens,
-        interpolatesUntrustedInput: text.hasSubstitutions,
+        /*
+         * Either the literal takes a value itself, or something splices it together with one. Both are a
+         * run time value entering this prompt, and only the first was read.
+         */
+        interpolatesUntrustedInput:
+          text.hasSubstitutions || (text.enclosing !== undefined && spliced.has(text.enclosing)),
       },
-      metadata: { characters: text.value.length, hasSubstitutions: text.hasSubstitutions },
+      metadata: {
+        characters: text.value.length,
+        hasSubstitutions: text.hasSubstitutions,
+        ...(text.enclosing !== undefined && spliced.has(text.enclosing)
+          ? { assembledElsewhere: true }
+          : {}),
+      },
       tags: ['prompt'],
     }),
   );
@@ -124,10 +199,11 @@ export const promptsAdapter: AgentSystemAdapter = {
     const files = new Set<string>();
 
     for (const module of context.modules) {
+      const spliced = splicedWithOtherValues(module);
       for (const text of module.texts) {
         if (text.approximateTokens < PROMPT_MIN_TOKENS) continue;
         if (!looksLikePrompt(text.value)) continue;
-        const added = addPrompt(context, builder, module.file, text);
+        const added = addPrompt(context, builder, module.file, text, spliced);
         components += 1;
         edges += added.edges;
         files.add(module.file);
