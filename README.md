@@ -59,7 +59,7 @@ repository, so you can check that what you installed is what this source builds:
 ```
 pnpm install
 pnpm package                       # builds the bundle, packs, installs and audits with it
-npm install -g release/orchescope-0.3.0.tgz
+npm install -g release/orchescope-0.4.0.tgz
 ```
 
 `pnpm package` also installs the tarball into a temporary prefix and audits a project with it, so a failure there means the
@@ -109,8 +109,8 @@ Every command accepts `--json` and then writes exactly one JSON document to stan
 document has the same four keys whatever happened, so a caller never special cases an outcome:
 
 ```json
-{ "ok": true, "command": "audit", "version": "0.3.0", "data": { "…": "…" } }
-{ "ok": false, "command": "audit", "version": "0.3.0", "data": null, "error": { "code": "…", "category": "…", "message": "…" } }
+{ "ok": true, "command": "audit", "version": "0.4.0", "data": { "…": "…" } }
+{ "ok": false, "command": "audit", "version": "0.4.0", "data": null, "error": { "code": "…", "category": "…", "message": "…" } }
 ```
 
 Exit codes are part of the interface: `0` success, `1` findings at or above a `--fail-on` threshold, `2` a caller mistake,

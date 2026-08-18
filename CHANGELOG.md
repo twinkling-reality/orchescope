@@ -2,7 +2,9 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
-## Unreleased
+## 0.4.0
+
+Released 2026-08-17 from npm as `orchescope@0.4.0`.
 
 This answers the field report against 0.3.0, from a Swift and AppKit repository with a small JavaScript and
 Python surface. Three of the report's items were withdrawn on inspection: the version labelling defect it opens
@@ -129,11 +131,36 @@ recording a run would add.
 **A validation separates a person from a failure.** "1 of 2 criteria satisfied, 1 undecided" said the same thing
 about a criterion that failed, one nothing could judge, and one waiting for a human review to be recorded.
 
+### What will move a reader's numbers
+
+- **`crewai` gains two findings**: an OAuth device code poll that re-sends a POST, and a `while True:` status
+  poll with no attempt ceiling. Both were invisible because a retry had to be spelled with a `try`.
+- **A repository with a committed directory named `build`, `out`, `target`, `vendor` or `coverage`** now sees it
+  named in coverage and in the gap region. Nothing about what is scanned changed; what changed is that the scan
+  says what it left out.
+- **A retry around a request that carries an idempotency key** becomes a strength rather than passing unremarked.
+- **Six rules that reported `insufficient_evidence` still do**, with a different sentence. A reader matching on
+  the text `no run has been recorded` will stop matching when a run was recorded and produced no span.
+
 ### Known limits, unchanged
 
 Prompt injection still reads a prompt only where a framework declares one, so a prompt assembled at a raw SDK
 call site produces no component. The rule now reports `not_applicable` rather than `clear`, so it fails quietly
 and correctly, and the false negative is real.
+
+`analysis.exclude` still removes what it matches. This version reports the removal and does not undo it, because
+a project that vendors its dependencies on purpose wants exactly that exclusion and only its owner knows which
+case they are in.
+
+### Provenance
+
+This version was published from a laptop with `npm publish --no-provenance`, so **it carries no attestation**.
+`publishConfig` asks for provenance and the registry generates it from a workflow identity, which a laptop does
+not have, so the publish refuses until the flag says plainly that there will be none.
+
+What stands in its place is that the artifact is reproducible: `pnpm package` from this repository builds the
+tarball that was published. That is a weaker guarantee than a registry attestation and it is worth naming as
+such. It says the bytes match this source; it does not say who published them.
 
 ## 0.3.0
 
