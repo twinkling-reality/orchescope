@@ -103,9 +103,24 @@ type RulesEvaluated = FindingSet['rulesEvaluated'];
 const measuredRunCount = (bundle: ReportBundle): number =>
   bundle.summary.observedRunCount ?? (bundle.componentMetrics.length > 0 ? bundle.runs.length : 0);
 
-/** Runs that were recorded and produced no span, which is a thing to report and not a thing to reason from. */
-const silentRunCount = (bundle: ReportBundle): number =>
-  bundle.summary.silentRunCount ?? bundle.runs.length - measuredRunCount(bundle);
+/**
+ * Runs that were recorded and produced no span, which is a thing to report and not a thing to reason from.
+ *
+ * A bundle that does not carry the count contributes nothing, because nothing else in it answers the
+ * question. Deriving it as the runs that measured nothing read a run whose spans attributed to nothing
+ * declared as a run that produced no span at all: one field report traced a target whose four spans
+ * resolved only to an undeclared host, and the document told them seven runs had recorded no span while
+ * the summary beside it said six.
+ *
+ * Those two states send a reader to opposite places. "Recorded and silent" means the instrumentation
+ * never loaded, and the answer is to make the system emit spans. "Measured nothing I could attribute"
+ * means the spans arrived and named things this build does not know, and the answer is somewhere else
+ * entirely. A `RunRecord` carries its component metrics and no span count, so a bundle without the
+ * partition cannot be asked which of the two happened, and saying nothing is the only honest answer.
+ * `measuredRunCount` is a different question and its fallback is sound: a run that attributed nothing
+ * did measure nothing, whatever it emitted.
+ */
+const silentRunCount = (bundle: ReportBundle): number => bundle.summary.silentRunCount ?? 0;
 
 export function checkCoverage(rules: RulesEvaluated): CheckCoverage {
   const ran = rules.filter((rule) => rule.status === 'fired' || rule.status === 'clear').length;

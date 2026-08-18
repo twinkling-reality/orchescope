@@ -4,6 +4,26 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### A run that produced spans, described as producing none
+
+The loop's count of silent runs fell back to the runs that measured nothing whenever a bundle did not
+carry the partition itself. A run whose spans resolve only to a host nothing declared attributes to no
+component, so it measured nothing and was read as having emitted nothing: one field report traced such a
+target and the document said seven runs had recorded no span while the summary beside it said six.
+
+Those two states send a reader to opposite places. Recorded and silent means the instrumentation never
+loaded, and the answer is to make the system emit spans. Measured nothing I could attribute means the
+spans arrived and named things this build does not know, and the answer is somewhere else entirely. That
+is the distinction 0.4.0 exists to preserve, undone by a fallback.
+
+A `RunRecord` carries its component metrics and no span count, so a bundle without the partition cannot
+be asked which of the two happened and now says nothing rather than guessing. Such a bundle is an older
+stored report; anything this build writes carries the count. The step still reports that nothing was
+measured and still names `trace`, because that part was never in doubt.
+
+`measuredRunCount` is a different question and keeps its fallback. A run that attributed nothing did
+measure nothing, whatever it emitted, so it is not a baseline a goal can be judged against.
+
 ### A sentence about the graph, said as a sentence about the graph
 
 `side-effect-approval-boundary` declined with "18 consequential operations were left unreported because

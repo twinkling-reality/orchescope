@@ -52,6 +52,23 @@ const bundle = (overrides: Partial<ReportBundle> = {}): ReportBundle => {
   } as unknown as ReportBundle;
 };
 
+/**
+ * A bundle that does not carry the partition, which is what an older stored report is.
+ *
+ * Seven runs, and the seventh produced four spans that resolved only to an undeclared host, so nothing
+ * was attributed and `componentMetrics` is empty. Deriving silence from that emptiness said seven runs
+ * had recorded no span, which is false of one of them and points a reader at instrumentation that is
+ * working.
+ */
+const unpartitionedBundle = (): ReportBundle =>
+  ({
+    ...bundle(),
+    runs: Array.from({ length: 7 }, (_unused, index) => ({
+      id: `run_000000000000000${index}`,
+    })),
+    summary: { runCount: 7 },
+  }) as unknown as ReportBundle;
+
 /** One run recorded, no span in it. The loop must treat this as no baseline at all. */
 const silentRunBundle = (overrides: Partial<ReportBundle> = {}): ReportBundle =>
   bundle({
@@ -340,5 +357,28 @@ describe('loopProgress', () => {
     );
     assert.equal(closed.standingAt, null);
     assert.equal(closed.nextCommand, null);
+  });
+});
+
+describe('a bundle that does not say which runs were silent', () => {
+  it('does not read runs that measured nothing as runs that produced no span', () => {
+    const measure = loopProgress(unpartitionedBundle(), []).steps.find(
+      (step) => step.id === 'measure',
+    );
+    assert.doesNotMatch(measure?.summary ?? '', /recorded, no span arrived/);
+    assert.ok(!measure?.detail.some((line) => /recorded no span/.test(line)));
+  });
+
+  it('still sends the reader to trace, because nothing was measured either way', () => {
+    const measure = loopProgress(unpartitionedBundle(), []).steps.find(
+      (step) => step.id === 'measure',
+    );
+    assert.equal(measure?.state, 'blocked');
+    assert.deepEqual(measure?.command, [
+      'orchescope',
+      'trace',
+      '--',
+      '<the command that starts your system>',
+    ]);
   });
 });
