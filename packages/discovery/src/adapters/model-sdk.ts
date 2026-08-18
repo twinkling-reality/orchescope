@@ -16,6 +16,7 @@ import {
   clientTimeoutMs,
   type DeclaredDeadline,
   deadlineOfRelation,
+  deadlineOnRelation,
   modelCallDeadline,
 } from '../model-deadline.ts';
 
@@ -303,12 +304,7 @@ const registerModelCalls = (
           location: call.location,
           symbol: dotted(call.calleePath),
           confidence: CONFIDENCE_BANDS.structural,
-          ...(deadline === undefined
-            ? {}
-            : {
-                policy: { timeoutMs: deadline.timeoutMs },
-                metadata: { timeoutDeclaredAt: deadline.declaredAt },
-              }),
+          ...deadlineOnRelation(deadline),
         }),
       );
       found.edges += 1;

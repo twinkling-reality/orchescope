@@ -902,8 +902,8 @@ describe('the fix offered for a model call with no timeout', () => {
     return outcome.drafts[0]?.recommendation;
   };
 
-  it('names the abort signal when the model is reached by a plain request', () => {
-    const recommendation = stepsFor({ reachedOver: 'http' });
+  it('names the abort signal when a JavaScript request reached the model', () => {
+    const recommendation = stepsFor({ reachedOver: 'http', language: 'typescript' });
     assert.match(recommendation?.summary ?? '', /no client to configure/);
     assert.ok(
       recommendation?.steps.some((step) => /abort signal/.test(step)),
@@ -911,9 +911,29 @@ describe('the fix offered for a model call with no timeout', () => {
     );
   });
 
+  /*
+   * Python has no abort signal to pass, so the sentence that serves a `fetch` sends a Python reader
+   * looking for something their language does not have. One remediation covering both ecosystems is the
+   * same defect as one covering both a client and a request, one level down.
+   */
+  it('names the timeout argument when a Python request reached the model', () => {
+    const recommendation = stepsFor({ reachedOver: 'http', language: 'python' });
+    assert.match(recommendation?.summary ?? '', /no client to configure/);
+    assert.ok(
+      recommendation?.steps.some((step) => /timeout argument/.test(step)),
+      `no achievable step among ${JSON.stringify(recommendation?.steps)}`,
+    );
+    assert.ok(!recommendation?.steps.some((step) => /abort signal/.test(step)));
+  });
+
   it('names the client when there is one to configure', () => {
     const recommendation = stepsFor({});
     assert.ok(recommendation?.steps.some((step) => /Set it at the client/.test(step)));
+  });
+
+  it('falls to the signal when a stored scan names no language', () => {
+    const recommendation = stepsFor({ reachedOver: 'http' });
+    assert.ok(recommendation?.steps.some((step) => /abort signal/.test(step)));
   });
 });
 

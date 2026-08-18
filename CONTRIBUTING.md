@@ -42,11 +42,15 @@ That runs `check`, `test` and `test:e2e`, and it is the gate. Run it before you 
 trailers.
 
 **Tests that would fail without it.** A new rule needs a test that fires it and a test that proves it stays quiet without
-evidence, and a rule a goal can be cut from needs a third: a repository its own remediation clears. The first two pass
-for a rule nothing can ever answer, which is how a rule filtering on a field no adapter produces fired on every
-repository for two releases while the goal cut from it asked for a change that could not move it. A new adapter needs a
-fixture repository and a test asserting the components, the relations and the evidence, which is what makes the support
-claim in the README true. A bug fix needs the test that reproduces the bug.
+evidence, and a rule a goal can be cut from needs a third: a repository its own remediation clears, one for each
+remediation the rule can print. The first two pass for a rule nothing can ever answer, which is how a rule filtering on
+a field no adapter produces fired on every repository for two releases while the goal cut from it asked for a change
+that could not move it. One repository per rule passes for a rule whose other branch nothing can answer, which is how a
+remediation telling a reader to give a request an expiring signal shipped to readers whose request already carried one.
+A rule declares its branches as `remediations`, keyed by the situation each one addresses, and the check enumerates
+those keys rather than being handed a list. A new adapter needs a fixture repository and a test asserting the components,
+the relations and the evidence, which is what makes the support claim in the README true. A bug fix needs the test that
+reproduces the bug.
 
 **Evidence in the pull request.** State what you ran and what it printed. For anything touching discovery, run
 `pnpm --silent orchescope --cwd apps/demo audit --json` and read the coverage block, not just the exit code, then run

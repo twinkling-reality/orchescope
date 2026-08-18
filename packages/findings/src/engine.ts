@@ -177,7 +177,12 @@ const toFinding = (
     conflictsWith: [],
     tags: [...(draft.tags ?? []), ...(capped.capReason === undefined ? [] : ['severity-capped'])],
     createdAt: input.generatedAt,
-    metadata: capped.capReason === undefined ? {} : { severityCapReason: capped.capReason },
+    metadata: {
+      ...(capped.capReason === undefined ? {} : { severityCapReason: capped.capReason }),
+      ...(draft.remediationVariant === undefined
+        ? {}
+        : { remediationVariant: draft.remediationVariant }),
+    },
   };
 };
 

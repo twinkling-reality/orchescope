@@ -1,5 +1,6 @@
 import { formatCount } from '@orchescope/domain';
 import type { IndexedGraph } from '@orchescope/graph';
+import type { RemediationVariants } from './rules/remediation-variant.ts';
 import type {
   BenchmarkReport,
   ChaosReport,
@@ -62,6 +63,15 @@ export type FindingDraft = {
   readonly evidence: readonly EvidenceId[];
   readonly metrics?: readonly FindingMetric[];
   readonly recommendation?: Recommendation;
+  /**
+   * Which of the rule's remediations this draft printed.
+   *
+   * A rule that answers two situations differently has made two promises, and the loop check has to be
+   * able to tell which one a repository was given: proving one keepable proves nothing about the other.
+   * Set by every rule whose remediation varies with what it found, and read by the check that requires a
+   * cleared repository per variant.
+   */
+  readonly remediationVariant?: string;
   readonly suggestedExperiment?: SuggestedExperiment;
   readonly taxonomy?: readonly string[];
   readonly goalEligible: boolean;
@@ -116,6 +126,17 @@ export type Rule = {
   readonly category: FindingCategory;
   readonly summary: string;
   readonly evaluate: (context: RuleContext) => RuleOutcome;
+  /**
+   * The remediations this rule can print, keyed by the situation each one answers.
+   *
+   * Declared on the rule so the loop check can enumerate them rather than be handed a list. A rule a goal
+   * can be cut from needs a repository its own remediation clears, and a rule printing two remediations
+   * needs one per branch: `model-call-without-timeout` was proved clearable by the fixture exercising the
+   * branch for a model behind a client, while the branch for a model reached by a plain request asked a
+   * request that already carried an expiring signal to be given one. Adding a key with no case is a
+   * failing check; adding a branch with no key is the thing the key exists to make awkward.
+   */
+  readonly remediations?: RemediationVariants;
 };
 
 export const clear = (detail?: string): RuleOutcome => ({

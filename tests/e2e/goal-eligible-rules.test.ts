@@ -6,9 +6,10 @@ import { dirname, join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { DEFAULT_RULES } from '../../packages/findings/src/index.ts';
 
 /**
- * Every rule a goal can be cut from has to be clearable by a change to the source.
+ * Every remediation a rule can print has to be one a change to the source can keep.
  *
  * A rule needs a test that fires it and a test that proves it stays quiet without evidence, and both of
  * those can pass for a rule nothing can ever answer. `model-call-without-timeout` filtered on a field no
@@ -21,6 +22,13 @@ import { promisify } from 'node:util';
  * So each case here is a pair. The repository that fires the rule, and the same repository with the
  * remediation the finding itself prints applied to it. The second is the half that was missing, and it is
  * the half that fails when a rule stops being answerable.
+ *
+ * One pair per rule was not enough, and the next field report proved it on the same rule. That rule prints
+ * one remediation for a model behind a client and another for a model reached by a plain request, and the
+ * single fixture exercised the first. The second told a reader to pass an abort signal to a request that
+ * already carried one: the rule was proved clearable and that branch never was. So the unit here is the
+ * remediation rather than the rule, the rules declare their remediations by key, and a branch with no
+ * repository behind it is a failing check rather than a quiet one.
  *
  * Through the real command line, because that is the surface an operator has. A rule can be cleared in a
  * unit test and remain unclearable in the product if a scan, a store or a rescan sits between them.
@@ -59,28 +67,41 @@ const write = (root: string, files: Files): void => {
   }
 };
 
-const auditFor = async (files: Files): Promise<readonly string[]> => {
+type Risk = {
+  readonly ruleId: string;
+  readonly polarity: string;
+  readonly metadata: Readonly<Record<string, unknown>>;
+  readonly recommendation?: { readonly summary: string; readonly steps: readonly string[] };
+};
+
+const auditFor = async (files: Files): Promise<readonly Risk[]> => {
   const root = mkdtempSync(join(tmpdir(), 'orchescope-goal-rule-'));
   workspaces.push(root);
   write(root, files);
   const stdout = await runCli(root, ['audit', '--json']);
-  const document = JSON.parse(stdout) as {
-    data: { findings: readonly { ruleId: string; polarity: string }[] };
-  };
-  return document.data.findings
-    .filter((finding) => finding.polarity === 'risk')
-    .map((finding) => finding.ruleId);
+  const document = JSON.parse(stdout) as { data: { findings: readonly Risk[] } };
+  return document.data.findings.filter((finding) => finding.polarity === 'risk');
 };
 
+/** Every line of a remediation, which is what a case quotes one of to say which promise it followed. */
+const linesOf = (risk: Risk | undefined): readonly string[] =>
+  risk?.recommendation === undefined
+    ? []
+    : [risk.recommendation.summary, ...risk.recommendation.steps];
+
 /**
- * One rule, the repository that fires it, and the repository its own remediation produces.
+ * One remediation, the repository that fires it, and the repository that remediation produces.
  *
  * `remediated` is the whole project again rather than a patch, so a reader can see both states of every
- * file the change touches without reconstructing one from the other.
+ * file the change touches without reconstructing one from the other. `remediation` is one line of what
+ * the finding actually prints, verbatim: rewording that line fails this until the quote is updated, which
+ * is the moment to ask whether the promise is still keepable.
  */
 type LoopCase = {
   readonly ruleId: string;
-  /** The remediation this follows, quoted from what the finding prints. */
+  /** The key the rule files this remediation under, which is what makes the set enumerable. */
+  readonly variant: string;
+  /** One line of the remediation this follows, quoted from what the finding prints. */
   readonly remediation: string;
   readonly fires: Files;
   readonly remediated: Files;
@@ -91,9 +112,37 @@ const PYPROJECT = (name: string, dependencies: readonly string[]): string =>
     .map((entry) => `  "${entry}",`)
     .join('\n')}\n]\n`;
 
+const PACKAGE_JSON = (name: string): string =>
+  `${JSON.stringify({ name, version: '1.0.0', type: 'module' }, null, 2)}\n`;
+
+/*
+ * A model reached by a plain request, in each ecosystem, because neither states a deadline the way the
+ * other does. The JavaScript request has no timeout argument to pass and the Python request has no signal,
+ * so a remediation proved keepable in one of them says nothing about the other.
+ */
+const RAW_REQUEST_JS = (signal: string): string => `export async function ask(prompt: string) {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    body: JSON.stringify({ model: 'claude-sonnet-4', messages: [{ role: 'user', content: prompt }] }),${signal}
+  });
+  return await response.text();
+}
+`;
+
+const RAW_REQUEST_PY = (timeout: string): string => `import httpx
+
+
+def ask(prompt: str):
+    return httpx.post(
+        "https://api.openai.com/v1/chat/completions",
+        json={"model": "gpt-4o", "messages": [{"role": "user", "content": prompt}]},${timeout}
+    )
+`;
+
 const CASES: readonly LoopCase[] = [
   {
     ruleId: 'model-call-without-timeout',
+    variant: 'client',
     remediation: 'Set an explicit request timeout on the model client or the call site.',
     fires: {
       'pyproject.toml': PYPROJECT('timeout-case', ['openai']),
@@ -123,8 +172,37 @@ async def answer(prompt: str):
     },
   },
   {
+    ruleId: 'model-call-without-timeout',
+    variant: 'request-abort-signal',
+    remediation:
+      'Pass an abort signal that expires after it, built with AbortSignal.timeout so the deadline is stated where the request is.',
+    fires: {
+      'package.json': PACKAGE_JSON('timeout-request-js'),
+      'src/ask.ts': RAW_REQUEST_JS(''),
+    },
+    remediated: {
+      'package.json': PACKAGE_JSON('timeout-request-js'),
+      'src/ask.ts': RAW_REQUEST_JS('\n    signal: AbortSignal.timeout(60000),'),
+    },
+  },
+  {
+    ruleId: 'model-call-without-timeout',
+    variant: 'request-timeout-argument',
+    remediation:
+      'Pass it as the timeout argument of the request itself, which is where this ecosystem states a deadline.',
+    fires: {
+      'pyproject.toml': PYPROJECT('timeout-request-py', ['httpx']),
+      'src/ask.py': RAW_REQUEST_PY(''),
+    },
+    remediated: {
+      'pyproject.toml': PYPROJECT('timeout-request-py', ['httpx']),
+      'src/ask.py': RAW_REQUEST_PY('\n        timeout=60.0,'),
+    },
+  },
+  {
     ruleId: 'unbounded-retry',
-    remediation: 'Set a maximum attempt count at the call site, and add a bounded backoff.',
+    variant: 'no-attempt-ceiling',
+    remediation: 'Set a maximum attempt count at the call site.',
     fires: {
       'pyproject.toml': PYPROJECT('unbounded-case', ['httpx']),
       'src/poll.py': `import time
@@ -158,7 +236,8 @@ def poll_status():
   },
   {
     ruleId: 'retry-around-non-idempotent-operation',
-    remediation: 'Attach an idempotency key, sent on every attempt including the first.',
+    variant: 'no-idempotency-key',
+    remediation: 'Send the key on every attempt including the first.',
     fires: {
       'pyproject.toml': PYPROJECT('unsafe-retry-case', ['httpx']),
       'src/charge.py': `import time
@@ -196,7 +275,9 @@ def charge(body, key):
   },
   {
     ruleId: 'side-effect-approval-boundary',
-    remediation: 'Mark the tool as needing approval in the framework.',
+    variant: 'no-approval-boundary',
+    remediation:
+      'Add an approval check at the call site, or mark the tool as needing approval in the framework.',
     fires: {
       'pyproject.toml': PYPROJECT('approval-case', ['pydantic-ai', 'httpx']),
       'src/support.py': `import httpx
@@ -230,8 +311,9 @@ async def issue_refund(ctx: RunContext[None], order_id: str) -> str:
   },
   {
     ruleId: 'prompt-injection-boundary',
+    variant: 'interpolated-prompt',
     remediation:
-      'Pass retrieved or tool provided text as data, never concatenated into the instruction.',
+      'Pass retrieved or tool provided text as data in a clearly delimited section, never concatenated into the instruction.',
     fires: {
       'pyproject.toml': PYPROJECT('prompt-case', ['pydantic-ai', 'httpx']),
       'src/support.py': `import httpx
@@ -283,17 +365,48 @@ async def lookup_order(ctx: RunContext[None], order_id: str) -> str:
 
 describe('a rule a goal can be cut from', () => {
   for (const testCase of CASES) {
-    it(`${testCase.ruleId} fires, and is cleared by ${testCase.remediation}`, async () => {
+    it(`${testCase.ruleId} offers ${testCase.variant}, and is cleared by it`, async () => {
       const before = await auditFor(testCase.fires);
+      const fired = before.find((risk) => risk.ruleId === testCase.ruleId);
       assert.ok(
-        before.includes(testCase.ruleId),
-        `${testCase.ruleId} did not fire on the repository written to fire it, which reported ${before.join(', ') || 'nothing'}`,
+        fired !== undefined,
+        `${testCase.ruleId} did not fire on the repository written to fire it, which reported ${before.map((risk) => risk.ruleId).join(', ') || 'nothing'}`,
+      );
+      assert.equal(
+        fired.metadata['remediationVariant'],
+        testCase.variant,
+        `this repository was written to exercise ${testCase.variant} and was given another remediation, so that branch is still unproved`,
+      );
+      assert.ok(
+        linesOf(fired).includes(testCase.remediation),
+        `the remediation this case follows is not one the finding prints. It printed ${JSON.stringify(linesOf(fired))}`,
       );
       const after = await auditFor(testCase.remediated);
       assert.ok(
-        !after.includes(testCase.ruleId),
-        `${testCase.ruleId} still fires after its own remediation was applied, so no change to the source can close a goal cut from it. The rescan reported ${after.join(', ')}`,
+        !after.some((risk) => risk.ruleId === testCase.ruleId),
+        `${testCase.ruleId} still fires after its own ${testCase.variant} remediation was applied, so no change to the source can close a goal cut from it. The rescan reported ${after.map((risk) => risk.ruleId).join(', ')}`,
       );
     });
   }
+
+  /*
+   * The half that makes this a check rather than a list. A rule declares the remediations it can print,
+   * so a branch added without a repository that clears it is a name with no case behind it and fails
+   * here. The previous shape carried one repository per rule and could not have noticed.
+   */
+  it('has a repository for every remediation any rule can print', () => {
+    const missing = DEFAULT_RULES.flatMap((rule) =>
+      Object.keys(rule.remediations ?? {})
+        .filter(
+          (variant) =>
+            !CASES.some((entry) => entry.ruleId === rule.id && entry.variant === variant),
+        )
+        .map((variant) => `${rule.id} ${variant}`),
+    );
+    assert.deepEqual(
+      missing,
+      [],
+      `${missing.join(', ')} can be printed to an operator and nothing here proves a change to the source can keep it`,
+    );
+  });
 });

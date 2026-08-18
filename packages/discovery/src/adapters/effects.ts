@@ -46,6 +46,12 @@ import {
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
 import { keyDeclaredAt } from '../idempotency-key.ts';
 import {
+  type DeclaredDeadline,
+  deadlineOfRelation,
+  deadlineOnRelation,
+  requestDeadline,
+} from '../model-deadline.ts';
+import {
   addressOf,
   hostOf,
   hostToAskAbout,
@@ -423,6 +429,69 @@ const modelNamedAt = (call: CallFact): string | undefined => {
 };
 
 /**
+ * The model a request names, which is the one this build reports it reaching.
+ *
+ * Shared by the pass that settles a relation's deadline and the pass that writes the relation, because
+ * the two have to name the same model or the deadline is filed against a component nobody else produced.
+ */
+const modelNameAt = (call: CallFact, url: string): string =>
+  modelNamedAt(call) ?? modelFromPath(pathOf(url)) ?? 'unspecified';
+
+/**
+ * Whether this request reaches a model, and which one it reaches.
+ *
+ * A known provider host is not enough on its own. The same host mints tokens, takes file uploads and
+ * answers usage queries, and reading those as model calls reported an authentication endpoint as a
+ * model and then offered a remediation naming a client that call site does not have.
+ */
+const modelEndpointCalledAt = (
+  request: RequestCall,
+): { readonly endpoint: ModelEndpoint; readonly url: string } | undefined => {
+  const { url, host } = request;
+  if (url === undefined || host === undefined) return undefined;
+  const endpoint = modelEndpointForHost(hostToAskAbout(host));
+  if (endpoint === undefined || !isInferencePath(pathOf(url))) return undefined;
+  return { endpoint, url };
+};
+
+/**
+ * The deadline each model relation may claim, settled across the module before any edge is written.
+ *
+ * A relation stands for every request one function makes to one model, and the builder merges two drafts
+ * for the same relation by taking the union of their policies. So a function that gives one of its two
+ * requests an expiring signal would have handed the relation a deadline covering the other one, and the
+ * rule would have reported the untimed request as bounded. The answer is a property of the set, which is
+ * why it is computed here rather than left to whichever request was read last.
+ */
+const modelRelationDeadlines = (
+  module: ModuleFacts,
+  aliases: ReadonlyMap<string, string>,
+): ReadonlyMap<string, DeclaredDeadline> => {
+  const grouped = new Map<string, (DeclaredDeadline | undefined)[]>();
+  for (const call of module.calls) {
+    const request = requestAt(call, aliases);
+    if (request === undefined) continue;
+    const reached = modelEndpointCalledAt(request);
+    if (reached === undefined) continue;
+    const key = modelRelationKey(call, reached.endpoint, reached.url);
+    const deadline = requestDeadline(optionsOf(call), module.language);
+    const bucket = grouped.get(key);
+    if (bucket === undefined) grouped.set(key, [deadline]);
+    else bucket.push(deadline);
+  }
+  const declared = new Map<string, DeclaredDeadline>();
+  for (const [key, deadlines] of grouped) {
+    const deadline = deadlineOfRelation(deadlines);
+    if (deadline !== undefined) declared.set(key, deadline);
+  }
+  return declared;
+};
+
+/** The caller and model a relation joins, named the way `ensureCaller` names the scope it mints. */
+const modelRelationKey = (call: CallFact, endpoint: ModelEndpoint, url: string): string =>
+  `${call.enclosing ?? 'module-scope'} ${endpoint.provider}/${modelNameAt(call, url)}`;
+
+/**
  * A model call written as a plain HTTP request.
  *
  * One project in a thirty six repository sweep ran thirteen MCP servers and reached OpenAI by posting to
@@ -447,10 +516,11 @@ const discoverModelEndpoint = (input: {
   readonly endpoint: ModelEndpoint;
   readonly url: string;
   readonly client: string;
+  readonly deadline: DeclaredDeadline | undefined;
 }): void => {
   const { module, context, builder, found, call, endpoint, url } = input;
   const path = pathOf(url);
-  const model = modelNamedAt(call) ?? modelFromPath(path) ?? 'unspecified';
+  const model = modelNameAt(call, url);
   const providerIdentity = globalIdentity(
     'provider',
     GLOBAL_NAMESPACES.provider,
@@ -502,9 +572,14 @@ const discoverModelEndpoint = (input: {
        * has no such thing, and a rule that cannot tell them apart wrote a remediation naming a client
        * that does not exist, which is a goal an agent cannot complete inside its own scope.
        */
+      /*
+       * The language is recorded because a request states its deadline differently in each ecosystem,
+       * and the remediation a rule prints has to name the one this call site can actually reach for.
+       */
       metadata: {
         callSite: input.client,
         reachedOver: 'http',
+        language: module.language,
         operation: modelOperationForPath(path),
       },
       tags: ['model-endpoint'],
@@ -531,6 +606,7 @@ const discoverModelEndpoint = (input: {
       location: call.location,
       symbol: input.client,
       confidence: CONFIDENCE_BANDS.structural,
+      ...deadlineOnRelation(input.deadline),
     }),
   );
   found.edges += 2;
@@ -719,28 +795,28 @@ const discoverHttp = (
   found: Found,
 ): void => {
   const aliases = clientAliases(module);
+  const deadlines = modelRelationDeadlines(module, aliases);
   for (const call of module.calls) {
     const request = requestAt(call, aliases);
     if (request === undefined) continue;
-    const { written, url, host } = request;
-    const endpoint = host === undefined ? undefined : modelEndpointForHost(hostToAskAbout(host));
+    const { written, host } = request;
     /*
-     * A known provider host is not enough on its own. The same host mints tokens, takes file uploads and
-     * answers usage queries, and reading those as model calls reported an authentication endpoint as a
-     * model and then offered a remediation naming a client that call site does not have. The request is
-     * still recorded, as a request: dropping a discovered outbound call would trade a wrong answer for a
-     * missing one.
+     * A request that reaches a model is recorded as a model call and nothing else. One that reaches a
+     * provider host without reaching a model is still recorded, as a request: dropping a discovered
+     * outbound call would trade a wrong answer for a missing one.
      */
-    if (endpoint !== undefined && url !== undefined && isInferencePath(pathOf(url))) {
+    const reached = modelEndpointCalledAt(request);
+    if (reached !== undefined) {
       discoverModelEndpoint({
         module,
         context,
         builder,
         found,
         call,
-        endpoint,
-        url,
+        endpoint: reached.endpoint,
+        url: reached.url,
         client: written,
+        deadline: deadlines.get(modelRelationKey(call, reached.endpoint, reached.url)),
       });
       continue;
     }

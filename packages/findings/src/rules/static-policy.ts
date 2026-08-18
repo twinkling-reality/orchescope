@@ -17,6 +17,7 @@ import {
   unreachableComponents,
 } from '@orchescope/graph';
 import type { Component, Edge, EvidenceId, SideEffectClass } from '@orchescope/schema';
+import type { RemediationVariants } from './remediation-variant.ts';
 import {
   examined,
   type FindingDraft,
@@ -121,8 +122,23 @@ const sinkShowed = (
   return typeof value === 'string' ? value : undefined;
 };
 
+/** What makes an operation safe to repeat, which is the only thing that makes the retry in front of it safe. */
+export const UNSAFE_RETRY_REMEDIATIONS = {
+  'no-idempotency-key': (subject: string) => ({
+    summary: `Attach an idempotency key to ${subject}, or remove the retry.`,
+    steps: [
+      'Derive a key from the request fields that define the operation, not from a timestamp.',
+      'Send the key on every attempt including the first.',
+      'Run the chaos scenario that injects a tool timeout and confirm a single effect.',
+    ],
+    effort: 'small' as const,
+    risk: 'medium' as const,
+  }),
+} satisfies RemediationVariants;
+
 export const unsafeRetryRule: Rule = {
   id: 'retry-around-non-idempotent-operation',
+  remediations: UNSAFE_RETRY_REMEDIATIONS,
   category: 'reliability',
   summary: 'A retry wrapped around an operation whose idempotency was not established.',
   evaluate: (context) => {
@@ -177,16 +193,8 @@ export const unsafeRetryRule: Rule = {
         newEvidence: [record],
         evidence: edge.evidence as EvidenceId[],
         taxonomy: ['owasp-asi:ASI06'],
-        recommendation: {
-          summary: `Attach an idempotency key to ${target.displayName}, or remove the retry.`,
-          steps: [
-            'Derive a key from the request fields that define the operation, not from a timestamp.',
-            'Send the key on every attempt including the first.',
-            'Run the chaos scenario that injects a tool timeout and confirm a single effect.',
-          ],
-          effort: 'small',
-          risk: 'medium',
-        },
+        recommendation: UNSAFE_RETRY_REMEDIATIONS['no-idempotency-key'](target.displayName),
+        remediationVariant: 'no-idempotency-key',
         suggestedExperiment: {
           description:
             'Inject a tool timeout on the first attempt and count the resulting effects.',
@@ -233,8 +241,22 @@ const retryWasReadAs = (edge: Edge): string => {
   return typeof evidence === 'string' ? `a loop where ${evidence}` : 'a retry';
 };
 
+/** The ceiling and the pause between attempts, which are one change at the call site that wrote the loop. */
+export const UNBOUNDED_RETRY_REMEDIATIONS = {
+  'no-attempt-ceiling': () => ({
+    summary: 'Give the retry an explicit maximum attempt count and a backoff.',
+    steps: [
+      'Set a maximum attempt count at the call site.',
+      'Add a bounded backoff so repeated failures do not hammer the dependency.',
+    ],
+    effort: 'small' as const,
+    risk: 'low' as const,
+  }),
+} satisfies RemediationVariants;
+
 export const unboundedRetryRule: Rule = {
   id: 'unbounded-retry',
+  remediations: UNBOUNDED_RETRY_REMEDIATIONS,
   category: 'reliability',
   summary: 'A retry with no attempt ceiling.',
   evaluate: (context) => {
@@ -288,15 +310,8 @@ export const unboundedRetryRule: Rule = {
         ],
         edges: [edge.id],
         evidence: edge.evidence as EvidenceId[],
-        recommendation: {
-          summary: 'Give the retry an explicit maximum attempt count and a backoff.',
-          steps: [
-            'Set a maximum attempt count at the call site.',
-            'Add a bounded backoff so repeated failures do not hammer the dependency.',
-          ],
-          effort: 'small',
-          risk: 'low',
-        },
+        recommendation: UNBOUNDED_RETRY_REMEDIATIONS['no-attempt-ceiling'](),
+        remediationVariant: 'no-attempt-ceiling',
         goalEligible: true,
         goalReason: 'A bounded change at one call site with a static check.',
         tags: ['retry'],
@@ -330,23 +345,92 @@ export const unboundedRetryRule: Rule = {
  * the relation came from a manifest, which states the number and not where the code says it.
  */
 const deadlineOrigins = (edges: readonly Edge[]): string | undefined => {
-  const atCallSite = edges.filter((edge) => edge.metadata['timeoutDeclaredAt'] === 'call site');
-  const atClient = edges.filter((edge) => edge.metadata['timeoutDeclaredAt'] === 'client');
+  const declaredAt = (place: string): number =>
+    edges.filter((edge) => edge.metadata['timeoutDeclaredAt'] === place).length;
   const parts = [
-    atCallSite.length === 0 ? undefined : `${atCallSite.length} at the call site`,
-    atClient.length === 0 ? undefined : `${atClient.length} at the client`,
-  ].filter((part): part is string => part !== undefined);
+    { count: declaredAt('call site'), where: 'at the call site' },
+    { count: declaredAt('client'), where: 'at the client' },
+    { count: declaredAt('request'), where: 'on the request' },
+  ]
+    .filter((part) => part.count > 0)
+    .map((part) => `${part.count} ${part.where}`);
   return parts.length === 0 ? undefined : parts.join(' and ');
+};
+
+/**
+ * Whether a relation declares a deadline, which is a different question from whether its number was read.
+ *
+ * `AbortSignal.timeout(REQUEST_TIMEOUT_MS)` states a deadline and settles no number, and a rule filtering
+ * on the number alone reports that repository as declaring none. That is an accusation resting on the
+ * author having named a constant. The number is what reconciliation needs to contradict an observation;
+ * the declaration is what this rule is about, and they are read separately.
+ */
+const declaresDeadline = (edge: Edge): boolean =>
+  edge.policy?.timeoutMs !== undefined || edge.metadata['timeoutDeclaredAt'] !== undefined;
+
+/**
+ * The remediation has to name something the reader has, in the language they are writing.
+ *
+ * A model behind a published package is configured at its client, and one reached by a plain request has
+ * no client at all. Telling the second reader to set a timeout at the client names a thing that does not
+ * exist in the file the finding points at, and the goal cut from it asks an agent to change something it
+ * cannot find inside the only scope it is allowed to touch.
+ *
+ * The two requests then divide again, because the ecosystems do not share a spelling. `fetch` takes no
+ * timeout argument at all and states its deadline as a signal that expires; Python's clients take a
+ * `timeout` keyword and have no signal to pass. One sentence covering both told a Python repository to
+ * reach for an abort signal, which is not a thing it can do.
+ *
+ * How the model was reached and what language reached it are both recorded at discovery, so the answer is
+ * read rather than assumed. A scan that carries no language falls to the signal, since every client this
+ * build reads a request through other than Python's is one that takes one.
+ */
+export const TIMEOUT_REMEDIATIONS = {
+  client: () => ({
+    summary: 'Set an explicit request timeout on the model client or the call site.',
+    steps: [
+      'Choose a timeout from the observed p95 latency plus headroom.',
+      'Set it at the client.',
+    ],
+    effort: 'small' as const,
+    risk: 'low' as const,
+  }),
+  'request-abort-signal': () => ({
+    summary: 'Give the request a deadline, since there is no client to configure.',
+    steps: [
+      'Choose a timeout from the observed p95 latency plus headroom.',
+      'Pass an abort signal that expires after it, built with AbortSignal.timeout so the deadline is stated where the request is.',
+    ],
+    effort: 'small' as const,
+    risk: 'low' as const,
+  }),
+  'request-timeout-argument': () => ({
+    summary: 'Give the request a deadline, since there is no client to configure.',
+    steps: [
+      'Choose a timeout from the observed p95 latency plus headroom.',
+      'Pass it as the timeout argument of the request itself, which is where this ecosystem states a deadline.',
+    ],
+    effort: 'small' as const,
+    risk: 'low' as const,
+  }),
+} satisfies RemediationVariants;
+
+const timeoutVariantFor = (target: Component | undefined): keyof typeof TIMEOUT_REMEDIATIONS => {
+  if (target?.metadata['reachedOver'] !== 'http') return 'client';
+  return target.metadata['language'] === 'python'
+    ? 'request-timeout-argument'
+    : 'request-abort-signal';
 };
 
 export const missingTimeoutRule: Rule = {
   id: 'model-call-without-timeout',
+  remediations: TIMEOUT_REMEDIATIONS,
   category: 'reliability',
   summary: 'A model invocation with no timeout in the declared configuration.',
   evaluate: (context) => {
     const modelEdges = context.graph.edgesOfKind('invokes_model');
     if (modelEdges.length === 0) return notApplicable('no model invocation was discovered');
-    const missing = modelEdges.filter((edge) => edge.policy?.timeoutMs === undefined);
+    const missing = modelEdges.filter((edge) => !declaresDeadline(edge));
     if (missing.length === 0) {
       const evidence = modelEdges.flatMap((edge) => edge.evidence.slice(0, 1)) as EvidenceId[];
       const origins = deadlineOrigins(modelEdges);
@@ -359,7 +443,7 @@ export const missingTimeoutRule: Rule = {
           confidence: CONFIDENCE_BANDS.strongStructural,
           basis: 'discovered',
           title: 'Every discovered model invocation declares a timeout',
-          explanation: `All ${formatCount(modelEdges.length, 'model call')} carry an explicit timeout${origins === undefined ? '' : `, ${origins}`}, so a hung provider cannot stall a run indefinitely.`,
+          explanation: `All ${formatCount(modelEdges.length, 'model call')} ${agree(modelEdges.length, 'carries', 'carry')} an explicit timeout${origins === undefined ? '' : `, ${origins}`}, so a hung provider cannot stall a run indefinitely.`,
           impact:
             'A slow or hanging provider fails fast instead of consuming the whole run budget.',
           components: modelEdges.map((edge) => edge.from),
@@ -371,37 +455,6 @@ export const missingTimeoutRule: Rule = {
         },
       ]);
     }
-    /*
-     * The remediation has to name something the reader has.
-     *
-     * A model behind a published package is configured at its client, and one reached by a plain request
-     * has no client at all: `fetch(url, { method: 'POST' })` takes a signal and nothing else. Telling the
-     * second reader to set a timeout at the client names a thing that does not exist in the file the
-     * finding points at, and the goal cut from it asks an agent to change something it cannot find,
-     * inside the only scope it is allowed to touch. How the model was reached is recorded at discovery,
-     * so the answer is read rather than assumed.
-     */
-    const timeoutRemediation = (target: Component | undefined) =>
-      target?.metadata['reachedOver'] === 'http'
-        ? {
-            summary: 'Give the request a deadline, since there is no client to configure.',
-            steps: [
-              'Choose a timeout from the observed p95 latency plus headroom.',
-              'Pass an abort signal that expires after it to the request itself.',
-            ],
-            effort: 'small' as const,
-            risk: 'low' as const,
-          }
-        : {
-            summary: 'Set an explicit request timeout on the model client or the call site.',
-            steps: [
-              'Choose a timeout from the observed p95 latency plus headroom.',
-              'Set it at the client.',
-            ],
-            effort: 'small' as const,
-            risk: 'low' as const,
-          };
-
     // Grouped by the model rather than reported per relation: five callers of one untimed model is one problem with
     // five call sites, and five findings would bury the rest of the report.
     const byModel = new Map<string, typeof missing>();
@@ -431,7 +484,8 @@ export const missingTimeoutRule: Rule = {
         components: [...callers, ...(target === undefined ? [] : [target.id])],
         edges: edges.map((edge) => edge.id),
         evidence: edges.flatMap((edge) => edge.evidence.slice(0, 2)) as EvidenceId[],
-        recommendation: timeoutRemediation(target),
+        recommendation: TIMEOUT_REMEDIATIONS[timeoutVariantFor(target)](),
+        remediationVariant: timeoutVariantFor(target),
         goalEligible: true,
         goalReason: 'One configuration value with a static check.',
         tags: ['timeout'],
@@ -487,8 +541,28 @@ const modelReachable = (graph: IndexedGraph): ReadonlySet<string> =>
       .map((component) => component.id),
   );
 
+/**
+ * The decision that has to happen before a consequential operation runs.
+ *
+ * It names the operation rather than the tool, because the tool is one frame away from the write and an
+ * operator who marked the tool got the finding back. Either route closes it: the graph asks whether every
+ * declared caller that reaches the operation requires approval.
+ */
+export const APPROVAL_REMEDIATIONS = {
+  'no-approval-boundary': (subject: string) => ({
+    summary: `Require an explicit approval before ${subject} executes.`,
+    steps: [
+      'Add an approval check at the call site, or mark the tool as needing approval in the framework.',
+      'Record the approval decision on the span so the boundary is observable.',
+    ],
+    effort: 'medium' as const,
+    risk: 'low' as const,
+  }),
+} satisfies RemediationVariants;
+
 export const approvalBoundaryRule: Rule = {
   id: 'side-effect-approval-boundary',
+  remediations: APPROVAL_REMEDIATIONS,
   category: 'security',
   summary: 'Whether an operation with an external effect is guarded by an approval boundary.',
   evaluate: (context) => {
@@ -575,15 +649,8 @@ export const approvalBoundaryRule: Rule = {
         newEvidence: [record],
         evidence: component.evidence.slice(0, 3) as EvidenceId[],
         taxonomy: ['owasp-llm:LLM06', 'owasp-asi:ASI04'],
-        recommendation: {
-          summary: `Require an explicit approval before ${component.displayName} executes.`,
-          steps: [
-            'Add an approval check at the call site, or mark the tool as needing approval in the framework.',
-            'Record the approval decision on the span so the boundary is observable.',
-          ],
-          effort: 'medium',
-          risk: 'low',
-        },
+        recommendation: APPROVAL_REMEDIATIONS['no-approval-boundary'](component.displayName),
+        remediationVariant: 'no-approval-boundary',
         goalEligible: true,
         goalReason:
           'The scope is one call site plus a scenario that asserts the approval happened.',
@@ -595,8 +662,24 @@ export const approvalBoundaryRule: Rule = {
   },
 };
 
+/** Keeping untrusted text out of the instruction, which is the only place the boundary can be drawn. */
+export const PROMPT_INJECTION_REMEDIATIONS = {
+  'interpolated-prompt': () => ({
+    summary:
+      'Separate untrusted content from instructions and constrain what the model may do with it.',
+    steps: [
+      'Pass retrieved or tool provided text as data in a clearly delimited section, never concatenated into the instruction.',
+      'Restrict the tools available while untrusted content is in context.',
+      'Add a scenario that injects an instruction into retrieved content and asserts the system does not follow it.',
+    ],
+    effort: 'medium' as const,
+    risk: 'medium' as const,
+  }),
+} satisfies RemediationVariants;
+
 export const promptInjectionBoundaryRule: Rule = {
   id: 'prompt-injection-boundary',
+  remediations: PROMPT_INJECTION_REMEDIATIONS,
   category: 'security',
   summary: 'Places where content Orchescope cannot vouch for reaches a prompt.',
   evaluate: (context) => {
@@ -658,17 +741,8 @@ export const promptInjectionBoundaryRule: Rule = {
       components: [prompt.id, ...untrustedSources.slice(0, 5).map((component) => component.id)],
       evidence: prompt.evidence.slice(0, 3) as EvidenceId[],
       taxonomy: ['owasp-llm:LLM01', 'owasp-asi:ASI01'],
-      recommendation: {
-        summary:
-          'Separate untrusted content from instructions and constrain what the model may do with it.',
-        steps: [
-          'Pass retrieved or tool provided text as data in a clearly delimited section, never concatenated into the instruction.',
-          'Restrict the tools available while untrusted content is in context.',
-          'Add a scenario that injects an instruction into retrieved content and asserts the system does not follow it.',
-        ],
-        effort: 'medium',
-        risk: 'medium',
-      },
+      recommendation: PROMPT_INJECTION_REMEDIATIONS['interpolated-prompt'](),
+      remediationVariant: 'interpolated-prompt',
       suggestedExperiment: {
         description:
           'Inject an instruction into retrieved content and assert the system ignores it.',

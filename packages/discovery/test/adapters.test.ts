@@ -325,12 +325,20 @@ describe('a deadline a model call declares', () => {
   const timeoutOf = (
     result: Awaited<ReturnType<typeof scan>>['result'],
     from: string,
-  ): { readonly ms: number | undefined; readonly declaredAt: unknown } => {
+  ): {
+    readonly ms: number | undefined;
+    readonly declaredAt: unknown;
+    readonly readFrom: unknown;
+  } => {
     const edge = result.graph.edges.find(
       (entry) => entry.kind === 'invokes_model' && entry.from === from,
     );
     assert.ok(edge !== undefined, `no invokes_model edge from ${from}`);
-    return { ms: edge.policy?.timeoutMs, declaredAt: edge.metadata['timeoutDeclaredAt'] };
+    return {
+      ms: edge.policy?.timeoutMs,
+      declaredAt: edge.metadata['timeoutDeclaredAt'],
+      readFrom: edge.metadata['timeoutReadFrom'],
+    };
   };
 
   it('reads a Python call site timeout as the seconds its SDK takes', async () => {
@@ -353,6 +361,7 @@ async def compute_embedding(text: str):
     assert.deepEqual(timeoutOf(result, 'agent:compute_embedding'), {
       ms: 60_000,
       declaredAt: 'call site',
+      readFrom: undefined,
     });
   });
 
@@ -374,7 +383,11 @@ export async function answer(prompt: string) {
 `,
       );
     });
-    assert.deepEqual(timeoutOf(result, 'agent:answer'), { ms: 5000, declaredAt: 'call site' });
+    assert.deepEqual(timeoutOf(result, 'agent:answer'), {
+      ms: 5000,
+      declaredAt: 'call site',
+      readFrom: undefined,
+    });
   });
 
   it('carries the deadline of the client a call goes through', async () => {
@@ -395,6 +408,7 @@ async def compute_embedding(text: str):
     assert.deepEqual(timeoutOf(result, 'agent:compute_embedding'), {
       ms: 30_000,
       declaredAt: 'client',
+      readFrom: undefined,
     });
   });
 
@@ -416,7 +430,11 @@ export async function answer(prompt: string) {
 `,
       );
     });
-    assert.deepEqual(timeoutOf(result, 'agent:answer'), { ms: 5000, declaredAt: 'call site' });
+    assert.deepEqual(timeoutOf(result, 'agent:answer'), {
+      ms: 5000,
+      declaredAt: 'call site',
+      readFrom: undefined,
+    });
   });
 
   it('carries nothing when the client was constructed in another module', async () => {
@@ -448,6 +466,7 @@ class Embedder:
     assert.deepEqual(timeoutOf(result, 'agent:compute_embedding'), {
       ms: undefined,
       declaredAt: undefined,
+      readFrom: undefined,
     });
   });
 
@@ -470,6 +489,7 @@ async def compute_embedding(text: str):
     assert.deepEqual(timeoutOf(result, 'agent:compute_embedding'), {
       ms: undefined,
       declaredAt: undefined,
+      readFrom: undefined,
     });
   });
 
@@ -489,7 +509,11 @@ async def answer(text: str):
 `,
       );
     });
-    assert.deepEqual(timeoutOf(result, 'agent:answer'), { ms: undefined, declaredAt: undefined });
+    assert.deepEqual(timeoutOf(result, 'agent:answer'), {
+      ms: undefined,
+      declaredAt: undefined,
+      readFrom: undefined,
+    });
   });
 
   it('carries the longest deadline when the calls a relation stands for disagree', async () => {
@@ -508,7 +532,180 @@ async def answer(text: str):
 `,
       );
     });
-    assert.deepEqual(timeoutOf(result, 'agent:answer'), { ms: 90_000, declaredAt: 'call site' });
+    assert.deepEqual(timeoutOf(result, 'agent:answer'), {
+      ms: 90_000,
+      declaredAt: 'call site',
+      readFrom: undefined,
+    });
+  });
+});
+
+/**
+ * A deadline a plain request declares, for a model reached without an SDK.
+ *
+ * The remediation this feeds told a reader to pass an abort signal that expires, and a request already
+ * carrying one got the same finding back, because nothing on this path had ever looked for a deadline.
+ * Both ecosystems are here because both reach a model this way and neither spells it the way the other
+ * does: one fixture would have proved the reading works for whichever half its author wrote, which is
+ * exactly how the branch that could not be cleared survived a check written to prove it could be.
+ */
+describe('a deadline a model request declares', () => {
+  const timeoutOf = (
+    result: Awaited<ReturnType<typeof scan>>['result'],
+    from: string,
+  ): {
+    readonly ms: number | undefined;
+    readonly declaredAt: unknown;
+    readonly readFrom: unknown;
+  } => {
+    const edge = result.graph.edges.find(
+      (entry) => entry.kind === 'invokes_model' && entry.from === from,
+    );
+    assert.ok(edge !== undefined, `no invokes_model edge from ${from}`);
+    return {
+      ms: edge.policy?.timeoutMs,
+      declaredAt: edge.metadata['timeoutDeclaredAt'],
+      readFrom: edge.metadata['timeoutReadFrom'],
+    };
+  };
+
+  const jsRequest = (body: string) =>
+    scan((workspace) => {
+      writeNodeProject(workspace, { name: 'request-deadline-js', dependencies: {} });
+      workspace.write(
+        'src/ask.ts',
+        `export async function ask(prompt: string) {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    body: JSON.stringify({ model: 'claude-sonnet-4', messages: [{ role: 'user', content: prompt }] }),
+${body}
+  });
+  return await response.text();
+}
+`,
+      );
+    });
+
+  const pythonRequest = (timeout: string) =>
+    scan((workspace) => {
+      writePythonProject(workspace, { name: 'request-deadline-py', dependencies: ['httpx'] });
+      workspace.write(
+        'app/ask.py',
+        `import httpx
+
+
+def ask(prompt: str):
+    return httpx.post(
+        "https://api.openai.com/v1/chat/completions",
+        json={"model": "gpt-4o", "messages": [{"role": "user", "content": prompt}]},
+        ${timeout}
+    )
+`,
+      );
+    });
+
+  it('reads a signal that expires as the milliseconds it takes', async () => {
+    const { result } = await jsRequest('    signal: AbortSignal.timeout(60000),');
+    assert.deepEqual(timeoutOf(result, 'entrypoint:ask'), {
+      ms: 60_000,
+      declaredAt: 'request',
+      readFrom: 'abort signal',
+    });
+  });
+
+  it('reads a timeout argument as the milliseconds a JavaScript client takes', async () => {
+    const { result } = await jsRequest('    timeout: 45000,');
+    assert.deepEqual(timeoutOf(result, 'entrypoint:ask'), {
+      ms: 45_000,
+      declaredAt: 'request',
+      readFrom: 'timeout argument',
+    });
+  });
+
+  it('reads a timeout argument as the seconds a Python client takes', async () => {
+    const { result } = await pythonRequest('timeout=30.0,');
+    assert.deepEqual(timeoutOf(result, 'entrypoint:ask'), {
+      ms: 30_000,
+      declaredAt: 'request',
+      readFrom: 'timeout argument',
+    });
+  });
+
+  /*
+   * Naming the duration is how most repositories write it, and reading the constant is past what this
+   * settles. Expiry is the whole purpose of the constructor, so the deadline is a fact whatever the
+   * argument says, and only the number is missing. Reporting it as no deadline at all would accuse a
+   * repository of having none because its author named a number.
+   */
+  it('records a signal whose duration it cannot read as a deadline with no number', async () => {
+    const { result } = await jsRequest('    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),');
+    assert.deepEqual(timeoutOf(result, 'entrypoint:ask'), {
+      ms: undefined,
+      declaredAt: 'request',
+      readFrom: 'abort signal',
+    });
+  });
+
+  it('reads the pair of phase timeouts a Python client takes as a deadline with no number', async () => {
+    const { result } = await pythonRequest('timeout=(3.05, 27.0),');
+    assert.deepEqual(timeoutOf(result, 'entrypoint:ask'), {
+      ms: undefined,
+      declaredAt: 'request',
+      readFrom: 'timeout argument',
+    });
+  });
+
+  it('declines a signal whose expiry is set on a controller somewhere else', async () => {
+    const { result } = await jsRequest('    signal: controller.signal,');
+    assert.deepEqual(timeoutOf(result, 'entrypoint:ask'), {
+      ms: undefined,
+      declaredAt: undefined,
+      readFrom: undefined,
+    });
+  });
+
+  it('declines a timeout argument that asks for no deadline', async () => {
+    const { result } = await pythonRequest('timeout=None,');
+    assert.deepEqual(timeoutOf(result, 'entrypoint:ask'), {
+      ms: undefined,
+      declaredAt: undefined,
+      readFrom: undefined,
+    });
+  });
+
+  /*
+   * The builder merges two drafts for one relation by taking the union of their policies, so a deadline
+   * settled per request rather than per relation would have covered the request that declares none.
+   */
+  it('declines to give a relation a deadline when one of its requests has none', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'partial-request-js', dependencies: {} });
+      workspace.write(
+        'src/ask.ts',
+        `export async function ask(prompt: string) {
+  const body = JSON.stringify({ model: 'claude-sonnet-4', messages: [] });
+  await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    body,
+    signal: AbortSignal.timeout(60000),
+  });
+  return await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', body });
+}
+`,
+      );
+    });
+    assert.deepEqual(timeoutOf(result, 'entrypoint:ask'), {
+      ms: undefined,
+      declaredAt: undefined,
+      readFrom: undefined,
+    });
+  });
+
+  it('reports the language that reached the model, so a remediation can name a spelling it has', async () => {
+    const { result } = await pythonRequest('timeout=None,');
+    const model = result.graph.components.find((component) => component.kind === 'model');
+    assert.equal(model?.metadata['reachedOver'], 'http');
+    assert.equal(model?.metadata['language'], 'python');
   });
 });
 

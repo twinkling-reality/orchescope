@@ -4,6 +4,52 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### A deadline a request states
+
+`model-call-without-timeout` printed one remediation for a model behind a client and another for a model
+reached by a plain request, and only the first could ever be followed. The second said to pass an abort
+signal that expires to the request itself, and a request already carrying `AbortSignal.timeout(60_000)`
+got the finding back: nothing on that path had ever looked for a deadline, so the field the rule filters
+on was written only by the SDK reader. A field report edited two call sites, one of each shape, watched
+the count move from two to one, and was told the goal had not been met.
+
+Both ecosystems are read, because both reach a model this way and neither spells it the way the other
+does. JavaScript states it as a signal that expires and Python as a `timeout` argument, and the sentence
+serving one told the other to reach for something its language does not have. So the request remediation
+divided in two as well, and each of the three now has a repository that fires it and the same repository
+its own remediation clears.
+
+What the syntax settles decides what is read. `AbortSignal.timeout(x)` states a deadline whatever `x` is,
+since expiry is the whole purpose of that constructor, so a duration written as a named constant is a
+deadline with a number this build cannot read rather than no deadline at all. A `timeout` argument states
+nothing on its own, because `timeout=None` and `timeout: 0` are both how a caller asks for none, so a
+literal is required. A signal from an `AbortController` is refused: what aborts it is written elsewhere,
+and holding one to let a caller cancel is at least as common as holding one for a clock. The same
+distinction the tenacity reading makes between a ceiling that cannot be read and no ceiling at all.
+
+The deadline is settled per relation before any edge is written. A relation stands for every request one
+function makes to one model and the builder merges two drafts for it by union, so a function that gives
+one of its two requests a signal would have handed the relation a deadline covering the other.
+
+Nothing moves across the thirteen pinned repositories: none of them reaches a model over a plain request.
+
+### A remediation is a promise, and every branch of it is checked
+
+Three checks were added last release to turn a rule nothing can answer into a build failure, and this
+report got past all three. `tests/e2e/goal-eligible-rules.test.ts` carried one repository per rule and
+the rule above prints two remediations, so the branch the fixture exercised was proved clearable and the
+other one never was. The rule was answerable; the promise it printed to half its readers was not.
+
+A rule now declares the remediations it can print, keyed by the situation each one addresses, and the
+check enumerates those keys rather than being handed a list. Every key needs a repository that fires it
+and the same repository that remediation clears, a case that reaches a branch is required to say which
+branch it reached, and the line it quotes has to be one the finding actually prints. A branch added with
+no repository behind it is a failing check.
+
+The five goal eligible static rules declare their remediations this way, and findings carry the key they
+were given as `remediationVariant`. That is metadata rather than a new field, so no published document
+changes shape.
+
 ### A search index is a retrieval source
 
 `retrieval` was a component kind nothing produced. `prompt-injection-boundary` reads it as one of the
