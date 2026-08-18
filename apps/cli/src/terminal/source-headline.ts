@@ -77,15 +77,44 @@ const runsPhrase = (result: AuditResult): string => {
   return silent === 0 ? 'no runs on record' : `${formatCount(silent, 'run')} on record, no spans`;
 };
 
+/**
+ * What was read, over a denominator that says what it counts.
+ *
+ * "read from 3858 of 3858 files" is completeness over the files this build parses, printed as though it
+ * were completeness over the repository. The target it was measured on tracks 4224 files, so a reader
+ * was shown a rate of one hundred percent against a denominator that left 366 of their files out, and
+ * nothing on the line said which whole was being divided.
+ *
+ * The denominator is named instead, and the documents beside it are counted where there are any.
+ * Configuration is discovered and read for what it declares rather than parsed, so it belongs in neither
+ * half of the parse rate and disappeared from the document entirely. What this still cannot say is how
+ * many tracked files are in formats it never records, because the number reaches the coverage block only
+ * as the language markers it recognises.
+ */
 const coverageVariants = (result: AuditResult, verbose: boolean): readonly string[] => {
   const coverage = result.graph.coverage;
   const supported = coverage.filesInSupportedLanguages ?? coverage.filesParsed;
-  const files = `${coverage.filesParsed} of ${formatCount(supported, 'file')}`;
+  const files = `${coverage.filesParsed} of ${formatCount(supported, 'source file')}`;
+  const documents = coverage.filesDiscovered - supported;
+  const beside =
+    documents <= 0 ? '' : ` beside ${formatCount(documents, 'configuration document')}`;
   const runs = runsPhrase(result);
   const graph = `${formatCount(result.bundle.summary.componentCount, 'part')} and ${formatCount(result.bundle.summary.edgeCount, 'link')}`;
-  if (!verbose) return [`read from ${files}, with ${runs}`, `read from ${files}`];
+  if (!verbose)
+    return [
+      `read from ${files}${beside}, with ${runs}`,
+      `read from ${files}, with ${runs}`,
+      `read from ${files}`,
+    ];
+  /*
+   * The verb is shed before any fact is. Naming the denominator cost seven columns and pushed this line
+   * past eighty, and what fell off the end was whether anything had ever run, which is the fact that
+   * decides what the rest of the document can say.
+   */
   return [
+    `${graph}; ${files}${beside} read; ${runs}`,
     `${graph}; ${files} read; ${runs}`,
+    `${graph}; ${files}; ${runs}`,
     `${graph}; ${files} read`,
     `read from ${files}, with ${runs}`,
     `read from ${files}`,

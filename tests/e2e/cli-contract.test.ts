@@ -277,10 +277,15 @@ describe('a repository with no agent system', () => {
   });
 
   /*
-   * `emptyProject` holds one JavaScript file and one `package.json`. The walk counts both, because configuration
-   * adapters read JSON, and only the JavaScript file is in a language this build parses. Dividing the files parsed
-   * by the files walked printed "1 of 2" and read as half a repository unread, when every file this build claims to
-   * read had been read.
+   * `emptyProject` holds one JavaScript file and one `package.json`. The walk counts both, because the readers that
+   * take configuration read JSON, and only the JavaScript file is in a language this build parses. Dividing the files
+   * parsed by the files walked printed "1 of 2" and read as half a repository unread, when every file this build
+   * claims to read had been read.
+   *
+   * The denominator that fixed it then went unnamed, which is the opposite error and the harder one to see: "read
+   * from 3858 of 3858 files" on a repository tracking 4224 of them is a rate of one hundred percent over a whole the
+   * line never states. So the denominator says what it counts, and the documents sitting in the difference between
+   * the two counts are named rather than left to a reader subtracting one coverage field from another.
    */
   it('counts the parse rate against the files it claims to read, not against every file walked', async () => {
     const root = emptyProject();
@@ -292,7 +297,9 @@ describe('a repository with no agent system', () => {
     assert.equal(coverage['filesInSupportedLanguages'], 1);
     assert.equal(coverage['filesDiscovered'], 2);
     // The headline states the files read over the files this build claims to read, under line one.
-    assert.match(result.stdout, /read from 1 of 1 file/);
+    assert.match(result.stdout, /read from 1 of 1 source file/);
+    // And the document that makes the two counts differ is named rather than left in the gap between them.
+    assert.match(result.stdout, /1 configuration document, not parsed as source/);
     assert.equal(
       /read from \d+ of 2 files?/.test(result.stdout),
       false,

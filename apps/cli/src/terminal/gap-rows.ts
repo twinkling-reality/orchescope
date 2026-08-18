@@ -150,6 +150,33 @@ const failedRows = (coverage: Coverage, layout: Layout): readonly Row[] =>
       ] as const;
     });
 
+/**
+ * Documents traversal discovered and no parser read.
+ *
+ * `filesDiscovered` counts everything traversal recognised as some language and `filesParsed` counts the
+ * source that reached a parser, so configuration sits in the difference between them and appeared in
+ * neither half of the line a reader checks coverage on. On one field report's target that difference is
+ * a hundred and eighty five documents, discovered, counted and named nowhere.
+ *
+ * It says what they are and not that they were read, because whether one is opened depends on whether a
+ * configuration or manifest reader knows that file: on the same target the configuration reader opened
+ * none of them and the manifest reader opened one. Claiming the population was read would replace a
+ * silence with an overstatement.
+ */
+const configurationRow = (coverage: Coverage): readonly Row[] => {
+  const supported = coverage.filesInSupportedLanguages ?? coverage.filesParsed;
+  const documents = coverage.filesDiscovered - supported;
+  if (documents <= 0) return [];
+  return [
+    {
+      kind: 'keyed',
+      key: 'gap',
+      state: '. unparsed',
+      text: `${documents} configuration ${documents === 1 ? 'document' : 'documents'}, not parsed as source`,
+    } as const,
+  ];
+};
+
 const truncatedRow = (coverage: Coverage): readonly Row[] =>
   coverage.truncated
     ? [
@@ -172,6 +199,7 @@ export const gapRegion = (coverage: Coverage, layout: Layout): Region => {
     ...truncatedRow(coverage),
     ...skippedRows(coverage),
     ...unsupportedRows(coverage),
+    ...configurationRow(coverage),
   ];
   const keyed = entries.filter((row) => row.kind === 'keyed');
   if (keyed.length <= ROW_CEILING) return entries;

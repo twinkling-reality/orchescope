@@ -4,6 +4,38 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### A coverage rate whose denominator says what it counts
+
+"read from 3858 of 3858 files" is completeness over the files this build parses, printed as though it
+were completeness over the repository. The target it was measured on tracks 4224, so a reader was shown
+one hundred percent against a whole the line never named. The denominator says `source files` now.
+
+The documents in the difference are named too. `filesDiscovered` counts everything traversal recognised
+as some language and `filesParsed` counts the source that reached a parser, so configuration falls
+between the two counts and appeared in neither half of the line coverage is read from. It is a gap row
+now: `185 configuration documents, not parsed as source`.
+
+That row says what they are and not that they were read, which is the part worth stating carefully. The
+expectation going in was that these are configuration this build reads through the readers that take
+configuration rather than code. On the report's target the configuration reader opened none of them and
+the manifest reader opened one, the root `package.json`, so claiming the population was read would have
+replaced a silence with an overstatement.
+
+The arithmetic, re-derived at `0ab3414c015bb8d4cea781b59f15237864db2239` rather than taken from the
+report. 4224 files tracked: 3858 read as code and all parsed, 185 configuration documents discovered and
+not parsed, `package-lock.json` skipped for exceeding the size limit, 4 Go source files reported
+unsupported, and 176 in extensions the language map does not name. The report's two figures were 181 and
+180; the first is right as a total and decomposes into 176 undisclosed plus 5 already reported, and the
+second is 185, because the Go files and the oversized one are not inside the discovered set it subtracted
+them from.
+
+Naming the denominator cost seven columns and pushed the verbose line past eighty, where what fell off
+the end was whether anything had ever run. That line sheds its verb before it sheds a fact.
+
+Still not said: how many tracked files are in formats nothing here records. That number reaches the
+coverage block only as the language markers it recognises, so 176 of this target's files are counted
+nowhere in the document.
+
 ### A run that produced spans, described as producing none
 
 The loop's count of silent runs fell back to the runs that measured nothing whenever a bundle did not

@@ -19,7 +19,7 @@ describe('the headline', () => {
   it('describes the project by what is in it, then says what was read', () => {
     assert.deepEqual(lines(auditResult({}), 80), [
       'demo            this scan found 5 agents, 7 tools and 2 models',
-      '                read from 23 of 23 files, with no runs on record',
+      '                read from 23 of 23 source files, with no runs on record',
     ]);
   });
 
@@ -49,7 +49,7 @@ describe('the headline', () => {
     });
     assert.equal(
       lines(withRuns, 80)[1],
-      '                read from 23 of 23 files, with 2 runs on record',
+      '                read from 23 of 23 source files, with 2 runs on record',
     );
   });
 
@@ -58,7 +58,7 @@ describe('the headline', () => {
       lines(auditResult({ projectName: 'a-very-long-repository-name-here-now' }), 60),
       [
         'a-very-long-repository-name…  5 agents, 7 tools and 2 models',
-        '                read from 23 of 23 files',
+        '                read from 23 of 23 source files',
       ],
     );
   });
@@ -83,7 +83,7 @@ describe('verbose', () => {
   it('adds the graph counts to the line that already carries coverage', () => {
     assert.deepEqual(lines(auditResult({}), 80, true), [
       'demo            this scan found 5 agents, 7 tools and 2 models',
-      '                33 parts and 32 links; 23 of 23 files read; no runs on record',
+      '                33 parts and 32 links; 23 of 23 source files; no runs on record',
     ]);
   });
 });

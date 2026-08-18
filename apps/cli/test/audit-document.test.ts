@@ -61,7 +61,7 @@ describe('the glance', () => {
       render(detected),
       [
         'demo            this scan found 5 agents, 7 tools and 2 models',
-        '                read from 23 of 23 files, with 1 run on record',
+        '                read from 23 of 23 source files, with 1 run on record',
         '',
         'problems        1 serious, 1 medium, worst first',
         'serious         a model is called with no timeout declared',
@@ -93,7 +93,7 @@ describe('the glance', () => {
       render(undetected),
       [
         'express         this scan found 5 parts',
-        '                read from 141 of 141 files, with no runs on record',
+        '                read from 141 of 141 source files, with no runs on record',
         'No agent system was detected: no adapter here recognised one.',
         '',
         'problems        no problems found',
