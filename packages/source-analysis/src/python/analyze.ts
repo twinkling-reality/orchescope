@@ -164,15 +164,22 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
         : { kind: 'member', path };
     }
     case 'call': {
+      /*
+       * Reduced the same way a call at the top level is, because it is the same shape and a reader
+       * asking what it was given cannot know how deeply it was nested. Mapping the children one by one
+       * left every keyword argument of a nested call as an unknown: `stop_after_attempt(15)` read
+       * correctly and `stop_after_attempt(max_attempt_number=15)` did not, and the two are one policy
+       * spelled two ways.
+       */
       const callee = childField(node, 'function');
-      const argumentList = childField(node, 'arguments');
+      const { positional, keywords } = splitArguments(node, context);
       return {
         kind: 'call',
         path: callee === undefined ? [] : attributePath(callee),
         args:
-          argumentList === undefined
-            ? []
-            : namedChildren(argumentList).map((child) => argumentFact(child, context)),
+          keywords.length === 0
+            ? positional
+            : [...positional, { kind: 'object', entries: keywords }],
       };
     }
     case 'list':

@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { dotted, findEntry, identifierItems, objectArgument, stringValue } from '../src/facts.ts';
+import {
+  dotted,
+  findEntry,
+  identifierItems,
+  numberValue,
+  objectArgument,
+  stringValue,
+} from '../src/facts.ts';
 import { analyzePython } from '../src/python/analyze.ts';
 
 const analyze = (text: string, file = 'src/agents/triage.py') =>
@@ -93,6 +100,30 @@ client.embeddings.create(
     );
     assert.ok(call, 'expected the create call');
     assert.equal(findEntry(objectArgument(call), 'timeout')?.value.kind, 'number');
+  });
+
+  /*
+   * A nested call is reduced the way a top level one is, because it is the same shape and a reader asking
+   * what it was given cannot know how deeply it sits. Mapping its children one by one left every keyword
+   * argument of a nested call unknown, so a policy written `stop_after_attempt(15)` was read and the same
+   * policy written `stop_after_attempt(max_attempt_number=15)` was not.
+   */
+  it('reads the keyword arguments of a call nested inside another call', async () => {
+    const facts = await analyze(`
+retrying = AsyncRetrying(stop=stop_after_attempt(max_attempt_number=15))
+`);
+    const call = facts.calls.find((candidate) => dotted(candidate.calleePath) === 'AsyncRetrying');
+    assert.ok(call, 'expected the AsyncRetrying call');
+    const stop = findEntry(objectArgument(call), 'stop')?.value;
+    assert.equal(stop?.kind, 'call');
+    if (stop?.kind !== 'call') return;
+    assert.equal(
+      numberValue(
+        findEntry(stop.args[0]?.kind === 'object' ? stop.args[0].entries : [], 'max_attempt_number')
+          ?.value,
+      ),
+      15,
+    );
   });
 
   it('keeps a positional splat, whose arity nothing here can know', async () => {
