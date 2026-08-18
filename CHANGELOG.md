@@ -31,6 +31,16 @@ call site no route back and the relation carries nothing. And a relation standin
 claims a deadline only when every call it stands for declares one, because a function that times one of
 its two calls has not given the relation a deadline.
 
+### A goal is judged against the risk it was cut from
+
+`model-call-without-timeout` answers a repository where every call declares a deadline with a strength
+carrying the same rule identifier. Presence of the finding is resolved on the goal's rule, because
+identifiers are renumbered by every rescan, so the goal read its own rule back out of the finding set,
+found it, and reported that the finding still fired. The half of the loop the deadline join opened was
+closed again by the reading of its result. A goal is only ever cut from a risk, since a strength is never
+goal eligible, so a strength carrying the goal's rule is now read as the evidence that the goal succeeded
+rather than that it failed.
+
 ### A note beside an argument was counted as one
 
 The parser reports a comment as a named child of an argument list, and a `**` splat was being counted as

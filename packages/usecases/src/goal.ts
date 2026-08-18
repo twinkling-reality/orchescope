@@ -165,6 +165,14 @@ const comparisonForGoal = (workspace: Workspace, goal: Goal): Comparison | undef
  * carries, because that identifier is a per category sequence number over one scan's findings and is
  * renumbered whenever the set changes. The answer is expressed back in terms of the identifiers the
  * criteria hold, so the pure judge in `@orchescope/goals` stays a function of its inputs.
+ *
+ * The risk is what is looked for, not the rule. A rule that reports both polarities says the opposite
+ * thing with the same identifier when its population comes out clean: `model-call-without-timeout`
+ * answers a repository where every call declares a deadline with a strength, and a goal reading its own
+ * rule back out of the finding set saw the rule present and reported that nothing had changed. An agent
+ * that had done exactly what the goal asked was told it had not. A goal is only ever cut from a risk,
+ * since a strength is never goal eligible, so a strength carrying the same rule is the evidence that the
+ * goal succeeded rather than that it failed.
  */
 export const judgeGoal = (input: {
   readonly workspace: Workspace;
@@ -176,7 +184,9 @@ export const judgeGoal = (input: {
   const { workspace, goal } = input;
   const stillPresent = new Set(
     input.findings
-      .filter((finding) => finding.ruleId === goal.metadata['ruleId'])
+      .filter(
+        (finding) => finding.ruleId === goal.metadata['ruleId'] && finding.polarity === 'risk',
+      )
       .map((finding) => finding.id),
   );
   if (stillPresent.size > 0) stillPresent.add(goal.findingId);
