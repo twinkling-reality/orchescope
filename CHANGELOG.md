@@ -4,6 +4,44 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### Every value a rule reads, and the thing that writes it
+
+0.5.0 added a check that reads the relation policy fields out of the schema and asserts a scan can
+produce each one. It found `concurrency` within minutes of first running, and it covered one of the
+five ways a rule selects on anything. This is the other four: component kinds, relation kinds, the
+metadata keys a rule matches on, and the fields of `details` it filters on, across every rule the
+engine evaluates rather than the static ones alone.
+
+Both halves are measured rather than listed. What a rule reads comes out of the rule's own source,
+asked against the enumerations the schema declares, so a rule that starts selecting on something new
+is a rule this asks about without anyone remembering to add it, and the files it reads are checked
+against the engine's own list of rules, so a family written in a file nobody named fails here rather
+than going unread. What a scan can produce comes from scanning a repository where nine adapters apply
+at once, because a name found by grep proves that something mentions the value and not that anything
+writes it. `deduplicatesAtSink` and `timeoutDeclaredAt` are what makes that distinction worth the
+fixture: both have a producer in source, and no pinned repository triggers either, so a check that
+took the corpus for its denominator would have reported two producers missing that are not.
+
+The residue is three tables and each entry names what writes the value instead. Two are written by a
+run and not by a scan: `guarded_by`, which a span reports when an approval was passed, and
+`observedSideEffect`, which reconciliation writes from an effect that happened. One is declared by a
+person, `requiresApproval`, for the reason the narrower check already recorded.
+
+**It found one on its first run, and that one is in the third table.** `worker` is a component kind
+nothing anywhere produces, and `topology-shape` counts it among the kinds that participate in
+reachability. The frameworks read here model a worker as an agent whose `details.role` is `worker`,
+which is what CrewAI, LangGraph, the OpenAI Agents SDK and the Vercel AI SDK all write, and a
+Cloudflare Worker reaches the graph as the bindings it declares. No answer is wrong today, because no
+component can carry the kind and so the filter never matches, which is exactly why nothing had
+noticed: it is a claim of coverage with nothing behind it rather than a wrong number. Closing it is
+either an adapter that produces the kind or removing it from the schema, and both are decisions for
+the maintainer.
+
+One pinned number moves, and it is this repository counting itself. `packages/discovery` is pinned as
+a `not_agent_system` entry, and the narrower check it used to hold now sits beside the one that proves
+a rule clearable, so 35 files are discovered where 36 were. Its ceiling of zero components is
+unchanged, and nothing moves across the other fifteen measured entries.
+
 ### Three applications in the corpus, where there was one
 
 The corpus pinned six frameworks and one third party application. Every field report so far has been an
