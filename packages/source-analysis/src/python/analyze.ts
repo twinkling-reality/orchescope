@@ -36,11 +36,21 @@ const location = (file: string, node: Node): SourceLocation => ({
   endColumn: node.endPosition.column,
 });
 
+/**
+ * The children that are part of the program, which excludes what is only written beside it.
+ *
+ * The parser reports a comment as a named child, so anything reading a sequence of children by position
+ * counted one. An argument list with a note in it moved every argument after the note along by a slot,
+ * and `create(  # Azure OpenAI takes the deployment name as the model name` put the whole keyword object
+ * at index one, where no adapter looks. Two of the provider call sites in one field report's target
+ * repository were unreadable for that reason alone, and the report of what they configure was a report
+ * about a comment.
+ */
 const namedChildren = (node: Node): readonly Node[] => {
   const children: Node[] = [];
   for (let index = 0; index < node.namedChildCount; index += 1) {
     const child = node.namedChild(index);
-    if (child !== null) children.push(child);
+    if (child !== null && child.type !== 'comment') children.push(child);
   }
   return children;
 };
@@ -547,6 +557,19 @@ const decoratorFacts = (node: Node, context: Context): readonly DecoratorFact[] 
   return facts;
 };
 
+/**
+ * A call's arguments, separated into the positional ones and the keyword object.
+ *
+ * A `**` splat contributes keywords, not a positional argument, and counting it as one moved the
+ * keyword object along by a slot: `create(model=..., timeout=..., **overrides)` reduced to an unknown
+ * first argument and the keywords second, so every adapter asking a Python call what it was configured
+ * with read nothing. The model went unnamed, the deadline went unread, and the shape is the one the
+ * provider SDKs document for passing options through. JavaScript reduces the same program correctly
+ * already, because an object spread is skipped where it sits and shifts nothing.
+ *
+ * A `*` splat stays positional, where it belongs. Its arity is unknown, which makes any later index
+ * unreliable, and recording it says so rather than quietly renumbering what follows.
+ */
 const splitArguments = (
   call: Node,
   context: Context,
@@ -556,6 +579,7 @@ const splitArguments = (
   const list = childField(call, 'arguments');
   if (list === undefined) return { positional, keywords };
   for (const child of namedChildren(list)) {
+    if (child.type === 'dictionary_splat') continue;
     if (child.type === 'keyword_argument') {
       const nameNode = childField(child, 'name');
       const valueNode = childField(child, 'value');

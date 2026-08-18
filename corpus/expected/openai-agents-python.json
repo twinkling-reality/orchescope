@@ -43,8 +43,8 @@
       "status": "completed"
     },
     "adapter:openai-agents": {
-      "componentsFound": 2005,
-      "edgesFound": 259,
+      "componentsFound": 2009,
+      "edgesFound": 264,
       "filesInspected": 315,
       "status": "completed"
     },
@@ -76,12 +76,12 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 620,
+      "agent": 617,
       "database": 2,
       "entrypoint": 22,
       "external_service": 4,
       "mcp_server": 21,
-      "model": 15,
+      "model": 18,
       "prompt": 370,
       "provider": 1,
       "queue": 1,
@@ -121,16 +121,16 @@
   "relations": {
     "byKind": {
       "calls_service": 4,
-      "calls_tool": 81,
+      "calls_tool": 82,
       "consumes_from_queue": 2,
       "hands_off_to": 53,
-      "invokes_model": 34,
+      "invokes_model": 38,
       "provides_tool": 11,
       "publishes_to_queue": 12,
       "queries_database": 6,
       "served_by_provider": 1,
       "uses_prompt": 2
     },
-    "total": 206
+    "total": 211
   }
 }

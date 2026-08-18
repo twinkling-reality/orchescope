@@ -2,7 +2,7 @@
   "adapters": {
     "adapter:crewai": {
       "componentsFound": 998,
-      "edgesFound": 428,
+      "edgesFound": 432,
       "filesInspected": 84,
       "status": "completed"
     },
@@ -76,7 +76,7 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 260,
+      "agent": 258,
       "agent_group": 90,
       "database": 4,
       "entrypoint": 80,
@@ -86,7 +86,7 @@
       "provider": 3,
       "queue": 1
     },
-    "total": 1006
+    "total": 1004
   },
   "discardedRelations": [],
   "files": {
@@ -120,13 +120,13 @@
   "relations": {
     "byKind": {
       "calls_service": 42,
-      "contains": 104,
+      "contains": 106,
       "invokes_model": 25,
       "publishes_to_queue": 2,
       "queries_database": 37,
       "served_by_provider": 6,
       "uses_prompt": 6
     },
-    "total": 222
+    "total": 224
   }
 }

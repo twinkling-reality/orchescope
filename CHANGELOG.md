@@ -4,6 +4,28 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### A note beside an argument was counted as one
+
+The parser reports a comment as a named child of an argument list, and a `**` splat was being counted as
+a positional argument, so a Python call's keyword object moved along one slot for every note or
+passthrough written among its arguments. Everything asking a call what it was configured with reads the
+first argument, so it read the note. LangGraph's own command line example writes `add_conditional_edges`
+with a comment before each of its three arguments and no handoff was read from it at all; CrewAI's
+`Agent(role="Multimodal Analyst", ..., multimodal=True,  # crucial for adding the multimodal tool)` was
+named after the variable holding it rather than after the role it declares; and an agent written as
+`Agent(name="Assistant", ..., model="litellm/openrouter/openai/gpt-5.4-mini")` with one comment in the
+middle had no name, no model and no tool.
+
+A comment is not part of the program and a `**` splat is not positional, so neither takes an argument
+slot now. A `*` splat still does, because it genuinely expands into positional arguments and its arity is
+unknown, which is what makes every later index unreliable and worth recording. JavaScript already read
+the same programs correctly, since an object spread is skipped where it sits and shifts nothing.
+
+Across the pinned repositories this names components the source had named all along and finds relations
+that were written down: `openai-agents-python` goes from 620 agents to 617 as nine anonymous ones take
+their declared names and merge, from 15 models to 18, and from 34 model invocations to 38; `langgraph`
+goes from 175 handoffs to 182; `crewai` from 260 agents to 258 and from 104 containment relations to 106.
+
 ### A prompt written in one place and assembled in another
 
 The field report's last item said prompt injection cannot see a prompt built at a raw SDK call site. That is

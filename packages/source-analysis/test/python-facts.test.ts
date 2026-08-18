@@ -55,6 +55,74 @@ triage = Agent(
     assert.deepEqual(variable?.initializer, ['Agent']);
   });
 
+  /*
+   * A keyword object at the index nobody looks at.
+   *
+   * The parser reports a `**` splat and a comment as named children of the argument list, and both were
+   * being counted as positional arguments, so the keyword object moved along one slot per note or
+   * passthrough. `create(  # a note\n model=..., timeout=..., **overrides)` reduced to two unknown
+   * arguments followed by the keywords, and every adapter that asks a call what it was configured with
+   * reads the first argument. Four of the five provider call sites in one field report's target
+   * repository were unreadable for this and nothing else: the model was reported as unspecified and the
+   * deadline written at the call was invisible.
+   */
+  it('keeps the keyword object first when a call passes a dictionary through', async () => {
+    const facts = await analyze(`
+client.embeddings.create(model="text-embedding-3-large", input=text, timeout=60.0, **overrides)
+`);
+    const call = facts.calls.find(
+      (candidate) => dotted(candidate.calleePath) === 'client.embeddings.create',
+    );
+    assert.ok(call, 'expected the create call');
+    const entries = objectArgument(call);
+    assert.equal(stringValue(findEntry(entries, 'model')?.value), 'text-embedding-3-large');
+    assert.equal(findEntry(entries, 'timeout')?.value.kind, 'number');
+  });
+
+  it('keeps the keyword object first when a comment sits among the arguments', async () => {
+    const facts = await analyze(`
+client.embeddings.create(
+    # Azure OpenAI takes the deployment name as the model name
+    model=deployment,
+    input=text,
+    timeout=60.0,
+)
+`);
+    const call = facts.calls.find(
+      (candidate) => dotted(candidate.calleePath) === 'client.embeddings.create',
+    );
+    assert.ok(call, 'expected the create call');
+    assert.equal(findEntry(objectArgument(call), 'timeout')?.value.kind, 'number');
+  });
+
+  it('keeps a positional splat, whose arity nothing here can know', async () => {
+    const facts = await analyze(`
+handler(*items, name="triage")
+`);
+    const call = facts.calls.find((candidate) => dotted(candidate.calleePath) === 'handler');
+    assert.ok(call, 'expected the handler call');
+    assert.equal(call.args[0]?.kind, 'unknown');
+    assert.equal(stringValue(findEntry(objectArgument(call, 1), 'name')?.value), 'triage');
+  });
+
+  it('reads a list literal written with a note in it', async () => {
+    const facts = await analyze(`
+triage = Agent(
+    tools=[
+        # the two the router needs
+        lookup_account,
+        check_inventory,
+    ],
+)
+`);
+    const call = facts.calls.find((candidate) => dotted(candidate.calleePath) === 'Agent');
+    assert.ok(call, 'expected an Agent call');
+    assert.deepEqual(identifierItems(findEntry(objectArgument(call), 'tools')?.value), [
+      'lookup_account',
+      'check_inventory',
+    ]);
+  });
+
   it('records decorated functions with decorator arguments', async () => {
     const facts = await analyze(`
 from agents import function_tool
