@@ -49,9 +49,9 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 568,
-      "edgesFound": 6,
-      "filesInspected": 237,
+      "componentsFound": 392,
+      "edgesFound": 4,
+      "filesInspected": 178,
       "status": "completed"
     },
     "adapter:pydantic-ai": {
@@ -88,11 +88,11 @@
       "entrypoint": 80,
       "external_service": 41,
       "model": 6,
-      "prompt": 521,
+      "prompt": 360,
       "provider": 3,
       "queue": 1
     },
-    "total": 1004
+    "total": 843
   },
   "discardedRelations": [],
   "files": {
@@ -131,8 +131,8 @@
       "publishes_to_queue": 2,
       "queries_database": 37,
       "served_by_provider": 6,
-      "uses_prompt": 6
+      "uses_prompt": 4
     },
-    "total": 224
+    "total": 222
   }
 }

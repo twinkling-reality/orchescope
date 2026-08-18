@@ -4,6 +4,36 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### A prompt only a test writes
+
+`prompt-injection-boundary` fired on 91 prompts on one field report's target, and several of the source
+locations it cited were logger templates rather than prompt assembly. Measuring the population first
+found something narrower and more certain than a resemblance to judge: the prompts adapter did not honour
+`isTestFile`, alone among the adapters that read source. A test file is full of the one thing it looks
+for, since fixtures, mocked model replies and assertion messages all read as long text with values
+spliced into it.
+
+Across the pinned corpus and the report's target, 32 of the 174 prompts this rule fired on were in test
+files. On `langgraph` it was 16 of 18: the security finding there was almost entirely about that
+repository's own fixtures. Prompt components fall from 2379 to 1502 across the corpus, every removal in a
+test file, and the two `uses_prompt` relations `crewai` loses are both in `lib/crewai/tests`. No
+repository's finding disappeared and no rule changed status, which was the thing worth checking, since a
+narrowing that silences a rule costs more than the noise it removes.
+
+`isTestFile` itself was reading one file wrong, and it mattered here because applying it would have acted
+on the mistake. `spec` is absent from the directory names for a stated reason, that a directory of that
+name holds schema documents at least as often as tests, and the file pattern let the same word stand
+alone: `specs.ts` was a test file and `order.spec.ts` was too. One pinned repository has a
+`data-schemas/src/app/specs.ts` that processes the model specifications its configuration declares, and
+three adapters were declining to read it. `spec` needs a separator in front of it now and `test` does not,
+because `test` carries no second meaning that stands on its own. That is the only file across fourteen
+repositories whose classification changes.
+
+What this does not fix is the rest of the population. 83 prompts remain on that target and many are still
+log templates, because separating those from prompts means either filtering on length, which correlates
+with nothing, or asking whether the text reaches a model, which the graph can answer for some repositories
+and not for the ones that assemble prompts most carefully. Both are guesses in the direction of silence.
+
 ### A coverage rate whose denominator says what it counts
 
 "read from 3858 of 3858 files" is completeness over the files this build parses, printed as though it

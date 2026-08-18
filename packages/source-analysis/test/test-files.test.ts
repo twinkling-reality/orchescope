@@ -20,6 +20,9 @@ describe('a path that names a test', () => {
     'service/conftest.py',
     'service/client_test.py',
     'src/reducer.spec.jsx',
+    /* `test` carries no second meaning that stands on its own, so it needs no separator in front of it. */
+    'src/tests.ts',
+    'src/test.js',
   ];
 
   for (const path of tests) {
@@ -38,6 +41,13 @@ describe('a path that does not name a test', () => {
     'src/protest/handler.ts',
     // A directory of API documents is not a test harness, which is why `spec` alone never matches.
     'spec/openapi.ts',
+    /*
+     * And a file of them is not either, for the same reason one directory up. One pinned repository
+     * processes the model specifications its configuration declares in `data-schemas/src/app/specs.ts`,
+     * and every adapter that honours this declined to read it.
+     */
+    'packages/data-schemas/src/app/specs.ts',
+    'src/spec.ts',
     'src/attestation.py',
     'src/greatest.py',
   ];

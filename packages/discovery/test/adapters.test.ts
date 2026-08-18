@@ -1330,6 +1330,41 @@ export const HELP = "Answer the question in the box. You are never charged for a
       `no prompt should exist, saw ${ids.join(', ')}`,
     );
   });
+
+  /*
+   * A test file is full of the one thing this adapter looks for. Fixtures, mocked model replies and
+   * assertion messages all read as long text with values spliced into it, and a prompt only a test writes
+   * can never reach a model in a run. On one pinned repository sixteen of the eighteen prompts the
+   * injection rule fired on were fixtures, which is a security finding about a harness.
+   */
+  it('are not recorded from a test file, whatever the repository declares', async () => {
+    const { ids, adapters } = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'prompt-in-test', dependencies: ['pydantic-ai>=1.0'] });
+      workspace.write(
+        'src/desk.py',
+        `from pydantic_ai import Agent
+
+desk = Agent('openai:gpt-4.1-mini')
+`,
+      );
+      workspace.write(
+        'tests/test_desk.py',
+        `from pydantic_ai import Agent
+
+fake = Agent('openai:gpt-4.1-mini', instructions=${literal})
+`,
+      );
+    });
+    assert.equal(
+      adapters.find((entry) => entry.adapterId === 'adapter:prompts')?.componentsFound,
+      0,
+    );
+    assert.equal(
+      ids.some((id) => id.startsWith('prompt:')),
+      false,
+      `a prompt written in a test should not be in the graph, saw ${ids.join(', ')}`,
+    );
+  });
 });
 
 describe('an adapter that claims a framework and reads nothing from it', () => {

@@ -18,10 +18,18 @@
 const TEST_DIRECTORIES = new Set(['test', 'tests', '__tests__', '__mocks__', 'testing']);
 
 /**
- * `spec` is deliberately absent. A directory of that name holds OpenAPI and schema documents at least as often as it
- * holds tests, and reading a repository's API specification as its test harness is the more expensive mistake.
+ * `spec` is absent from the directories above, and needs a separator in front of it here. Both for one reason.
+ *
+ * A directory called `spec` holds OpenAPI and schema documents at least as often as it holds tests, and reading a
+ * repository's API specification as its test harness is the more expensive mistake. The word carries a second
+ * meaning that stands on its own and loses it once something else is being specified, so `order.spec.ts` is a test
+ * and `specs.ts` is a module about specifications, and the separator is the whole of what tells them apart. `test`
+ * has no such second meaning, so `tests.ts` needs nothing in front of it.
+ *
+ * One pinned repository has a `data-schemas/src/app/specs.ts` that processes the model specifications its
+ * configuration file declares, and every adapter honouring this declined to read it.
  */
-const TEST_FILE_PATTERN = /(^|[.\-_])(test|spec)s?\.[cm]?[jt]sx?$/i;
+const TEST_FILE_PATTERN = /(^(test)s?|[.\-_](test|spec)s?)\.[cm]?[jt]sx?$/i;
 const PYTHON_TEST_PATTERN = /(^test_.*|.*_test)\.py$/i;
 
 export const isTestFile = (path: string): boolean => {

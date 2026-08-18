@@ -49,9 +49,9 @@
       "status": "completed"
     },
     "adapter:prompts": {
-      "componentsFound": 437,
+      "componentsFound": 338,
       "edgesFound": 3,
-      "filesInspected": 211,
+      "filesInspected": 161,
       "status": "completed"
     },
     "adapter:pydantic-ai": {
@@ -88,12 +88,12 @@
       "external_service": 4,
       "mcp_server": 21,
       "model": 18,
-      "prompt": 370,
+      "prompt": 277,
       "provider": 1,
       "queue": 1,
       "tool": 318
     },
-    "total": 1374
+    "total": 1281
   },
   "discardedRelations": [],
   "files": {

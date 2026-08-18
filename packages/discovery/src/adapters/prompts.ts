@@ -1,6 +1,7 @@
 import { CONFIDENCE_BANDS, identityKey, sha256Hex } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type { ArgumentFact, ModuleFacts, TextFact } from '@orchescope/source-analysis';
+import { isTestFile } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { createDrafts, sourceIdentity } from '../drafts.ts';
 
@@ -198,6 +199,15 @@ export const promptsAdapter: AgentSystemAdapter = {
     const files = new Set<string>();
 
     for (const module of context.modules) {
+      /*
+       * A developer's tooling is not the system under audit, and a test file is full of the one thing this
+       * adapter looks for: fixtures, mocked model replies and assertion messages all read as long text with
+       * values spliced into it. Every other adapter that reads source already declines these and this one
+       * did not, so `prompt-injection-boundary` reported a security boundary over a population that was
+       * sixteen of eighteen test fixtures on one pinned repository. A prompt only a test writes can never
+       * reach a model in a run, which is the same reason the clients a harness constructs are left out.
+       */
+      if (isTestFile(module.file)) continue;
       const spliced = splicedWithOtherValues(module);
       for (const text of module.texts) {
         if (text.approximateTokens < PROMPT_MIN_TOKENS) continue;
