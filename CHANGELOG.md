@@ -2,7 +2,34 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
-## Unreleased
+## 0.6.0
+
+Cut 2026-08-19. The line naming how it was published and the checksum the tarball was checked against
+are written once it is on the registry, the way 0.5.0's were.
+
+This release is one defect followed to the end. Something reads a field, a kind or an invariant; only
+some of the producers write it; nothing errors. The rule reports `not_applicable`, the adapter reports
+`componentsFound: 0`, the goal reports not validated, and the answer is too quiet in a way only a
+stranger running the product on their own repository ever notices. 0.5.0 added the first three checks
+that ask whether the shape is present. This one generalises them, and everything below except the corpus
+entries is something those checks found rather than something a person reported.
+
+**Finding counts will move on any repository whose tests declare agents, and the exercise fraction has
+changed what it divides by.** A component every source location of which is a test file is discovered,
+marked, and left out of the populations the rules judge. On the frameworks this build reads that is most
+of the graph: 835 of 903 `pydantic-ai` components, 448 of 526 on `langgraph`, 302 of 323 on `crewai`. On
+one application built with pydantic-ai it was ten of the sixteen agents reported. Nothing leaves the
+graph, and `coverage.componentsDeclaredInTest` says how many were set aside.
+
+**Six published documents change and one of them takes something away.** `Component.declaredInTest`,
+`Edge.declaredInTest` and `coverage.componentsDeclaredInTest` are new and optional, so a consumer reading
+the old shape is unaffected; `coverage.adapters[].ecosystem` became `.languages` and `coverage.filesTracked`
+arrived earlier in this series. And `project`, `worker` and `guardrail` are gone from `ComponentKind`.
+Nothing has ever written one of those, so no document that exists stops validating, and a manifest
+declaring one is refused where it was accepted and ignored.
+
+The corpus is nineteen pinned repositories where 0.5.0 had thirteen, and `pnpm corpus --exercise` passes
+for the first time since before 0.2.0.
 
 ### The delta answered with the harness
 

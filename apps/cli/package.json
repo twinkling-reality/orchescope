@@ -1,6 +1,6 @@
 {
   "name": "orchescope",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Map, test, and improve agent systems. A local first CLI and MCP tool that discovers, audits, benchmarks and resilience tests agentic systems.",
   "license": "Apache-2.0",
   "author": "Glendon Chin",
