@@ -7,9 +7,15 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 40,
-      "edgesFound": 23,
+      "componentsFound": 37,
+      "edgesFound": 20,
       "filesInspected": 11,
+      "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 2,
+      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:langgraph": {
@@ -54,26 +60,38 @@
       "filesInspected": 0,
       "status": "not_applicable"
     },
+    "adapter:search-index": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
     "adapter:vercel-ai-sdk": {
       "componentsFound": 23,
       "edgesFound": 14,
       "filesInspected": 10,
       "status": "completed"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     }
   },
   "agentSystemDetected": true,
-  "blindSpots": [],
   "components": {
     "byKind": {
       "agent": 7,
-      "database": 2,
+      "database": 1,
       "entrypoint": 17,
-      "external_service": 2,
+      "external_service": 14,
       "model": 3,
       "prompt": 7,
       "tool": 5
     },
-    "total": 43
+    "declaredInTest": 0,
+    "total": 54
   },
   "discardedRelations": [],
   "files": {
@@ -88,6 +106,7 @@
       "declared-not-exercised": 2,
       "exercised-not-declared": 2,
       "model-call-without-timeout": 1,
+      "observability-coverage": 1,
       "prompt-injection-boundary": 1,
       "topology-shape": 1
     },
@@ -95,30 +114,31 @@
       "high": 1,
       "info": 1,
       "low": 1,
-      "medium": 4
+      "medium": 5
     },
     "strengths": 1,
-    "total": 7
+    "total": 8
   },
+  "foundNothing": [],
   "kind": "agent_system",
   "languagesNotAnalysed": [],
   "name": "vercel-ai-chatbot-exercised",
   "relations": {
     "byKind": {
-      "calls_service": 16,
+      "calls_service": 18,
       "calls_tool": 5,
       "invokes_model": 6,
-      "queries_database": 2,
+      "queries_database": 1,
       "uses_prompt": 1
     },
-    "total": 30
+    "total": 31
   },
   "runtime": {
     "ambiguousNames": [],
     "contradictions": 0,
-    "declaredComponents": 19,
+    "declaredComponents": 28,
     "duplicateSideEffects": 0,
-    "exercisedComponents": 3,
+    "exercisedComponents": 1,
     "exercisedNotDeclared": [
       "agent:corpus-exercise",
       "model:mock/mock-model"

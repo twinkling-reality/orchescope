@@ -4,6 +4,40 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### Two pinned repositories nobody had measured since before 0.2.0
+
+Sixteen of the eighteen corpus entries are measured by `pnpm corpus`. The other two need `--exercise`,
+because they install an environment and run third party code to produce spans, and they are the only
+entries that measure the declared against exercised join on code this repository did not write. That
+join is the centre of this product. `pnpm corpus` skips them and prints the skip, `pnpm verify` runs
+the offline subset, the release checklist named neither, and so nothing ran them. Their expectations
+were last recorded at `51ce695` on 2026-07-27: ninety five commits and four releases ago.
+
+The commit that froze them is the commit that recorded them. `51ce695` taught the effect reader to
+leave a test harness out of the graph, re-recorded every measured entry, and could not re-record these
+two, because recording them needs the flag. Everything since piled onto that, so
+`pydantic-ai-exercised` still claimed 562 effect components where the reader now finds 33, 241 entry
+points where it finds 15, and 97 queue consumptions where nothing produces one.
+
+One number in the difference looks like a regression and is a fix. `exercisedComponents` falls from 3
+to 2 on one entry and from 3 to 1 on the other, while the set of declared components each run actually
+joined is unchanged. The old counts are that set plus the components the run named and nothing
+declared: two plus one, and one plus two. `97492b7` took undeclared components out of that fraction on
+2026-08-11 for exactly that reason, and these two files still held the number from before it.
+
+What each entry records is checked against its own sibling rather than against a baseline four
+releases old, which is the only comparison worth making here: an exercised entry is the entry beside it
+plus one run. Outside the runtime block `pydantic-ai-exercised` differs from `pydantic-ai` by the one
+agent its run named and nothing declared, the two relations drawn to it, and three findings only a
+reconciliation produces, one of which is `observability-coverage` ceasing to report that no run exists.
+`vercel-ai-chatbot-exercised` differs from `vercel-ai-chatbot` by two such components and four
+findings. Each total is its sibling plus exactly the components in `exercisedNotDeclared`, and nothing
+else moves in either.
+
+`pnpm corpus --exercise` is in the release checklist now, and not in `pnpm verify`: a gate that runs on
+every change should not install an environment and execute third party code, which is the reason it was
+in neither.
+
 ### A component only a test declares
 
 The invariant that a developer's tooling is not the system under audit already existed here, in
