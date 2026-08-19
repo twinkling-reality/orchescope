@@ -48,17 +48,25 @@ import { componentKindFor } from '../../packages/traces/src/index.ts';
 
 const repositoryRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /**
- * Every rule this build evaluates, which is the population the questions below are asked of.
+ * Every source whose vocabulary decides what a rule answers.
  *
- * Listed as the files that export the rule sets rather than as the rules, because what a rule reads is
- * read out of its own text. A rule family added without a line here is a family this asks nothing about,
- * which is why the set is asserted against the engine's own list before anything else runs.
+ * The four rule files, and the graph analysis they reach through. A rule names most of the kinds it
+ * selects on directly, and it delegates the rest: `topology-shape` asks `unreachableComponents` which
+ * components participate, and `observability-coverage` reads a rate whose denominator `delta.ts` builds
+ * from `isObservableKind`. A kind named only in one of those sets is read exactly as hard as one named in
+ * a rule, and reading only the rule files is how `guardrail` and `project` sat unproduced in the set that
+ * decides an exercise rate while this file passed.
+ *
+ * Listed as files rather than as rules because what a rule reads is read out of its own text. A rule
+ * family added without a line here is a family this asks nothing about, which is why the set is asserted
+ * against the engine's own list before anything else runs.
  */
 const RULE_SOURCES = [
   'packages/findings/src/rules/static-policy.ts',
   'packages/findings/src/rules/runtime.ts',
   'packages/findings/src/rules/reconciliation.ts',
   'packages/findings/src/rules/experiments.ts',
+  'packages/graph/src/analysis.ts',
 ] as const;
 
 /**
@@ -95,7 +103,13 @@ dependencies = [
       version: '1.0.0',
       private: true,
       type: 'module',
-      dependencies: { openai: '^6.0.0', bullmq: '^5.0.0', axios: '^1.7.0', 'p-retry': '^6.0.0' },
+      dependencies: {
+        openai: '^6.0.0',
+        bullmq: '^5.0.0',
+        axios: '^1.7.0',
+        'p-retry': '^6.0.0',
+        '@langchain/langgraph': '^0.4.0',
+      },
     },
     null,
     2,
@@ -178,9 +192,30 @@ export async function answer(prompt: string) {
   );
 }
 `,
-  'src/jobs.ts': `import { Worker } from 'bullmq';
+  // A worker states its concurrency where these libraries put options, which is last, and a queue is written to.
+  'src/jobs.ts': `import { Queue, Worker } from 'bullmq';
+
+export const deliveries = new Queue('emails');
+
+export const enqueue = () => deliveries.add('deliver', { id: 1 });
 
 export const worker = new Worker('emails', async () => undefined, { concurrency: 4 });
+`,
+  // A graph, which is where one agent hands off to the next.
+  'src/graph.ts': `import { StateGraph, START, END } from '@langchain/langgraph';
+
+const graph = new StateGraph({ channels: {} });
+
+graph.addNode('planner', planner);
+graph.addNode('researcher', researcher);
+graph.addNode('writer', writer);
+
+graph.addEdge(START, 'planner');
+graph.addEdge('planner', 'researcher');
+graph.addEdge('researcher', 'writer');
+graph.addEdge('writer', END);
+
+export const app = graph.compile();
 `,
   // A retry whose sink deduplicates, which is the evidence that stops a rule asserting the absence of a key.
   'src/outbox.ts': `export const enqueueDelivery = async (): Promise<void> => {
@@ -341,6 +376,11 @@ const readByRules = (): {
 const WRITTEN_BY_A_RUN: Readonly<Record<string, string>> = {
   guarded_by:
     'derived in packages/traces/src/topology.ts from a span whose operation is an approval, which is the only thing that reports an approval gate was passed',
+  reads_memory:
+    'derived in packages/traces/src/topology.ts from a span whose operation reads a memory store. No framework here declares a memory store in source, so a run naming one is the only evidence there is',
+  writes_memory: 'the same span, on the operations that write rather than read',
+  performs_side_effect:
+    'derived in packages/traces/src/topology.ts from a span that reports an effect. What source declares is the specific operation, a request or a query, and this is the kind a run reports when it says only that an effect happened',
   observedSideEffect:
     'written by reconciliation in packages/graph/src/reconcile.ts from an effect a run performed, which is the observation permissions-broader-than-observed-use exists to compare a declaration against',
 };
@@ -361,14 +401,16 @@ const DECLARED_BY_A_PERSON: Readonly<Record<string, string>> = {
 /**
  * Values a rule reads that nothing anywhere writes.
  *
- * This is the defect, recorded rather than hidden, and the assertion is that it does not grow. An entry
- * costs a rule the part of its population that value stands for, silently, which is the whole shape this
- * file exists to catch.
+ * Empty, and the assertion is that it stays empty. It held `worker` for one release, alongside `guardrail`
+ * and `project`, which this file could not see until it started reading the graph analysis a rule delegates
+ * to. All three were component kinds nothing produced, and they are gone from the schema: a worker is an
+ * agent whose `details.role` says so, and the other two named nothing at all.
+ *
+ * An entry here costs a rule the part of its population that value stands for, silently, which is the whole
+ * shape this file exists to catch. Adding one is recording a defect rather than fixing it, so it wants a
+ * reason nobody can write for long.
  */
-const WRITTEN_BY_NOTHING: Readonly<Record<string, string>> = {
-  worker:
-    'no adapter and no trace produces a component of this kind. The frameworks read here model a worker as an agent whose details.role is worker, which is what crewai, langgraph, openai-agents and the Vercel AI SDK all write, and a Cloudflare Worker reaches the graph as the bindings it declares. topology-shape counts this kind among the ones that participate in reachability, so the coverage that names implies is coverage this build does not have. Closing it is either an adapter that produces the kind or removing it from the schema, and both are decisions for the maintainer',
-};
+const WRITTEN_BY_NOTHING: Readonly<Record<string, string>> = {};
 
 describe('the values a rule reads, and what writes them', () => {
   let produced: Produced;

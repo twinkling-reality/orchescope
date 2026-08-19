@@ -182,9 +182,7 @@ export const unreachableComponents = (index: IndexedGraph): readonly Component[]
   const roots = entryPoints(index).map((component) => component.id);
   if (roots.length === 0) return [];
   const reachable = reachableFrom(index, roots);
-  return index.graph.components.filter(
-    (component) => component.kind !== 'project' && !reachable.has(component.id),
-  );
+  return index.graph.components.filter((component) => !reachable.has(component.id));
 };
 
 /** Cycles in the control flow projection, each reported as the component sequence that closes it. */
@@ -223,12 +221,10 @@ const OBSERVABLE_KINDS = new Set([
   'memory',
   'retrieval',
   'queue',
-  'worker',
   'database',
   'external_service',
   'approval_boundary',
   'side_effect',
-  'guardrail',
   'evaluator',
 ]);
 

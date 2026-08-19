@@ -554,10 +554,6 @@
           "kind": {
             "anyOf": [
               {
-                "const": "project",
-                "type": "string"
-              },
-              {
                 "const": "entrypoint",
                 "type": "string"
               },
@@ -602,10 +598,6 @@
                 "type": "string"
               },
               {
-                "const": "worker",
-                "type": "string"
-              },
-              {
                 "const": "database",
                 "type": "string"
               },
@@ -619,10 +611,6 @@
               },
               {
                 "const": "side_effect",
-                "type": "string"
-              },
-              {
-                "const": "guardrail",
                 "type": "string"
               },
               {

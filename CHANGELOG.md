@@ -4,6 +4,41 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### Three component kinds nothing could produce
+
+`worker` was found by the check in the section below and recorded there as a defect nobody had closed.
+Closing it turned up two more, and turned up why one check had not seen them.
+
+**This removes `project`, `worker` and `guardrail` from `ComponentKind`, which is the sixth published
+document change since 0.5.0 and the only one so far that takes something away.** No stored document can
+contain one, because nothing has ever written one, so nothing that exists stops validating. A manifest
+declaring one of the three is now rejected, and none of the documented manifests does.
+
+The check that found `worker` reads the four rule files, and it could not see the other two because a
+rule delegates. `topology-shape` asks `unreachableComponents` which components participate in
+reachability, and `observability-coverage` reads a rate whose denominator `delta.ts` builds from
+`isObservableKind`. `worker` and `guardrail` were both in that second set, so the exercise rate on every
+repository was computed over a population described in part by kinds nothing could put in it, and
+`project` was in the guard that keeps a component out of the unreachable population. Three sets claiming
+a coverage this build does not have, and no reader could tell, because a filter that never matches looks
+exactly like a filter with nothing to match.
+
+So the check reads the graph analysis a rule reaches through, and not only the rules. That is what makes
+this a closed class rather than three fixed instances: it now asks the same question of the vocabulary a
+rule delegates to, and the table of values nothing writes is empty with an assertion that it stays empty.
+
+Extending the reading surface also asked about five relation kinds the fixture had never produced. Two
+of them, `hands_off_to` and `publishes_to_queue`, a scan produces and the fixture simply did not, so it
+declares a graph and writes to a queue now. The other three, `reads_memory`, `writes_memory` and
+`performs_side_effect`, only a run produces, and they are recorded beside `guarded_by` with the reason.
+
+A worker was already in the model without this kind, as an agent whose `details.role` is `worker`, which
+is what CrewAI, LangGraph, the OpenAI Agents SDK and the Vercel AI SDK all write. `project` and
+`guardrail` named nothing at all. Nothing moves across the nineteen pinned repositories.
+
+`falls_back_to` is a relation kind nothing produces and it stays, because nothing reads it either. A
+vocabulary entry with no producer and no reader costs a reader nothing; one with a reader is a claim.
+
 ### A repository that is about agents and declares none
 
 The three `not_agent_system` entries were Flask, Express and axios: general purpose libraries with
@@ -149,15 +184,14 @@ run and not by a scan: `guarded_by`, which a span reports when an approval was p
 `observedSideEffect`, which reconciliation writes from an effect that happened. One is declared by a
 person, `requiresApproval`, for the reason the narrower check already recorded.
 
-**It found one on its first run, and that one is in the third table.** `worker` is a component kind
+**It found one on its first run, and that one was in the third table.** `worker` is a component kind
 nothing anywhere produces, and `topology-shape` counts it among the kinds that participate in
 reachability. The frameworks read here model a worker as an agent whose `details.role` is `worker`,
 which is what CrewAI, LangGraph, the OpenAI Agents SDK and the Vercel AI SDK all write, and a
-Cloudflare Worker reaches the graph as the bindings it declares. No answer is wrong today, because no
-component can carry the kind and so the filter never matches, which is exactly why nothing had
-noticed: it is a claim of coverage with nothing behind it rather than a wrong number. Closing it is
-either an adapter that produces the kind or removing it from the schema, and both are decisions for
-the maintainer.
+Cloudflare Worker reaches the graph as the bindings it declares. No answer was wrong, because no
+component could carry the kind and so the filter never matched, which is exactly why nothing had
+noticed: a claim of coverage with nothing behind it rather than a wrong number. The section above
+closes it, and two more the same shape that this check could not yet see.
 
 Nothing moves across the pinned repositories. `packages/discovery` is pinned as a `not_agent_system`
 entry and counts this repository's own files, so moving the narrower check out of it to sit beside the

@@ -14,8 +14,23 @@ import {
  * The component vocabulary of an agentic system. A component is anything that can be pointed at
  * in a review conversation: an agent, the model behind it, the tool it calls, the store it reads.
  */
+/**
+ * Every kind something in this build can produce, and nothing else.
+ *
+ * `project`, `worker` and `guardrail` were here and no adapter, no trace and no manifest ever wrote one.
+ * A kind in that position is not harmless vocabulary waiting for a producer: `worker` and `guardrail` sat
+ * in the set that decides which components an exercise rate is computed over, and `project` in the guard
+ * that keeps a component out of the unreachable population, so three sets claimed a coverage this build
+ * did not have and no reader could tell, because a filter that never matches looks exactly like a filter
+ * with nothing to match.
+ *
+ * A worker is already in the model, as an agent whose `details.role` is `worker`, which is what CrewAI,
+ * LangGraph, the OpenAI Agents SDK and the Vercel AI SDK all write. The other two named nothing at all.
+ *
+ * `tests/e2e/rule-input-producers.test.ts` asks this list against what a scan and a run can produce, so
+ * adding a kind here means writing the producer or failing that check.
+ */
 export const COMPONENT_KINDS = [
-  'project',
   'entrypoint',
   'agent',
   'agent_group',
@@ -27,12 +42,10 @@ export const COMPONENT_KINDS = [
   'memory',
   'retrieval',
   'queue',
-  'worker',
   'database',
   'external_service',
   'approval_boundary',
   'side_effect',
-  'guardrail',
   'evaluator',
 ] as const;
 
