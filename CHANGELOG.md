@@ -4,8 +4,19 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## 0.6.0
 
-Cut 2026-08-19. The line naming how it was published and the checksum the tarball was checked against
-are written once it is on the registry, the way 0.5.0's were.
+Released 2026-08-19 from npm as `orchescope@0.6.0`, published locally with `npm publish --no-provenance`,
+so this release carries no registry attestation. `pnpm package` builds from this tag a tarball byte
+identical to the one on the registry, which was checked by downloading the published one and comparing:
+
+```
+sha256  56ef9101c2bf664a5fbc7bdd0d3acbb07a937e69296d7bca05d004bee9b9cf38
+```
+
+That is a weaker guarantee than a registry attestation and it is worth naming as such. It says the bytes
+match this source; it does not say who published them. Installed from the registry the binary reports
+`0.6.0` and `orchescope doctor` passes every required check, which is the one that matters: the parsers
+resolve a native binding and a WebAssembly grammar relative to their own package directories, and only a
+real audit from an installed tree proves those resolve.
 
 This release is one defect followed to the end. Something reads a field, a kind or an invariant; only
 some of the producers write it; nothing errors. The rule reports `not_applicable`, the adapter reports
