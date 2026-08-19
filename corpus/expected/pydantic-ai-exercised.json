@@ -140,9 +140,9 @@
       "agent"
     ],
     "contradictions": 0,
-    "declaredComponents": 957,
+    "declaredComponents": 86,
     "duplicateSideEffects": 0,
-    "exercisedComponents": 2,
+    "exercisedComponents": 1,
     "exercisedNotDeclared": [
       "agent:agent"
     ],

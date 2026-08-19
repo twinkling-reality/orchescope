@@ -4,6 +4,41 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### The delta answered with the harness
+
+Option three put the filtering where the question is asked, which meant eight populations decided one at
+a time by hand. Deciding them by hand is fine; leaving nothing to check them is how this defect class
+works. So every rule the engine evaluates is now asked the same question: one system written twice, once
+where a system lives and once where its tests live, and each rule has to answer the second exactly as it
+answers a repository that declares nothing at all.
+
+It found the population nobody had decided. The reconciliation delta never asked whether a component
+belongs to the system under audit, so on `pydantic-ai` with a run in it, 871 of the 958 components in the
+exercise fraction were declared in a test file and `declared-not-exercised` named some five hundred
+fixtures as declarations no run had reached. That is the centre of this product, the delta between what a
+repository declares and what a run exercises, answering with the framework's own test suite.
+
+`observableComponents` asks both halves now. `isObservableKind` says whether a kind can appear in a trace
+at all, which is what keeps a prompt and an entry point out of a coverage fraction; `partOfAuditedSystem`
+says whether the repository ships the thing. The invariant was already in one predicate, and this was the
+one population that had never been routed through it.
+
+One pinned number moves and both halves of it get more honest. `pydantic-ai-exercised` reports 1 of 86
+components exercised where it reported 2 of 957. The denominator loses 871 fixtures. The numerator loses
+one: `model:test`, declared in `tests/ext/test_langchain.py`, which is the library's own offline model. A
+run really did reach it, which is why it stays in the join summary, and it is not part of the system that
+repository ships, which is why it is not inside a fraction about that system. `tool:customer_balance` in
+`examples/pydantic_ai_examples/bank_support.py` is the one that remains.
+
+The check enumerates `DEFAULT_RULES` and covers eleven of the twenty three rules. The other twelve are
+listed with the reason each is unmovable by a declaration, and the list is asserted exact: every one is
+keyed on what a run measured, on a benchmark or on a chaos suite, and a fixture is precisely the thing no
+run reaches. The delta it is built from comes from `computeDelta` rather than a literal, because a hand
+written delta would have agreed with whatever the author believed and the defect was in the delta.
+Reverting the one line above fails this on two rules.
+
+Nothing else moves across the nineteen pinned repositories.
+
 ### Three component kinds nothing could produce
 
 `worker` was found by the check in the section below and recorded there as a defect nobody had closed.

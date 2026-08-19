@@ -1,4 +1,9 @@
-import { derivedEvidence, formatCount, spanEvidence } from '@orchescope/domain';
+import {
+  derivedEvidence,
+  formatCount,
+  partOfAuditedSystem,
+  spanEvidence,
+} from '@orchescope/domain';
 import type {
   Component,
   ComponentId,
@@ -30,8 +35,25 @@ export type RunSideEffects = {
   readonly sideEffects: readonly SideEffectRecord[];
 };
 
+/**
+ * The components a run could name, restricted to the system this scan is auditing.
+ *
+ * Both halves matter and the second was missing. `isObservableKind` asks whether a kind can appear in a
+ * trace at all, which keeps a prompt and an entry point out of a coverage fraction. `partOfAuditedSystem`
+ * asks whether the repository ships the thing, which keeps out a component only a test declares and a
+ * server only somebody's editor configures.
+ *
+ * Without the second, this delta reported a framework's own test suite as a system that had never been
+ * run. On `pydantic-ai` with a run in it, 871 of the 958 components in this population are declared in a
+ * test file: the exercise rate divided by 958 where the system under audit is 87, and
+ * `declared-not-exercised` named some five hundred fixtures as declarations no run had reached. That is
+ * the centre of this product answering with the harness rather than the system, which is the same defect
+ * the static rules carried and the reason the invariant lives in one predicate.
+ */
 const observableComponents = (graph: SystemGraph): readonly Component[] =>
-  graph.components.filter((component) => isObservableKind(component.kind));
+  graph.components.filter(
+    (component) => isObservableKind(component.kind) && partOfAuditedSystem(component),
+  );
 
 const declaredNotExercised = (graph: SystemGraph): readonly Component[] =>
   observableComponents(graph).filter(
