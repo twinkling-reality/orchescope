@@ -4,6 +4,28 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### A repository that is about agents and declares none
+
+The three `not_agent_system` entries were Flask, Express and axios: general purpose libraries with
+nothing to do with agents. They catch a reader that matches on the vocabulary of the domain, and they
+say nothing at all about the harder case, which is a repository that really is about agents and is
+still not one.
+
+`langchain-ai/open-agent-platform` is that case. It imports `@langchain/langgraph-sdk` in twenty one
+places, holds an MCP client in `use-mcp.tsx`, and declares no graph: no `StateGraph`, no
+`createReactAgent`, no node added and nothing compiled, because the graphs it talks to and the servers
+it connects to run somewhere else. It is a client on both axes.
+
+What decides the entry is that `adapter:langgraph` applies here, inspects twelve files, and produces
+nothing. The ceiling is twenty six components, every one a database, an entry point or a service the
+effect reader found, and no agent system detected. A reader widened until an import or an SDK type is
+enough moves that zero, and this is the entry that says so.
+
+Both blind spots it reports are true of this build and stay in the expectation. `@modelcontextprotocol/sdk`
+is imported to build a client, and the MCP adapter reads configuration and the call sites that declare a
+server; `@langchain/core` is imported for message and document types. Neither is a claim this build makes
+and fails, and an adapter that starts claiming either has to move the entry.
+
 ### Two pinned repositories nobody had measured since before 0.2.0
 
 Sixteen of the eighteen corpus entries are measured by `pnpm corpus`. The other two need `--exercise`,

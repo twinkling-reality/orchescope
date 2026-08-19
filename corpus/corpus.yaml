@@ -239,3 +239,32 @@ repositories:
       An HTTP client, so a repository dense in the exact facts the effect reader looks for: requests, retries and
       timeouts. It is the entry that says what the effect reader costs on code that has nothing to do with agents,
       and the ceiling that stops the retry and timeout rules from being widened into noise.
+
+  - name: open-agent-platform
+    source: git
+    url: https://github.com/langchain-ai/open-agent-platform.git
+    commit: 6a2ea0a3d019c20550b8d88ca0ed4d57df774ac8
+    kind: not_agent_system
+    why: >-
+      A client of agent systems rather than one of them, which is the negative case every other entry of this kind
+      misses. Flask, Express and axios are general purpose libraries with nothing to do with agents, so they say
+      nothing about a reader loosened until an import decides the answer. This repository is about agents
+      throughout: it imports `@langchain/langgraph-sdk` in twenty one places, holds an MCP client in
+      `use-mcp.tsx`, and declares no graph anywhere. No `StateGraph`, no `createReactAgent`, no node added and
+      nothing compiled, because the graphs it talks to and the servers it connects to are somewhere else. The
+      ceiling is twenty six components, every one of them a database, an entry point or a service the effect
+      reader found, and no agent system detected.
+
+      The number that decides it is `adapter:langgraph`, which applies here and inspects twelve files and
+      produces nothing. That is the adapter reading the client of a framework and declining to call it the
+      framework, so a reader widened until an import or an SDK type is enough moves that zero and this entry
+      with it.
+
+      Both blind spots it reports are true of this build and are part of the measurement. `@modelcontextprotocol/sdk`
+      is imported to build a client, and the MCP adapter reads configuration and the call sites that declare a
+      server; `@langchain/core` is imported for message and document types, and the LangGraph adapter reads graphs.
+      An adapter that starts claiming either one has to move this entry.
+
+      The upstream repository is marked deprecated at this commit. The commit is pinned and stays readable, and a
+      client of a framework is the shape being tested rather than this project in particular, so a replacement
+      would have to be another repository that is about agents and declares none.

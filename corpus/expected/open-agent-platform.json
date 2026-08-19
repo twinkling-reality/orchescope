@@ -1,0 +1,124 @@
+{
+  "adapters": {
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 49,
+      "edgesFound": 31,
+      "filesInspected": 13,
+      "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 12,
+      "status": "completed"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:search-index": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": false,
+  "components": {
+    "byKind": {
+      "database": 2,
+      "entrypoint": 18,
+      "external_service": 6
+    },
+    "declaredInTest": 0,
+    "total": 26
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 203,
+    "inSupportedLanguages": 191,
+    "parsed": 191,
+    "skipped": 0,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "observability-coverage": 1
+    },
+    "bySeverity": {
+      "info": 1
+    },
+    "strengths": 0,
+    "total": 1
+  },
+  "foundNothing": [
+    "@langchain/core is imported here and its adapter found nothing",
+    "@modelcontextprotocol/sdk is imported here and its adapter found nothing"
+  ],
+  "kind": "not_agent_system",
+  "languagesNotAnalysed": [],
+  "name": "open-agent-platform",
+  "relations": {
+    "byKind": {
+      "calls_service": 6,
+      "queries_database": 12
+    },
+    "total": 18
+  }
+}
