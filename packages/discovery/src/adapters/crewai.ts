@@ -167,6 +167,36 @@ const discoverFromConfig = (context: DiscoveryContext, builder: SystemGraphBuild
 
 type SourceCounts = { components: number; edges: number; files: Set<string> };
 
+/**
+ * The name an `Agent(...)` call gives the agent it builds.
+ *
+ * A role written as a literal is the agent's own name and is what a run reports, so it wins. Where the
+ * role is not a literal the call is inside something that names it, and which something depends on how
+ * the crew is written. The framework's older documentation assigns the agent to a variable, which is the
+ * definition the call sits in. The layout `crewai create crew` generates returns it from a decorated
+ * method of a `@CrewBase` class, and `definitionForCall` answers with nothing there, because it looks for
+ * a variable or a function and a method is neither.
+ *
+ * The fallback was therefore a constant. Every agent in one file became one component named `agent`: on
+ * the pinned examples repository, forty four `Agent` calls across nineteen files became nineteen
+ * components, each carrying every call site in its file. The marketing crew's three agents were one
+ * component, and the two a reader could not see were not reported as unread either.
+ *
+ * `enclosing` is the nearest named function, class or method a call sits inside, and the fact model
+ * already carries it, so the method that returns the agent names it without a parser learning anything
+ * new. It is read after the definition rather than instead of it, because where both exist they are the
+ * same name and the definition carries the location the rest of this adapter binds against.
+ *
+ * **This does not make such an agent join a run**, and the corpus records that it does not. CrewAI names
+ * an agent by its role at run time, the role of an agent written this way is in the `agents.yaml` the
+ * crew names, and the subscript that selects an entry of it is not a fact this model carries.
+ */
+const agentNameFor = (
+  role: string | undefined,
+  definitionName: string | undefined,
+  enclosing: string | undefined,
+): string => role ?? definitionName ?? enclosing ?? 'agent';
+
 const discoverAgentCalls = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
@@ -177,7 +207,7 @@ const discoverAgentCalls = (
     const entries = objectArgument(match.call);
     const definition = definitionForCall(match.module, match.call);
     const role = stringValue(findEntry(entries, 'role')?.value);
-    const name = role ?? definition?.name ?? 'agent';
+    const name = agentNameFor(role, definition?.name, match.call.enclosing);
     const goal = stringValue(findEntry(entries, 'goal')?.value);
     const identity = sourceIdentity('agent', match.module.file, name);
     builder.addComponent(

@@ -179,16 +179,16 @@ repositories:
       literal Agent(role=...) in the older examples, and the @CrewBase class with config/agents.yaml that
       `crewai create crew` generates in the newer ones.
 
-      It is here because the second of those is what the field uses and it is the one this build reads worst. Forty
-      four Agent calls across nineteen files are nineteen components, one per file and each of them named `agent`,
+      It is here because the second of those is what the field uses and it is the one this build read worst. Forty
+      four Agent calls across nineteen files were nineteen components, one per file and each of them named `agent`,
       because Agent(config=...) names no role and definitionForCall looks for a variable or a function where the
-      framework's own template writes a method. Three agents of one crew are one component, and the two a reader
-      cannot see are not reported as unread either.
+      framework's own template writes a method. Reading the enclosing method makes them forty three, one pair still
+      sharing a method name across two classes in one file, so the count here is 73 agents where it was 49.
 
-      Nor does it read the agents.yaml those calls select an entry of, which is where every role in such a crew is
-      written. The config reader opens agents.yaml at the repository root and at config/agents.yaml, and
-      `crewai create crew` puts it at src/<package>/config/agents.yaml, so twenty of them in this repository go
-      unopened.
+      What it still does not read is the agents.yaml those calls select an entry of, which is where every role in
+      such a crew is written. The config reader opens agents.yaml at the repository root and at config/agents.yaml,
+      and `crewai create crew` puts it at src/<package>/config/agents.yaml, so twenty of them in this repository go
+      unopened. That is the measured reason the entry below joins nothing of its own.
 
   - name: crewai-examples-exercised
     source: git
@@ -201,8 +201,9 @@ repositories:
 
       What the run says is that a CrewAI agent span is read: six spans, five of them an agent's, each carrying the
       agent's role under graph.node.id, and this build reads all five. What it also says is that none of them joins
-      the crew that ran. The three agents of crews/marketing_strategy are one component named `agent`, the run names
-      each one by the role in the agents.yaml this build does not open, and neither spelling meets the other.
+      the crew that ran. The three agents of crews/marketing_strategy are declared by the method that returns each
+      one, the run names each one by the role in the agents.yaml this build does not open, and the two spellings do
+      not meet.
 
       **The three components this entry records as joined are the wrong ones, and that is what it is here to hold.**
       crews/instagram_post declares three agents with a literal role, and its three roles are the same three words:

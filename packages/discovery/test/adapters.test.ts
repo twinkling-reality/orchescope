@@ -138,6 +138,32 @@ editor = Agent(
 crew = Crew(agents=[researcher, editor], process=Process.sequential)
 `,
     );
+    /*
+     * The layout `crewai create crew` generates, where an agent's role lives in a document and the call
+     * that builds it names no literal. Every agent in such a file was one component named `agent`.
+     */
+    workspace.write(
+      'src/project_crew.py',
+      `from crewai import Agent, Crew, Process, Task
+from crewai.project import CrewBase, agent, crew
+
+@CrewBase
+class MarketCrew():
+    agents_config = 'config/agents.yaml'
+
+    @agent
+    def market_analyst(self) -> Agent:
+        return Agent(config=self.agents_config['market_analyst'], verbose=True)
+
+    @agent
+    def copy_writer(self) -> Agent:
+        return Agent(config=self.agents_config['copy_writer'], verbose=True)
+
+    @crew
+    def crew(self) -> Crew:
+        return Crew(agents=self.agents, tasks=self.tasks, process=Process.sequential)
+`,
+    );
     workspace.write(
       'config/agents.yaml',
       `planner:
@@ -186,6 +212,20 @@ reviewer:
     assert.ok(
       edges.some((edge) => edge.startsWith('invokes_model:agent:planner->model:')),
       `expected the planner to model edge in ${edges.join(', ')}`,
+    );
+  });
+
+  it('names an agent built inside a decorated method after that method', async () => {
+    const { ids } = await scan(build);
+    assert.ok(
+      ids.includes('agent:market_analyst'),
+      `expected the analyst named after its method in ${ids.join(', ')}`,
+    );
+    assert.ok(ids.includes('agent:copy_writer'), 'expected the writer as its own component');
+    assert.equal(
+      ids.includes('agent:agent'),
+      false,
+      'two agents naming no role collapsed into one component named after the call',
     );
   });
 });

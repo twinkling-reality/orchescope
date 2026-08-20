@@ -82,14 +82,14 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 49,
+      "agent": 73,
       "agent_group": 29,
       "entrypoint": 9,
       "external_service": 9,
       "prompt": 24
     },
     "declaredInTest": 0,
-    "total": 120
+    "total": 144
   },
   "discardedRelations": [],
   "files": {

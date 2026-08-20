@@ -82,14 +82,14 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 49,
+      "agent": 73,
       "agent_group": 29,
       "entrypoint": 9,
       "external_service": 9,
       "prompt": 24
     },
     "declaredInTest": 0,
-    "total": 120
+    "total": 144
   },
   "discardedRelations": [],
   "files": {
@@ -135,7 +135,7 @@
   "runtime": {
     "ambiguousNames": [],
     "contradictions": 0,
-    "declaredComponents": 58,
+    "declaredComponents": 82,
     "declaredEdges": 16,
     "duplicateSideEffects": 0,
     "exercisedComponents": 3,
