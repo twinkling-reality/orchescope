@@ -7,11 +7,49 @@ Notable changes per released version. Nothing here is generated; a release is a 
 **No published document changes.** `packages/schema` and `schemas/` are untouched, so a consumer reading
 0.7.0's shape reads this one.
 
-Both changes below came out of one run of one LangGraph application, which is the second third party
-application this build has traced and the first outside the OpenAI Agents SDK. A reader with a stored
+The changes below came out of runs of LangGraph applications, one in each ecosystem. A reader with a stored
 LangGraph run sees their component counts, their relation counts and their join move without retracing,
-because both readings are derived when a report is built rather than when a span is stored. A reader with
-no LangGraph run sees one number move, and it is a number that was wrong everywhere.
+because every reading here is derived when a report is built rather than when a span is stored. A reader
+with no LangGraph run sees one number move, and it is a number that was wrong everywhere.
+
+### The entry of a graph, read as a node of it
+
+Everything this build reads out of the LangChain dialect was argued from one instrumentor's spans, the
+Python one, and measured against nothing else. `openinference-instrumentation-langchain` exists twice, once
+per ecosystem, and they are two programs. The corpus now pins a LangGraph application in JavaScript and
+traces it, which is what says where they differ.
+
+**They agree about the shape that carries the join**, which is the answer to the question the entry was
+added to ask. The JavaScript instrumentor writes the same `metadata` document under the same attribute,
+with `langgraph_node` in it, and names a node's span after the node, so both declared nodes of the pinned
+application join and the reading crosses unchanged. Neither of the two relations that application declares
+between its own nodes joins, and that is not a defect of either instrumentor: LangGraph runs a pregel step
+by opening each node's span under the compiled graph rather than under whichever node routed to it, so the
+run shows two siblings where the source declares a handoff.
+
+**They disagree about `__start__`.** LangGraph keeps that name for the entry of a graph, `addNode` rejects
+it in both ecosystems with the same message, and the adapter on the declared side has excluded it since it
+was written. The JavaScript instrumentor opens a span for it anyway, named after itself and carrying itself
+in `langgraph_node`, which is a node span's exact shape. The same two node graph written in both produces
+three spans in Python and four in JavaScript.
+
+So a run reported the library's own bookkeeping as an agent of the application, at medium severity, as a
+part of the system that ran without being declared, with nothing in the repository a reader could declare
+in answer. It is one per graph invocation, so a run through a subgraph reports it again.
+
+Both reserved names are declined now, and the span falls to the rule that already declines a compiled
+graph, which counts it as `no_name`. That is the accurate reason rather than a convenient one: the span
+named the graph's own entry, and this build reads no name for a component out of it.
+
+`memory-agent-js-exercised` goes from three agents to two and from seven components to six, and
+`exercised-not-declared` goes from naming three components to two while still reporting two findings, which
+is the pair `componentsByRule` was recorded in 0.7.0 for. `open-deep-research-exercised` does not move, and
+it is the control: the Python instrumentor never opened that span.
+
+**One thing the JavaScript instrumentor does not write is the provider, and that stays unwritten here.** It
+writes neither `llm.provider` nor `llm.system`, so the model in that run is `model:gpt-4o-mini` where the
+Python entry reads `model:openai/gpt-4.1-mini-2025-04-14`. Naming the provider from the model would be an
+inference presented as an observation.
 
 ### Reachability answered by an unrelated HTTP route
 

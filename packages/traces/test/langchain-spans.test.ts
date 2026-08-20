@@ -8,24 +8,40 @@ import { deriveTopology } from '../src/topology.ts';
 /**
  * What LangChain's spans mean to this build.
  *
- * The spans below are copied from the stored run of the pinned `open-deep-research` checkout, the first
- * LangGraph application this build measured. Identifiers, names, nesting and the shape of every attribute
- * are the instrumentor's own; the timestamps are rounded and the `metadata` blobs are cut down to the keys
- * read here, because each one also carries a checkpoint namespace, the model settings and the library
- * versions, and nothing asserted below depends on any of them.
+ * The spans below are copied from two stored runs: the pinned `open-deep-research` checkout, which is the
+ * first LangGraph application this build measured, and the pinned `memory-agent-js` checkout, which is the
+ * first one in JavaScript. Identifiers, names, nesting and the shape of every attribute are each
+ * instrumentor's own; the timestamps are rounded and the `metadata` blobs are cut down to the keys read
+ * here, because each one also carries a checkpoint namespace, the model settings and the library versions,
+ * and nothing asserted below depends on any of them.
  *
  * This dialect has one kind for everything. A compiled graph, a node, a subgraph, a sequence, a lambda and
  * a model wrapper all arrive as `CHAIN`, so the rule that a chain span naming nothing is the
- * instrumentation's own structure declined twenty three of the thirty one spans this run produced and left
- * a model and a tool: none of the nine nodes the run walked, and no observed relation at all.
+ * instrumentation's own structure declined twenty three of the thirty one spans the Python run produced and
+ * left a model and a tool: none of the nine nodes the run walked, and no observed relation at all.
  *
- * They are held verbatim so that a rename in `openinference-instrumentation-langchain` fails here rather
- * than going quiet, which is the failure this build keeps hitting: an attribute moves, the join stops
+ * Both runs are here because the two instrumentors are two programs, and everything this build reads out of
+ * this dialect was argued from the first of them. They agree about the shape that carries the join and
+ * disagree about what else gets a span, which is the whole reason for measuring the second.
+ *
+ * They are held verbatim so that a rename in either `openinference-instrumentation-langchain` fails here
+ * rather than going quiet, which is the failure this build keeps hitting: an attribute moves, the join stops
  * happening, and every report afterwards names something nothing declared instead of saying it could not
  * tell.
  */
 
-const TRACE = '242ea73a2bb9420347d72e51f45fdc52';
+/** The run a set of spans came out of, so a bundle carries the service and the trace that produced it. */
+type Run = { readonly service: string; readonly trace: string };
+
+const PYTHON_RUN: Run = {
+  service: 'open-deep-research-exercised',
+  trace: '242ea73a2bb9420347d72e51f45fdc52',
+};
+
+const JAVASCRIPT_RUN: Run = {
+  service: 'memory-agent-js-exercised',
+  trace: 'bcc135e8df4c58c9788f6a369057fa6f',
+};
 
 type SpanInput = {
   readonly name: string;
@@ -41,16 +57,16 @@ const attributeList = (attributes: Readonly<Record<string, string>>) =>
 
 const nanos = (ms: number): string => String(BigInt(ms) * 1_000_000n);
 
-const bundleOf = (spans: readonly SpanInput[]) => {
+const bundleOf = (spans: readonly SpanInput[], run: Run = PYTHON_RUN) => {
   const decoded = decodeTraceJson({
     resourceSpans: [
       {
-        resource: { attributes: attributeList({ 'service.name': 'open-deep-research-exercised' }) },
+        resource: { attributes: attributeList({ 'service.name': run.service }) },
         scopeSpans: [
           {
             scope: { name: 'openinference.instrumentation.langchain' },
             spans: spans.map((span) => ({
-              traceId: TRACE,
+              traceId: run.trace,
               spanId: span.spanId,
               ...(span.parentSpanId === undefined ? {} : { parentSpanId: span.parentSpanId }),
               name: span.name,
@@ -266,8 +282,8 @@ const RECORDED_RUN: readonly SpanInput[] = [
 const describeEdge = (edge: ObservedEdge): string =>
   `${edge.kind} ${edge.fromKind}:${edge.fromObservedName} -> ${edge.toKind}:${edge.toObservedName}`;
 
-const componentsOf = (spans: readonly SpanInput[]): readonly string[] =>
-  deriveTopology(bundleOf(spans)).topology.components.map(
+const componentsOf = (spans: readonly SpanInput[], run: Run = PYTHON_RUN): readonly string[] =>
+  deriveTopology(bundleOf(spans, run)).topology.components.map(
     (component) => `${component.kind}:${component.observedName}`,
   );
 
@@ -428,5 +444,249 @@ describe('the provider a span names', () => {
       },
     };
     assert.deepEqual(componentsOf([hosted]), ['model:azure/gpt-4.1-mini-2025-04-14']);
+  });
+});
+
+/**
+ * The JavaScript instrumentor's spans, from the stored run of the pinned `memory-agent-js` checkout.
+ *
+ * Two nodes, one tool between them, and sixteen spans. The node spans are siblings under the compiled
+ * graph rather than nested in whichever node routed to them, which is how LangGraph runs a pregel step and
+ * is why neither relation this application declares between its own nodes can be joined by a run of it.
+ */
+const AGENT_ROOT = chain('MemoryAgent', '4fd7288107597002', undefined, 0, 2807, undefined, 0);
+
+/**
+ * The span the Python instrumentor does not open. `__start__` is the name LangGraph keeps for the entry of
+ * a graph, `addNode` rejects it in both ecosystems, and it arrives here named after itself and carrying
+ * itself in `langgraph_node`, which is exactly the shape a node's own span has.
+ */
+const ENTRY = chain('__start__', 'ab7672870a808263', AGENT_ROOT.spanId, 7, 14, '__start__', 0);
+const ENTRY_WRITE = chain(
+  'ChannelWrite<...>',
+  'e74bf68d019fb1d8',
+  ENTRY.spanId,
+  8,
+  13,
+  '__start__',
+  0,
+);
+const ENTRY_ROUTE = chain(
+  'ChannelWrite<branch:to:call_model>',
+  'ac6568953bc86b2c',
+  ENTRY.spanId,
+  15,
+  15,
+  '__start__',
+  0,
+);
+
+/** The first turn: the node, the model it called, and the two runnables LangGraph builds inside every node. */
+const FIRST_TURN = chain(
+  'call_model',
+  '3176e54d53dd92b2',
+  AGENT_ROOT.spanId,
+  16,
+  1732,
+  'call_model',
+  1,
+);
+const FIRST_MODEL: SpanInput = {
+  name: 'ChatOpenAI',
+  spanId: '844aafcdafe056f0',
+  parentSpanId: FIRST_TURN.spanId,
+  start: 215,
+  end: 1729,
+  attributes: {
+    'llm.model_name': 'gpt-4o-mini',
+    'llm.token_count.completion': '39',
+    'llm.token_count.prompt': '219',
+    metadata: metadata('call_model', 1),
+    'openinference.span.kind': 'LLM',
+  },
+};
+const FIRST_WRITE = chain(
+  'ChannelWrite<...>',
+  'f14734ea8f8534cc',
+  FIRST_TURN.spanId,
+  1730,
+  1730,
+  'call_model',
+  1,
+);
+const FIRST_BRANCH = chain(
+  'Branch<call_model,store_memory,__end__>',
+  'c9943b6e518e222f',
+  FIRST_TURN.spanId,
+  1732,
+  1732,
+  'call_model',
+  1,
+);
+
+/** The node the model routed to, and the application's own tool underneath it. */
+const STORE = chain(
+  'store_memory',
+  '53604d96cef08798',
+  AGENT_ROOT.spanId,
+  1734,
+  1736,
+  'store_memory',
+  2,
+);
+const UPSERT: SpanInput = {
+  name: 'upsertMemory',
+  spanId: 'fe6458c7d44373c9',
+  parentSpanId: STORE.spanId,
+  start: 1735,
+  end: 1735,
+  attributes: {
+    metadata: metadata('store_memory', 2),
+    'openinference.span.kind': 'TOOL',
+    'tool.name': 'upsertMemory',
+  },
+};
+const STORE_WRITE = chain(
+  'ChannelWrite<...>',
+  '7355b2b25c4867f6',
+  STORE.spanId,
+  1736,
+  1736,
+  'store_memory',
+  2,
+);
+const STORE_ROUTE = chain(
+  'ChannelWrite<branch:to:call_model>',
+  '4bf080c9d978779d',
+  STORE.spanId,
+  1736,
+  1736,
+  'store_memory',
+  2,
+);
+
+/** The same node again, which is what makes its sample size two rather than one. */
+const SECOND_TURN = chain(
+  'call_model',
+  '8f24e03bd1258f0e',
+  AGENT_ROOT.spanId,
+  1737,
+  2798,
+  'call_model',
+  3,
+);
+const SECOND_MODEL: SpanInput = {
+  name: 'ChatOpenAI',
+  spanId: '5a67dc08f0bf2ef7',
+  parentSpanId: SECOND_TURN.spanId,
+  start: 1738,
+  end: 2796,
+  attributes: {
+    'llm.model_name': 'gpt-4o-mini',
+    'llm.token_count.completion': '34',
+    'llm.token_count.prompt': '359',
+    metadata: metadata('call_model', 3),
+    'openinference.span.kind': 'LLM',
+  },
+};
+const SECOND_WRITE = chain(
+  'ChannelWrite<...>',
+  '4ffaa9ba2672c4ab',
+  SECOND_TURN.spanId,
+  2797,
+  2797,
+  'call_model',
+  3,
+);
+const SECOND_BRANCH = chain(
+  'Branch<call_model,store_memory,__end__>',
+  'f09ed7328abfa6b8',
+  SECOND_TURN.spanId,
+  2797,
+  2797,
+  'call_model',
+  3,
+);
+
+const RECORDED_JAVASCRIPT_RUN: readonly SpanInput[] = [
+  ENTRY_WRITE,
+  ENTRY_ROUTE,
+  ENTRY,
+  FIRST_MODEL,
+  FIRST_WRITE,
+  FIRST_BRANCH,
+  FIRST_TURN,
+  UPSERT,
+  STORE_WRITE,
+  STORE_ROUTE,
+  STORE,
+  SECOND_MODEL,
+  SECOND_WRITE,
+  SECOND_BRANCH,
+  SECOND_TURN,
+  AGENT_ROOT,
+];
+
+describe('the same dialect from the JavaScript instrumentor', () => {
+  it('reads the nodes out of the metadata document, which is the shape that crosses', () => {
+    // Everything this build reads out of this dialect was argued from the Python instrumentor's spans. What
+    // makes it generalise is that this one writes the same document under the same attribute and names a
+    // node's span after the node, so both declared nodes of the application join.
+    assert.deepEqual(componentsOf(RECORDED_JAVASCRIPT_RUN, JAVASCRIPT_RUN), [
+      'agent:call_model',
+      'model:gpt-4o-mini',
+      'agent:store_memory',
+      'tool:upsertMemory',
+    ]);
+  });
+
+  it('declines the entry sentinel, which this instrumentor opens a span for and the other does not', () => {
+    // `__start__` is named after itself and carries itself in `langgraph_node`, so it has a node span's
+    // exact shape. It is LangGraph's own entry rather than a node of the application: `addNode` rejects the
+    // name, so nothing in a repository can ever declare it, and reported as a component it arrives as a
+    // part of the system that ran undeclared with nothing a reader could do about it.
+    assert.ok(!componentsOf(RECORDED_JAVASCRIPT_RUN, JAVASCRIPT_RUN).includes('agent:__start__'));
+  });
+
+  it('declines the exit sentinel on the same ground', () => {
+    const exit = {
+      ...ENTRY,
+      name: '__end__',
+      attributes: { ...ENTRY.attributes, metadata: metadata('__end__', 4) },
+    };
+    assert.deepEqual(componentsOf([exit], JAVASCRIPT_RUN), []);
+  });
+
+  it('counts a node once per time the graph ran it', () => {
+    // `call_model` runs, routes to `store_memory`, and runs again. Two spans, two steps, one component with
+    // a sample size of two, which is the number every metric about it is reported against.
+    const topology = deriveTopology(bundleOf(RECORDED_JAVASCRIPT_RUN, JAVASCRIPT_RUN)).topology;
+    const node = topology.components.find((component) => component.observedName === 'call_model');
+    assert.equal(node?.spanCount, 2);
+  });
+
+  it('names the model without a provider, because this instrumentor writes neither attribute', () => {
+    // The Python instrumentor writes `llm.provider` and the OpenAI Agents one writes `llm.system`. This one
+    // writes no provider at all, so the model is named by itself rather than by who serves it, and that is
+    // what the span said rather than something this build can infer.
+    assert.deepEqual(componentsOf([FIRST_MODEL], JAVASCRIPT_RUN), ['model:gpt-4o-mini']);
+  });
+
+  it('attaches what ran inside a node to that node, across the runnables between them', () => {
+    const edges = deriveTopology(
+      bundleOf(RECORDED_JAVASCRIPT_RUN, JAVASCRIPT_RUN),
+    ).topology.edges.map(describeEdge);
+    assert.deepEqual(edges, [
+      'invokes_model agent:call_model -> model:gpt-4o-mini',
+      'calls_tool agent:store_memory -> tool:upsertMemory',
+    ]);
+  });
+
+  it('says how many spans it declined and why', () => {
+    // The compiled graph, the entry sentinel, four channel writes, two branches and the two route writes.
+    assert.deepEqual(
+      deriveTopology(bundleOf(RECORDED_JAVASCRIPT_RUN, JAVASCRIPT_RUN)).topology.unattributed,
+      [{ reason: 'no_name', count: 10 }],
+    );
   });
 });

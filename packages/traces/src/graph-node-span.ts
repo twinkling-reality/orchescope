@@ -24,12 +24,33 @@ import { OPEN_INFERENCE, readString } from './attributes.ts';
  * names nothing, and a span that names nothing already attaches its work to the nearest enclosing
  * component, which is the node.
  *
- * An instrumentation that stops naming node spans after their nodes goes quiet here rather than wrong, and
- * `corpus/expected/open-deep-research-exercised.json` is what says so.
+ * An instrumentation that stops naming node spans after their nodes goes quiet here rather than wrong, and two
+ * entries say so: `corpus/expected/open-deep-research-exercised.json` holds the Python instrumentor and
+ * `corpus/expected/memory-agent-js-exercised.json` the JavaScript one. They are two programs writing one shape,
+ * and the second was measured because a fact read in one ecosystem is not read in the other.
  */
 
 /** LangGraph's key inside LangChain's run metadata. Absent from any span outside that ecosystem. */
 const LANGGRAPH_NODE = 'langgraph_node';
+
+/**
+ * The two names LangGraph keeps for the boundary of a graph rather than for a node of it.
+ *
+ * `addNode` rejects both, in both ecosystems and with the same message: `Node \`__start__\` is reserved`. So no
+ * application can declare one, the adapter on the other side of the join has excluded them since it was written,
+ * and a span naming one has named the library's own bookkeeping.
+ *
+ * The two instrumentors disagree about whether it produces a span at all. The same two node graph written in
+ * Python and in JavaScript emits three spans there and four here: JavaScript opens one for `__start__`, carrying
+ * `langgraph_node: "__start__"` and named after it, and Python opens none. Read as a node it became
+ * `agent:__start__`, reported at medium severity as a part of the system that ran without being declared, with
+ * nothing in the repository a reader could declare in answer, and once per graph invocation, so a run through a
+ * subgraph reported it again.
+ *
+ * Declining leaves the span to `isStructuralSpan`, which counts it as `no_name`. That is the accurate reason: the
+ * span named the graph's own entry, and this build reads no name for a component out of it.
+ */
+const RESERVED_NODES = new Set(['__start__', '__end__']);
 
 /** The OpenInference kind LangChain gives every runnable, whatever the runnable is. */
 const CHAIN = 'CHAIN';
@@ -52,5 +73,7 @@ export const graphNodeSpanName = (span: NormalizedSpan): string | undefined => {
   if (spanKind?.toUpperCase() !== CHAIN) return undefined;
   const metadata = readString(span.attributes, OPEN_INFERENCE.metadata);
   if (metadata === undefined) return undefined;
-  return nodeNamedIn(metadata) === span.name ? span.name : undefined;
+  const node = nodeNamedIn(metadata);
+  if (node === undefined || node !== span.name || RESERVED_NODES.has(node)) return undefined;
+  return node;
 };

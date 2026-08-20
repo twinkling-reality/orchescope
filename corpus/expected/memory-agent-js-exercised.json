@@ -82,14 +82,14 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 3,
+      "agent": 2,
       "agent_group": 1,
       "model": 1,
       "prompt": 1,
       "tool": 1
     },
     "declaredInTest": 0,
-    "total": 7
+    "total": 6
   },
   "discardedRelations": [],
   "files": {
@@ -107,7 +107,7 @@
       "topology-shape": 1
     },
     "componentsByRule": {
-      "exercised-not-declared": 3,
+      "exercised-not-declared": 2,
       "model-call-without-timeout": 2,
       "observability-coverage": 2,
       "topology-shape": 2
@@ -137,7 +137,6 @@
     "exercisedComponents": 2,
     "exercisedEdges": 0,
     "exercisedNotDeclared": [
-      "agent:__start__",
       "model:gpt-4o-mini",
       "tool:upsertmemory"
     ],
