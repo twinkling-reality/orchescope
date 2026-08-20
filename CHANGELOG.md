@@ -121,15 +121,20 @@ six and `calls_tool` from none to one, and `configured-tool-has-no-caller` stops
 run showed being called. Ten spans are still declined, and that number is the guard on the other half: the
 compiled graph, the two subgraph loops and the three runnables inside one node all name nothing.
 
-**Five relations arrive that this application declares nowhere, and they are worth naming.** A node whose
-implementation is a subgraph nests that subgraph's nodes inside itself, so an agent span contains another
-agent span, and 0.7.0 settled that a nesting between two agents is `hands_off_to`. That branch is load
-bearing where it was argued: the demonstration system declares exactly that relation between its
-orchestrator and its workers. Here it reads a subgraph as a transfer of control to a node the subgraph is
-made of, and `hands_off_to` goes from eight relations to thirteen with none of the five joining anything.
-Nothing is invented by it, since containment would join nothing either, and the trace on its own cannot
-tell a node delegating to a peer from a node built out of one. It is left as it is and recorded rather
-than changed in the same breath as the reading above.
+**Five relations arrive that this application declares nowhere, and the reading that produces them stands.**
+A node whose implementation is a subgraph nests that subgraph's nodes inside itself, so an agent span
+contains another agent span, and 0.7.0 settled that a nesting between two agents is `hands_off_to`. That
+branch is load bearing where it was argued: the demonstration system declares exactly that relation between
+its orchestrator and its workers. Here the same reading calls a subgraph a transfer of control to a node the
+subgraph is made of, and `hands_off_to` goes from eight relations to thirteen with none of the five joining
+anything.
+
+**Keeping it is a decision and it was made deliberately.** Nothing is bought by calling it containment:
+`contains` is agent group to agent on the declared side, so a relation between two nodes would join nothing
+either way, and the report would trade five relations a reader can question for five a reader cannot see.
+What the trace shows is that one node's work happened inside another's, and on this dialect it cannot show
+whether that is a node delegating to a peer or a node built out of one. The count is what goes quiet if the
+reading is changed without saying so, which is why `open-deep-research-exercised` holds it.
 
 **The two that do not join are the point.** That repository declares `supervisor` and `supervisor_tools`
 twice, once in the deep researcher graph and once in the legacy one, so the adapter disambiguated both and

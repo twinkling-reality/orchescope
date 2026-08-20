@@ -326,6 +326,25 @@ describe('a chain span that names a node of the application graph', () => {
     );
   });
 
+  it('calls a subgraph nested in the node that runs it a handoff, which is the decision', () => {
+    // A node whose implementation is a subgraph nests that subgraph's nodes inside itself, so an agent
+    // span contains another agent span, and a nesting between two agents is a handoff. That reading is
+    // kept here rather than narrowed to containment: the declared `contains` runs from a graph to its
+    // nodes, so a relation between two nodes joins neither way, and calling it containment would trade
+    // five relations a reader can question for five a reader cannot see. What the trace shows is that
+    // one node's work happened inside another's, and this dialect cannot show whether that is a node
+    // delegating to a peer or a node built out of one.
+    const edges = deriveTopology(bundleOf(RECORDED_RUN)).topology.edges.map(describeEdge);
+    assert.deepEqual(
+      edges.filter((edge) => edge.startsWith('hands_off_to')),
+      [
+        'hands_off_to agent:research_supervisor -> agent:supervisor',
+        'hands_off_to agent:research_supervisor -> agent:supervisor_tools',
+        'hands_off_to agent:supervisor_tools -> agent:researcher_tools',
+      ],
+    );
+  });
+
   it('says how many spans it declined and why, rather than declining quietly', () => {
     // The compiled graph, the two subgraph loops, and the three runnables inside one node.
     assert.deepEqual(deriveTopology(bundleOf(RECORDED_RUN)).topology.unattributed, [

@@ -227,6 +227,14 @@ repositories:
       against twenty six declared. That was recorded here before it was fixed, because an expectation written
       afterwards cannot show what the fix moved.
 
+      It also holds the count of a decision. A node whose implementation is a subgraph nests that subgraph's nodes
+      inside itself, and a nesting between two agents is a handoff, so this run draws five hands_off_to relations
+      between nodes that this repository declares no relation between at all: hands_off_to reads thirteen where the
+      scan without a run reads eight. Calling it containment instead buys nothing, since the declared contains is
+      from a graph to its nodes and a relation between two nodes joins neither way, and it would trade five relations
+      a reader can question for five a reader cannot see. The reading is kept, and the number is pinned so that
+      changing it is a decision rather than a diff.
+
       What the entry holds now is the counts that go quiet if the reading stops working. Seven of the nine nodes
       join, and joinedOnNameAlone is the list of them. Ten spans are still declined and that number is the guard on
       the other half: the compiled graph, the two subgraph loops and the runnables a node builds inside itself all
