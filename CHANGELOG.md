@@ -37,9 +37,10 @@ carried it, so the method that returns the agent names it without a parser learn
 nineteen become forty three, and the one pair that still shares a component shares a method name across two
 classes in one file, which is a repository writing the same name twice.
 
-`crewai-examples` goes from 49 agents to 73. `crewai` goes from 843 components to 847: three collapsed ones
-become seven, four of them in its own test suite and three in the project templates its CLI writes, and
-nothing else in that repository moves. That is the difference between a framework and a use of one.
+`crewai-examples` goes from 49 agents to 73. `crewai` goes from 843 components to 847: three collapsed
+components become seven, three of them in its own test suite and four in the project templates its CLI
+writes, and nothing else in that repository moves. That is the difference between a framework and a use of
+one.
 
 ### What a CrewAI run says, and what it matches
 
