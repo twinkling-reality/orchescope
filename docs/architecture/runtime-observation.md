@@ -63,6 +63,12 @@ Spans are assembled into a forest by parent identifier, then folded into compone
   from "these two tools ran one after the other".
 - **Retries** are recognised from an explicit attempt attribute, or from a repeated operation on the same component after a
   failure. A retried operation is one component attempted twice, never two components.
+- **Handoffs** are recognised where a framework performs one by calling a tool, which is what the OpenAI Agents SDK does and
+  what its instrumentor faithfully records. A tool span that names no tool, whose `input.value` and `output.value` are both
+  names the same run reported as agents, is a transfer of control between those two agents. The span name is corroboration
+  and never the test: a repository may call a tool anything, and a span that does name a tool is a call to that tool
+  whatever its arguments say. A transfer becomes a relation and never a component, and its duration is attributed to that
+  relation, which is the only thing it can honestly be attributed to.
 - **Side effects** are collected from span events and from the target's own result file, and counted as the larger of the
   two sources rather than their sum, so a carefully instrumented target that reports an effect in both places is not
   accused of duplicating it.

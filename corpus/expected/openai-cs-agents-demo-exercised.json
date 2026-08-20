@@ -90,10 +90,10 @@
       "model": 2,
       "prompt": 14,
       "queue": 1,
-      "tool": 13
+      "tool": 11
     },
     "declaredInTest": 0,
-    "total": 48
+    "total": 46
   },
   "discardedRelations": [],
   "files": {
@@ -125,14 +125,14 @@
   "relations": {
     "byKind": {
       "calls_service": 2,
-      "calls_tool": 15,
+      "calls_tool": 13,
       "contains": 7,
       "hands_off_to": 19,
       "invokes_model": 2,
       "publishes_to_queue": 1,
       "validated_by": 14
     },
-    "total": 60
+    "total": 58
   },
   "runtime": {
     "ambiguousNames": [],
@@ -145,9 +145,7 @@
       "agent_group:agent-workflow",
       "agent_group:turn",
       "model:gpt-4.1-mini-2025-04-14",
-      "model:gpt-5.2-2025-12-11",
-      "tool:to-seat-and-special-services-agent",
-      "tool:to-triage-agent"
+      "model:gpt-5.2-2025-12-11"
     ],
     "joined": [
       "agent:jailbreak-guardrail",

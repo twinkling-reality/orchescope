@@ -4,6 +4,47 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### A handoff the instrumentor recorded as a tool call
+
+The section below deferred this rather than guessing at it, and what closed it is that the guess was
+never necessary. The OpenAI Agents SDK performs a handoff by calling a tool, and
+`openinference-instrumentation-openai-agents` faithfully records a tool, so a run of an application
+whose declared graph is full of handoffs exercised none of them and exercised two tools nothing
+declared instead:
+
+```
+name:                     "handoff to Seat and Special Services Agent"
+openinference.span.kind:  "TOOL"
+input.value:              "Triage Agent"
+output.value:             "Seat and Special Services Agent"
+```
+
+**The span name is corroboration and the attributes are the test.** A repository may call a tool
+whatever it likes, so `handoff to` settles nothing on its own. What does settle it is a tool span that
+names no tool, whose input and output are both names the same run reported as agents: control passed
+from the first to the second, and both ends are already components, since a name appearing only inside
+those two attributes names nothing the run can show ran. A span that does name a tool is a call to that
+tool whatever its arguments say.
+
+That is a fact about a run rather than about a span, which is why it is derived in
+`packages/traces/src/topology.ts` beside self time, parallelism and retries, and not where one span is
+classified. The stored span keeps the operation the instrumentor's attributes give it.
+
+**A transfer becomes a relation and never a component.** The span names both ends, so the relation is
+drawn between the two agents rather than out of whatever the parent span happened to be, which on this
+SDK is the turn the handoff was decided in. The time the transfer took is attributed to the edge, which
+is the only thing it can honestly be attributed to.
+
+On `openai-cs-agents-demo-exercised`, `tool:to-seat-and-special-services-agent` and
+`tool:to-triage-agent` are gone from what ran undeclared, the run's two transfers join the declared
+`hands_off_to` relations instead of adding relations of their own, and the run reports two handoffs and
+one tool call where it reported none and three. Nothing else in the corpus notices: the two hermetic
+exercised entries emit no `input.value` at all.
+
+The spans are pinned verbatim in `packages/traces/test/openai-agents-handoff.test.ts`, alongside the
+three cases that have to stay tools: a span that names its tool, a span where only one of the two values
+names an agent, and a span named `handoff to` in a run that reported no agent at all.
+
 ### A handoff written after the agents exist
 
 The second defect the first traced run found, and it turned out to be larger than it looked. The run of

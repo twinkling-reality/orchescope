@@ -24,11 +24,12 @@ import {
   readNumber,
   readString,
 } from './attributes.ts';
+import { type ObservedHandoff, recognizeHandoffs } from './handoff.ts';
 
 /**
  * Runtime topology derivation.
  *
- * Spans become components and relations. Three facts are computed here that a raw span list does not
+ * Spans become components and relations. Four facts are computed here that a raw span list does not
  * contain and that the findings depend on:
  *
  *  - self time, so latency can be attributed to the component that actually spent it rather than to
@@ -36,7 +37,9 @@ import {
  *  - whether sibling calls overlapped in wall clock, which is the difference between "these two tools
  *    ran in parallel" and "these two tools ran one after the other";
  *  - retries, counted only when an earlier sibling with the same name ended in error, so a loop that
- *    legitimately calls the same tool three times is not reported as two retries.
+ *    legitimately calls the same tool three times is not reported as two retries;
+ *  - which tool spans were transfers of control, which one span cannot answer because it depends on
+ *    what the rest of the run reported as agents.
  */
 
 const PRODUCER = 'traces';
@@ -221,10 +224,14 @@ const COUNTER_BY_OPERATION: Readonly<Record<string, keyof RunCounters>> = {
   memory_write: 'memoryOperations',
 };
 
-const countOperation = (metrics: RunCounters, span: NormalizedSpan): void => {
-  const counter = COUNTER_BY_OPERATION[span.operation];
+const countOperation = (
+  metrics: RunCounters,
+  span: NormalizedSpan,
+  operation: AgentOperation,
+): void => {
+  const counter = COUNTER_BY_OPERATION[operation];
   if (counter !== undefined) metrics[counter] += 1;
-  if (span.operation === 'queue_wait') metrics.queueWaitMs += span.durationMs;
+  if (operation === 'queue_wait') metrics.queueWaitMs += span.durationMs;
   if (readBoolean(span.attributes, ORCHESCOPE.userIntervention) === true) {
     metrics.userInterventions += 1;
   }
@@ -335,15 +342,20 @@ const accumulateComponent = (
   return accumulator;
 };
 
+/** Both ends of an observed relation, named the way the run named them. */
+type EdgeEnds = {
+  readonly kind: string;
+  readonly fromKind: string;
+  readonly fromObservedName: string;
+  readonly fromKey: string;
+  readonly toKind: string;
+  readonly toObservedName: string;
+  readonly toKey: string;
+};
+
 const accumulateEdge = (
   edges: Map<string, EdgeAccumulator>,
-  ends: {
-    readonly from: ComponentAccumulator;
-    readonly toKind: ComponentKind;
-    readonly toObservedName: string;
-    readonly fromKey: string;
-    readonly toKey: string;
-  },
+  ends: EdgeEnds,
   node: SpanNode,
   facts: {
     readonly tokens: SpanTokens;
@@ -353,12 +365,11 @@ const accumulateEdge = (
   },
 ): void => {
   const span = node.span;
-  const edgeKind = edgeKindFor(ends.from.kind, ends.toKind, span.operation);
-  const edgeKey = `${edgeKind}|${ends.fromKey}|${ends.toKey}`;
+  const edgeKey = `${ends.kind}|${ends.fromKey}|${ends.toKey}`;
   const edge: EdgeAccumulator = edges.get(edgeKey) ?? {
-    kind: edgeKind,
-    fromKind: ends.from.kind,
-    fromObservedName: ends.from.observedName,
+    kind: ends.kind,
+    fromKind: ends.fromKind,
+    fromObservedName: ends.fromObservedName,
     toKind: ends.toKind,
     toObservedName: ends.toObservedName,
     executionCount: 0,
@@ -452,14 +463,17 @@ type TraversalState = {
   readonly spanToComponentKey: Map<string, string>;
   readonly unattributed: Map<string, number>;
   readonly metrics: RunCounters;
+  /** Span identifier to the transfer of control it recorded, for the spans that recorded one. */
+  readonly handoffs: ReadonlyMap<string, ObservedHandoff>;
 };
 
-const emptyTraversalState = (): TraversalState => ({
+const emptyTraversalState = (handoffs: ReadonlyMap<string, ObservedHandoff>): TraversalState => ({
   components: new Map(),
   edges: new Map(),
   evidence: [],
   spanToComponentKey: new Map(),
   unattributed: new Map(),
+  handoffs,
   metrics: {
     modelCalls: 0,
     toolCalls: 0,
@@ -479,6 +493,60 @@ const emptyTraversalState = (): TraversalState => ({
   },
 });
 
+/**
+ * A transfer of control becomes a relation and never a component.
+ *
+ * The span carries both ends, so the relation is drawn between the two agents rather than from
+ * whatever happened to be the parent span, which on the SDK that emits these is the turn the handoff
+ * was decided in. Both ends are already components: a span is only read as a handoff when the run
+ * reported both of its names as agents. The time the transfer took is attributed to the edge, which
+ * is the only thing it can honestly be attributed to.
+ */
+const recordHandoff = (
+  state: TraversalState,
+  bundle: TraceBundle,
+  node: SpanNode,
+  parent: SpanNode | undefined,
+  handoff: ObservedHandoff,
+): void => {
+  const span = node.span;
+  const spanRecord = spanEvidence({
+    producer: PRODUCER,
+    runId: bundle.runId,
+    traceId: span.traceId,
+    spanId: span.spanId,
+    spanName: span.name,
+    attribute: GEN_AI.operationName,
+    attributeValue: 'handoff',
+  });
+  state.evidence.push(spanRecord);
+
+  const retried = isRetry(parent, node);
+  const parallel = parallelSiblings(parent, node);
+  accumulateEdge(
+    state.edges,
+    {
+      kind: 'hands_off_to',
+      fromKind: 'agent',
+      fromObservedName: handoff.fromAgent,
+      fromKey: componentKey('agent', handoff.fromAgent),
+      toKind: 'agent',
+      toObservedName: handoff.toAgent,
+      toKey: componentKey('agent', handoff.toAgent),
+    },
+    node,
+    { tokens: tokensOf(span), retried, parallel, evidenceId: spanRecord.id },
+  );
+
+  if (span.status === 'error') state.metrics.errors += 1;
+  if (retried) state.metrics.retries += 1;
+  state.metrics.maxObservedConcurrency = Math.max(
+    state.metrics.maxObservedConcurrency,
+    parallel + 1,
+  );
+  countOperation(state.metrics, span, 'handoff');
+};
+
 /** One span folded into the traversal state, then its children. */
 const visitSpan = (
   state: TraversalState,
@@ -488,6 +556,12 @@ const visitSpan = (
 ): void => {
   const { components, edges, evidence, spanToComponentKey, unattributed, metrics } = state;
   const span = node.span;
+  const handoff = state.handoffs.get(span.spanId);
+  if (handoff !== undefined) {
+    recordHandoff(state, bundle, node, parent, handoff);
+    for (const child of node.children) visitSpan(state, bundle, child, node);
+    return;
+  }
   const kind = componentKindFor(span.operation);
   if (kind === undefined) {
     const reason = span.operation === 'unclassified' ? 'no_operation' : 'unsupported_dialect';
@@ -529,7 +603,7 @@ const visitSpan = (
   if (span.status === 'error') metrics.errors += 1;
   if (retried) metrics.retries += 1;
   metrics.maxObservedConcurrency = Math.max(metrics.maxObservedConcurrency, parallel + 1);
-  countOperation(metrics, span);
+  countOperation(metrics, span, span.operation);
 
   const parentKey = parent === undefined ? undefined : spanToComponentKey.get(parent.span.spanId);
   const parentAccumulator = parentKey === undefined ? undefined : components.get(parentKey);
@@ -537,10 +611,12 @@ const visitSpan = (
     accumulateEdge(
       edges,
       {
-        from: parentAccumulator,
+        kind: edgeKindFor(parentAccumulator.kind, kind, span.operation),
+        fromKind: parentAccumulator.kind,
+        fromObservedName: parentAccumulator.observedName,
+        fromKey: parentKey,
         toKind: kind,
         toObservedName: observedName,
-        fromKey: parentKey,
         toKey: key,
       },
       node,
@@ -553,7 +629,7 @@ const visitSpan = (
 
 export const deriveTopology = (bundle: TraceBundle): TopologyResult => {
   const { roots } = buildForest(bundle.spans);
-  const state = emptyTraversalState();
+  const state = emptyTraversalState(recognizeHandoffs(bundle.spans));
   const { components, edges, evidence, spanToComponentKey, unattributed, metrics } = state;
 
   for (const root of roots) visitSpan(state, bundle, root, undefined);

@@ -126,9 +126,14 @@ recent runs are considered; `--runs 0` skips reconciliation.
 | `gen_ai.usage.input_tokens`, `output_tokens` | Token counts |
 | `gen_ai.tool.name`, `gen_ai.agent.name` | Component names |
 | `openinference.span.kind` | The OpenInference equivalent |
+| `input.value`, `output.value` | On a tool span that names no tool, the two agents a handoff passed control between |
 
 Both the current and the previous spellings of the renamed generative AI fields are read, because the conventions are still
 in development upstream and exporters lag.
+
+A framework that performs a handoff by calling a tool, as the OpenAI Agents SDK does, produces a tool span rather than a
+handoff. Orchescope reads it as a handoff only when both of those two values name agents the same run reported, so a tool
+that happens to take and return a string is unaffected, and so is a tool span that names the tool it called.
 
 **To join back to source**, which is the strongest match rule:
 

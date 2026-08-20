@@ -227,11 +227,15 @@ repositories:
       been shown. Here the triage agent hands off to the seat agent, which calls update_seat, with two guardrails
       running around it: five components declared and exercised on code this repository did not write.
 
-      It is also the entry that found how the join breaks. A guardrail is declared as an agent and reported by the run
-      as an evaluation, so reconciliation matches on kind and name, the kinds disagree, and one guardrail becomes two
-      components. And the SDK performs a handoff as a tool call, so a run exercises a tool named for the agent it
-      transfers to while the repository declares a hands_off_to relation, and the two never meet. Both are recorded
-      here rather than fixed, because an expectation that hides them would make this entry agree with the defect.
+      It is also the entry that found how the join breaks, twice. A guardrail was declared as an agent and reported by
+      the run as an evaluation, so reconciliation matched on kind and name, the kinds disagreed, and one guardrail
+      became two components. And the SDK performs a handoff as a tool call, so a run exercised a tool named for the
+      agent it transferred to while the repository declared a hands_off_to relation, and the two never met. Both were
+      recorded here before either was fixed, because an expectation that hides a defect makes the entry agree with it.
+
+      What that leaves this entry holding is the two counts either fix goes quiet on. The tool count is what a handoff
+      read as a tool inflates, and hands_off_to holds at nineteen only while the run's two transfers join declarations
+      instead of adding relations of their own, so a join that broke in either direction moves a number here.
     exercise:
       why: >-
         The join on an application, with a provider actually called. Both other exercised entries are hermetic by
@@ -240,8 +244,9 @@ repositories:
         and a run without it is skipped with the reason printed.
       script: corpus/runs/openai-cs-agents-demo/exercise.py
       # The OpenAI Agents SDK carries its own tracing, which exports to OpenAI's platform rather than over OTLP, so
-      # the spans this join needs come from the OpenInference instrumentor. It emits the conventions
-      # packages/traces/src/attributes.ts already decodes, so nothing in this build was changed to read them.
+      # the spans this join needs come from the OpenInference instrumentor. Its span kinds, model names and tool names
+      # were already decoded by packages/traces/src/attributes.ts. Its handoff was not: that arrives as a tool span
+      # carrying both agents, and packages/traces/src/handoff.ts is what reads it.
       pythonPackages:
         - openai-agents
         - openai-chatkit
