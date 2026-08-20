@@ -276,6 +276,72 @@ repositories:
       requiresEnvironment:
         - OPENAI_API_KEY
 
+  - name: memory-agent-js
+    source: git
+    url: https://github.com/langchain-ai/memory-agent-js.git
+    commit: fde601d1674e18ce55a0d7f9d7f90064bbda333d
+    kind: agent_system
+    why: >-
+      A LangGraph application in JavaScript, which is the half of that framework this corpus reads only from the
+      library that defines it. langgraph and langgraphjs are framework repositories, open-deep-research is Python,
+      and a repository that documents an API and a repository that uses one are different shapes. This is five
+      source files declaring two nodes, three edges and one tool, which is small enough that a person can check
+      every number here against the source in a few minutes.
+
+  - name: memory-agent-js-exercised
+    source: git
+    url: https://github.com/langchain-ai/memory-agent-js.git
+    commit: fde601d1674e18ce55a0d7f9d7f90064bbda333d
+    kind: agent_system
+    why: >-
+      The same commit as the entry above, measured with a run in it, and the first LangGraph run in JavaScript
+      anywhere in this corpus. Every reading this build has of the LangChain dialect was argued from Python spans:
+      that a chain span naming a node in its metadata is that node, that the node's own span is the one the graph
+      named after it, and that everything else composed inside it names nothing. Those are claims about what an
+      instrumentor emits, and the JavaScript instrumentor is a different program.
+
+      What it holds is whether that reading survives the crossing. Both declared nodes join, so the shape of the
+      metadata document generalises, and the two declared relations join neither way, because LangGraph runs its
+      nodes as siblings under one pregel span rather than nesting each in the one that routed to it.
+
+      It also records what the two instrumentors do not agree on. The JavaScript one emits a node span for
+      __start__, the sentinel LangGraph reserves for the entry of a graph, and the Python one does not: the same two
+      node graph written in both produces three spans in Python and four in JavaScript. No application can declare
+      that name, because addNode rejects it, and the adapter on the declared side has excluded it since it was
+      written. The other disagreement is the provider: the Python instrumentor writes llm.provider and this one
+      writes neither that nor llm.system, so the model here is named gpt-4o-mini where the Python entry names
+      openai/gpt-4.1-mini-2025-04-14, and that is what the span said rather than something this build could fix.
+    exercise:
+      why: >-
+        The dialect measurement in the other ecosystem. openinference-instrumentation-langchain is the instrumentor
+        for the same reason its Python sibling is: LangGraph's own tracing exports to LangSmith rather than over
+        OTLP, and this one hangs off LangChain's callback manager, so every node of the compiled graph becomes a
+        span whatever the application did to build it.
+
+        The run is bounded rather than representative: one message, one model, and a recursion limit of six, which
+        is the smallest configuration that still walks both nodes and the tool between them. What it costs is a
+        credential, which is stated rather than discovered, and a run without it is skipped with the reason printed.
+      script: corpus/runs/memory-agent-js/exercise.mjs
+      # The versions the checkout's own yarn.lock resolves, because an entry pinned to a commit and installed
+      # against whatever the index resolved today is measuring the index. zod is pinned hardest of all: this
+      # generation of langchain reads a tool schema through zod 3, and under zod 4 the tool arrives at the model
+      # declaring no parameters while the run still succeeds. tsx compiles the checkout, whose modules import their
+      # siblings with .js specifiers naming .ts files. The instrumentor is deliberately unpinned, since a dialect
+      # moving in the field is what this measures.
+      nodePackages:
+        - '@langchain/core@0.3.57'
+        - '@langchain/langgraph@0.3.0'
+        - '@langchain/openai@0.5.11'
+        - langchain@0.3.27
+        - uuid@10.0.0
+        - zod@3.23.8
+        - '@arizeai/openinference-instrumentation-langchain'
+        - tsx
+        - '@opentelemetry/sdk-trace-node'
+        - '@opentelemetry/exporter-trace-otlp-http'
+      requiresEnvironment:
+        - OPENAI_API_KEY
+
   - name: openai-cs-agents-demo
     source: git
     url: https://github.com/openai/openai-cs-agents-demo.git

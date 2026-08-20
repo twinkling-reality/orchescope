@@ -1,0 +1,155 @@
+{
+  "adapters": {
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 3,
+      "edgesFound": 4,
+      "filesInspected": 6,
+      "status": "completed"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 1,
+      "edgesFound": 0,
+      "filesInspected": 1,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:search-index": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": true,
+  "components": {
+    "byKind": {
+      "agent": 3,
+      "agent_group": 1,
+      "model": 1,
+      "prompt": 1,
+      "tool": 1
+    },
+    "declaredInTest": 0,
+    "total": 7
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 17,
+    "inSupportedLanguages": 12,
+    "parsed": 12,
+    "skipped": 0,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "exercised-not-declared": 2,
+      "model-call-without-timeout": 1,
+      "observability-coverage": 1,
+      "topology-shape": 1
+    },
+    "componentsByRule": {
+      "exercised-not-declared": 3,
+      "model-call-without-timeout": 2,
+      "observability-coverage": 2,
+      "topology-shape": 2
+    },
+    "strengths": 1,
+    "total": 5
+  },
+  "foundNothing": [],
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "memory-agent-js-exercised",
+  "relations": {
+    "byKind": {
+      "calls_tool": 1,
+      "contains": 2,
+      "hands_off_to": 2,
+      "invokes_model": 1
+    },
+    "total": 6
+  },
+  "runtime": {
+    "ambiguousNames": [],
+    "contradictions": 0,
+    "declaredComponents": 2,
+    "declaredEdges": 2,
+    "duplicateSideEffects": 0,
+    "exercisedComponents": 2,
+    "exercisedEdges": 0,
+    "exercisedNotDeclared": [
+      "agent:__start__",
+      "model:gpt-4o-mini",
+      "tool:upsertmemory"
+    ],
+    "joined": [
+      "agent:call_model",
+      "agent:store_memory"
+    ],
+    "joinedOnNameAlone": [
+      "agent:call_model",
+      "agent:store_memory"
+    ],
+    "runs": 1,
+    "spans": 16
+  }
+}
