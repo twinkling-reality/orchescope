@@ -138,6 +138,83 @@ describe('analysis', () => {
     );
   });
 
+  /**
+   * A fully cyclic set of agents has no member with an inbound relation to spare, so none of them
+   * qualifies as a root. The answer to that used to be a fallback over the whole graph, which fired on
+   * whether the repository had a root somewhere rather than on whether this part of it did.
+   */
+  describe('a set of agents that hand off to one another and back', () => {
+    const worker = componentDraft({ kind: 'agent', name: 'worker', file: 'src/worker.ts' });
+    const handler = componentDraft({
+      kind: 'entrypoint',
+      name: 'chat_endpoint',
+      file: 'src/api.ts',
+    });
+
+    const cyclicGraph = (extra: readonly ReturnType<typeof componentDraft>[]) =>
+      indexGraph(
+        buildGraph(
+          [orchestrator, worker, refund, ...extra],
+          [
+            edgeDraft('hands_off_to', orchestrator, worker),
+            edgeDraft('hands_off_to', worker, orchestrator),
+            edgeDraft('calls_tool', worker, refund),
+          ],
+        ),
+      );
+
+    it('reports a way into the cycle rather than the whole cycle as unreachable', () => {
+      assert.deepEqual(
+        unreachableComponents(cyclicGraph([])).map((component) => component.id),
+        [],
+      );
+    });
+
+    it('answers the same with an unrelated root beside it, which used to change the answer', () => {
+      // The pinned customer service demonstration reported seventeen of twenty two components
+      // unreachable because three Flask routes no adapter joins to its agents were roots. Deleting the
+      // routes would have reported none. An answer about one agent cannot turn on an HTTP handler.
+      const withHandler = cyclicGraph([handler]);
+      assert.deepEqual(
+        unreachableComponents(withHandler).map((component) => component.id),
+        [],
+      );
+      assert.ok(
+        entryPoints(withHandler)
+          .map((component) => component.id)
+          .includes('entrypoint:chat_endpoint'),
+      );
+    });
+
+    it('still reports a tool the cycle never calls, which is a kind that cannot be a root', () => {
+      assert.deepEqual(
+        unreachableComponents(cyclicGraph([inventory])).map((component) => component.id),
+        ['tool:check_inventory'],
+      );
+    });
+
+    it('promotes one way in rather than every candidate the roots do not reach', () => {
+      // Promoting the unreached set together would call the far end of a chain an entry point while
+      // the near end hands off to it.
+      const trailing = componentDraft({ kind: 'agent', name: 'reporter', file: 'src/report.ts' });
+      const graph = indexGraph(
+        buildGraph(
+          [orchestrator, worker, trailing],
+          [
+            edgeDraft('hands_off_to', orchestrator, worker),
+            edgeDraft('hands_off_to', worker, orchestrator),
+            edgeDraft('hands_off_to', worker, trailing),
+          ],
+        ),
+      );
+      assert.equal(
+        entryPoints(graph).some((component) => component.id === 'agent:reporter'),
+        false,
+      );
+      assert.equal(entryPoints(graph).length, 1);
+    });
+  });
+
   it('finds a handoff cycle between agents', () => {
     const worker = componentDraft({ kind: 'agent', name: 'worker', file: 'src/worker.ts' });
     const graph = buildGraph(

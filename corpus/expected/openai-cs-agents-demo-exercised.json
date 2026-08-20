@@ -123,7 +123,7 @@
       "observability-coverage": 10,
       "prompt-injection-boundary": 6,
       "tokens-concentrated-in-one-component": 1,
-      "topology-shape": 23
+      "topology-shape": 7
     },
     "strengths": 0,
     "total": 11

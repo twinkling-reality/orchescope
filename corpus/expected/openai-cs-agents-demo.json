@@ -117,7 +117,7 @@
       "configured-tool-has-no-caller": 1,
       "observability-coverage": 5,
       "prompt-injection-boundary": 6,
-      "topology-shape": 23
+      "topology-shape": 7
     },
     "strengths": 0,
     "total": 5

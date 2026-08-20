@@ -13,6 +13,38 @@ LangGraph run sees their component counts, their relation counts and their join 
 because both readings are derived when a report is built rather than when a span is stored. A reader with
 no LangGraph run sees one number move, and it is a number that was wrong everywhere.
 
+### Reachability answered by an unrelated HTTP route
+
+`topology-shape` reports the components no declared entry point reaches. A component is an entry point when
+nothing points at it, and a fully cyclic set of agents has no member with an inbound relation to spare, so
+it yields no root at all. The answer to that was a fallback over the whole graph: with no root anywhere,
+every candidate became one.
+
+It fired on whether the repository had a root somewhere rather than on whether this part of it did. The
+pinned customer service demonstration has six agents that hand off to one another and back, and three Flask
+routes no adapter joins to the agent graph. The routes are roots, the fallback therefore never fired, and
+the report said **seventeen of the twenty two components that participate in control flow cannot be
+reached**, naming every agent in the application and every tool that is wired to one. Deleting the three
+routes would have reported none of it. Reporting seventy seven percent of a system as unreachable is close
+to reporting nothing, and an answer about one agent cannot turn on an unrelated HTTP handler.
+
+A candidate no root reaches is now promoted to a root, one at a time and in candidate order, because
+nothing reachable reaches it and that is what a way in is. Promoting the unreached set together would call
+the far end of a chain an entry point while the near end hands off to it, so it is one per pass and the
+traversal runs again.
+
+**An agent is therefore never reported unreachable, and that is the honest reading rather than a
+weakening.** An agent nothing points at was already a root. An agent inside a cycle nothing points into is
+the only way into that cycle. What the unreachable half still reports is a component of a kind that cannot
+be a root, which on that demonstration is the finding a person checked against the source: `baggage_tool` is
+defined in its tools module and named in no agent's tool list.
+
+`topology-shape` goes from naming twenty three components to naming seven, which are the six in the cycle
+and `baggage_tool`. Both entries pinned at that commit move by the same amount and still agree with each
+other, which is the invariant the pair exists to hold. No other entry moves, and `findings.byRule` does not
+move on either of them: two findings before and two after. That number is the reason
+`findings.componentsByRule` was recorded in 0.7.0.
+
 ### The provider a span names, where the span names it twice
 
 OpenInference carries two attributes for it and this build read one. `llm.provider` names who hosts the

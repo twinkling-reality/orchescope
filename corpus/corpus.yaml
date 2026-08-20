@@ -277,6 +277,13 @@ repositories:
       reports the tools that are wired, moves this entry. Forty three files, so the whole of what it claims can be
       read against the source.
 
+      It is also where reachability was answered by something unrelated. This application's six agents hand off to
+      one another and back, so no agent has an inbound relation to spare and none of them qualified as a root, and
+      the roots that were left are three Flask routes no adapter joins to the agent graph. Seventeen of the twenty
+      two components that participate in control flow were reported unreachable, including every agent and every
+      tool that is wired, and deleting the three routes would have reported none. What topology-shape names here is
+      seven components now: the six in the cycle and baggage_tool.
+
   - name: openai-cs-agents-demo-exercised
     source: git
     url: https://github.com/openai/openai-cs-agents-demo.git

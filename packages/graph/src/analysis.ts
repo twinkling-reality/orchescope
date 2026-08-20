@@ -50,19 +50,51 @@ export const degrees = (index: IndexedGraph): readonly DegreeStats[] =>
   }));
 
 /**
+ * A candidate nothing points at, which is the ordinary way into a system.
+ *
+ * A frame discovery invented is one whether or not something calls it, which is the exception. It was never a
+ * root because nothing pointed at it: it is a function, and a function that one caller in this repository
+ * happens to reach is still a way into the module that exports it. Testing it by inbound relations would mean
+ * that joining a tool to the handler it runs, which is new information and strictly more of it, demoted the
+ * frames holding that repository's writes and reported more of the system as unreachable than before the join
+ * existed. A graph does not become less connected by gaining a relation.
+ */
+const nothingPointsAt = (index: IndexedGraph, candidate: Component): boolean =>
+  isInferredEntryPoint(candidate) ||
+  !index
+    .incoming(candidate.id)
+    .some(
+      (edge) =>
+        edge.from !== candidate.id &&
+        partOfDeclaredTopology(edge) &&
+        (isControlFlowKind(edge.kind) || edge.kind === 'contains'),
+    );
+
+/**
  * Entry points of the declared system.
  *
  * A component is an entry point when nothing points at it: no control flow relation and no containment. Declared
  * entry points, groups and agents are all candidates, because a repository may have an explicit entry point, an
- * orchestrator nobody calls, or both. When every candidate has an inbound relation, which happens in a fully cyclic
- * topology, all candidates are treated as roots rather than reporting the whole system unreachable.
+ * orchestrator nobody calls, or both.
  *
- * A frame discovery invented is a root whether or not something calls it, which is the one exception. It was
- * never a root because nothing pointed at it: it is a function, and a function that one caller in this
- * repository happens to reach is still a way into the module that exports it. Testing it by inbound relations
- * would mean that joining a tool to the handler it runs, which is new information and strictly more of it,
- * demoted the frames holding that repository's writes and reported more of the system as unreachable than
- * before the join existed. A graph does not become less connected by gaining a relation.
+ * **A cycle has no member with an inbound relation to spare, so a fully cyclic set of agents yields no root at
+ * all.** The answer to that used to be a fallback over the whole graph: with no root anywhere, every candidate
+ * became one. It fired on whether the repository had a root somewhere rather than on whether this part of it
+ * did, so the pinned customer service demonstration, whose six agents hand off to one another and back,
+ * reported seventeen of its twenty two participating components unreachable because three Flask routes no
+ * adapter joins to the agent graph were roots. Deleting those three routes would have reported nothing
+ * unreachable. An answer about one agent that turns on an unrelated HTTP handler is not an answer.
+ *
+ * What replaces it is promotion: a candidate no root reaches is itself a way in, because nothing reachable
+ * reaches it, so it becomes a root and the traversal runs again. One at a time and in candidate order, because
+ * promoting a set together would call the second member of a chain an entry point when the first one reaches
+ * it. The loop is bounded by the candidate count, which it removes one from on every pass.
+ *
+ * This does mean an agent is never reported unreachable, and that is the honest reading rather than a
+ * weakening: an agent nothing points at was already a root, and an agent inside a cycle nothing points into is
+ * the only way into that cycle. What the unreachable half still reports is a component of a kind that cannot
+ * be a root, which is the true finding on that demonstration: `baggage_tool` is defined in its tools module
+ * and named in no agent's tool list.
  */
 export const entryPoints = (index: IndexedGraph): readonly Component[] => {
   const candidates = [
@@ -71,19 +103,18 @@ export const entryPoints = (index: IndexedGraph): readonly Component[] => {
     ...index.componentsOfKind('agent'),
   ];
   if (candidates.length === 0) return [];
-  const roots = candidates.filter(
-    (candidate) =>
-      isInferredEntryPoint(candidate) ||
-      !index
-        .incoming(candidate.id)
-        .some(
-          (edge) =>
-            edge.from !== candidate.id &&
-            partOfDeclaredTopology(edge) &&
-            (isControlFlowKind(edge.kind) || edge.kind === 'contains'),
-        ),
-  );
-  return roots.length > 0 ? roots : candidates;
+  const roots = candidates.filter((candidate) => nothingPointsAt(index, candidate));
+  for (let pass = 0; pass < candidates.length; pass += 1) {
+    const reached = reachableFrom(
+      index,
+      roots.map((root) => root.id),
+      partOfDeclaredTopology,
+    );
+    const unreached = candidates.find((candidate) => !reached.has(candidate.id));
+    if (unreached === undefined) break;
+    roots.push(unreached);
+  }
+  return roots;
 };
 
 /**
