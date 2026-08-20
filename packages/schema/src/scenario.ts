@@ -24,7 +24,8 @@ import { SCHEMA_VERSIONS, schemaId } from './version.ts';
  * guesses: the target either writes the JSON result file whose path Orchescope passes in
  * `ORCHESCOPE_RESULT_FILE`, or annotates its root span with `orchescope.task.*` attributes.
  */
-export const ResultSource = literals(['result_file', 'root_span', 'exit_code'] as const);
+export const RESULT_SOURCES = ['result_file', 'root_span', 'exit_code'] as const;
+export const ResultSource = literals(RESULT_SOURCES);
 export type ResultSource = Static<typeof ResultSource>;
 
 export const ScenarioTarget = Type.Object(
@@ -98,13 +99,14 @@ export type ScenarioBudgets = Static<typeof ScenarioBudgets>;
  * Permissions a scenario needs. The runner refuses a scenario whose requirements exceed what the
  * user granted, and never silently downgrades to a weaker mode.
  */
-export const ScenarioPermission = literals([
+export const SCENARIO_PERMISSIONS = [
   'process:spawn',
   'network:loopback',
   'network:outbound',
   'model:paid',
   'filesystem:write',
-] as const);
+] as const;
+export const ScenarioPermission = literals(SCENARIO_PERMISSIONS);
 export type ScenarioPermission = Static<typeof ScenarioPermission>;
 
 export const Scenario = Document(

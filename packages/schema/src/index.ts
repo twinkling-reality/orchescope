@@ -174,9 +174,11 @@ export {
   RuntimeTopology,
 } from './runtime-topology.ts';
 export {
+  RESULT_SOURCES,
   ResultSource,
   Scenario,
   ScenarioBudgets,
+  SCENARIO_PERMISSIONS,
   ScenarioPermission,
   ScenarioTarget,
   ScenarioVariant,
