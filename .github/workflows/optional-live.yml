@@ -58,7 +58,7 @@ jobs:
             }
             console.log(data.variants.length + ' variant(s) with reportable quantiles');
           "
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: long-benchmark
           path: benchmark.json
@@ -87,7 +87,7 @@ jobs:
       - name: every pinned repository still produces what is recorded
         run: pnpm corpus:exercise
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: corpus-summary
