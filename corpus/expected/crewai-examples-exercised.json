@@ -1,0 +1,153 @@
+{
+  "adapters": {
+    "adapter:crewai": {
+      "componentsFound": 101,
+      "edgesFound": 5,
+      "filesInspected": 35,
+      "status": "completed"
+    },
+    "adapter:effects": {
+      "componentsFound": 18,
+      "edgesFound": 9,
+      "filesInspected": 8,
+      "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 4,
+      "edgesFound": 7,
+      "filesInspected": 1,
+      "status": "completed"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 3,
+      "status": "completed"
+    },
+    "adapter:prompts": {
+      "componentsFound": 24,
+      "edgesFound": 3,
+      "filesInspected": 12,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:search-index": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": true,
+  "components": {
+    "byKind": {
+      "agent": 49,
+      "agent_group": 29,
+      "entrypoint": 9,
+      "external_service": 9,
+      "prompt": 24
+    },
+    "declaredInTest": 0,
+    "total": 120
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 179,
+    "inSupportedLanguages": 116,
+    "parsed": 116,
+    "skipped": 0,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "declared-not-exercised": 1,
+      "observability-coverage": 1,
+      "topology-shape": 1
+    },
+    "bySeverity": {
+      "low": 2,
+      "medium": 1
+    },
+    "componentsByRule": {
+      "declared-not-exercised": 25,
+      "observability-coverage": 10,
+      "topology-shape": 3
+    },
+    "strengths": 0,
+    "total": 3
+  },
+  "foundNothing": [
+    "agents is imported here and its adapter found nothing"
+  ],
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "crewai-examples-exercised",
+  "relations": {
+    "byKind": {
+      "calls_service": 9,
+      "contains": 8,
+      "hands_off_to": 4,
+      "uses_prompt": 3
+    },
+    "total": 24
+  },
+  "runtime": {
+    "ambiguousNames": [],
+    "contradictions": 0,
+    "declaredComponents": 58,
+    "declaredEdges": 16,
+    "duplicateSideEffects": 0,
+    "exercisedComponents": 3,
+    "exercisedEdges": 0,
+    "exercisedNotDeclared": [],
+    "joined": [
+      "agent:chief-marketing-strategist",
+      "agent:creative-content-creator",
+      "agent:lead-market-analyst"
+    ],
+    "joinedOnNameAlone": [],
+    "runs": 1,
+    "spans": 6
+  }
+}
