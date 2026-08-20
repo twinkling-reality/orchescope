@@ -47,5 +47,5 @@ schema ──► domain ──► core analysis ──► usecases ──► edg
   advances it. The five steps themselves are `--verbose`; the default names where you stand by naming what is missing.
 - MCP or JSON: the same facts without prose chrome, for an agent or a gate.
 
-If a change makes the terminal answer "what do I do" in more than one place, it has regressed the root fault recorded in
-`docs/design/TUI-NEXT-SESSION.md`.
+If a change makes the terminal answer "what do I do" in more than one place, it has regressed the fault recorded in
+`docs/design/terminal-document.md`.

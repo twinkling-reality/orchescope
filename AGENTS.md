@@ -133,8 +133,6 @@ is a human surface and is allowed to change shape.
 - Unbounded queues, retries, concurrency or output.
 - `TODO`, `FIXME`, `HACK`, `XXX`, placeholder implementations, dead interfaces or speculative adapters.
 - Temporal comments: for now, later, currently, eventually, once we, after migration, old approach, new approach.
-- Em dash characters anywhere in the repository.
-- Co-authored-by lines, attribution trailers, generated-by statements or AI authorship notices.
 - A browser product surface, dashboard, or second UI that agents cannot invoke.
 
 ## Validation before you claim a change works

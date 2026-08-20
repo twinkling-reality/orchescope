@@ -47,4 +47,4 @@ without evidence. A new adapter needs a fixture and assertions on components, re
 - [ ] Nothing in this change claims support for an ecosystem, platform or format that no test exercises
 - [ ] No finding, metric or verdict added here reports more confidence than its evidence supports
 - [ ] No new unbounded retry, queue, concurrency or output
-- [ ] No `TODO`, `FIXME`, placeholder, temporal comment or em dash
+- [ ] No `TODO`, `FIXME`, placeholder or temporal comment

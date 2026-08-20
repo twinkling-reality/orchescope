@@ -38,8 +38,7 @@ That runs `check`, `test` and `test:e2e`, and it is the gate. Run it before you 
 
 ## What a change needs
 
-**A reason in the commit message.** One line, imperative, describing the change rather than the file. No attribution
-trailers.
+**A reason in the commit message.** One line, imperative, describing the change rather than the file.
 
 **Tests that would fail without it.** A new rule needs a test that fires it and a test that proves it stays quiet without
 evidence, and a rule a goal can be cut from needs a third: a repository its own remediation clears, one for each
@@ -83,7 +82,6 @@ suite.
   not narrate what the next line does, and they never contain a temporal marker: no "for now", "currently", "later", "once
   we", "after migration", "old approach".
 - **No `TODO`, `FIXME`, `HACK` or `XXX`.** Either do it or open an issue.
-- **No em dash characters** anywhere in the repository, in code, comments, documentation or commit messages.
 - **Time and randomness come from arguments**, never from the platform: `fixedClock` and `seededRng` in tests.
 - **Waits are event driven.** A test that sleeps to fix flakiness will be rejected.
 
