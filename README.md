@@ -193,7 +193,7 @@ every dialect measured for the first time has changed what this build reports ab
 | --- | --- | --- |
 | OpenAI Agents SDK (JavaScript, TypeScript and Python) | `new Agent({...})` and `Agent(name=...)`, handoffs, tools, `@function_tool` with `name_override` and `needs_approval`, MCP servers including a command nested in `params`, `maxTurns` | Python and JavaScript |
 | LangGraph (JavaScript, TypeScript and Python) | `StateGraph`, `addNode("name", fn)` and `add_node(fn)`, edges, conditional edges, and `create_react_agent(model, tools=[...])` with the model reference it names | Python and JavaScript |
-| CrewAI (Python) | `Agent(...)`, `Crew(...)`, `config/agents.yaml` including the model its `llm` field names | **not yet** |
+| CrewAI (Python) | `Agent(...)` and `Crew(...)`, an agent returned from a decorated method of a `@CrewBase` class named after that method, and `config/agents.yaml` at the repository root including the model its `llm` field names | agents run and none joins its own crew, see below |
 | Pydantic AI (Python) | `Agent('provider:model', ...)`, `@agent.tool` and `@agent.tool_plain`, `retries`, `requires_approval`, `output_type` | Python, against an offline model |
 | Vercel AI SDK (JavaScript and TypeScript) | `generateText`, `tool(...)`, `maxSteps` | JavaScript, against an offline model |
 | Model SDKs | OpenAI, Anthropic and compatible clients, including base URL overrides and a request timeout read at the client or the call site | an offline model only, see below |
@@ -220,6 +220,24 @@ on its own: that deep research default is `openai:gpt-4.1` and the run measured 
 `openai:gpt-4.1-mini`, which are two models and should not join. Nothing in this corpus yet shows a
 declared model and an observed model that differ only by the version the provider answered with, so no rule
 here matches on one.
+
+**A CrewAI run reaches this build and its agents match the wrong declarations.** Five agent spans of a
+three agent crew were read, each carrying the agent's role, and three components were reported as declared
+and exercised. None of the three is an agent of the crew that ran. They are three agents of a second
+application in the same repository whose roles are written as literals and happen to be the same words.
+
+The cause is one gap and it is on the declared side. CrewAI names an agent by its role at run time. The
+layout `crewai create crew` generates writes that role in `src/<package>/config/agents.yaml` and builds the
+agent with `Agent(config=self.agents_config['lead_market_analyst'])`, and this build opens `agents.yaml`
+only at the repository root. So the run's name for an agent appears nowhere in the graph, the join looks
+elsewhere for it, and on a repository holding one application it would have found nothing rather than the
+wrong thing. Such an agent is named after the method that returns it, which is a name the repository does
+give it and is not the name a run reports.
+
+The crew does not join either. Its span carries the OpenInference `CHAIN` kind and no name attribute, so
+it is declined and counted as `no_name`, which also means nothing nests inside it: that run reported no
+relation at all against sixteen declared. No model span is produced, because the instrumentor writes none
+unless it is started with an event listener.
 
 `create_react_agent` is read in its Python spelling only. The JavaScript prebuilt helper takes a different shape, and
 reading it the same way would be a guess rather than a fact.

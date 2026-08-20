@@ -2,6 +2,83 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
+## Unreleased
+
+CrewAI is measured at run time for the first time. It was the one framework in the README's support table
+whose "Joined on a run" column read `not yet`, it had never produced a span in any corpus entry, and
+everything this build claimed about the dialect had been argued from the adapter alone.
+
+The corpus now pins `crewAIInc/crewAI-examples`, which is sixteen crews and seven flows written the two
+ways the framework's own documentation writes one, and a second entry drives the marketing crew inside it
+through `openinference-instrumentation-crewai` against a model that answers from the driver's own process.
+Neither entry replaces `crewai`: that one is the framework, 302 of its 843 components are declared in its
+own tests, and what it holds is the parse rate.
+
+### Every agent in a file was one component, named after the call
+
+`crewai create crew` generates a `@CrewBase` class whose agents are returned from decorated methods, and it
+writes each agent's role into a document rather than into the call:
+
+```python
+@agent
+def lead_market_analyst(self) -> Agent:
+    return Agent(config=self.agents_config['lead_market_analyst'], verbose=True)
+```
+
+The adapter names an agent by the role it declares, then by the definition the call sits in, then by the
+constant `agent`. `definitionForCall` looks for a variable or a function, and a method is neither, so every
+agent written this way took the constant. **On the pinned examples repository that made forty four `Agent`
+calls into nineteen components, one per file, each named `agent` and carrying every call site in it.** A
+crew of three agents was one component, and the two a reader could not see were not reported as unread
+either: nothing said a name had been declined.
+
+`enclosing` is the nearest named function, class or method a call sits inside, and the fact model already
+carried it, so the method that returns the agent names it without a parser learning anything new. The
+nineteen become forty three, and the one pair that still shares a component shares a method name across two
+classes in one file, which is a repository writing the same name twice.
+
+`crewai-examples` goes from 49 agents to 73. `crewai` goes from 843 components to 847: three collapsed ones
+become seven, four of them in its own test suite and three in the project templates its CLI writes, and
+nothing else in that repository moves. That is the difference between a framework and a use of one.
+
+### What a CrewAI run says, and what it matches
+
+Six spans: one for the crew and one per task, each task's span carrying the agent's role under
+`graph.node.id` and the OpenInference `AGENT` kind. This build reads all five agent spans and three
+components come out of them, two agents having run twice.
+
+**All three of those components are the wrong ones, and the entry records them rather than hiding it.** The
+run was of `crews/marketing_strategy`, whose three agents are declared by the methods that return them. Its
+roles live in an `agents.yaml` this build does not open, because the config reader looks at the repository
+root and `crewai create crew` writes the file into the package. So no component in the graph carries the
+name the run reports for its own agents, and the join goes looking. `crews/instagram_post` declares three
+agents with a literal role, and its three roles are the same three words. Exactly one declaration of each
+name exists, so `kind_and_name` matches, and the report names a file the run never entered.
+
+On a repository holding one application it would have matched nothing at all, which is the ordinary case
+and is a truer answer. Opening the packaged `agents.yaml` is the change that closes it, and it would make
+these three names ambiguous rather than unique, so what a reader would then get is a refusal.
+
+**The crew joins nothing for an unrelated reason.** Its span carries the `CHAIN` kind and no
+`gen_ai.workflow.name`, which is a span saying that something is nested here and nothing about what, so it
+is declined and counted as `no_name`. Nothing nests inside a declined span, so a run that walked three
+agents under one crew reported no relation at all: `exercisedEdges` is zero against sixteen declared.
+
+**No model span is produced and no tool span.** The instrumentor opens spans for `Task._execute_core`,
+`Crew.kickoff` and `BaseTool.run`, and writes no model span unless it is started with an event listener, so
+a CrewAI application pairs it with an instrumentor for whichever client it calls. The tool half is a limit
+of the run rather than of the build: both tools that crew declares search the internet, so the scripted
+model asks for neither, and this entry therefore says nothing about what a CrewAI tool span looks like.
+
+### An entry can name the interpreter its framework installs under
+
+CrewAI and its instrumentor both declare `requires-python <3.14`. On a machine whose `python3` is newer,
+pip resolves `crewai` down to 0.11.2 and then fails building a `tiktoken` with no wheel for it, so an
+environment built from the wrong interpreter measures a release from before any of this existed rather than
+failing. An exercise may now declare `pythonInterpreter`, a machine without that interpreter skips the
+entry with the reason printed the way a missing credential does, and the environment marker records the
+interpreter alongside the package list so that changing it rebuilds rather than reuses.
+
 ## 0.8.0
 
 Released 2026-08-20 from npm as `orchescope@0.8.0`, published locally with `npm publish --no-provenance`,
