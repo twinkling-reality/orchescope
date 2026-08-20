@@ -147,6 +147,19 @@ describe('the agent interface over stdio', () => {
     assert.ok('tools' in capabilities, 'the server did not advertise the tools capability');
   });
 
+  /*
+   * The handshake is the only moment an agent is told anything before it has to choose a tool, and the
+   * protocol carries one field for it. A server that advertises seventeen tools and no entry point leaves
+   * that choice to a guess between three read only tools, none of them wrong and none of them the start.
+   */
+  it('tells a connecting agent where the loop starts, before it has called anything', () => {
+    const instructions = handshake['instructions'];
+    assert.equal(typeof instructions, 'string', 'the handshake carried no instructions');
+    const text = instructions as string;
+    assert.ok(text.includes('audit_agent_system'), 'the instructions do not name the entry point');
+    assert.ok(text.includes('loop.next.tool'), 'the instructions do not name what drives the rest');
+  });
+
   it('answers a ping, so a client can tell a live server from a hung one', async () => {
     const response = await client.request('ping');
     assert.deepEqual(response['result'], {});

@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import { OrchescopeError } from '@orchescope/domain';
 import { validate } from '@orchescope/schema';
 import { HANDLER_NAMES } from '../src/handlers.ts';
+import { SERVER_INSTRUCTIONS } from '../src/instructions.ts';
 import { TOOL_DEFINITIONS, toolByName } from '../src/tools.ts';
 
 /**
@@ -135,6 +136,45 @@ describe('argument validation', () => {
   it('requires the identifier a lookup needs', () => {
     assert.equal(validate(schemaFor('get_finding'), {}).ok, false);
     assert.equal(validate(schemaFor('get_finding'), { findingId: 'OSC-2026-0001' }).ok, true);
+  });
+});
+
+const MAX_INSTRUCTION_CHARACTERS = 2000;
+
+/**
+ * The one thing an agent reads before it chooses a tool.
+ *
+ * It is prepended to a context window on every session, so it has to stay a front door rather than become a
+ * manual, and every tool it names has to exist: a renamed tool leaves the entry point pointing at nothing,
+ * and nothing else in this repository would notice.
+ */
+describe('the instructions a connecting agent is given', () => {
+  it('names the entry point and the field that drives the rest', () => {
+    assert.ok(
+      SERVER_INSTRUCTIONS.includes('audit_agent_system'),
+      'an agent is not told which tool begins the loop',
+    );
+    assert.ok(
+      SERVER_INSTRUCTIONS.includes('loop.next.tool'),
+      'an agent is not told what to follow after the first call',
+    );
+  });
+
+  it('spells no tool name that does not exist', () => {
+    const mentioned = SERVER_INSTRUCTIONS.match(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g) ?? [];
+    for (const name of mentioned) {
+      assert.ok(
+        toolByName(name) !== undefined,
+        `the instructions name ${name}, which is not an advertised tool`,
+      );
+    }
+  });
+
+  it('stays short enough to be read rather than skimmed', () => {
+    assert.ok(
+      SERVER_INSTRUCTIONS.length <= MAX_INSTRUCTION_CHARACTERS,
+      `the instructions are ${SERVER_INSTRUCTIONS.length} characters, past the ${MAX_INSTRUCTION_CHARACTERS} a front door gets`,
+    );
   });
 });
 

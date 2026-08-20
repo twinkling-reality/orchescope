@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { asOrchescopeError, isOrchescopeError } from '@orchescope/domain';
 import { callTool, type HandlerContext } from './handlers.ts';
+import { SERVER_INSTRUCTIONS } from './instructions.ts';
 import { TOOL_DEFINITIONS } from './tools.ts';
 
 /**
@@ -24,7 +25,7 @@ export type McpServerOptions = {
 export const createMcpServer = (options: McpServerOptions): Server => {
   const server = new Server(
     { name: 'orchescope', version: options.context.orchescopeVersion },
-    { capabilities: { tools: {} } },
+    { capabilities: { tools: {} }, instructions: SERVER_INSTRUCTIONS },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
