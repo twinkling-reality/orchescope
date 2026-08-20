@@ -25,6 +25,25 @@ const run = (command, args, options = {}) =>
   });
 
 /**
+ * The interpreter an entry's environment is built from, which is `python3` unless the entry names another.
+ *
+ * An entry naming one is an entry whose framework declares a ceiling this machine's `python3` is above, and the
+ * marker carries it so that changing it rebuilds the environment rather than reusing one built from the other.
+ */
+const interpreterFor = (entry) => entry.exercise.pythonInterpreter ?? 'python3';
+
+/** The interpreter an entry names and this machine does not have, so a run can skip it with the reason printed. */
+export const missingInterpreter = (entry) => {
+  if (entry.exercise?.pythonInterpreter === undefined) return undefined;
+  try {
+    run(entry.exercise.pythonInterpreter, ['--version']);
+    return undefined;
+  } catch {
+    return entry.exercise.pythonInterpreter;
+  }
+};
+
+/**
  * The environment is rebuilt only when the package list changes, because installing it takes longer than every other
  * part of a corpus run put together. The marker records the list that produced the environment that is there.
  */
@@ -32,14 +51,15 @@ const prepareVirtualEnvironment = (root, entry, checkout) => {
   const directory = join(cacheDirectory(root), 'venvs', entry.name);
   const python = join(directory, 'bin/python');
   const marker = join(directory, MARKER);
-  const wanted = `${JSON.stringify(entry.exercise.pythonPackages)}\n`;
+  const interpreter = interpreterFor(entry);
+  const wanted = `${JSON.stringify([interpreter, ...entry.exercise.pythonPackages])}\n`;
   if (existsSync(python) && existsSync(marker) && readFileSync(marker, 'utf8') === wanted) {
     return { interpreter: python };
   }
 
   rmSync(directory, { recursive: true, force: true });
   mkdirSync(directory, { recursive: true });
-  run('python3', ['-m', 'venv', directory]);
+  run(interpreter, ['-m', 'venv', directory]);
   const environment = { ...process.env, ...(entry.exercise.buildEnvironment ?? {}) };
   /*
    * One at a time and in the order the entry lists them. A checkout pins its sibling packages by an exact version, so

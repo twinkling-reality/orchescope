@@ -20,7 +20,7 @@ import { auditRepository, clearStoredState } from './corpus/audit.mjs';
 import { cacheDirectory, checkout } from './corpus/checkout.mjs';
 import { claimDifference, differences } from './corpus/comparison.mjs';
 import { isOffline, readCorpus } from './corpus/definition.mjs';
-import { exerciseRepository, prepareEnvironment } from './corpus/exercise.mjs';
+import { exerciseRepository, missingInterpreter, prepareEnvironment } from './corpus/exercise.mjs';
 import { observationOf } from './corpus/observation.mjs';
 import { describe } from './corpus/summary.mjs';
 
@@ -83,6 +83,19 @@ for (const entry of entries) {
     results.push({
       entry,
       skipped: `needs ${missing.join(' and ')} in the environment, which this run reaches a provider with`,
+    });
+    continue;
+  }
+  /*
+   * An interpreter this machine does not have is a skip for the same reason. The framework a checkout pins declares
+   * which Python versions it installs under, and building the environment from a newer one resolves the framework
+   * back to a release that predates everything the entry measures rather than failing.
+   */
+  const absent = exercise ? missingInterpreter(entry) : undefined;
+  if (absent !== undefined) {
+    results.push({
+      entry,
+      skipped: `needs ${absent} on the path, which is the interpreter the framework this entry pins installs under`,
     });
     continue;
   }

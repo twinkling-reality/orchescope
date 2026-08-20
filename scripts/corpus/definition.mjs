@@ -88,6 +88,25 @@ const checkExercise = (exercise, problem) => {
     problem('exercise.why has to say what this run is meant to show');
   }
   /*
+   * The interpreter a checkout's framework will install under, where the machine's own `python3` is not one.
+   *
+   * CrewAI and its instrumentor both declare `requires-python <3.14`, and on a machine whose `python3` is 3.14 pip
+   * resolves `crewai` down to 0.11.2 and then fails building a tiktoken that has no wheel for it. An environment
+   * built from the wrong interpreter is worse than no environment: it installs a version four years older than the
+   * one the entry is measuring and says nothing about it. Naming the interpreter is how the entry states the
+   * constraint its framework declares, and a machine without that interpreter skips the entry with the reason
+   * printed, the same way a missing credential does.
+   */
+  if (exercise.pythonInterpreter !== undefined) {
+    if (!python) problem('exercise.pythonInterpreter belongs to a python entry');
+    else if (
+      typeof exercise.pythonInterpreter !== 'string' ||
+      !/^python3(\.\d{1,2})?$/.test(exercise.pythonInterpreter)
+    ) {
+      problem('exercise.pythonInterpreter has to name a python3 executable, such as python3.12');
+    }
+  }
+  /*
    * A credential the run needs is declared rather than discovered when the run fails without it.
    *
    * Two of these entries are hermetic: they drive their library's own offline model, so they need nothing and cost
