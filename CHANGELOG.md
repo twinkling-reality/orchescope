@@ -4,6 +4,39 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### A question about the declared topology stops reading what only a run produced
+
+`topology-shape` reports fan out, reachability and cycles "in the declared control flow", every draft it
+cuts carries `basis: discovered`, and the components it considers are filtered to `presence.static`. The
+traversal underneath read every relation in the graph, including the ones reconciliation could match
+against no declaration.
+
+So the declared answer depended on whether anyone had traced the system. On the pinned customer service
+demo, scanning the commit reported seventeen components unreachable and scanning it with a run in the
+project reported one, and the one was the tracing library's: the instrumentor opens a span for the trace
+it wraps a run in, nothing pointed at it, so it qualified as a root and reached the whole agent graph
+through relations only that run produced. Reading a wrapper as a component is fixed above; that fix took
+the false root away and left the true disagreement showing, at nineteen against seventeen.
+
+`partOfDeclaredTopology` is the one predicate that answers it, beside `partOfAuditedSystem` and for the
+same stated reason: the delta, the coverage fraction and every rule about the declared shape ask the same
+question, and a graph answering it one way for one of them and another way for another is how the
+contradiction arrived as a finding. `entryPoints`, `unreachableComponents`, `controlFlowCycles` and the
+fan out degree route through it, and so do the two places in the delta that spelled it inline.
+
+**`reachableFrom` keeps following everything, and that is deliberate.** Its other caller asks what model
+driven control can reach, which feeds the approval boundary rule, and there a relation a run produced is
+evidence that control did reach. Dropping it would make a safety rule quieter than its evidence. The
+predicate is the caller's argument rather than the function's policy.
+
+What this is checked against is an invariant the corpus was already holding the halves of. Three entries
+pin the same commit twice, once scanned and once scanned with a run, and `topology-shape` is about the
+declared graph, so the two have to agree. `pydantic-ai` and `vercel-ai-chatbot` agreed already.
+`openai-cs-agents-demo` did not, and now does.
+
+`DegreeStats` loses `outDegree` and `inDegree`, which nothing has ever read. Leaving them would have
+meant one field on that type counting declared relations and two counting every relation.
+
 ### A nesting is a handoff only between two agents
 
 The third thing that traced run found, and the one the two fixes above made impossible to miss. A span

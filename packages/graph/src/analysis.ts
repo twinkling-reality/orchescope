@@ -1,5 +1,5 @@
-import { isInferredEntryPoint } from '@orchescope/domain';
-import type { Component, ComponentId, EdgeKind } from '@orchescope/schema';
+import { isInferredEntryPoint, partOfDeclaredTopology } from '@orchescope/domain';
+import type { Component, ComponentId, Edge, EdgeKind } from '@orchescope/schema';
 import type { IndexedGraph } from './indexed-graph.ts';
 
 /**
@@ -27,23 +27,27 @@ const CONTROL_FLOW_KINDS: ReadonlySet<EdgeKind> = new Set([
 
 export const isControlFlowKind = (kind: EdgeKind): boolean => CONTROL_FLOW_KINDS.has(kind);
 
+/**
+ * A relation this analysis follows: declared, and control flow rather than containment or metadata.
+ *
+ * Every question in this module is about the shape the repository declares, so a relation only a run
+ * produced is not one of them. Following one made the answer depend on whether the project had been
+ * traced, which is how a tracing library's own span came to be the root that reached an application's
+ * whole agent graph.
+ */
+const isDeclaredControlFlow = (edge: Edge): boolean =>
+  partOfDeclaredTopology(edge) && isControlFlowKind(edge.kind);
+
 export type DegreeStats = {
   readonly componentId: ComponentId;
-  readonly outDegree: number;
-  readonly inDegree: number;
   readonly controlFlowOutDegree: number;
 };
 
 export const degrees = (index: IndexedGraph): readonly DegreeStats[] =>
-  index.graph.components.map((component) => {
-    const out = index.outgoing(component.id);
-    return {
-      componentId: component.id,
-      outDegree: out.length,
-      inDegree: index.incoming(component.id).length,
-      controlFlowOutDegree: out.filter((edge) => isControlFlowKind(edge.kind)).length,
-    };
-  });
+  index.graph.components.map((component) => ({
+    componentId: component.id,
+    controlFlowOutDegree: index.outgoing(component.id).filter(isDeclaredControlFlow).length,
+  }));
 
 /**
  * Entry points of the declared system.
@@ -75,15 +79,25 @@ export const entryPoints = (index: IndexedGraph): readonly Component[] => {
         .some(
           (edge) =>
             edge.from !== candidate.id &&
+            partOfDeclaredTopology(edge) &&
             (isControlFlowKind(edge.kind) || edge.kind === 'contains'),
         ),
   );
   return roots.length > 0 ? roots : candidates;
 };
 
+/**
+ * Everything reachable from a set of roots, following the relations `follow` accepts.
+ *
+ * The predicate is the caller's, because two questions traverse this graph and they want different
+ * populations. A question about the declared shape follows declared relations only. A question about
+ * what model driven control can reach follows everything, because a relation a run produced is evidence
+ * that control did reach, and dropping it would make a safety rule quieter than the evidence.
+ */
 export const reachableFrom = (
   index: IndexedGraph,
   roots: readonly ComponentId[],
+  follow: (edge: Edge) => boolean = () => true,
 ): ReadonlySet<ComponentId> => {
   const seen = new Set<ComponentId>();
   const stack = [...roots];
@@ -92,7 +106,7 @@ export const reachableFrom = (
     if (current === undefined || seen.has(current)) continue;
     seen.add(current);
     for (const edge of index.outgoing(current)) {
-      if (!seen.has(edge.to)) stack.push(edge.to);
+      if (!seen.has(edge.to) && follow(edge)) stack.push(edge.to);
     }
   }
   return seen;
@@ -181,7 +195,7 @@ export const declaredCallersOf = (
 export const unreachableComponents = (index: IndexedGraph): readonly Component[] => {
   const roots = entryPoints(index).map((component) => component.id);
   if (roots.length === 0) return [];
-  const reachable = reachableFrom(index, roots);
+  const reachable = reachableFrom(index, roots, partOfDeclaredTopology);
   return index.graph.components.filter((component) => !reachable.has(component.id));
 };
 
@@ -202,7 +216,7 @@ export const controlFlowCycles = (index: IndexedGraph): readonly (readonly Compo
     state.set(id, 'visiting');
     path.push(id);
     for (const edge of index.outgoing(id)) {
-      if (isControlFlowKind(edge.kind)) visit(edge.to);
+      if (isDeclaredControlFlow(edge)) visit(edge.to);
     }
     path.pop();
     state.set(id, 'done');

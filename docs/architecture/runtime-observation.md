@@ -103,6 +103,12 @@ The static graph and the runtime topology are matched by an explicit sequence of
 A name that matches two candidates is recorded as **ambiguous** and matched to neither, because a wrong join produces a
 wrong finding that looks well supported. Every match produces an evidence record naming the rule that made it.
 
+A relation that matched no declaration is kept and reported in the delta below, and it is not part of the declared
+topology. `partOfDeclaredTopology` is the predicate that says so, and reachability, entry points, cycles and coordination
+fan out all route through it: those questions are about the shape the repository declares, and an answer that changed
+depending on whether anyone had traced the system would not be one. What model driven control can reach is the exception
+and follows every relation, because there a run reaching somewhere is evidence rather than noise.
+
 ## The four deltas
 
 The join yields the output that nothing else produces:

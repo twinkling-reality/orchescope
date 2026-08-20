@@ -10,7 +10,7 @@ import {
   runtimeTopology,
   sideEffectRecord,
 } from '@orchescope/testkit';
-import { controlFlowCycles, entryPoints, unreachableComponents } from '../src/analysis.ts';
+import { controlFlowCycles, degrees, entryPoints, unreachableComponents } from '../src/analysis.ts';
 import { SystemGraphBuilder } from '../src/graph-builder.ts';
 import { computeDelta } from '../src/delta.ts';
 import { diffGraphs } from '../src/diff.ts';
@@ -154,6 +154,112 @@ describe('analysis', () => {
       3,
       'a cycle is reported closed, starting and ending at the same component',
     );
+  });
+
+  /**
+   * A relation only a run produced is not part of the declared topology, and every question in this
+   * module is about that topology. Each case reconciles a real run rather than setting the flag by hand,
+   * because reconciliation is what produces these relations and the point is that they arrive from there.
+   */
+  describe('a relation that only a run produced', () => {
+    const runReaching = (fromKind: string, fromName: string, toKind: string, toName: string) =>
+      runtimeTopology({
+        components: [
+          observedComponent({ kind: fromKind, observedName: fromName }),
+          observedComponent({ kind: toKind, observedName: toName }),
+        ],
+        edges: [
+          observedEdge({
+            kind: 'calls_tool',
+            fromKind,
+            fromObservedName: fromName,
+            toKind,
+            toObservedName: toName,
+          }),
+        ],
+      });
+
+    it('leaves a component an entry point when nothing declared points at it', () => {
+      // The case this was found on: an instrumentation's own span pointed at an application's agents, so
+      // none of them was a root any more, and the wrapper reached the whole graph in their place.
+      const worker = componentDraft({ kind: 'agent', name: 'worker', file: 'src/worker.ts' });
+      const graph = buildGraph([orchestrator, worker]);
+      const reconciled = reconcile(graph, [
+        runtimeTopology({
+          components: [
+            observedComponent({ kind: 'agent', observedName: 'worker' }),
+            observedComponent({ kind: 'agent', observedName: 'orchestrator' }),
+          ],
+          edges: [
+            observedEdge({
+              kind: 'hands_off_to',
+              fromKind: 'agent',
+              fromObservedName: 'worker',
+              toKind: 'agent',
+              toObservedName: 'orchestrator',
+            }),
+          ],
+        }),
+      ]);
+      assert.deepEqual(
+        entryPoints(indexGraph(reconciled.graph))
+          .map((component) => component.id)
+          .sort(),
+        ['agent:orchestrator', 'agent:worker'],
+      );
+    });
+
+    it('does not reach a declared component that no declared relation reaches', () => {
+      const graph = buildGraph([orchestrator, refund]);
+      const reconciled = reconcile(graph, [
+        runReaching('agent', 'orchestrator', 'tool', 'issue_refund'),
+      ]);
+      assert.deepEqual(
+        unreachableComponents(indexGraph(reconciled.graph)).map((component) => component.id),
+        ['tool:issue_refund'],
+      );
+    });
+
+    it('does not close a cycle in the declared control flow', () => {
+      const worker = componentDraft({ kind: 'agent', name: 'worker', file: 'src/worker.ts' });
+      const graph = buildGraph(
+        [orchestrator, worker],
+        [edgeDraft('hands_off_to', orchestrator, worker)],
+      );
+      const reconciled = reconcile(graph, [
+        runtimeTopology({
+          components: [
+            observedComponent({ kind: 'agent', observedName: 'worker' }),
+            observedComponent({ kind: 'agent', observedName: 'orchestrator' }),
+          ],
+          edges: [
+            observedEdge({
+              kind: 'hands_off_to',
+              fromKind: 'agent',
+              fromObservedName: 'worker',
+              toKind: 'agent',
+              toObservedName: 'orchestrator',
+            }),
+          ],
+        }),
+      ]);
+      assert.equal(controlFlowCycles(indexGraph(reconciled.graph)).length, 0);
+    });
+
+    it('does not count towards what an agent is declared to coordinate', () => {
+      const graph = buildGraph(
+        [orchestrator, refund],
+        [edgeDraft('calls_tool', orchestrator, refund)],
+      );
+      const reconciled = reconcile(graph, [
+        runReaching('agent', 'orchestrator', 'tool', 'check_inventory'),
+      ]);
+      const stats = degrees(indexGraph(reconciled.graph));
+      assert.equal(
+        stats.find((entry) => entry.componentId === 'agent:orchestrator')?.controlFlowOutDegree,
+        1,
+      );
+    });
   });
 
   it('does not call a containment relation control flow', () => {

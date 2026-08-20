@@ -2,6 +2,7 @@ import {
   derivedEvidence,
   formatCount,
   partOfAuditedSystem,
+  partOfDeclaredTopology,
   spanEvidence,
 } from '@orchescope/domain';
 import type {
@@ -68,11 +69,17 @@ const exercisedEdges = (graph: SystemGraph): readonly Edge[] =>
     (edge) => edge.observation !== undefined && edge.observation.executionCount > 0,
   );
 
+/**
+ * Containment is left out of both halves of the edge fraction. It says what a thing is made of rather
+ * than what ran, so a group that was never "exercised" is not a gap a reader can act on.
+ */
+const countableDeclaredEdge = (edge: Edge): boolean =>
+  partOfDeclaredTopology(edge) && edge.kind !== 'contains';
+
 const declaredNotExercisedEdges = (graph: SystemGraph): readonly Edge[] =>
   graph.edges.filter(
     (edge) =>
-      !edge.runtimeOnly &&
-      edge.kind !== 'contains' &&
+      countableDeclaredEdge(edge) &&
       (edge.observation === undefined || edge.observation.executionCount === 0),
   );
 
@@ -407,9 +414,7 @@ export const computeDelta = (input: DeltaInput): DeltaResult => {
   const exercisedComponents = declaredObservable.filter(
     (component) => component.presence.runtime,
   ).length;
-  const declaredEdges = input.graph.edges.filter(
-    (edge) => !edge.runtimeOnly && edge.kind !== 'contains',
-  ).length;
+  const declaredEdges = input.graph.edges.filter(countableDeclaredEdge).length;
   const exercised = exercisedEdges(input.graph).length;
   const runIds = input.graph.provenance.runIds;
 
@@ -421,7 +426,9 @@ export const computeDelta = (input: DeltaInput): DeltaResult => {
     },
     exercisedNotDeclared: {
       components: exercisedNotDeclared(input.graph).map((component) => component.id),
-      edges: input.graph.edges.filter((edge) => edge.runtimeOnly).map((edge) => edge.id),
+      edges: input.graph.edges
+        .filter((edge) => !partOfDeclaredTopology(edge))
+        .map((edge) => edge.id),
     },
     contradictions: [...contradictions],
     duplicateSideEffects: [...duplicates],
