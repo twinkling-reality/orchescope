@@ -90,10 +90,10 @@
       "model": 9,
       "prompt": 195,
       "provider": 1,
-      "tool": 126
+      "tool": 125
     },
     "declaredInTest": 36,
-    "total": 670
+    "total": 669
   },
   "discardedRelations": [],
   "files": {
@@ -121,7 +121,7 @@
     "componentsByRule": {
       "configured-tool-has-no-caller": 25,
       "declared-not-exercised": 50,
-      "exercised-not-declared": 2,
+      "exercised-not-declared": 1,
       "model-call-without-timeout": 25,
       "observability-coverage": 10,
       "prompt-injection-boundary": 22,
@@ -138,8 +138,8 @@
   "relations": {
     "byKind": {
       "calls_service": 13,
-      "calls_tool": 80,
-      "hands_off_to": 28,
+      "calls_tool": 79,
+      "hands_off_to": 29,
       "invokes_model": 43,
       "provides_tool": 8,
       "queries_database": 4,
@@ -159,8 +159,7 @@
     "exercisedComponents": 2,
     "exercisedEdges": 1,
     "exercisedNotDeclared": [
-      "agent:triage-agent",
-      "tool:handoff_to_seat-booking-agent"
+      "agent:triage-agent"
     ],
     "joined": [
       "agent:seat-booking-agent",

@@ -8,10 +8,11 @@ import { deriveTopology } from '../src/topology.ts';
 /**
  * What the OpenAI Agents SDK's spans mean to this build.
  *
- * The spans below are copied from the stored run of the pinned `openai-cs-agents-demo` checkout, which
- * is the first traced run of a third party application this build measured. Identifiers, names,
- * attributes and nesting are the instrumentor's own; only the timestamps are rounded, because nothing
- * asserted here depends on a sub millisecond duration.
+ * The spans below are copied from two stored runs, one per instrumentor. The Python one is the pinned
+ * `openai-cs-agents-demo` checkout, which is the first traced run of a third party application this build
+ * measured. The JavaScript one is the pinned `openai-agents-js` checkout's own customer service example.
+ * Identifiers, names, attributes and nesting are each instrumentor's own; only the timestamps are rounded,
+ * because nothing asserted here depends on a sub millisecond duration.
  *
  * Two of its spans say something other than what they appear to say, and both were found by running
  * this on somebody else's application. A handoff arrives as a tool call. The trace and the agent loop
@@ -40,12 +41,12 @@ const attributeList = (attributes: Readonly<Record<string, string>>) =>
 
 const nanos = (ms: number): string => String(BigInt(ms) * 1_000_000n);
 
-const bundleOf = (spans: readonly SpanInput[]) => {
+const bundleOf = (spans: readonly SpanInput[], service = 'openai-cs-agents-demo-exercised') => {
   const decoded = decodeTraceJson({
     resourceSpans: [
       {
         resource: {
-          attributes: attributeList({ 'service.name': 'openai-cs-agents-demo-exercised' }),
+          attributes: attributeList({ 'service.name': service }),
         },
         scopeSpans: [
           {
@@ -497,5 +498,185 @@ describe('a tool call that is not a handoff', () => {
       ['to Seat and Special Services Agent'],
     );
     assert.equal(result.runMetrics.handoffs, 0);
+  });
+});
+
+/**
+ * The same SDK from the other instrumentor, and the same handoff written two ways.
+ *
+ * These five spans are the stored run of the pinned `openai-agents-js` checkout's own customer service
+ * example, driven by a scripted model so the run reaches nothing and repeats exactly. Everything above was
+ * argued from the Python instrumentor's output, and `@arizeai/openinference-instrumentation-openai-agents`
+ * is a different program: the tree it opens is the same shape, and the one span that decides whether a
+ * declared handoff can ever join is written differently in both halves that reading depends on.
+ */
+const JAVASCRIPT = 'openai-agents-js-exercised';
+
+/** The trace the SDK opens, named by the application's own `withTrace` label rather than by an attribute. */
+const CUSTOMER_SERVICE: SpanInput = {
+  name: 'Customer service',
+  spanId: 'ec8ee807c163ecbf',
+  start: 0,
+  end: 41,
+  attributes: { 'llm.system': 'openai', 'openinference.span.kind': 'AGENT' },
+};
+
+/** An agent span. This instrumentor writes `graph.node.id` and no `agent.name`, where Python writes both. */
+const JS_TRIAGE: SpanInput = {
+  name: 'Triage Agent',
+  spanId: '4b8e228e66866715',
+  parentSpanId: CUSTOMER_SERVICE.spanId,
+  start: 9,
+  end: 27,
+  attributes: {
+    'graph.node.id': 'Triage Agent',
+    'llm.system': 'openai',
+    'openinference.span.kind': 'AGENT',
+  },
+};
+
+/**
+ * The transfer, and the whole reason this run is here. It names the tool it called and puts each agent in
+ * a JSON document under a key that says which end it is, where the Python instrumentor names no tool and
+ * writes the two names bare.
+ */
+const JS_HANDOFF: SpanInput = {
+  name: 'handoff to Seat Booking Agent',
+  spanId: '919ca9794598d765',
+  parentSpanId: JS_TRIAGE.spanId,
+  start: 20,
+  end: 23,
+  attributes: {
+    'input.mime_type': 'application/json',
+    'input.value': '{"from_agent":"Triage Agent"}',
+    'llm.system': 'openai',
+    'openinference.span.kind': 'TOOL',
+    'output.mime_type': 'application/json',
+    'output.value': '{"to_agent":"Seat Booking Agent"}',
+    'tool.name': 'handoff_to_Seat Booking Agent',
+  },
+};
+
+const JS_SEAT: SpanInput = {
+  name: 'Seat Booking Agent',
+  spanId: '223ad5ec2d6bdc95',
+  parentSpanId: CUSTOMER_SERVICE.spanId,
+  start: 27,
+  end: 41,
+  attributes: {
+    'graph.node.id': 'Seat Booking Agent',
+    'graph.node.parent_id': 'Triage Agent',
+    'llm.system': 'openai',
+    'openinference.span.kind': 'AGENT',
+  },
+};
+
+const JS_UPDATE_SEAT: SpanInput = {
+  name: 'update_seat',
+  spanId: 'fe49afe218931597',
+  parentSpanId: JS_SEAT.spanId,
+  start: 33,
+  end: 39,
+  attributes: {
+    'input.mime_type': 'application/json',
+    'input.value': '{"confirmationNumber":"IR-D204","seatNumber":"14A"}',
+    'llm.system': 'openai',
+    'openinference.span.kind': 'TOOL',
+    'output.value': 'Seat updated to 14A for confirmation IR-D204',
+    'tool.name': 'update_seat',
+  },
+};
+
+const RECORDED_JAVASCRIPT_RUN: readonly SpanInput[] = [
+  JS_HANDOFF,
+  JS_TRIAGE,
+  JS_UPDATE_SEAT,
+  JS_SEAT,
+  CUSTOMER_SERVICE,
+];
+
+describe('the same handoff from the JavaScript instrumentor', () => {
+  it('reads the documented form as a transfer of control rather than as a tool call', () => {
+    // Read as the span says it, this is a call to a tool named `handoff_to_Seat Booking Agent`, which
+    // nothing in the repository declares, and the declared handoff between the two agents joins nothing.
+    const result = deriveTopology(bundleOf(RECORDED_JAVASCRIPT_RUN, JAVASCRIPT));
+    const edges = result.topology.edges.map(describeEdge);
+    assert.ok(
+      edges.includes('hands_off_to agent:Triage Agent -> agent:Seat Booking Agent'),
+      edges.join('\n'),
+    );
+    assert.deepEqual(
+      result.topology.components
+        .filter((component) => component.kind === 'tool')
+        .map((component) => component.observedName),
+      ['update_seat'],
+    );
+    assert.equal(result.runMetrics.handoffs, 1);
+    assert.equal(result.runMetrics.toolCalls, 1);
+  });
+
+  it('reads the tool name the span carries, which the other instrumentor does not write', () => {
+    // The Python reading declines any span that names a tool, because a repository may call a tool
+    // whatever it likes. This one names every handoff span, so that check would decline all of them, and
+    // what carries the evidence instead is the document: two keys that say which end each agent is.
+    assert.equal(JS_HANDOFF.attributes['tool.name'], 'handoff_to_Seat Booking Agent');
+    const result = deriveTopology(bundleOf(RECORDED_JAVASCRIPT_RUN, JAVASCRIPT));
+    assert.equal(result.runMetrics.handoffs, 1);
+  });
+
+  it('still refuses a document naming an agent this run never reported', () => {
+    const stranger = {
+      ...JS_HANDOFF,
+      attributes: {
+        ...JS_HANDOFF.attributes,
+        'output.value': '{"to_agent":"An Agent Nothing Ran"}',
+      },
+    };
+    const result = deriveTopology(
+      bundleOf([CUSTOMER_SERVICE, JS_TRIAGE, stranger, JS_SEAT, JS_UPDATE_SEAT], JAVASCRIPT),
+    );
+    assert.equal(result.runMetrics.handoffs, 0);
+    assert.ok(
+      result.topology.components.some(
+        (component) => component.observedName === 'handoff_to_Seat Booking Agent',
+      ),
+      'the tool the span named is reported when the document names nothing that ran',
+    );
+  });
+
+  it('keeps a named tool whose bare input and output happen to be agent names a tool call', () => {
+    // The branch the documented form does not reach. A repository's own tool that takes one agent's name
+    // and answers with another's is a tool call, because the span already said which tool it called and
+    // nothing in the arguments says otherwise.
+    const ordinary = {
+      ...JS_HANDOFF,
+      attributes: {
+        'input.value': 'Triage Agent',
+        'openinference.span.kind': 'TOOL',
+        'output.value': 'Seat Booking Agent',
+        'tool.name': 'pick_specialist',
+      },
+    };
+    const result = deriveTopology(
+      bundleOf([CUSTOMER_SERVICE, JS_TRIAGE, ordinary, JS_SEAT], JAVASCRIPT),
+    );
+    assert.equal(result.runMetrics.handoffs, 0);
+    assert.deepEqual(
+      result.topology.components
+        .filter((component) => component.kind === 'tool')
+        .map((component) => component.observedName),
+      ['pick_specialist'],
+    );
+  });
+
+  it('declines the trace span, which this application named itself', () => {
+    // `withTrace('Customer service')` puts the application's own label on the span the SDK opens around a
+    // run. It carries an OpenInference kind and no naming attribute, so it names nothing this build can
+    // report, and reading the span name would mint an agent the repository declares nowhere.
+    const result = deriveTopology(bundleOf(RECORDED_JAVASCRIPT_RUN, JAVASCRIPT));
+    assert.deepEqual(
+      result.topology.components.map((component) => `${component.kind}:${component.observedName}`),
+      ['agent:Triage Agent', 'agent:Seat Booking Agent', 'tool:update_seat'],
+    );
   });
 });
