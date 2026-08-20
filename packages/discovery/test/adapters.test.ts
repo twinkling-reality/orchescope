@@ -192,7 +192,10 @@ reviewer:
     );
     assert.ok(ids.includes('agent:researcher'), `expected agent:researcher in ${ids.join(', ')}`);
     assert.ok(ids.includes('agent:editor'));
-    assert.ok(ids.includes('agent:planner'), 'expected the agent declared in agents.yaml');
+    assert.ok(
+      ids.includes('agent:planning-expert'),
+      `expected the configured agent under the role a run reports, in ${ids.join(', ')}`,
+    );
     assert.ok(ids.includes('agent:reviewer'));
   });
 
@@ -215,17 +218,33 @@ reviewer:
       'expected a model from the llm field',
     );
     assert.ok(
-      edges.some((edge) => edge.startsWith('invokes_model:agent:planner->model:')),
+      edges.some((edge) => edge.startsWith('invokes_model:agent:planning-expert->model:')),
       `expected the planner to model edge in ${edges.join(', ')}`,
     );
   });
 
   it('declares the role as the name a run will report, trimmed of the fold that ends it', async () => {
     const { result } = await scan(build);
-    const planner = result.graph.components.find((component) => component.id === 'agent:planner');
+    const planner = result.graph.components.find(
+      (component) => component.id === 'agent:planning-expert',
+    );
     assert.ok(planner !== undefined, 'the configured planner is not in the graph');
     assert.equal(planner.metadata['runtimeName'], 'Planning Expert');
     assert.equal(planner.metadata['declaredRole'], 'Planning Expert');
+  });
+
+  /*
+   * The role names the component and the key does not, because a run reports the role. What the key still
+   * answers is where in the document the agent was read, so it stays as the pointer the evidence carries.
+   */
+  it('keeps the key the document files an agent under as the pointer into it', async () => {
+    const { result } = await scan(build);
+    const planner = result.graph.components.find(
+      (component) => component.id === 'agent:planning-expert',
+    );
+    assert.deepEqual(planner?.configLocations, [
+      { file: 'config/agents.yaml', pointer: '/planner' },
+    ]);
   });
 
   /*
@@ -315,6 +334,219 @@ describe('a CrewAI crew document', () => {
         `${id} claims a run will report it by the file it is declared in`,
       );
     }
+  });
+});
+
+/**
+ * The layout `crewai create crew` generates, where the roles live inside the package.
+ *
+ * This is the shape the field uses and the one that was read worst: the config reader opened `agents.yaml`
+ * at the repository root and at `config/agents.yaml`, and the framework's own generator writes it to
+ * `src/<package>/config/agents.yaml`, so no component in such a repository carried the name its run reports.
+ */
+describe('a CrewAI project laid out the way its generator writes one', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writePythonProject(workspace, { name: 'marketing-posts', dependencies: ['crewai>=0.80'] });
+    workspace.write(
+      'src/marketing_posts/config/agents.yaml',
+      `lead_market_analyst:
+  role: >
+    Lead Market Analyst
+  goal: >
+    Conduct analysis of the products and the competitors.
+  backstory: >
+    You dissect online business landscapes.
+chief_creative_director:
+  role: >
+    Chief Creative Director
+  goal: >
+    Review the work of the team against the product goals.
+  backstory: >
+    You ensure your team crafts the best possible content.
+`,
+    );
+    workspace.write(
+      'src/marketing_posts/crew.py',
+      `from crewai import Agent, Crew, Process
+from crewai.project import CrewBase, agent, crew
+
+@CrewBase
+class MarketingPostsCrew():
+    agents_config = 'config/agents.yaml'
+
+    @agent
+    def lead_market_analyst(self) -> Agent:
+        return Agent(config=self.agents_config['lead_market_analyst'], verbose=True)
+
+    @crew
+    def crew(self) -> Crew:
+        return Crew(agents=self.agents, tasks=self.tasks, process=Process.sequential)
+`,
+    );
+  };
+
+  it('reads the agents document where the package holds it', async () => {
+    const { ids, result } = await scan(build);
+    assert.ok(
+      ids.includes('agent:lead-market-analyst'),
+      `expected the packaged agents.yaml to be read, saw ${ids.join(', ')}`,
+    );
+    const analyst = result.graph.components.find(
+      (component) => component.id === 'agent:lead-market-analyst',
+    );
+    assert.deepEqual(analyst?.configLocations, [
+      { file: 'src/marketing_posts/config/agents.yaml', pointer: '/lead_market_analyst' },
+    ]);
+    assert.equal(analyst?.metadata['runtimeName'], 'Lead Market Analyst');
+  });
+
+  /*
+   * Nothing in the repository says which call builds which declared agent: the subscript that selects an
+   * entry is not a fact this model carries, and the enclosing method is a name that agrees with the key on
+   * 31 of the 50 calls measured in the field. So both are reported, and the doubling is a stated cost rather
+   * than a silence.
+   */
+  it('reports the call that builds an agent separately from the document that declares it', async () => {
+    const { ids } = await scan(build);
+    assert.ok(
+      ids.includes('agent:lead_market_analyst'),
+      `expected the call named after its method, saw ${ids.join(', ')}`,
+    );
+    assert.equal(
+      ids.filter((id) => id.startsWith('agent:')).length,
+      3,
+      `two declared agents and one call are three components, saw ${ids.join(', ')}`,
+    );
+  });
+
+  it('claims no runtime name for the call, which named no role', async () => {
+    const { result } = await scan(build);
+    const fromCall = result.graph.components.find(
+      (component) => component.id === 'agent:lead_market_analyst',
+    );
+    assert.equal(fromCall?.metadata['runtimeName'], undefined);
+  });
+
+  /*
+   * A shared cap sorted by path and cut at thirty two, so `crews/` and `flows/` crowded out `wrangler.toml`
+   * on the first repository that held many of both. The two kinds carry separate caps for that reason.
+   */
+  it('does not let agents documents crowd out a deployment manifest', async () => {
+    const { ids } = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'many-crews', dependencies: ['crewai>=0.80'] });
+      for (let index = 0; index < 40; index += 1) {
+        workspace.write(
+          `crews/crew_${String(index).padStart(2, '0')}/config/agents.yaml`,
+          `worker_${index}:\n  role: Worker ${index}\n  goal: Do the work.\n`,
+        );
+      }
+      workspace.write(
+        'wrangler.toml',
+        `name = "events-worker"
+compatibility_date = "2024-12-18"
+
+[[d1_databases]]
+binding = "EVENTS_DB"
+database_name = "app-events"
+database_id = "c13a8424-bc2c-486c-8b50-9b8748a88b72"
+`,
+      );
+    });
+    assert.ok(
+      ids.includes('database:app-events'),
+      `the manifest should still be read beside forty agents documents, saw ${ids.length} components`,
+    );
+    assert.equal(
+      ids.filter((id) => id.startsWith('agent:')).length,
+      40,
+      'every agents document under the cap should be read',
+    );
+  });
+});
+
+/**
+ * `agents.yaml` is a file name, not a framework.
+ *
+ * Once it is found wherever the traversal walked, applying the adapter on the name alone would report any
+ * repository holding a file of that name as an agent system. That is the failure already recorded for
+ * `.mcp.json`, where reading a developer's own tooling reported a 220 component Workers application as a
+ * detected agent system with no agent in it.
+ */
+describe('a document named agents.yaml that declares no agent', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writeNodeProject(workspace, { name: 'monitoring', dependencies: { express: '^4.19.0' } });
+    workspace.write(
+      'agents.yaml',
+      `node-exporter:
+  host: metrics.internal
+  port: 9100
+otel-collector:
+  host: collector.internal
+  port: 4318
+`,
+    );
+    workspace.write(
+      'src/server.js',
+      "const express = require('express');\nmodule.exports = express();\n",
+    );
+  };
+
+  it('is not read as a crew, and does not make the repository an agent system', async () => {
+    const { ids, result, adapters } = await scan(build);
+    const run = adapters.find((adapter) => adapter.adapterId === 'adapter:crewai');
+    assert.equal(run?.status, 'not_applicable', 'the crewai adapter applied on a file name');
+    assert.equal(
+      ids.some((id) => id.startsWith('agent:')),
+      false,
+      `a host and a port are not agents, saw ${ids.join(', ')}`,
+    );
+    assert.equal(result.agentSystemDetected, false);
+  });
+});
+
+/**
+ * A role CrewAI interpolates is a template, and a template is a name no run reports.
+ *
+ * The templates the framework's own CLI writes declare `{topic} Senior Data Researcher`. Filing a component
+ * under that string would name it after a placeholder, and declaring it as the runtime name would put it in
+ * the strongest lookup the reconciler has, waiting to match something else.
+ */
+describe('a CrewAI agent whose role is interpolated at run time', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writePythonProject(workspace, { name: 'template-crew', dependencies: ['crewai>=0.80'] });
+    workspace.write(
+      'config/agents.yaml',
+      `researcher:
+  role: >
+    {topic} Senior Data Researcher
+  goal: >
+    Uncover developments in {topic}.
+  backstory: >
+    You are a seasoned researcher.
+`,
+    );
+  };
+
+  it('names it by the key its document files it under and claims no runtime name', async () => {
+    const { ids, result } = await scan(build);
+    assert.ok(
+      ids.includes('agent:researcher'),
+      `expected the key to name it, saw ${ids.join(', ')}`,
+    );
+    const researcher = result.graph.components.find(
+      (component) => component.id === 'agent:researcher',
+    );
+    assert.equal(researcher?.metadata['runtimeName'], undefined);
+    assert.equal(researcher?.metadata['declaredRole'], '{topic} Senior Data Researcher');
+  });
+
+  it('says that it declined the role rather than leaving it as a silence', async () => {
+    const { adapters } = await scan(build);
+    const run = adapters.find((adapter) => adapter.adapterId === 'adapter:crewai');
+    assert.equal(
+      run?.detail,
+      '1 declared role interpolates a value at run time, so the key in the document names the component and no runtime name is claimed',
+    );
   });
 });
 

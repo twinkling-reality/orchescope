@@ -33,7 +33,7 @@
     "adapter:mcp": {
       "componentsFound": 36,
       "edgesFound": 31,
-      "filesInspected": 4,
+      "filesInspected": 3,
       "status": "completed"
     },
     "adapter:model-sdk": {

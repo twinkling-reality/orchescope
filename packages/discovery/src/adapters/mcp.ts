@@ -137,12 +137,14 @@ const addDeclaredServer = (
   return { unresolved: unresolvedNames.length > 0 || entry['envFile'] !== undefined };
 };
 
+/** Only the documents that declare a server, because the rest were parsed by the scan and read by nobody. */
 const discoverFromConfig = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
-): { components: number; unresolved: number } => {
+): { components: number; unresolved: number; files: readonly string[] } => {
   let components = 0;
   let unresolved = 0;
+  const files: string[] = [];
 
   for (const document of context.configs) {
     const root = asRecord(document.data);
@@ -150,6 +152,7 @@ const discoverFromConfig = (
     for (const configKey of CONFIG_KEYS) {
       const servers = asRecord(root[configKey]);
       if (servers === undefined) continue;
+      files.push(document.path);
       for (const [name, rawEntry] of Object.entries(servers)) {
         const entry = asRecord(rawEntry);
         if (entry === undefined) continue;
@@ -164,7 +167,7 @@ const discoverFromConfig = (
       }
     }
   }
-  return { components, unresolved };
+  return { components, unresolved, files: [...new Set(files)] };
 };
 
 type SdkMatch = ReturnType<typeof matchCalls>[number];
@@ -439,7 +442,7 @@ export const mcpAdapter: AgentSystemAdapter = {
     return {
       componentsFound: fromConfig.components + fromSdk.components,
       edgesFound: fromSdk.edges,
-      filesInspected: [...fromSdk.files, ...context.configs.map((entry) => entry.path)],
+      filesInspected: [...fromSdk.files, ...fromConfig.files],
       ...(fromConfig.unresolved === 0
         ? {}
         : {

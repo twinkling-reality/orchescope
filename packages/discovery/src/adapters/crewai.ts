@@ -1,4 +1,4 @@
-import { CONFIDENCE_BANDS } from '@orchescope/domain';
+import { CONFIDENCE_BANDS, formatCount } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import {
   findEntry,
@@ -15,43 +15,103 @@ import { definitionForCall, matchCalls, projectUses } from '../matching.ts';
  * CrewAI, from source and from its declarative files.
  *
  * CrewAI describes a crew as agents plus tasks plus a process, and recent versions moved that
- * description into declarative files. Reading `crew.jsonc` and `config/agents.yaml` is both cheaper and
- * higher fidelity than reading the source, so configuration wins when both are present and the source
- * pass fills in what configuration does not declare.
+ * description into declarative files. Both passes run and neither wins, because nothing in the
+ * repository says which call builds which declared agent.
+ *
+ * `Agent(config=self.agents_config['lead_market_analyst'])` is the whole of the link, and the fact model
+ * records that argument as an unknown subscript with no key in it: `analyze.ts` has no subscript case, and
+ * the string `config/agents.yaml` the class attribute holds is a definition with a location and no value.
+ * The obvious substitute is the method the call sits in, and it is measurably wrong: across the pinned
+ * examples repository, 31 of the 50 `Agent` calls that sit beside an `agents.yaml` have an enclosing name
+ * that is a key in it, and the other 19 would attach a call to the wrong declared agent. A method with an
+ * `_agent` suffix the key lacks, a call in a class body naming the class, and a crew whose document
+ * describes a different crew are each enough to break it.
+ *
+ * So a configured agent and the call that builds it are two components. The cost is visible: on one pinned
+ * crew, four declared agents and three calls produce seven agent components where the repository has four
+ * agents. The alternative is a guess that reads like a measurement, which is the failure this join exists
+ * to avoid, and closing it means teaching a parser to carry a subscript key first.
  */
 
 /**
- * The name a run will report for an agent, where this build knows one.
+ * The role a run will report, out of the role a document or a call declares.
  *
  * `runtimeName` is a declaration that a running system will report a component under this name, and
  * reconciliation trusts it above everything except a code location: `byRuntimeName` is consulted before
  * kind and name. So a value that is not a name any run can report does not merely fail to match, it sits in
  * the strongest lookup in the reconciler waiting to match something else.
  *
- * CrewAI reports an agent by its role. This adapter named every agent it found, by the role where one is a
- * literal and otherwise by the variable, the method or the constant `agent`, and then declared that name as
- * the runtime name whatever it was. Three agents of the pinned marketing crew therefore declared that a run
- * would call them `lead_market_analyst`, `chief_marketing_strategist` and `creative_content_creator`, which
- * are the methods that build them and are names CrewAI never emits.
+ * CrewAI reports an agent by its role, and two spellings of a role are not one. Folded YAML keeps the
+ * newline that ends a `role: >` block, and every one of the 48 roles in the pinned examples repository is
+ * written that way, so a raw value would match none of them. And CrewAI interpolates a role before it uses
+ * it: the templates its own CLI writes declare `{topic} Senior Data Researcher`, which is two of the five
+ * distinct roles in the pinned framework repository. A run reports whatever `{topic}` was, so the literal
+ * string is a name no run can report and is declined here rather than filed as one.
  *
- * A role read out of `agents.yaml` is the same fact from the other side, and it is the value to declare
- * there rather than the key the document happens to file it under. Folded YAML keeps the newline that ends
- * a `role: >` block, so the value is trimmed before it is used as a claim about what a run will say.
+ * Where no role survives that, this returns nothing at all. An absent runtime name says this build does not
+ * know what the run will call the component, which is true, and leaves the join to the rules that match on
+ * what was actually read.
  *
- * Where no role is known this returns nothing at all. An absent runtime name says this build does not know
- * what the run will call the component, which is true, and leaves the join to the rules that match on what
- * was actually read.
+ * **Naming a component and claiming a runtime name are separate decisions, and only the second is a claim
+ * about a run.** A document holds two names for one agent, the key and the role, so when the role is a
+ * template the key is a name the repository actually wrote and the component takes it. A call site holds
+ * one, and replacing it with the variable the call is assigned to collapsed three distinctly declared
+ * agents of the framework's own test suite into a single component named `agent`, which is the failure
+ * 0.8.0 fixed. So a call keeps naming itself by the literal it carries, and declines only to promise that
+ * a run will say it.
  */
-const runtimeNameOf = (role: string | undefined): { readonly runtimeName?: string } => {
+const reportedRole = (role: string | undefined): string | undefined => {
   const trimmed = role?.trim();
-  return trimmed === undefined || trimmed.length === 0 ? {} : { runtimeName: trimmed };
+  if (trimmed === undefined || trimmed.length === 0) return undefined;
+  return trimmed.includes('{') ? undefined : trimmed;
 };
+
+const runtimeNameOf = (reported: string | undefined): { readonly runtimeName?: string } =>
+  reported === undefined ? {} : { runtimeName: reported };
+
+/**
+ * Whether a document named `agents.yaml` declares a crew's agents.
+ *
+ * The name belongs to no framework. This build finds `agents.yaml` wherever the bounded traversal walked,
+ * and a repository is free to keep a monitoring inventory or a deployment roster under it. Applying the
+ * adapter on the name alone is the failure already recorded for `.mcp.json` in `config-files.ts`, where
+ * reading a developer's own tooling reported a 220 component Workers application as a detected agent system
+ * with no agent in it. One record valued key is enough: two constructed repositories depending on express
+ * and on axios, with a root `agents.yaml` holding hosts and ports, were both reported as detected agent
+ * systems with the entries of that file as their agents.
+ *
+ * CrewAI's `Agent` takes a role, a goal and a backstory, and all 60 agent entries readable across the
+ * examples repository, the framework's own templates and its tests declare all three as strings. The test
+ * asks for the first two. A backstory is present in every field document and in neither entry of the two
+ * agent fixture this repository writes, so requiring it would reject a document CrewAI accepts.
+ */
+const declaresAnAgent = (root: Record<string, unknown>): boolean =>
+  Object.values(root).some((entry) => {
+    const agent = asRecord(entry);
+    if (agent === undefined) return false;
+    return (
+      (asString(agent['role']) ?? '').trim().length > 0 &&
+      (asString(agent['goal']) ?? '').trim().length > 0
+    );
+  });
+
+const AGENTS_DOCUMENT = 'agents.yaml';
+
+const isAgentsDocumentPath = (path: string): boolean => path.split('/').at(-1) === AGENTS_DOCUMENT;
+
+const isAgentsDocument = (path: string, root: Record<string, unknown>): boolean =>
+  isAgentsDocumentPath(path) && declaresAnAgent(root);
 
 const PACKAGES = ['crewai', 'crewai_tools', 'crewai-tools'];
 const ADAPTER_ID = 'adapter:crewai';
 const drafts = createDrafts(ADAPTER_ID);
 
 type Counts = { components: number; edges: number };
+
+/** A role CrewAI interpolates is counted so the decline can be stated rather than left as a silence. */
+type AgentsDocumentCounts = Counts & { interpolatedRoles: number };
+
+type ConfigCounts = AgentsDocumentCounts & { files: readonly string[] };
 
 /** A crew document declares the group and the agents it contains. */
 const discoverCrewDocument = (
@@ -113,33 +173,54 @@ const discoverCrewDocument = (
   return { components, edges };
 };
 
-/** An agents document declares one agent per key, each optionally naming the model it uses. */
+/**
+ * An agents document declares one agent per key, each optionally naming the model it uses.
+ *
+ * **The role names the component and the key does not.** CrewAI reports an agent by its role at run time,
+ * and naming a configured agent after the key its document files it under put every such declaration into
+ * the reconciler under a name no run says. On the pinned examples repository that was not a missed join but
+ * a wrong one: the marketing crew's three roles are declared in a document under `src/`, one other
+ * application declares the same three roles as literals in Python, and a run of the marketing crew joined
+ * all three of its agents to that other application. Under the role, each of those names has three
+ * declarations, `uniqueCandidate` returns nothing, and the reconciler records an ambiguity instead. A
+ * repository that declares one role in two applications gets a refusal, which is the true answer.
+ *
+ * The key is still what the document is indexed by and is still what a caller writes to select an entry, so
+ * it stays as the pointer the evidence carries and as the name this document binds the component under.
+ *
+ * Where no role survives `reportedRole` the key names the component, because it is then the only name that
+ * was read.
+ */
 const discoverAgentsDocument = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   document: { readonly path: string },
   root: Record<string, unknown>,
-): Counts => {
+): AgentsDocumentCounts => {
   let components = 0;
   let edges = 0;
+  let interpolatedRoles = 0;
 
   for (const [agentName, rawAgent] of Object.entries(root)) {
     const agent = asRecord(rawAgent);
     if (agent === undefined) continue;
-    const identity = configIdentity('agent', document.path, agentName);
     const role = asString(agent['role']);
+    const reported = reportedRole(role);
+    if (reported === undefined && (role ?? '').includes('{')) interpolatedRoles += 1;
+    const name = reported ?? agentName;
+    const identity = configIdentity('agent', document.path, name);
     const goal = asString(agent['goal']);
     builder.addComponent(
       drafts.configComponent({
         kind: 'agent',
         configFile: document.path,
         pointer: jsonPointer([agentName]),
-        name: agentName,
+        name,
         ...(goal === undefined ? {} : { description: goal.slice(0, 240) }),
         details: { for: 'agent', framework: 'crewai', role: 'worker' },
         metadata: {
           framework: 'crewai',
-          ...runtimeNameOf(role),
+          ...runtimeNameOf(reported),
           ...(role === undefined ? {} : { declaredRole: role.trim() }),
         },
         tags: ['crewai', 'declared'],
@@ -174,26 +255,43 @@ const discoverAgentsDocument = (
     );
     edges += 1;
   }
-  return { components, edges };
+  return { components, edges, interpolatedRoles };
 };
 
-const discoverFromConfig = (context: DiscoveryContext, builder: SystemGraphBuilder): Counts => {
+/**
+ * Only the documents this adapter read.
+ *
+ * `filesInspected` used to be every configuration document the scan parsed, which after `agents.yaml` became
+ * a name found in the traversal would have had this adapter claim to have inspected every document it
+ * declined as well as every one it read.
+ */
+const discoverFromConfig = (
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+): ConfigCounts => {
   let components = 0;
   let edges = 0;
+  let interpolatedRoles = 0;
+  const files: string[] = [];
 
   for (const document of context.configs) {
     const root = asRecord(document.data);
     if (root === undefined) continue;
-    const found =
-      document.path === 'crew.jsonc'
-        ? discoverCrewDocument(context, builder, document, root)
-        : document.path.endsWith('agents.yaml')
-          ? discoverAgentsDocument(context, builder, document, root)
-          : { components: 0, edges: 0 };
+    if (document.path === 'crew.jsonc') {
+      const found = discoverCrewDocument(context, builder, document, root);
+      components += found.components;
+      edges += found.edges;
+      files.push(document.path);
+      continue;
+    }
+    if (!isAgentsDocument(document.path, root)) continue;
+    const found = discoverAgentsDocument(context, builder, document, root);
     components += found.components;
     edges += found.edges;
+    interpolatedRoles += found.interpolatedRoles;
+    files.push(document.path);
   }
-  return { components, edges };
+  return { components, edges, interpolatedRoles, files };
 };
 
 type SourceCounts = { components: number; edges: number; files: Set<string> };
@@ -221,6 +319,10 @@ type SourceCounts = { components: number; edges: number; files: Set<string> };
  * **This does not make such an agent join a run**, and the corpus records that it does not. CrewAI names
  * an agent by its role at run time, the role of an agent written this way is in the `agents.yaml` the
  * crew names, and the subscript that selects an entry of it is not a fact this model carries.
+ *
+ * The role is taken here as it was written, template braces and all, which is not what `reportedRole`
+ * hands to `runtimeName`. A literal is the only name a call site carries, and declining it sends fourteen
+ * calls in one file to the variable they share.
  */
 const agentNameFor = (
   role: string | undefined,
@@ -251,7 +353,7 @@ const discoverAgentCalls = (
         confidence: match.confidence,
         ...(goal === undefined ? {} : { description: goal.slice(0, 240) }),
         details: { for: 'agent', framework: 'crewai', role: 'worker' },
-        metadata: { framework: 'crewai', ...runtimeNameOf(role) },
+        metadata: { framework: 'crewai', ...runtimeNameOf(reportedRole(role)) },
         tags: ['crewai'],
       }),
     );
@@ -329,16 +431,23 @@ export const crewAiAdapter: AgentSystemAdapter = {
   packages: PACKAGES,
   appliesTo: (context) =>
     projectUses(context, PACKAGES) ||
-    context.configs.some(
-      (document) => document.path === 'crew.jsonc' || document.path.endsWith('agents.yaml'),
-    ),
+    context.configs.some((document) => {
+      if (document.path === 'crew.jsonc') return true;
+      const root = asRecord(document.data);
+      return root !== undefined && isAgentsDocument(document.path, root);
+    }),
   discover: (context, builder): AdapterFindings => {
     const fromConfig = discoverFromConfig(context, builder);
     const fromSource = discoverFromSource(context, builder);
     return {
       componentsFound: fromConfig.components + fromSource.components,
       edgesFound: fromConfig.edges + fromSource.edges,
-      filesInspected: [...fromSource.files, ...context.configs.map((entry) => entry.path)],
+      filesInspected: [...fromSource.files, ...fromConfig.files],
+      ...(fromConfig.interpolatedRoles === 0
+        ? {}
+        : {
+            note: `${formatCount(fromConfig.interpolatedRoles, 'declared role interpolates', 'declared roles interpolate')} a value at run time, so the key in the document names the component and no runtime name is claimed`,
+          }),
     };
   },
 };

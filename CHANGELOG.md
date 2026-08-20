@@ -4,9 +4,107 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
-Three changes to how a reader and an agent find the loop, the first CrewAI run anywhere in this corpus, and
-a correction to what that run's join was made by.
+Three changes to how a reader and an agent find the loop, the first CrewAI run anywhere in this corpus, a
+correction to what that run's join was made by, and then the reading that turns that join into a refusal.
 No published document changes: the documents under `schemas/` are byte identical.
+
+### The agents document CrewAI writes inside the package
+
+`crewai create crew` writes every agent's role into `src/<package>/config/agents.yaml`, and CrewAI reports an
+agent by its role at run time. The config reader opened `agents.yaml` at the repository root and at
+`config/agents.yaml` only, so on a real CrewAI application **no component in the graph carried the name its
+own run reports**. Twenty such documents in the pinned examples repository went unopened, every one of them
+at a path ending `config/agents.yaml` and none at the root.
+
+That was not a missing answer, it was a wrong one. The marketing crew ran, reported its three agents by role,
+and the only declaration of those three names anywhere in the repository belonged to `crews/instagram_post`,
+which writes the same three roles as literals and which the run never entered. The join was made by
+`runtime_name`, the strongest rule reconciliation has short of a code location, on a declaration that was
+perfectly true. **`crewai-examples-exercised` recorded three exercised components and all three were the
+wrong file.**
+
+**Three separate things had to change together, and reading the file was the least of them.**
+
+**Where a document found by name is allowed to live.** `platformConfigPaths` filtered the bounded traversal
+by basename against three `wrangler.*` names, sorted, and cut at 32. Adding `agents.yaml` and `tasks.yaml` to
+that set puts 40 candidates under one cap of 32 on the examples repository and drops eight; adding a root
+`wrangler.toml` and a `packages/worker/wrangler.toml` to the same repository drops **both of those too**,
+because the list sorts by path and `c`, `f` and `i` sort before `w`. That is the 0.6.0 fix undone by a name
+put in the wrong set, and no test and no corpus entry would have caught it: nothing anywhere referenced
+`platformConfigPaths`, and all 26 expectations record `adapter:workers-bindings` finding nothing. So the
+mechanism is now a table of named kinds with a cap each, `namedConfigPaths`, and a fixture with forty agents
+documents and one `wrangler.toml` in it asserts the manifest still comes back. The agent declaration cap is
+64 against the 20 that repository declares.
+
+**What names a configured agent.** The document holds two names for one agent, the key it is filed under and
+the role beside it, and only the second is what a run says. Naming by the key is what made the wrong join
+survive: measured against the real reconciler, reading all twenty documents while still naming by the key
+leaves the same three wrong matches in place and only downgrades the rule that made them from `runtime_name`
+to `kind_and_name`. Naming by the role gives each of the three names three declarations, `uniqueCandidate`
+returns nothing, and the reconciler records an ambiguity. The key stays as the pointer the evidence carries
+and as the name the document binds the component under, which is what a caller writes to select an entry.
+
+**A role with a placeholder in it.** CrewAI interpolates a role before it uses it, and four of the seven
+agents in the framework repository's own three documents declare one of the form `{topic} Senior Data
+Researcher`. That string is a name no run will ever report. Those are named by their key, declare no runtime
+name, and the adapter run now carries a detail saying it declined four, because a decline nobody states reads
+as an absence. That detail arrives on `--json` and over MCP: the terminal renders an adapter's detail only
+when the adapter failed, and this one completed. A call site is treated differently and keeps naming itself
+by whatever literal it carries: it has no second name to fall back to, and declining the literal sent
+fourteen calls in one test file to the variable `agent` they share, which is the collapse 0.8.0 fixed.
+
+**`agents.yaml` is a file name and not a framework.** The adapter applied whenever any config document path
+ended in `agents.yaml`, with no check that the document looked like a crew. Once the name is found wherever
+the traversal walked, that makes any repository holding a file of that name a candidate agent system: two
+constructed repositories depending on express and on axios, with a root `agents.yaml` holding hosts and
+ports, were both reported as detected agent systems whose agents were the entries of that file. This is the
+failure already recorded for `.mcp.json`. A document now has to declare at least one entry carrying a
+non-empty string `role` and `goal`, which admits all 60 real agent entries readable across the examples
+repository, the framework's templates and its tests, and admits this repository's own two entry fixture,
+whose entries carry no backstory. The match on the file name is now exact rather than a suffix, which also
+drops four VCR cassettes named `test_..._agents.yaml` in the framework repository.
+
+**Two components for one agent, on purpose.** This adapter's own comment claimed that "configuration wins
+when both are present and the source pass fills in what configuration does not declare", and neither half was
+implemented: both passes run unconditionally and their components cannot merge, because a config namespace is
+a file path and a module namespace is that path with the extension removed. The comment is now corrected
+rather than implemented. `Agent(config=self.agents_config['lead_market_analyst'])` is the whole of the link
+between the two, the fact model records that argument as an unknown subscript with no key in it, and the
+obvious substitute is measurably unsafe: the enclosing method name is a key in the neighbouring document for
+31 of the 50 `Agent` calls that sit beside one, and the other 19 would attach a call to the wrong declared
+agent. So three of the four agents of one pinned crew are two components each. That doubling is the price of
+not guessing, it is stated in the corpus entry, and closing it means teaching a parser to carry a subscript
+key first.
+
+**What moved.** `crewai-examples` goes from 144 components to 192: 48 agent keys across 20 documents, all 48
+declaring a role and **none declaring an `llm`**, so no model and no relation follows. `crewai` goes from 847
+to 854, which is the seven keys of its three documents; `declaredInTest` does not move, because a component
+read out of a document has no source location and that flag is derived from source locations alone.
+`crewai-examples-exercised` goes from three exercised components to **zero**, gains the three names under
+`joins.ambiguous` and three runtime only components, and raises a fourth finding. **Zero is the fix.** It is
+the same shape of refusal `open-deep-research-exercised` already records for `supervisor`, and a refusal that
+names what it refused is worth more than a confident join to a file the run never opened.
+
+**What is still wrong, and this change made it visible on a second entry.** The three refused names appear
+under `exercisedNotDeclared`, where `exercised-not-declared` prints "static discovery found no matching
+declaration". They have three declarations each. That rule has a branch for an observation whose name cannot
+identify anything and none for an observation whose name identifies too much, and the sentence has shipped
+for `open-deep-research-exercised` since it was pinned. Diverting the population is not enough on its own:
+`fired` with nothing left becomes `clear`, and `clear` on that rule claims every observed component matched a
+declaration, which is a worse falsehood than the one it replaces. It needs its own rule, and a rule needs the
+three tests, so it is not in this change. `joins.ambiguous` carries the true statement until then.
+
+**Also stated rather than fixed.** A named kind that exceeds its cap still drops the remainder without saying
+so in the document. Saying so needs a fifth `UnsupportedAreaKind` or an eighth `SkippedFile.reason`, both
+closed sets, and a schema change is the maintainer's decision. The caps are stated in the module beside the
+population each was measured against, and neither is reached by anything in this corpus.
+
+`adapter:mcp` reported every configuration document the scan parsed as a file it had inspected, which cost
+nothing until `agents.yaml` became a name found in the traversal and it began claiming three documents on the
+CrewAI framework repository that it read no server from. It now reports the documents that declare one, the
+same way the CrewAI adapter now reports only the documents it read. Four expectations move by one each:
+`openai-agents-js` was counting `integration-tests/cloudflare-workers/worker/wrangler.jsonc`, and
+`pydantic-ai` was counting `.claude/settings.json`.
 
 ### A runtime name declared for an agent no run will call that
 

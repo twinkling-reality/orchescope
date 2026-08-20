@@ -163,9 +163,20 @@ repositories:
     kind: agent_system
     why: >-
       The CrewAI framework itself, and the largest tree in this corpus: 2027 files discovered against 1272 parsed,
-      which is the parse rate a Python repository of that shape actually produces. 302 of its 843 components are
+      which is the parse rate a Python repository of that shape actually produces. 304 of its 854 components are
       declared in its own tests, so what it holds is the parse rate and the marking, and the two entries below are
       what hold the reading.
+
+      It is also the only entry that measures a role no run can report. Three agents.yaml live here, two of them the
+      templates `crewai create crew` writes and one its own test suite, and four of their seven agents declare a role
+      of the form `{topic} Senior Data Researcher`. CrewAI interpolates that before it uses it, so the literal string
+      is a name no run will ever say. Each of those four is named by the key its document files it under and declares
+      no runtime name, and this repository is where that decline is measured: `adapter:crewai` carries a detail
+      saying it declined four, which reaches --json and MCP because the terminal prints an adapter's detail only
+      for one that failed. The seven keys are the whole of the +7 agents here; none of them declares an llm, so no
+      model and no relation follows.
+      declaredInTest does not move, because a component read out of a document has no source location and the flag is
+      derived from source locations alone.
 
   - name: crewai-examples
     source: git
@@ -183,12 +194,22 @@ repositories:
       four Agent calls across nineteen files were nineteen components, one per file and each of them named `agent`,
       because Agent(config=...) names no role and definitionForCall looks for a variable or a function where the
       framework's own template writes a method. Reading the enclosing method makes them forty three, one pair still
-      sharing a method name across two classes in one file, so the count here is 73 agents where it was 49.
+      sharing a method name across two classes in one file, so the count here is 73 agents from source where it was
+      49.
 
-      What it still does not read is the agents.yaml those calls select an entry of, which is where every role in
-      such a crew is written. The config reader opens agents.yaml at the repository root and at config/agents.yaml,
-      and `crewai create crew` puts it at src/<package>/config/agents.yaml, so twenty of them in this repository go
-      unopened. That is the measured reason the entry below joins nothing of its own.
+      The twenty agents.yaml those calls select an entry of are now read where they live. Every one of them sits at
+      a path ending config/agents.yaml and none at the repository root, so a fixed path reached none of them; they
+      are found by file name in the same bounded traversal, under a cap of their own rather than the deployment
+      manifest's. They hold 48 agent keys, all 48 declaring a role and none an llm, which is why this entry gains 48
+      agents, no model and no relation, and why the agent count here is 121.
+
+      **That 121 is 48 documents plus 73 calls and the repository has fewer agents than either sum suggests.** Three
+      of the four agents of crews/marketing_strategy are declared twice, once by the document and once by the method
+      that builds them, and nothing in the repository says which call reads which entry: the subscript in
+      Agent(config=self.agents_config['lead_market_analyst']) is not a fact this build's model carries. Binding them
+      by the enclosing method name holds for 31 of the 50 Agent calls that sit beside an agents.yaml here, so the
+      other 19 would attach a call to the wrong declared agent. The doubling is the price of not guessing, and it is
+      recorded here rather than hidden behind a heuristic.
 
   - name: crewai-examples-exercised
     source: git
@@ -200,20 +221,25 @@ repositories:
       corpus. Every claim this build makes about that dialect had been argued from the adapter alone.
 
       What the run says is that a CrewAI agent span is read: six spans, five of them an agent's, each carrying the
-      agent's role under graph.node.id, and this build reads all five. What it also says is that none of them joins
-      the crew that ran. The three agents of crews/marketing_strategy are declared by the method that returns each
-      one, the run names each one by the role in the agents.yaml this build does not open, and the two spellings do
-      not meet.
+      agent's role under graph.node.id, and this build reads all five.
 
-      **The three components this entry records as joined are the wrong ones, and that is what it is here to hold.**
-      crews/instagram_post declares three agents with a literal role, and its three roles are the same three words:
-      Lead Market Analyst, Chief Marketing Strategist, Creative Content Creator. The adapter declares a role as the
-      name a run will report, so those three carry it as `runtimeName`, and `runtime_name` is the strongest rule
-      reconciliation has short of a code location: this entry records `byRuntimeName: 3` and `byKindAndName: 0`. The
-      match is the rule working on a true declaration. What is missing is the marketing crew's own roles, which live
-      in an agents.yaml this build does not open, so the only declaration of those names in the repository belongs to
-      an application the run never entered. Reading that file would make the same three names ambiguous rather than
-      unique, and a refusal is the right answer where a repository declares one role in two applications.
+      **This entry records zero exercised components, and zero is the fix rather than the regression.** It used to
+      record three, and all three were the wrong ones: crews/instagram_post declares three agents with a literal
+      role, its three roles are the same three words the run reports, and the marketing crew's own roles lived in an
+      agents.yaml nothing opened. So a run of one application joined every one of its agents to another application
+      it never entered, by `runtime_name`, which is the strongest rule reconciliation has short of a code location.
+      Reading the packaged document puts the marketing crew's roles in the graph twice over, once under crews/ and
+      once under the copy in integrations/nvidia_models/, so each of the three names now has three declarations,
+      uniqueCandidate returns nothing and the reconciler refuses. `ambiguousNames` holds the three verbatim, trailing
+      newline and all, because that is the string the instrumentor writes into graph.node.id out of a folded
+      `role: >` block. A repository that declares one role in three places gets a refusal, and a refusal naming what
+      it refused is worth more than a confident join to the wrong file.
+
+      **The three then appear under exercisedNotDeclared, and that list is telling a reader something false about
+      them.** They are not undeclared; they are declared three times each. The `exercised-not-declared` rule has no
+      branch for an ambiguous name and prints "no matching declaration", which is the same sentence
+      open-deep-research-exercised has carried for `supervisor` since it was pinned. `joins.ambiguous` is where the
+      true statement is until that rule has one.
 
       The crew joins nothing either, for a different reason. Its span is a CHAIN carrying no gen_ai.workflow.name, so
       isStructuralSpan declines it as no_name, and the name it declines is `MarketingPostsCrew.kickoff` where the

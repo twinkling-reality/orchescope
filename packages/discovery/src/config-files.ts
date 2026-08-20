@@ -10,7 +10,7 @@ import { parse as parseYaml } from 'yaml';
  * both slow and a way for a hostile repository to feed a parser arbitrary input. Each document keeps
  * its raw text length and a JSON pointer helper so evidence can point at the exact key.
  *
- * A caller may name further paths, and `platformConfigPaths` derives them from the bounded traversal by file name so
+ * A caller may name further paths, and `namedConfigPaths` derives them from the bounded traversal by file name so
  * that a deployment manifest in a workspace package is read as well as one at the root. That keeps the guarantee the
  * explicit list exists for: every path read is one the traversal already walked, under the same exclusions and the
  * same file limit, and the count of them is capped.
@@ -133,25 +133,58 @@ const formatOf = (path: string): ConfigFormat => {
 };
 
 /**
- * Deployment manifests that declare infrastructure, found by file name in the traversal rather than at a fixed path.
+ * Documents found by file name in the traversal rather than at a fixed path, in kinds that do not share a cap.
  *
  * A Cloudflare Workers manifest sits beside the worker it deploys, which in a workspace is not the repository root.
  * Reading only the root missed every binding in one repository: a D1 database, two KV namespaces and a cron trigger
  * declared in `packages/worker/wrangler.toml`, while fifty seven prepared statements ran against the first of them.
+ * An agents document is the same problem from another direction: `crewai create crew` writes one into
+ * `src/<package>/config/`, and the twenty in the pinned CrewAI examples repository sit at no fixed path at all.
  *
- * Only names on this list are read, the candidates come from the bounded traversal so the exclusions and the file
- * limit already applied, and the count read is capped. A repository with more of them than the cap is a repository
- * whose extra manifests are not read, which is why the cap is stated rather than silent.
+ * **Each kind carries its own cap, because one cap over both is a cap that a repository full of one kind spends on
+ * that kind.** Measured on that examples repository, putting the agent and task document names into the deployment
+ * manifest's set of three produced forty candidates under its cap of thirty two and dropped eight of them. Adding a
+ * root `wrangler.toml` and a `packages/worker/wrangler.toml` to the same repository dropped both of those as well:
+ * the candidates sort by path, `c` and `f` and `i` sort before `w`, and the two manifests the cap exists to protect
+ * are the first things a shared cap discards. That is the fix 0.6.0 made, undone by a name added to the wrong set.
+ *
+ * Only names on a list are read, the candidates come from the bounded traversal so the exclusions and the file limit
+ * already applied, and the count read is capped per kind. A repository with more documents of one kind than its cap
+ * is a repository whose extra documents are not read, which is why each cap is stated here beside the population it
+ * was measured against rather than left as a number in a slice.
  */
-const PLATFORM_CONFIG_NAMES = new Set(['wrangler.toml', 'wrangler.json', 'wrangler.jsonc']);
+type NamedConfigKind = {
+  readonly names: ReadonlySet<string>;
+  readonly max: number;
+};
+
+/** Deployment manifests. Thirty two against a field repository that declares two. */
+const PLATFORM_CONFIG_NAMES: ReadonlySet<string> = new Set([
+  'wrangler.toml',
+  'wrangler.json',
+  'wrangler.jsonc',
+]);
 
 export const MAX_PLATFORM_CONFIGS = 32;
 
-export const platformConfigPaths = (paths: readonly string[]): readonly string[] =>
-  paths
-    .filter((path) => PLATFORM_CONFIG_NAMES.has(path.split('/').at(-1) ?? ''))
-    .sort()
-    .slice(0, MAX_PLATFORM_CONFIGS);
+/** Documents that declare agents where a framework's own layout puts them, which is inside the package. */
+const AGENT_DECLARATION_NAMES: ReadonlySet<string> = new Set(['agents.yaml']);
+
+/** Agent declaration documents. Sixty four against the twenty the pinned CrewAI examples repository declares. */
+export const MAX_AGENT_DECLARATIONS = 64;
+
+const NAMED_CONFIG_KINDS: readonly NamedConfigKind[] = [
+  { names: PLATFORM_CONFIG_NAMES, max: MAX_PLATFORM_CONFIGS },
+  { names: AGENT_DECLARATION_NAMES, max: MAX_AGENT_DECLARATIONS },
+];
+
+export const namedConfigPaths = (paths: readonly string[]): readonly string[] =>
+  NAMED_CONFIG_KINDS.flatMap((kind) =>
+    paths
+      .filter((path) => kind.names.has(path.split('/').at(-1) ?? ''))
+      .sort()
+      .slice(0, kind.max),
+  );
 
 export const readConfigDocuments = (
   root: string,
@@ -162,8 +195,16 @@ export const readConfigDocuments = (
 } => {
   const documents: ConfigDocument[] = [];
   const problems: ConfigProblem[] = [];
+  /*
+   * A name on the explicit list is also a name the traversal finds, so `agents.yaml` at the root arrives twice.
+   * Reading it twice would hand every adapter the same document twice and double what each one reports having
+   * found in it.
+   */
+  const read = new Set<string>();
 
   for (const relativePath of [...KNOWN_CONFIG_PATHS, ...extraPaths]) {
+    if (read.has(relativePath)) continue;
+    read.add(relativePath);
     let text: string;
     try {
       text = readFileSync(join(root, relativePath), 'utf8');

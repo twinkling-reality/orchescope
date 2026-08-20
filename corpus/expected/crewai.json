@@ -1,9 +1,9 @@
 {
   "adapters": {
     "adapter:crewai": {
-      "componentsFound": 998,
+      "componentsFound": 1005,
       "edgesFound": 432,
-      "filesInspected": 84,
+      "filesInspected": 87,
       "status": "completed"
     },
     "adapter:effects": {
@@ -82,7 +82,7 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 262,
+      "agent": 269,
       "agent_group": 90,
       "database": 4,
       "entrypoint": 80,
@@ -93,7 +93,7 @@
       "queue": 1
     },
     "declaredInTest": 304,
-    "total": 847
+    "total": 854
   },
   "discardedRelations": [],
   "files": {

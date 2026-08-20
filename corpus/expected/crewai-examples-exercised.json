@@ -1,9 +1,9 @@
 {
   "adapters": {
     "adapter:crewai": {
-      "componentsFound": 101,
+      "componentsFound": 149,
       "edgesFound": 5,
-      "filesInspected": 35,
+      "filesInspected": 55,
       "status": "completed"
     },
     "adapter:effects": {
@@ -82,14 +82,14 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 73,
+      "agent": 124,
       "agent_group": 29,
       "entrypoint": 9,
       "external_service": 9,
       "prompt": 24
     },
     "declaredInTest": 0,
-    "total": 144
+    "total": 195
   },
   "discardedRelations": [],
   "files": {
@@ -102,20 +102,22 @@
   "findings": {
     "byRule": {
       "declared-not-exercised": 1,
+      "exercised-not-declared": 1,
       "observability-coverage": 1,
       "topology-shape": 1
     },
     "bySeverity": {
       "low": 2,
-      "medium": 1
+      "medium": 2
     },
     "componentsByRule": {
       "declared-not-exercised": 25,
+      "exercised-not-declared": 3,
       "observability-coverage": 10,
       "topology-shape": 3
     },
     "strengths": 0,
-    "total": 3
+    "total": 4
   },
   "foundNothing": [
     "agents is imported here and its adapter found nothing"
@@ -133,19 +135,23 @@
     "total": 24
   },
   "runtime": {
-    "ambiguousNames": [],
+    "ambiguousNames": [
+      "Chief Marketing Strategist\n",
+      "Creative Content Creator\n",
+      "Lead Market Analyst\n"
+    ],
     "contradictions": 0,
-    "declaredComponents": 82,
+    "declaredComponents": 130,
     "declaredEdges": 16,
     "duplicateSideEffects": 0,
-    "exercisedComponents": 3,
+    "exercisedComponents": 0,
     "exercisedEdges": 0,
-    "exercisedNotDeclared": [],
-    "joined": [
+    "exercisedNotDeclared": [
       "agent:chief-marketing-strategist",
       "agent:creative-content-creator",
       "agent:lead-market-analyst"
     ],
+    "joined": [],
     "joinedOnNameAlone": [],
     "runs": 1,
     "spans": 6

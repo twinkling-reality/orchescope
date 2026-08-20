@@ -34,7 +34,7 @@ import {
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from './adapter.ts';
 import { createBindingRegistry } from './bindings.ts';
 import { createCallSiteEffects } from './call-site-effect.ts';
-import { platformConfigPaths, readConfigDocuments } from './config-files.ts';
+import { namedConfigPaths, readConfigDocuments } from './config-files.ts';
 import { createImplementationSpanRegistry } from './implementation-span.ts';
 import { DEFAULT_ADAPTERS } from './registry.ts';
 import { buildSymbolIndex } from './symbol-index.ts';
@@ -312,7 +312,7 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
   const fileSet = collectFiles(request.root, request.traversal);
   const configs = readConfigDocuments(
     request.root,
-    platformConfigPaths(fileSet.files.map((file) => file.path)),
+    namedConfigPaths(fileSet.files.map((file) => file.path)),
   );
   request.deadline.check('static discovery');
 
