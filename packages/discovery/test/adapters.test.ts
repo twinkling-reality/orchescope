@@ -166,8 +166,13 @@ class MarketCrew():
     );
     workspace.write(
       'config/agents.yaml',
+      /*
+       * The planner's role is folded and differs from its key, which is how a real crew is written and is
+       * what separates the name the document files an agent under from the name a run reports.
+       */
       `planner:
-  role: planner
+  role: >
+    Planning Expert
   goal: Break the request into steps a worker can take.
   llm: gpt-4o-mini
 reviewer:
@@ -215,6 +220,39 @@ reviewer:
     );
   });
 
+  it('declares the role as the name a run will report, trimmed of the fold that ends it', async () => {
+    const { result } = await scan(build);
+    const planner = result.graph.components.find((component) => component.id === 'agent:planner');
+    assert.ok(planner !== undefined, 'the configured planner is not in the graph');
+    assert.equal(planner.metadata['runtimeName'], 'Planning Expert');
+    assert.equal(planner.metadata['declaredRole'], 'Planning Expert');
+  });
+
+  /*
+   * `runtimeName` is consulted before kind and name, so a value that is not a name any run can report does
+   * not merely fail to match: it waits in the strongest lookup in the reconciler to match something else.
+   */
+  it('declares no runtime name for an agent whose role it never read', async () => {
+    const { result } = await scan(build);
+    for (const id of ['agent:market_analyst', 'agent:copy_writer']) {
+      const component = result.graph.components.find((entry) => entry.id === id);
+      assert.ok(component !== undefined, `${id} is not in the graph`);
+      assert.equal(
+        component.metadata['runtimeName'],
+        undefined,
+        `${id} claims a run will report it by the method that builds it`,
+      );
+    }
+    const researcher = result.graph.components.find(
+      (component) => component.id === 'agent:researcher',
+    );
+    assert.equal(
+      researcher?.metadata['runtimeName'],
+      'researcher',
+      'an agent that does name its role stopped declaring it',
+    );
+  });
+
   it('names an agent built inside a decorated method after that method', async () => {
     const { ids } = await scan(build);
     assert.ok(
@@ -227,6 +265,56 @@ reviewer:
       false,
       'two agents naming no role collapsed into one component named after the call',
     );
+  });
+});
+
+/**
+ * The declarative crew document, which had no fixture and so no statement of what it promises.
+ *
+ * It lists its members by the name of the file each one is declared in. That name is the document's own
+ * identifier for the agent and it is not the role CrewAI reports at run time, which lives in the file being
+ * pointed at and is not read here.
+ */
+describe('a CrewAI crew document', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writePythonProject(workspace, { name: 'json-crew', dependencies: ['crewai>=0.80'] });
+    workspace.write(
+      'crew.jsonc',
+      `{
+  // Display name for this crew
+  "name": "research-desk",
+  "agents": ["planner", "writer"],
+  "process": "sequential"
+}
+`,
+    );
+  };
+
+  it('declares the crew and the members it lists', async () => {
+    const { ids, edges } = await scan(build);
+    assert.ok(
+      ids.includes('agent_group:research-desk'),
+      `expected the crew as a group in ${ids.join(', ')}`,
+    );
+    assert.ok(ids.includes('agent:planner'), 'expected the first member');
+    assert.ok(ids.includes('agent:writer'), 'expected the second member');
+    assert.ok(
+      edges.includes('contains:agent_group:research-desk->agent:planner'),
+      `expected containment in ${edges.join(', ')}`,
+    );
+  });
+
+  it('claims no runtime name for a member it knows only by file name', async () => {
+    const { result } = await scan(build);
+    for (const id of ['agent:planner', 'agent:writer']) {
+      const component = result.graph.components.find((entry) => entry.id === id);
+      assert.ok(component !== undefined, `${id} is not in the graph`);
+      assert.equal(
+        component.metadata['runtimeName'],
+        undefined,
+        `${id} claims a run will report it by the file it is declared in`,
+      );
+    }
   });
 });
 

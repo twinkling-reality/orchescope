@@ -20,6 +20,33 @@ import { definitionForCall, matchCalls, projectUses } from '../matching.ts';
  * pass fills in what configuration does not declare.
  */
 
+/**
+ * The name a run will report for an agent, where this build knows one.
+ *
+ * `runtimeName` is a declaration that a running system will report a component under this name, and
+ * reconciliation trusts it above everything except a code location: `byRuntimeName` is consulted before
+ * kind and name. So a value that is not a name any run can report does not merely fail to match, it sits in
+ * the strongest lookup in the reconciler waiting to match something else.
+ *
+ * CrewAI reports an agent by its role. This adapter named every agent it found, by the role where one is a
+ * literal and otherwise by the variable, the method or the constant `agent`, and then declared that name as
+ * the runtime name whatever it was. Three agents of the pinned marketing crew therefore declared that a run
+ * would call them `lead_market_analyst`, `chief_marketing_strategist` and `creative_content_creator`, which
+ * are the methods that build them and are names CrewAI never emits.
+ *
+ * A role read out of `agents.yaml` is the same fact from the other side, and it is the value to declare
+ * there rather than the key the document happens to file it under. Folded YAML keeps the newline that ends
+ * a `role: >` block, so the value is trimmed before it is used as a claim about what a run will say.
+ *
+ * Where no role is known this returns nothing at all. An absent runtime name says this build does not know
+ * what the run will call the component, which is true, and leaves the join to the rules that match on what
+ * was actually read.
+ */
+const runtimeNameOf = (role: string | undefined): { readonly runtimeName?: string } => {
+  const trimmed = role?.trim();
+  return trimmed === undefined || trimmed.length === 0 ? {} : { runtimeName: trimmed };
+};
+
 const PACKAGES = ['crewai', 'crewai_tools', 'crewai-tools'];
 const ADAPTER_ID = 'adapter:crewai';
 const drafts = createDrafts(ADAPTER_ID);
@@ -62,7 +89,11 @@ const discoverCrewDocument = (
         pointer: jsonPointer(['agents', index]),
         name: agentName,
         details: { for: 'agent', framework: 'crewai', role: 'worker' },
-        metadata: { framework: 'crewai', runtimeName: agentName },
+        /*
+         * A crew document lists its members by the name of the file each one is declared in, and the role
+         * that file carries is not read here, so nothing on this path knows what a run will call them.
+         */
+        metadata: { framework: 'crewai' },
         tags: ['crewai', 'declared'],
       }),
     );
@@ -108,8 +139,8 @@ const discoverAgentsDocument = (
         details: { for: 'agent', framework: 'crewai', role: 'worker' },
         metadata: {
           framework: 'crewai',
-          runtimeName: agentName,
-          ...(role === undefined ? {} : { declaredRole: role }),
+          ...runtimeNameOf(role),
+          ...(role === undefined ? {} : { declaredRole: role.trim() }),
         },
         tags: ['crewai', 'declared'],
       }),
@@ -220,7 +251,7 @@ const discoverAgentCalls = (
         confidence: match.confidence,
         ...(goal === undefined ? {} : { description: goal.slice(0, 240) }),
         details: { for: 'agent', framework: 'crewai', role: 'worker' },
-        metadata: { framework: 'crewai', runtimeName: name },
+        metadata: { framework: 'crewai', ...runtimeNameOf(role) },
         tags: ['crewai'],
       }),
     );
