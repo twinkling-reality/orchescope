@@ -29,6 +29,7 @@ import {
 import { graphNodeSpanName } from './graph-node-span.ts';
 import { type ObservedHandoff, recognizeHandoffs } from './handoff.ts';
 import { isStructuralSpan } from './structural-span.ts';
+import { supersededSpans } from './superseded-span.ts';
 
 /**
  * Runtime topology derivation.
@@ -487,15 +488,21 @@ type TraversalState = {
   readonly metrics: RunCounters;
   /** Span identifier to the transfer of control it recorded, for the spans that recorded one. */
   readonly handoffs: ReadonlyMap<string, ObservedHandoff>;
+  /** Spans another producer already reported, which are read as nothing rather than as a second call. */
+  readonly superseded: ReadonlySet<string>;
 };
 
-const emptyTraversalState = (handoffs: ReadonlyMap<string, ObservedHandoff>): TraversalState => ({
+const emptyTraversalState = (
+  handoffs: ReadonlyMap<string, ObservedHandoff>,
+  superseded: ReadonlySet<string>,
+): TraversalState => ({
   components: new Map(),
   edges: new Map(),
   evidence: [],
   spanToComponentKey: new Map(),
   unattributed: new Map(),
   handoffs,
+  superseded,
   metrics: {
     modelCalls: 0,
     toolCalls: 0,
@@ -630,6 +637,15 @@ const visitSpan = (
     for (const child of node.children) visitSpan(state, bundle, child, node);
     return;
   }
+  /*
+   * A call another producer already reported is read as nothing at all, rather than as a second call. It is
+   * not counted as unattributed, because nothing it said went unreported.
+   */
+  if (state.superseded.has(span.spanId)) {
+    encloseChildren(state, node, parent);
+    for (const child of node.children) visitSpan(state, bundle, child, node);
+    return;
+  }
   const component = componentOf(span);
   if ('reason' in component) {
     unattributed.set(component.reason, (unattributed.get(component.reason) ?? 0) + 1);
@@ -697,7 +713,7 @@ const visitSpan = (
 
 export const deriveTopology = (bundle: TraceBundle): TopologyResult => {
   const { roots } = buildForest(bundle.spans);
-  const state = emptyTraversalState(recognizeHandoffs(bundle.spans));
+  const state = emptyTraversalState(recognizeHandoffs(bundle.spans), supersededSpans(bundle.spans));
   const { components, edges, evidence, spanToComponentKey, unattributed, metrics } = state;
 
   for (const root of roots) visitSpan(state, bundle, root, undefined);
