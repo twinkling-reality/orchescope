@@ -64,6 +64,59 @@ repositories:
       The same framework in the other ecosystem. The adapter claims to read one fact model in two languages, and
       only a repository in each language holds that claim up.
 
+  - name: openai-agents-js-exercised
+    source: git
+    url: https://github.com/openai/openai-agents-js.git
+    commit: 52b2702fc034fb47f79ec50fad173f0e9b068ca6
+    kind: agent_system
+    why: >-
+      The same commit as the entry above, measured with a run in it, and the first OpenAI Agents run in
+      JavaScript anywhere in this corpus. That dialect is the richest source of defects this build has had, and
+      every one of them was found in Python: a handoff arriving as a tool call, the instrumentation's own
+      wrapper spans becoming components, and a provider written under only one of two attribute names. Each of
+      those is a claim about what one program emits, and the JavaScript instrumentor is a different program.
+
+      What it found is that the handoff reading does not cross. The Python instrumentor writes a tool span with
+      no tool name whose input and output are the two agents, spelled as bare strings. This one names the span's
+      tool handoff_to_Seat Booking Agent and writes {"from_agent": "Triage Agent"} and {"to_agent": "Seat
+      Booking Agent"} as JSON documents. Both halves of the existing test therefore fail: a span that names a
+      tool is a call to that tool, and neither value is a name any agent was reported under. So a transfer of
+      control was reported as a call to a tool nothing declared, which is exactly the defect 0.7.0 fixed in the
+      other ecosystem, unfixed in this one. That was recorded here before it was fixed.
+
+      Two things the entry pins that are properties of the repository rather than defects. Triage Agent is in
+      joins.ambiguous because this repository declares 292 agents across its examples and more than one of them
+      carries that name, which is the same refusal pydantic-ai-exercised holds for a different reason. And the
+      one relation this run joins is worth naming: before it, four entries carrying runs joined 0, 5, 0 and 0
+      declared relations between them, so the relation half of this product's central join had almost no
+      evidence anywhere.
+    exercise:
+      why: >-
+        The dialect measurement in the other ecosystem, on the repository's own customer service example. The
+        agents, the tools and the handoffs between them are the example's; what the driver supplies is the
+        model, through the SDK's own setDefaultModelProvider.
+
+        That choice is what makes the entry hermetic and reproducible, and the second half is not optional.
+        Driven by a real gpt-4o-mini the same conversation produced eight spans, then eleven, then eight: the
+        seat agent follows a routine that asks for a confirmation number, and whether it asks again before
+        calling its tool is the model's decision. An entry pins a span count, so the decisions have to be the
+        driver's. What it costs is the model span: the SDK opens a generation span from its own model
+        implementations and not from somebody else's, so this run reports no LLM span at all, and what that
+        instrumentor writes on one is pinned in packages/traces/test instead.
+      script: corpus/runs/openai-agents-js/exercise.mjs
+      # The published release of the version this checkout's own packages/agents declares. The checkout is the
+      # framework rather than a user of one, and building its workspace would edit a pinned repository, so the
+      # closest honest pin is the release of the same version. zod is the version the checkout's own lockfile
+      # resolves. The instrumentor is deliberately unpinned, since a dialect moving in the field is what this
+      # measures.
+      nodePackages:
+        - '@openai/agents@0.13.5'
+        - '@openai/agents-core@0.13.5'
+        - zod@4.3.5
+        - '@arizeai/openinference-instrumentation-openai-agents'
+        - '@opentelemetry/sdk-trace-node'
+        - '@opentelemetry/exporter-trace-otlp-http'
+
   - name: langgraph
     source: git
     url: https://github.com/langchain-ai/langgraph.git
