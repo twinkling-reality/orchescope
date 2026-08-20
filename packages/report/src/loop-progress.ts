@@ -284,9 +284,25 @@ function unmeasuredStep(bundle: ReportBundle, rules: RulesEvaluated): LoopStep {
       coverage.blocked === 0
         ? 'nothing has been run'
         : `${coverage.blocked} ${coverage.blocked === 1 ? 'check is' : 'checks are'} blocked on a run`,
-    detail: areas.length === 0 ? [] : [namedAreas(areas)],
+    detail: [...(areas.length === 0 ? [] : [namedAreas(areas)]), ...declaringTheCommand(bundle)],
     command: [...traceCommand()],
   };
+}
+
+/**
+ * The command carried here is the only one in the loop with a placeholder in it, because the command that
+ * starts somebody else's system is not a fact this build reads anywhere and inventing one would mean
+ * executing a guess. A person fills the placeholder in and moves on; an agent cannot, and stalls at step
+ * one on every repository nobody has traced.
+ *
+ * A scenario is where that command is declared once and reused by every measurement after it, so the way
+ * out is named here rather than left in the help output. It is a detail rather than the command, because
+ * the reader who already knows how their system starts is one `trace` away and should not be sent to write
+ * a file first.
+ */
+function declaringTheCommand(bundle: ReportBundle): readonly string[] {
+  if (bundle.scenarios.length > 0) return [];
+  return ['orchescope init --scenario writes a template that declares the command once'];
 }
 
 function measureStep(bundle: ReportBundle, rules: RulesEvaluated): LoopStep {
