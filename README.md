@@ -183,21 +183,31 @@ See [SECURITY.md](SECURITY.md) and [docs/security/threat-model.md](docs/security
 
 ## Ecosystem support
 
-Only what is tested is claimed. Each of these has an adapter exercised by tests in this repository:
+Only what is tested is claimed, and this product has two halves that are tested separately. **Discovered
+from** is what a scan reads out of a repository. **Joined on a run** is whether a real stored run of a real
+system has ever matched what that scan declared, which is the reconciliation everything else here is built
+on. A row can be solid in the first column and empty in the second, and the difference is not cosmetic:
+every dialect measured for the first time has changed what this build reports about it.
 
-| Ecosystem | Discovered from |
-| --- | --- |
-| OpenAI Agents SDK (JavaScript, TypeScript and Python) | `new Agent({...})` and `Agent(name=...)`, handoffs, tools, `@function_tool` with `name_override` and `needs_approval`, MCP servers including a command nested in `params`, `maxTurns` |
-| LangGraph (JavaScript, TypeScript and Python) | `StateGraph`, `addNode("name", fn)` and `add_node(fn)`, edges, conditional edges, and `create_react_agent(model, tools=[...])` with the model reference it names |
-| CrewAI (Python) | `Agent(...)`, `Crew(...)`, `config/agents.yaml` including the model its `llm` field names |
-| Pydantic AI (Python) | `Agent('provider:model', ...)`, `@agent.tool` and `@agent.tool_plain`, `retries`, `requires_approval`, `output_type` |
-| Vercel AI SDK (JavaScript and TypeScript) | `generateText`, `tool(...)`, `maxSteps` |
-| Model SDKs | OpenAI, Anthropic and compatible clients, including base URL overrides and a request timeout read at the client or the call site |
-| Tenacity (Python) | `AsyncRetrying(...)` iterated in a loop and `@retry(...)` over a function, with the ceiling from `stop_after_attempt` and the wait from `wait_exponential` and `wait_random_exponential` |
-| Azure AI Search (Python and JavaScript) | `SearchClient(index_name=...)` and `KnowledgeBaseRetrievalClient`, joined to the function that queries them, as the retrieval source a prompt injection boundary is measured against |
-| Model Context Protocol | `.mcp.json`, `.vscode/mcp.json`, and `FastMCP` including `from mcp.server import` and the `@mcp.tool()` decorator |
-| Cloudflare Workers bindings | `wrangler.toml` anywhere in the workspace: `d1_databases` and `kv_namespaces`, joined to the code by the binding name |
-| OpenTelemetry | OTLP over HTTP, protobuf and JSON, `gen_ai.*` attributes |
+| Ecosystem | Discovered from | Joined on a run |
+| --- | --- | --- |
+| OpenAI Agents SDK (JavaScript, TypeScript and Python) | `new Agent({...})` and `Agent(name=...)`, handoffs, tools, `@function_tool` with `name_override` and `needs_approval`, MCP servers including a command nested in `params`, `maxTurns` | Python and JavaScript |
+| LangGraph (JavaScript, TypeScript and Python) | `StateGraph`, `addNode("name", fn)` and `add_node(fn)`, edges, conditional edges, and `create_react_agent(model, tools=[...])` with the model reference it names | Python and JavaScript |
+| CrewAI (Python) | `Agent(...)`, `Crew(...)`, `config/agents.yaml` including the model its `llm` field names | **not yet** |
+| Pydantic AI (Python) | `Agent('provider:model', ...)`, `@agent.tool` and `@agent.tool_plain`, `retries`, `requires_approval`, `output_type` | Python, against an offline model |
+| Vercel AI SDK (JavaScript and TypeScript) | `generateText`, `tool(...)`, `maxSteps` | JavaScript, against an offline model |
+| Model SDKs | OpenAI, Anthropic and compatible clients, including base URL overrides and a request timeout read at the client or the call site | an offline model only, see below |
+| Tenacity (Python) | `AsyncRetrying(...)` iterated in a loop and `@retry(...)` over a function, with the ceiling from `stop_after_attempt` and the wait from `wait_exponential` and `wait_random_exponential` | not yet |
+| Azure AI Search (Python and JavaScript) | `SearchClient(index_name=...)` and `KnowledgeBaseRetrievalClient`, joined to the function that queries them, as the retrieval source a prompt injection boundary is measured against | not yet |
+| Model Context Protocol | `.mcp.json`, `.vscode/mcp.json`, and `FastMCP` including `from mcp.server import` and the `@mcp.tool()` decorator | not yet |
+| Cloudflare Workers bindings | `wrangler.toml` anywhere in the workspace: `d1_databases` and `kv_namespaces`, joined to the code by the binding name | not yet |
+| OpenTelemetry | OTLP over HTTP, protobuf and JSON, `gen_ai.*` attributes | every run in the corpus |
+
+**One model component has ever joined a declaration, and it is an offline test model.** Every run in the
+corpus that reaches a real provider reports its model as exercised and never declared, because a repository
+declares the model it asks for and a run reports the model that answered: `openai:gpt-4.1-mini` against
+`gpt-4.1-mini-2025-04-14`. Agents, tools and handoffs join; models do not yet. That is the largest known gap
+in the second column and it is the same in both ecosystems.
 
 `create_react_agent` is read in its Python spelling only. The JavaScript prebuilt helper takes a different shape, and
 reading it the same way would be a guess rather than a fact.

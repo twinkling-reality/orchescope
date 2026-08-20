@@ -19,6 +19,46 @@ turns a strength into four cycles. A reader with a stored run sees their compone
 move as well, without retracing, because every reading here is derived when a report is built rather than
 when a span is stored.
 
+### One model call, counted twice
+
+`orchescope trace` patches `fetch` in the target so that a run of a system with no instrumentation of its
+own still says something. A system worth auditing usually has its own, and then both watch the same
+request: this build from outside, the target's instrumentation from inside the SDK that made it. Two spans,
+one call.
+
+Read as two calls it doubled everything a reader counts. A run of the pinned OpenAI Agents example made two
+model calls and reported four, and because the two producers name a model differently it reported two
+models: `gen_ai.request.model` is what was sent, `gpt-5.4-mini`, and `llm.model_name` is what came back,
+`gpt-5.4-mini-2026-03-17`. Neither number nor name was wrong on its own. Together they described a system
+making twice as many calls to twice as many models as it did.
+
+**The two producers are told apart by the scope that exported them**, so no guess is involved: this build's
+spans carry `orchescope` and nothing else does. **What settles which to keep is that the request was in
+flight for the whole of the other span.** An SDK's model call contains the HTTP request it makes, and the
+two are not even in one trace, because an instrumentation that bridges its SDK's own events after the fact
+opens no context a patched `fetch` runs inside. Time is what relates them. One to one matching is not
+attempted: the question is only whether something better placed already reported this call.
+
+A superseded span is not an unattributed one. `unattributed` records what this build could not read, and
+everything a superseded span said is reported by a witness that said more, so there is no gap to state and
+the count there does not move.
+
+**`orchescope.component` is no longer set on a model call.** It overrides every other name the topology
+reads, so set to the host it reported every model a run called as one component named `api.openai.com`,
+which is a name no repository declares. The module setting it already said it belonged only on requests
+whose component genuinely is the host they went to, and a model call is not one.
+
+**No corpus entry witnesses either change, and that is worth saying rather than leaving as a silence.**
+Every entry carrying a run either drives an offline model or runs Python, where this shim does not apply,
+so all twenty four match unchanged. What the changes are measured against instead is a stored run of the
+pinned OpenAI Agents example against a real provider, held span for span in `packages/traces/test`.
+
+**What the shim sees is narrower than a Node run**, which the same measurement showed. It patches
+`globalThis.fetch`, so a target whose HTTP goes through `node-fetch` is invisible to it: the pinned
+LangGraph JavaScript run reaches a real provider twice through `openai@4`, which bundles `node-fetch`, and
+this build's shim produced no span for either call. That bounds both the double count and the fallback the
+shim exists to be, and it is unfixed.
+
 ### The same handoff, written two ways
 
 The OpenAI Agents SDK performs a handoff by calling a tool, and 0.7.0 taught this build to read that: a
