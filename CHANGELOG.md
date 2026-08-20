@@ -2,7 +2,46 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
-## Unreleased
+## 0.7.0
+
+Cut 2026-08-19. The line naming how it was published and the checksum the tarball was checked against
+are written once it is on the registry, the way 0.6.0's were. What `pnpm package` built from this tag is
+`orchescope-0.7.0.tgz` at `sha256 04aaf71e623d9eb119b88e6e08b86a295311da8cda40de5bbd4fa03ccc2f1120`,
+which the install smoke test installed into a temporary prefix and audited a TypeScript and a Python
+project with.
+
+**No published document changes.** `packages/schema` and `schemas/` are untouched, so a consumer reading
+0.6.0's shape reads this one. `unattributed[].reason` gains its first producer of `no_name`, which the
+schema has declared since before anything wrote it.
+
+**What moves is what a report says about a system somebody traced, and it moves a lot.** Every change
+below came out of one run of one third party application, and each was only visible once the one before
+it was fixed. A reader who has stored runs should expect their component counts, their relation counts
+and their `topology-shape` answer to change; a reader with no runs sees nothing move at all, which the
+corpus says plainly, since all seventeen entries that carry no run matched unchanged through every one of
+these.
+
+- A handoff the OpenAI Agents SDK performs by calling a tool is read as a handoff rather than as a tool
+  nothing declared. Two components leave the graph on the pinned demonstration and two declared relations
+  gain their first observation.
+- The spans an instrumentation opens for its own structure stop becoming components. Three more leave,
+  and what ran under them attaches to the agent that ran it, which is what let a run join relations an
+  application declares. A run of six spans that had reported no relation at all now reports two.
+- A nesting is called a handoff only where both ends are agents. An evaluator running the agent that
+  implements it is containment, and calling it a transfer of control reported one that never happened.
+- Reachability, entry points, cycles and coordination fan out stop reading relations that only a run
+  produced. Until this, auditing a commit with a run in the project and auditing it without gave two
+  different answers about the declared architecture, and the second was the tracing library's.
+
+**Finding counts will move where runs are stored.** On the pinned customer service demo,
+`exercised-not-declared` goes from naming seven components to naming two, and both of the two are models
+that repository genuinely pins nowhere. `topology-shape` goes from naming one unreachable component to
+naming seventeen, which is what the same commit reports with no run in it and always has.
+
+The corpus grew the measurement that would have caught the last of those. `findings.byRule` counts
+findings, a rule that groups its occurrences reports one finding whatever it found, and reachability
+swung by eighteen components across three changes without moving a single number in any expectation file.
+`findings.componentsByRule` is recorded beside it now.
 
 ### What each rule names, which the corpus could not see
 
