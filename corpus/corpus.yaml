@@ -241,8 +241,11 @@ repositories:
       name nothing, and a reading that admitted them would report a node as having run four times. The two nodes
       that do not join are the reason the entry is worth having at all. This repository declares supervisor and
       supervisor_tools twice, once in the deep researcher graph and once in the legacy one, so the adapter
-      disambiguated both and a run naming a bare supervisor cannot say which it ran. They are the first entries in
-      ambiguousNames anywhere in this corpus, and refusing to guess is the behaviour being pinned.
+      disambiguated both and a run naming a bare supervisor cannot say which it ran. Refusing to guess is the
+      behaviour being pinned. ambiguousNames had one producer before this and it is not the same case:
+      pydantic-ai-exercised reports agent because ninety eight declared agents in that library's examples carry that
+      name and no run could pick one. These two are inside one application, and the run names the subgraph that
+      contains the node it ran, so this is a tie something could break.
     exercise:
       why: >-
         The dialect measurement, and the second application in this corpus rather than a driver written around a

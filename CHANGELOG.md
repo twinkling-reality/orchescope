@@ -138,8 +138,13 @@ reading is changed without saying so, which is why `open-deep-research-exercised
 
 **The two that do not join are the point.** That repository declares `supervisor` and `supervisor_tools`
 twice, once in the deep researcher graph and once in the legacy one, so the adapter disambiguated both and
-a run naming a bare `supervisor` cannot say which it ran. They are the first entries in `joins.ambiguous`
-anywhere in the corpus, so the path that refuses to guess had no field evidence behind it until now.
+a run naming a bare `supervisor` cannot say which it ran.
+
+`joins.ambiguous` had one producer before this, and the two are not the same case.
+`pydantic-ai-exercised` reports `agent` because ninety eight declared agents in that library's examples are
+each named `agent`, and no run could ever pick one of them. Here there are two, they are in one
+application, and the run names the subgraph that contains the node it ran, which is a tie a later change
+could break. Refusing to guess is right either way and it is what this entry pins.
 
 `openai-cs-agents-demo-exercised` does not move, which is the control: that instrumentor writes no
 `metadata` attribute, and its wrapper spans still decline.
