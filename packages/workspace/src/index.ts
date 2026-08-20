@@ -13,6 +13,11 @@ export {
   writeManifestTemplate,
 } from './manifest-template.ts';
 export {
+  type ScenarioTemplateResult,
+  scenarioTemplate,
+  writeScenarioTemplate,
+} from './scenario-template.ts';
+export {
   type InitOptions,
   type InitResult,
   initWorkspace,

@@ -21,6 +21,8 @@ export type WorkspacePaths = {
   readonly orchescope: string;
   readonly configFile: string;
   readonly manifestFile: string;
+  /** The scenario template init writes. Scenarios are read from `scenarios/`, never from here. */
+  readonly scenarioTemplateFile: string;
   readonly state: string;
   readonly databaseFile: string;
   readonly artifacts: string;
@@ -38,6 +40,7 @@ export const resolvePaths = (root: string): WorkspacePaths => {
     orchescope,
     configFile: join(orchescope, 'config.json'),
     manifestFile: join(orchescope, 'manifest.yaml'),
+    scenarioTemplateFile: join(orchescope, 'scenario.yaml'),
     state,
     databaseFile: join(state, 'orchescope.db'),
     artifacts: join(state, 'artifacts'),

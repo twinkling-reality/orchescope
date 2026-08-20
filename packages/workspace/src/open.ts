@@ -24,6 +24,7 @@ import { DEFAULT_CONFIG, loadConfig, writeConfig } from './config.ts';
 import { type ExcludedConfig, excludedConfig } from './committable-config.ts';
 import { type GitFacts, readGitFacts } from './git.ts';
 import { type ManifestTemplateResult, writeManifestTemplate } from './manifest-template.ts';
+import { type ScenarioTemplateResult, writeScenarioTemplate } from './scenario-template.ts';
 import {
   ensureStateDirectories,
   resolvePaths,
@@ -140,6 +141,8 @@ export type InitResult = {
   readonly alreadyExisted: boolean;
   /** Present when a manifest template was asked for, whether or not it had to be written. */
   readonly manifest?: ManifestTemplateResult;
+  /** Present when a scenario template was asked for, whether or not it had to be written. */
+  readonly scenario?: ScenarioTemplateResult;
   /**
    * The git rule excluding the configuration file, when one does.
    *
@@ -154,6 +157,8 @@ export type InitOptions = {
   readonly projectName?: string;
   /** Writes `.orchescope/manifest.yaml` from the template unless a manifest already exists. */
   readonly manifest?: boolean;
+  /** Writes `.orchescope/scenario.yaml` from the template unless one is already there. */
+  readonly scenario?: boolean;
 };
 
 /**
@@ -176,6 +181,7 @@ export const initWorkspace = (root: string, options: InitOptions = {}): InitResu
     configFile: paths.configFile,
     alreadyExisted: existed,
     ...(options.manifest === true ? { manifest: writeManifestTemplate(paths) } : {}),
+    ...(options.scenario === true ? { scenario: writeScenarioTemplate(paths) } : {}),
     ...(ignoredBy === undefined ? {} : { configIgnoredBy: ignoredBy }),
   };
 };

@@ -17,11 +17,12 @@ import { doctorSummary } from '../terminal/doctor-summary.ts';
 
 export const initCommand = (
   context: CommandContext,
-  options: { readonly name?: string; readonly manifest?: boolean },
+  options: { readonly name?: string; readonly manifest?: boolean; readonly scenario?: boolean },
 ): number => {
   const result = initWorkspace(context.workspace.paths.root, {
     ...(options.name === undefined ? {} : { projectName: options.name }),
     ...(options.manifest === true ? { manifest: true } : {}),
+    ...(options.scenario === true ? { scenario: true } : {}),
   });
   if (context.json) {
     context.stdout(
@@ -43,6 +44,22 @@ export const initCommand = (
     context.stdout(
       context.style.dim(
         '  It declares nothing yet. Declare the components and edges Orchescope could not read, then audit again.\n',
+      ),
+    );
+  }
+  if (result.scenario !== undefined) {
+    context.stdout(
+      result.scenario.created
+        ? `${context.style.good('+')} wrote ${result.scenario.scenarioFile}\n`
+        : `${context.style.dim('.')} ${result.scenario.scenarioFile} already exists, left unchanged\n`,
+    );
+    /*
+     * Where to put it is the half a reader cannot infer. Scenarios are read from `scenarios/` and this
+     * file is not there, which is deliberate: nothing runs until the command in it is yours.
+     */
+    context.stdout(
+      context.style.dim(
+        '  Fill in target.command, then move it to scenarios/ and run: orchescope test --scenario example\n',
       ),
     );
   }

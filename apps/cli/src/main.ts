@@ -162,7 +162,8 @@ program
     '--manifest',
     'also write a manifest template for components no adapter can read from source',
   )
-  .action(async (options: { name?: string; manifest?: boolean }) => {
+  .option('--scenario', 'also write a scenario template that declares how your system is started')
+  .action(async (options: { name?: string; manifest?: boolean; scenario?: boolean }) => {
     await withContext('init', globals(), (context) => initCommand(context, options));
   });
 
