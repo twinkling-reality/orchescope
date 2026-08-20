@@ -13,6 +13,21 @@ LangGraph run sees their component counts, their relation counts and their join 
 because both readings are derived when a report is built rather than when a span is stored. A reader with
 no LangGraph run sees one number move, and it is a number that was wrong everywhere.
 
+### The provider a span names, where the span names it twice
+
+OpenInference carries two attributes for it and this build read one. `llm.provider` names who hosts the
+model; `llm.system` names the API it speaks. The OpenAI Agents instrumentor writes only the second, so the
+two models the pinned customer service demo run reports were named `gpt-4.1-mini-2025-04-14` and
+`gpt-5.2-2025-12-11` while every model declared beside them carries the provider serving it, and two models
+of one name from two providers were one component.
+
+Both are read now, host first. The LangChain instrumentor writes both, so
+`open-deep-research-exercised` does not move, which is the control.
+
+The three call sites that asked what a span names spelled it three ways, two of them with a string literal
+rather than the vocabulary beside them, which is how one of them fell a convention behind. `providerNamed`
+and `modelNamed` are the one spelling now.
+
 ### A relation counted as exercised that nothing declared
 
 `coverage.exercisedEdges` counted every relation a run performed, including the ones reconciliation could

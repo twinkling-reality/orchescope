@@ -332,7 +332,7 @@ describe('the spans the instrumentation opens for its own structure', () => {
         'agent:Triage Agent',
         'evaluator:Relevance Guardrail',
         'agent:Relevance Guardrail',
-        'model:gpt-5.2-2025-12-11',
+        'model:openai/gpt-5.2-2025-12-11',
         'agent:Seat and Special Services Agent',
         'tool:update_seat',
       ],
@@ -359,7 +359,7 @@ describe('the spans the instrumentation opens for its own structure', () => {
       edges.join('\n'),
     );
     assert.ok(
-      edges.includes('invokes_model agent:Triage Agent -> model:gpt-5.2-2025-12-11'),
+      edges.includes('invokes_model agent:Triage Agent -> model:openai/gpt-5.2-2025-12-11'),
       edges.join('\n'),
     );
   });

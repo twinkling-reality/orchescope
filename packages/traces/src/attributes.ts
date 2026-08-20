@@ -35,6 +35,7 @@ export const OPEN_INFERENCE = {
   spanKind: 'openinference.span.kind',
   modelName: 'llm.model_name',
   provider: 'llm.provider',
+  system: 'llm.system',
   promptTokens: 'llm.token_count.prompt',
   completionTokens: 'llm.token_count.completion',
   toolName: 'tool.name',
@@ -124,6 +125,29 @@ export const readBoolean = (
   }
   return undefined;
 };
+
+/**
+ * The provider a span names, in the order one convention supersedes the last.
+ *
+ * `gen_ai.provider.name` is the current generative AI attribute and `gen_ai.system` the deprecated name it
+ * replaced. OpenInference carries two: `llm.provider` names who hosts the model and `llm.system` names the
+ * API it speaks, and an instrumentor may write either or both. Only the first was read, and the OpenAI
+ * Agents instrumentor writes only the second, so a model that run reported was named `gpt-5.2-2025-12-11`
+ * while every model declared beside it carried the provider serving it. Two models of the same name from
+ * two providers were one component.
+ */
+export const providerNamed = (attributes: Attributes): string | undefined =>
+  readString(
+    attributes,
+    GEN_AI.providerName,
+    GEN_AI.legacySystem,
+    OPEN_INFERENCE.provider,
+    OPEN_INFERENCE.system,
+  );
+
+/** The model a span names. Spelled once here because three call sites spelled it three ways. */
+export const modelNamed = (attributes: Attributes): string | undefined =>
+  readString(attributes, GEN_AI.requestModel, GEN_AI.responseModel, OPEN_INFERENCE.modelName);
 
 const OPERATION_BY_GEN_AI: Readonly<Record<string, AgentOperation>> = {
   chat: 'chat',
@@ -254,18 +278,8 @@ export const observedNameFor = (
     case 'chat':
     case 'text_completion':
     case 'embeddings': {
-      const model = readString(
-        attributes,
-        GEN_AI.requestModel,
-        GEN_AI.responseModel,
-        OPEN_INFERENCE.modelName,
-      );
-      const provider = readString(
-        attributes,
-        GEN_AI.providerName,
-        GEN_AI.legacySystem,
-        OPEN_INFERENCE.provider,
-      );
+      const model = modelNamed(attributes);
+      const provider = providerNamed(attributes);
       if (model === undefined) return stripPrefix(name);
       return provider === undefined ? model : `${provider}/${model}`;
     }

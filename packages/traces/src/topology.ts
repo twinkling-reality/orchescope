@@ -18,8 +18,10 @@ import {
   componentKindFor,
   GEN_AI,
   MCP,
+  modelNamed,
   ORCHESCOPE,
   observedNameFor,
+  providerNamed,
   readBoolean,
   readNumber,
   readString,
@@ -348,12 +350,8 @@ const accumulateComponent = (
   accumulator.durationsMs.push(span.durationMs);
   accumulator.inputTokens += facts.tokens.inputTokens;
   accumulator.outputTokens += facts.tokens.outputTokens;
-  accumulator.provider =
-    accumulator.provider ??
-    readString(span.attributes, GEN_AI.providerName, GEN_AI.legacySystem, 'llm.provider');
-  accumulator.model =
-    accumulator.model ??
-    readString(span.attributes, GEN_AI.requestModel, GEN_AI.responseModel, 'llm.model_name');
+  accumulator.provider = accumulator.provider ?? providerNamed(span.attributes);
+  accumulator.model = accumulator.model ?? modelNamed(span.attributes);
   accumulator.codeLocation = accumulator.codeLocation ?? codeLocationOf(span);
   accumulator.mcpServer =
     accumulator.mcpServer ?? readString(span.attributes, MCP.serverName, MCP.methodName);

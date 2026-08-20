@@ -382,3 +382,32 @@ describe('a span of another kind that carries the node it ran in', () => {
     assert.deepEqual(componentsOf([THINK_TOOL]), ['tool:think_tool']);
   });
 });
+
+describe('the provider a span names', () => {
+  it('reads llm.system, which is the only provider this instrumentor writes on some spans', () => {
+    // The OpenAI Agents instrumentor writes `llm.system` and no `llm.provider`, so a model that run
+    // reported was named without the provider serving it while every declared model carried one.
+    const spoken = {
+      ...BRIEF_MODEL,
+      attributes: {
+        'llm.model_name': 'gpt-5.2-2025-12-11',
+        'llm.system': 'openai',
+        'openinference.span.kind': 'LLM',
+      },
+    };
+    assert.deepEqual(componentsOf([spoken]), ['model:openai/gpt-5.2-2025-12-11']);
+  });
+
+  it('prefers the host over the API it speaks, where a span names both', () => {
+    const hosted = {
+      ...BRIEF_MODEL,
+      attributes: {
+        'llm.model_name': 'gpt-4.1-mini-2025-04-14',
+        'llm.provider': 'azure',
+        'llm.system': 'openai',
+        'openinference.span.kind': 'LLM',
+      },
+    };
+    assert.deepEqual(componentsOf([hosted]), ['model:azure/gpt-4.1-mini-2025-04-14']);
+  });
+});
