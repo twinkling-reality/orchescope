@@ -2,6 +2,96 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
+## Unreleased
+
+**No published document changes.** `packages/schema` and `schemas/` are untouched, so a consumer reading
+0.7.0's shape reads this one.
+
+Both changes below came out of one run of one LangGraph application, which is the second third party
+application this build has traced and the first outside the OpenAI Agents SDK. A reader with a stored
+LangGraph run sees their component counts, their relation counts and their join move without retracing,
+because both readings are derived when a report is built rather than when a span is stored. A reader with
+no LangGraph run sees one number move, and it is a number that was wrong everywhere.
+
+### A relation counted as exercised that nothing declared
+
+`coverage.exercisedEdges` counted every relation a run performed, including the ones reconciliation could
+match against no declaration, while `coverage.declaredEdges` beside it counted declared relations only. A
+fraction whose halves are drawn from different populations is not a fraction, and this one only ever
+overstated: on the LangGraph application below, sixteen declared relations, sixteen of them reported as
+never exercised, and an answer of eleven of sixteen.
+
+Every entry in the corpus that carries a run had it. Reading each as `exercisedEdges` against the number
+the same delta calls never exercised:
+
+```
+open-deep-research-exercised       11 of 16   where 16 of 16 were never exercised
+openai-cs-agents-demo-exercised    11 of 42   where 37 of 42 were never exercised
+pydantic-ai-exercised               2 of 597  where 597 of 597 were never exercised
+vercel-ai-chatbot-exercised         2 of 31   where 31 of 31 were never exercised
+```
+
+The two halves add up now, which is the property that was missing and the one the tests assert. What each
+entry actually joins is 0, 5, 0 and 0.
+
+**This is the defect the component fraction beside it already had and had already fixed**, which is worth
+saying plainly. The comment above the component pair records that counting an undeclared observation on
+both sides made `15 of 22` on the demonstration system include a component nothing declared, and it ends
+by noting that edges exclude a runtime only relation from their denominator. Nobody looked at the
+numerator, and the corpus recorded neither number, so a fraction that could be off by sixty nine points
+moved nothing anywhere. `runtime.declaredEdges` and `runtime.exercisedEdges` are recorded beside the
+component pair now.
+
+### What a LangGraph run says it ran, which one kind for everything hides
+
+`isStructuralSpan` decides that an OpenInference span carrying a kind and no name is the instrumentation's
+own structure rather than a component. That reading was argued from one instrumentor's spans and measured
+against no other, and OpenInference has one kind, `CHAIN`, for everything LangChain composes: a compiled
+graph, every node inside it, every subgraph, and every sequence, lambda and model wrapper a node happens to
+build. None of them carries `gen_ai.workflow.name`.
+
+So a run of a LangGraph application deleted the application. Thirty one spans walking all nine declared
+nodes of the pinned `open-deep-research` graph left a model and a tool, no observed relation at all, and a
+join reporting zero exercised components against twenty six declared. Twenty three spans were declined,
+which the report did say, and there was nothing else to read it against.
+
+**The spans do say what they ran.** LangGraph writes the node it is executing into LangChain's run
+metadata, and the instrumentor emits that metadata verbatim under the OpenInference `metadata` attribute.
+`langgraph_node` is the node's own name out of the application's graph, which is the same authority the
+LangGraph adapter reads `add_node` from, so both ends of the join are named by the same thing. A chain span
+that names a node is read as that node, and as an agent rather than as a workflow, because a node is what
+the adapter on the other side of the join calls an agent.
+
+**The node's own span is the one the graph named after it.** Every span inside a node carries the same
+`langgraph_node`, because the attribute names the node the work happened in rather than the work. Reading
+it off all of them reports one node as having run four times and counts its duration once per runnable
+nested inside it, and an inflated sample size is worse than a missing component. Everything else inside a
+node still names nothing, and a span that names nothing already attaches its work to the nearest enclosing
+component, which is the node.
+
+On `open-deep-research-exercised`, seven of the nine nodes join, `invokes_model` goes from one relation to
+six and `calls_tool` from none to one, and `configured-tool-has-no-caller` stops firing on a tool the same
+run showed being called. Ten spans are still declined, and that number is the guard on the other half: the
+compiled graph, the two subgraph loops and the three runnables inside one node all name nothing.
+
+**Five relations arrive that this application declares nowhere, and they are worth naming.** A node whose
+implementation is a subgraph nests that subgraph's nodes inside itself, so an agent span contains another
+agent span, and 0.7.0 settled that a nesting between two agents is `hands_off_to`. That branch is load
+bearing where it was argued: the demonstration system declares exactly that relation between its
+orchestrator and its workers. Here it reads a subgraph as a transfer of control to a node the subgraph is
+made of, and `hands_off_to` goes from eight relations to thirteen with none of the five joining anything.
+Nothing is invented by it, since containment would join nothing either, and the trace on its own cannot
+tell a node delegating to a peer from a node built out of one. It is left as it is and recorded rather
+than changed in the same breath as the reading above.
+
+**The two that do not join are the point.** That repository declares `supervisor` and `supervisor_tools`
+twice, once in the deep researcher graph and once in the legacy one, so the adapter disambiguated both and
+a run naming a bare `supervisor` cannot say which it ran. They are the first entries in `joins.ambiguous`
+anywhere in the corpus, so the path that refuses to guess had no field evidence behind it until now.
+
+`openai-cs-agents-demo-exercised` does not move, which is the control: that instrumentor writes no
+`metadata` attribute, and its wrapper spans still decline.
+
 ## 0.7.0
 
 Released 2026-08-20 from npm as `orchescope@0.7.0`, published locally with `npm publish --no-provenance`,
