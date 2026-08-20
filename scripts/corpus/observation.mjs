@@ -103,7 +103,21 @@ export const observationOf = (entry, audit, bundle, exercise) => {
     findings: {
       total: findings.length,
       strengths: findings.filter((finding) => finding.polarity === 'strength').length,
-      bySeverity: sortedCounts(findings.map((finding) => finding.severity)),
+      /*
+       * Severity is left out where a run reaches a provider, because a provider does not reproduce a proportion.
+       *
+       * A rule that reports concentration chooses its band from a measured share, and two runs of one commit against
+       * a real model put `latency-concentrated-in-one-component` at 42 percent and then 62 percent, which is `low`
+       * and then `medium`. Nothing about the repository moved. An expectation carrying that number manufactures a
+       * diff on every run and teaches a reader to skip the one diff this file exists to make them read.
+       *
+       * What is dropped is only the band. `byRule` was identical across both runs and stays pinned, so an entry that
+       * stops firing a rule still fails, and that is the half a join is measured on. The entries that drive an
+       * offline model reproduce a duration as well as a rule, so they keep both.
+       */
+      ...(entry.exercise?.requiresEnvironment === undefined
+        ? { bySeverity: sortedCounts(findings.map((finding) => finding.severity)) }
+        : {}),
       byRule: sortedCounts(findings.map((finding) => finding.ruleId)),
     },
   };

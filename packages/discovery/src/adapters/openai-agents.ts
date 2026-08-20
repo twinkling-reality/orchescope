@@ -126,6 +126,63 @@ const registerTools = (
 };
 
 /**
+ * A guardrail the repository declares, which is a different thing from the agent it runs.
+ *
+ * `@input_guardrail` decorates a function, and that function usually runs an agent of its own, so a repository
+ * declares both and this adapter read only the second. On the pinned customer service demo the graph held an agent
+ * named `Relevance Guardrail` and nothing else, while a run reported an evaluation under the same name. The kinds
+ * disagreed, reconciliation matches on kind and name, and one guardrail became two components with the run's half
+ * reported at high severity as having executed undeclared.
+ *
+ * `evaluator` is the kind because it is what a run calls this, and agreeing with the run is the whole point: a span
+ * whose operation is an evaluation resolves to `evaluator`, so declaring one here is what lets the two meet. It also
+ * gives that kind and the `validated_by` relation below their first producer that reads source rather than a trace.
+ */
+const registerGuardrails = (
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+): { components: number } => {
+  let components = 0;
+  const decorators = ['input_guardrail', 'output_guardrail'];
+  for (const decorated of decoratedDefinitions(context.modules, decorators, PACKAGES)) {
+    const decorator = decorated.definition.decorators.find((entry) =>
+      decorators.includes(entry.path[entry.path.length - 1] ?? ''),
+    );
+    const entries = decorator?.args[0]?.kind === 'object' ? decorator.args[0].entries : [];
+    // The decorator names the guardrail the way a run reports it; the function name is what the agent list cites.
+    const declaredName =
+      stringValue(findEntry(entries, 'name')?.value) ?? decorated.definition.name;
+    const guards =
+      decorator?.path[decorator.path.length - 1] === 'output_guardrail' ? 'output' : 'input';
+    const identity = sourceIdentity('evaluator', decorated.module.file, declaredName);
+    builder.addComponent(
+      drafts.sourceComponent({
+        kind: 'evaluator',
+        file: decorated.module.file,
+        name: declaredName,
+        location: decorated.definition.location,
+        symbol: `@${guards}_guardrail ${decorated.definition.name}`,
+        confidence: decorated.resolved
+          ? CONFIDENCE_BANDS.deterministic
+          : CONFIDENCE_BANDS.heuristic,
+        metadata: { framework: 'openai-agents', declaredName, guards },
+        tags: ['openai-agents', 'guardrail'],
+      }),
+    );
+    components += 1;
+    context.bindings.register(decorated.module.file, decorated.definition.name, identity);
+    context.bindings.register(decorated.module.file, declaredName, identity);
+    context.implementations.record({
+      identity,
+      file: decorated.module.file,
+      body: decorated.definition.location,
+      symbol: `@${guards}_guardrail ${decorated.definition.name}`,
+    });
+  }
+  return { components };
+};
+
+/**
  * How a server is reached, from either spelling.
  *
  * TypeScript passes `fullCommand` or `url` at the top level. Python nests the same facts inside `params`, as
@@ -357,6 +414,20 @@ const addAgentRelations = (
     kind: () => 'hands_off_to',
     label: 'handoffs',
   });
+  /*
+   * Read as two lists rather than one, because an agent may declare both and `addNamedRelations` takes the first key
+   * that matches. What guards the input and what checks the output are different claims about the same agent.
+   */
+  edges += addNamedRelations(context, builder, agent, {
+    key: ['input_guardrails', 'inputGuardrails'],
+    kind: () => 'validated_by',
+    label: 'input_guardrails',
+  });
+  edges += addNamedRelations(context, builder, agent, {
+    key: ['output_guardrails', 'outputGuardrails'],
+    kind: () => 'validated_by',
+    label: 'output_guardrails',
+  });
   return edges;
 };
 
@@ -379,13 +450,16 @@ export const openAiAgentsAdapter: AgentSystemAdapter = {
   appliesTo: (context) => projectUses(context, PACKAGES),
   discover: (context, builder): AdapterFindings => {
     const tools = registerTools(context, builder);
+    // Before the agents, because an agent's guardrail list is resolved through the bindings this registers.
+    const guardrails = registerGuardrails(context, builder);
     const servers = registerMcpServers(context, builder);
     const agents = registerAgents(context, builder);
     const filesInspected = context.modules
       .filter((module) => module.imports.some((entry) => PACKAGES.includes(entry.module)))
       .map((module) => module.file);
     return {
-      componentsFound: tools.components + servers.components + agents.components,
+      componentsFound:
+        tools.components + guardrails.components + servers.components + agents.components,
       edgesFound: agents.edges,
       filesInspected,
     };

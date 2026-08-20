@@ -822,6 +822,86 @@ graph = builder.compile()
  * is nested inside `params`, and a handoff that names the variable rather than the declared agent name. Every
  * shape here is taken from the SDK's own examples and dataclass fields.
  */
+/**
+ * A guardrail the repository declares, and the agent it protects.
+ *
+ * `@input_guardrail` decorates a function and that function usually runs an agent of its own, so a repository
+ * declares two things under one name. This adapter read only the agent, so the graph held an agent named for a
+ * guardrail and nothing that was one. A run reports the guardrail as an evaluation, reconciliation matches on kind
+ * and name, and the disagreement made one guardrail into two components with the run's half accused of executing
+ * undeclared. The pinned customer service demo is where that was measured.
+ */
+describe('a guardrail in the OpenAI Agents SDK', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writePythonProject(workspace, { name: 'guarded', dependencies: ['openai-agents>=0.4'] });
+    workspace.write(
+      'src/guardrails.py',
+      `from agents import Agent, input_guardrail, output_guardrail
+
+guardrail_agent = Agent(name="Relevance Guardrail", instructions="Judge whether the question is on topic.")
+
+
+@input_guardrail(name="Relevance Guardrail")
+async def relevance_guardrail(ctx, agent, input):
+    """Refuse a question that is not about the airline."""
+    return input
+
+
+@output_guardrail
+async def leak_guardrail(ctx, agent, output):
+    """Refuse an answer that leaks an internal note."""
+    return output
+`,
+    );
+    workspace.write(
+      'src/desk.py',
+      `from agents import Agent
+
+from .guardrails import leak_guardrail, relevance_guardrail
+
+triage_agent = Agent(
+    name="Triage Agent",
+    instructions="Route the customer to the right desk.",
+    input_guardrails=[relevance_guardrail],
+    output_guardrails=[leak_guardrail],
+)
+`,
+    );
+  };
+
+  it('reads the decorated function as an evaluator, under the name the decorator gives it', async () => {
+    const { ids } = await scan(build);
+    assert.ok(
+      ids.includes('evaluator:relevance-guardrail'),
+      `the decorator names this one, so the name it gives is the one a run reports. Saw ${ids.filter((id) => id.startsWith('evaluator:')).join(', ') || 'no evaluator'}`,
+    );
+    assert.ok(
+      ids.includes('evaluator:leak_guardrail'),
+      'a decorator with no name takes the function name, which is what the library does',
+    );
+  });
+
+  it('keeps the agent a guardrail runs separate from the guardrail', async () => {
+    const { ids } = await scan(build);
+    assert.ok(
+      ids.includes('agent:relevance-guardrail'),
+      'the agent the guardrail runs is still an agent, and the repository declares both',
+    );
+  });
+
+  it('joins the agent to what checks it, in both directions of the check', async () => {
+    const { edges } = await scan(build);
+    assert.ok(
+      edges.includes('validated_by:agent:triage-agent->evaluator:relevance-guardrail'),
+      `the input guardrail was not joined to the agent that declares it: ${edges.join(', ')}`,
+    );
+    assert.ok(
+      edges.includes('validated_by:agent:triage-agent->evaluator:leak_guardrail'),
+      'an output guardrail is a separate list and a separate claim about the same agent',
+    );
+  });
+});
+
 describe('the OpenAI Agents SDK in Python', () => {
   const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
     writePythonProject(workspace, { name: 'desk-py', dependencies: ['openai-agents>=0.4'] });

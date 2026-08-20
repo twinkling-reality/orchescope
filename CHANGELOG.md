@@ -4,6 +4,64 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### A guardrail the repository declares, and the agent it protects
+
+The first traced run of a third party application found this on its first attempt. The graph held
+`agent:jailbreak-guardrail`, declared and exercised, beside `evaluator:jailbreak-guardrail`, which only
+the run produced, and the same pair for the relevance guardrail. Reconciliation matches on kind and name,
+the kinds disagreed, and one guardrail became two components with the run's half reported at **high**
+severity as having executed undeclared.
+
+Neither side was wrong about what it saw. The repository states the role plainly, three times, and this
+adapter read past all of it:
+
+```
+guardrail_agent = Agent(name="Relevance Guardrail", ...)     # read
+@input_guardrail(name="Relevance Guardrail")                 # ignored
+input_guardrails=[relevance_guardrail, jailbreak_guardrail]  # ignored
+```
+
+`@input_guardrail` and `@output_guardrail` are read now, as `evaluator` components, and
+`input_guardrails` and `output_guardrails` as `validated_by` relations from the agent to what checks it.
+The two lists are read separately, because what guards an input and what checks an output are different
+claims about the same agent. `evaluator` is the kind because it is what a run calls this, and agreeing
+with the run is the whole point.
+
+The agent a guardrail runs stays a separate agent. A repository declares two things here, a decorated
+function and the agent that function runs, and on the pinned demo both carry the same name; collapsing
+them would trade one wrong answer for another.
+
+On `openai-cs-agents-demo` both guardrails now join instead of being accused: exercised goes from 5 of 22
+to 7 of 24, `validated_by` from 2 relations to 14, twelve of them read from source where the run had
+supplied the only two. The high severity finding is still there and it is now about the two models, which
+genuinely are undeclared because the demo pins none. A wrong high finding was replaced by a right one.
+
+On `openai-agents-python`, the SDK's own repository, 48 evaluators appear and 46 of them are in its test
+suite, marked and left out of what the rules judge. The two the repository ships are `math_guardrail` and
+`sensitive_data_check` in `examples/agent_patterns`, each joined to the agent that declares it.
+
+Only the Python spelling is read. The JavaScript SDK declares a guardrail as an object rather than
+through a decorator, so `openai-agents-js` does not move, and an agent there that names a guardrail this
+build cannot resolve draws no relation rather than a guessed one.
+
+`evaluator` and `validated_by` both gain their first producer that reads source rather than a trace, and
+move out of the table in `tests/e2e/rule-input-producers.test.ts` that records what only a run can write.
+
+### An expectation cannot pin what a provider will not reproduce
+
+Measuring that fix twice showed the entry moving on its own. `latency-concentrated-in-one-component` put
+one model at 42 percent of measured time and then at 62 percent, which is `low` and then `medium`, with
+nothing in the repository changed. A corpus exists so that a diff means something, and an entry that
+manufactures one on every run teaches a reader to skip the diff this file exists to make them read.
+
+An observation no longer pins `findings.bySeverity` where the entry declares `requiresEnvironment`, which
+is exactly the entries that reach a provider. Only the band is dropped: `byRule` was identical across
+both runs and stays pinned, so an entry that stops firing a rule still fails, and that is the half a join
+is measured on. The two hermetic entries drive an offline model, reproduce a duration as well as a rule,
+and keep both.
+
+Checked by running the entry against a live provider twice in a row. Both matched.
+
 ### The join, on an application, with a provider actually called
 
 The two entries that carried a run before this one are hermetic by design: each drives its library's own

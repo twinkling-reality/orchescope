@@ -43,8 +43,8 @@
       "status": "not_applicable"
     },
     "adapter:openai-agents": {
-      "componentsFound": 19,
-      "edgesFound": 12,
+      "componentsFound": 21,
+      "edgesFound": 24,
       "filesInspected": 4,
       "status": "completed"
     },
@@ -115,11 +115,6 @@
       "tokens-concentrated-in-one-component": 1,
       "topology-shape": 1
     },
-    "bySeverity": {
-      "high": 1,
-      "low": 5,
-      "medium": 5
-    },
     "strengths": 0,
     "total": 11
   },
@@ -135,22 +130,20 @@
       "hands_off_to": 4,
       "invokes_model": 2,
       "publishes_to_queue": 1,
-      "validated_by": 2
+      "validated_by": 14
     },
-    "total": 33
+    "total": 45
   },
   "runtime": {
     "ambiguousNames": [],
     "contradictions": 0,
-    "declaredComponents": 22,
+    "declaredComponents": 24,
     "duplicateSideEffects": 0,
-    "exercisedComponents": 5,
+    "exercisedComponents": 7,
     "exercisedNotDeclared": [
       "agent:agent-workflow",
       "agent_group:agent-workflow",
       "agent_group:turn",
-      "evaluator:jailbreak-guardrail",
-      "evaluator:relevance-guardrail",
       "model:gpt-4.1-mini-2025-04-14",
       "model:gpt-5.2-2025-12-11",
       "tool:to-seat-and-special-services-agent",
@@ -161,6 +154,8 @@
       "agent:relevance-guardrail",
       "agent:seat-and-special-services-agent",
       "agent:triage-agent",
+      "evaluator:jailbreak-guardrail",
+      "evaluator:relevance-guardrail",
       "tool:update_seat"
     ],
     "joinedOnNameAlone": [
@@ -168,6 +163,8 @@
       "agent:relevance-guardrail",
       "agent:seat-and-special-services-agent",
       "agent:triage-agent",
+      "evaluator:jailbreak-guardrail",
+      "evaluator:relevance-guardrail",
       "tool:update_seat"
     ],
     "runs": 1,

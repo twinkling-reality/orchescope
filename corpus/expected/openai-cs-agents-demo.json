@@ -43,8 +43,8 @@
       "status": "not_applicable"
     },
     "adapter:openai-agents": {
-      "componentsFound": 19,
-      "edgesFound": 12,
+      "componentsFound": 21,
+      "edgesFound": 24,
       "filesInspected": 4,
       "status": "completed"
     },
@@ -84,13 +84,14 @@
     "byKind": {
       "agent": 8,
       "entrypoint": 3,
+      "evaluator": 2,
       "external_service": 2,
       "prompt": 14,
       "queue": 1,
       "tool": 11
     },
     "declaredInTest": 0,
-    "total": 39
+    "total": 41
   },
   "discardedRelations": [],
   "files": {
@@ -123,8 +124,9 @@
     "byKind": {
       "calls_service": 2,
       "calls_tool": 12,
-      "publishes_to_queue": 1
+      "publishes_to_queue": 1,
+      "validated_by": 12
     },
-    "total": 15
+    "total": 27
   }
 }
