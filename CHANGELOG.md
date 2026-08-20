@@ -4,6 +4,42 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+Two changes to how a reader and an agent find the loop, and the first CrewAI run anywhere in this corpus.
+No published document changes: `packages/schema` and `schemas/` are untouched.
+
+### An agent connecting over MCP was told nothing before it had to choose
+
+The protocol carries one string a server can send at the handshake, and this one sent none. So a coding
+agent arriving here saw seventeen tool names and no statement of where to begin, and the honest first move
+was a guess between `scan_agent_system`, `get_system_map` and `get_findings`. None of the three is wrong and
+none of them is the beginning.
+
+The loop was already in the payload and had been since it was written. `audit_agent_system` returns which of
+the five steps a repository is standing at and the one next action, with `loop.next.tool` naming the tool and
+the arguments where a tool exists. **What was missing was the sentence that says to start there.** The server
+now sends it: what Orchescope is, call `audit_agent_system` first, then follow `loop.next.tool`.
+
+It stays four short paragraphs and a test holds it there, because this text is prepended to a context window
+on every session and a front door that has to be read is not a front door. A second test fails if it ever
+spells a tool name that does not exist, which is the drift nothing else here would catch: renaming a tool
+would leave the entry point pointing at nothing.
+
+No behaviour changes and no schema changes. What moves is what an agent knows before its first call.
+
+### The README leads with the loop rather than with the capability list
+
+A reader met seven bullets about what Orchescope does, five about what it does not, and a section on
+verifying a tarball, and reached the loop sixty lines in. The loop is the whole interface: install, run one
+command, get told the single next thing, and find out whether it helped. It is now the second section, as
+five named steps with the command that runs each one, and it says plainly that a coding agent runs the same
+loop with no person in it.
+
+The five steps in that table are the five an audit prints, and `tests/e2e/documented-loop.test.ts` compares
+them against a real audit rather than against the constants, because the constants are the half a reader
+never sees. Renaming a step in one place and not the other used to move nothing a gate would notice.
+
+### CrewAI at run time, which nothing anywhere had measured
+
 CrewAI is measured at run time for the first time. It was the one framework in the README's support table
 whose "Joined on a run" column read `not yet`, it had never produced a span in any corpus entry, and
 everything this build claimed about the dialect had been argued from the adapter alone.
