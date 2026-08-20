@@ -7,10 +7,57 @@ Notable changes per released version. Nothing here is generated; a release is a 
 **No published document changes.** `packages/schema` and `schemas/` are untouched, so a consumer reading
 0.7.0's shape reads this one.
 
-The changes below came out of runs of LangGraph applications, one in each ecosystem. A reader with a stored
-LangGraph run sees their component counts, their relation counts and their join move without retracing,
-because every reading here is derived when a report is built rather than when a span is stored. A reader
-with no LangGraph run sees one number move, and it is a number that was wrong everywhere.
+The changes below came out of LangGraph applications, one read and two traced, one in each ecosystem.
+
+**A reader with a LangGraph application sees their declared graph grow whether or not they have ever traced
+it**, because the routes a node declares by returning a `Command` were invisible and are now relations. That
+moves reachability, cycles, entry points and the coordination fan out, and on the pinned application it
+turns a strength into four cycles. A reader with a stored run sees their component counts and their join
+move as well, without retracing, because every reading here is derived when a report is built rather than
+when a span is stored.
+
+### A graph declared from inside its own nodes
+
+The LangGraph adapter read `add_edge` and `add_conditional_edges`, which is how the library's first
+documentation wires a graph and is neither of the ways the pinned `open_deep_research` application does it.
+A node there returns `Command(goto="write_research_brief")`, and seven of the eight relations that file
+declares between its own nodes are written that way. Nine nodes with exactly one relation between two of
+them was the whole declared graph, which is the single `add_edge` its file contains.
+
+**What that produced was not a missing finding but a wrong one, reported as a strength.** `topology-shape`
+read a graph with almost nothing in it and said the declared topology is reachable, acyclic and narrow. The
+application is a supervisor loop: `supervisor` commands `supervisor_tools`, which commands `supervisor`
+back, and `researcher` and `researcher_tools` do the same one level down. Telling a reader their agent
+topology is acyclic because the edges could not be seen is worse than saying nothing.
+
+A `Command` whose `goto` is a string literal naming a node the same module declared is now read as a
+handoff from the node the call sits inside. Which function implements which node is what `add_node` already
+states, so both ends are named by the same authority the rest of this adapter reads.
+
+The route is taken from the call rather than from the `-> Command[Literal["a", "b"]]` return annotation
+that usually sits above it. The annotation is the fuller statement and it is the one the fact model does
+not carry: a return type is not a call, an argument or a definition, so reading it means teaching two
+language parsers a new fact first. Where the two disagree, the call is the one a reader can check by
+running it.
+
+Nothing is read from `goto=END`, from a `Send` fan out, or from a name computed at run time. The sentinel
+needs no special case: `__end__` is never a declared node, because `add_node` rejects the name.
+
+On `open-deep-research`, `hands_off_to` goes from eight relations to eighteen, and every one of the ten is
+a line in that repository a reader can open. `topology-shape` stops reporting a strength and reports four
+cycles across eight components. `open-deep-research-exercised` moves by the same amount and still agrees
+with it, which is the invariant that pair exists to hold, and its `declaredEdges` goes from sixteen to
+twenty six while `exercisedEdges` stays at zero. **The delta gets worse and that is the point:** LangGraph
+opens each node's span under the compiled graph rather than under whichever node routed to it, so the run
+shows containment where the source declares routing, and none of the ten joins. Zero of twenty six is a
+truer statement than zero of sixteen.
+
+`langgraph` gains sixteen handoffs, all of them inside its own test files, so every component they touch is
+marked as declared in a test and no rule fires on any of them. `langgraphjs` gains none, for two reasons
+worth stating rather than leaving as a zero: it imports its own `Command` from a relative path rather than
+from the package, and its graphs pass inline functions to `addNode`, which the fact model reduces to the
+fact that they are functions. An application does neither. `gpt-researcher` gains none because it does not
+use the idiom at all.
 
 ### The entry of a graph, read as a node of it
 

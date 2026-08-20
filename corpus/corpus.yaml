@@ -74,6 +74,12 @@ repositories:
       was behind. Its own tests and examples are written in every form the library documents, which is exactly the
       surface a per framework reader drifts away from.
 
+      Sixteen of its handoffs are read out of Command(goto=) returns, which is the idiom this library defines and
+      which an application declares its whole graph in. All sixteen are in its own test files, so every component
+      they touch is marked declaredInTest and no rule fires on any of them. The number is here because it is the
+      reading measured against the library that defines the idiom, and because it moving is how a rename in
+      langgraph.types would be noticed.
+
   - name: langgraphjs
     source: git
     url: https://github.com/langchain-ai/langgraphjs.git
@@ -83,6 +89,14 @@ repositories:
       LangGraph in JavaScript, and the entry that currently reports two blind spots: the repository imports the
       Vercel AI SDK and an OpenAI client that the adapters claiming them read nothing from. Those two lines are the
       measurement, and they stay in the expectation until an adapter earns their removal.
+
+      It is also where the Command(goto=) reading finds nothing, and both reasons are worth stating rather than
+      leaving as a zero. This repository imports its own Command from a relative path rather than from the package,
+      and the reading asks where Command came from, because a class named after a common noun is the one most
+      likely to collide. Its graphs also pass an inline function to addNode, and the fact model reduces a function
+      argument to the fact that it is one, so nothing connects the commands inside it to the node it implements.
+      An application does neither: it imports from the package and registers a named function. That the number here
+      is zero while open-deep-research reads ten is the difference between a library and a use of one.
 
   - name: crewai
     source: git
@@ -208,6 +222,18 @@ repositories:
       LangGraph application, an Azure search client and a model call with no declared deadline, which is three
       readers joined on one graph in a repository a person can read in an afternoon.
 
+      It is also the repository that showed a graph declared from inside its own nodes. This adapter read add_edge
+      and add_conditional_edges, which is how the library's first documentation wires a graph and is neither of the
+      two ways this application does it: a node returns Command(goto="write_research_brief"), and seven of the
+      eight relations deep_researcher.py declares between its own nodes are written that way. Nine nodes with one
+      relation between two of them was the whole declared graph, and topology-shape reported a strength saying the
+      topology is reachable, acyclic and narrow. It is a supervisor loop. A strength claimed because the relations
+      were invisible is worse than either a missing finding or a wrong one, which is why the count is here now:
+      hands_off_to reads eighteen where it read eight, and the strength is four cycles across eight components,
+      which are supervisor and supervisor_tools, researcher and researcher_tools, and two more in the legacy
+      graphs. Every one of the ten new relations is a Command(goto=) line in this repository that a reader can
+      open.
+
   - name: open-deep-research-exercised
     source: git
     url: https://github.com/langchain-ai/open_deep_research.git
@@ -234,6 +260,14 @@ repositories:
       from a graph to its nodes and a relation between two nodes joins neither way, and it would trade five relations
       a reader can question for five a reader cannot see. The reading is kept, and the number is pinned so that
       changing it is a decision rather than a diff.
+
+      The declared half of it grew afterwards, and the delta got worse rather than better, which is the honest
+      outcome. Reading the routes a node declares by returning a Command takes declaredEdges from sixteen to
+      twenty six, and this run joins none of them either, because LangGraph opens each node's span under the
+      compiled graph rather than under whichever node routed to it. So the observed shape is containment and the
+      declared shape is routing, and ten more declared relations arrive with nothing to match. A join that reads
+      zero of twenty six is a truer statement than one that read zero of sixteen because ten of the twenty six
+      were invisible.
 
       What the entry holds now is the counts that go quiet if the reading stops working. Seven of the nine nodes
       join, and joinedOnNameAlone is the list of them. Ten spans are still declined and that number is the guard on
