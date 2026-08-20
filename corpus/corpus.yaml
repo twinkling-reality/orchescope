@@ -284,9 +284,15 @@ repositories:
     why: >-
       A LangGraph application in JavaScript, which is the half of that framework this corpus reads only from the
       library that defines it. langgraph and langgraphjs are framework repositories, open-deep-research is Python,
-      and a repository that documents an API and a repository that uses one are different shapes. This is five
-      source files declaring two nodes, three edges and one tool, which is small enough that a person can check
-      every number here against the source in a few minutes.
+      and a repository that documents an API and a repository that uses one are different shapes. This is six
+      source files declaring two nodes and two relations between them, small enough that a person can check every
+      number here against the source in a few minutes: the third edge the file writes runs from the START sentinel
+      and is an entry point rather than a relation, and the fourth branch of the conditional runs to END.
+
+      What it declares and this build does not read is the tool. upsertMemory is built with tool() from
+      @langchain/core/tools inside a function that closes over the run's configuration, and no adapter reads that
+      shape, so the entry beside this one reports a tool nothing declared. That is true of this build rather than
+      of the repository, and it is part of what these two entries hold.
 
   - name: memory-agent-js-exercised
     source: git
@@ -304,13 +310,21 @@ repositories:
       metadata document generalises, and the two declared relations join neither way, because LangGraph runs its
       nodes as siblings under one pregel span rather than nesting each in the one that routed to it.
 
-      It also records what the two instrumentors do not agree on. The JavaScript one emits a node span for
-      __start__, the sentinel LangGraph reserves for the entry of a graph, and the Python one does not: the same two
-      node graph written in both produces three spans in Python and four in JavaScript. No application can declare
-      that name, because addNode rejects it, and the adapter on the declared side has excluded it since it was
-      written. The other disagreement is the provider: the Python instrumentor writes llm.provider and this one
-      writes neither that nor llm.system, so the model here is named gpt-4o-mini where the Python entry names
-      openai/gpt-4.1-mini-2025-04-14, and that is what the span said rather than something this build could fix.
+      What it found is where the two instrumentors do not agree. The JavaScript one opens a node span for
+      __start__, the name LangGraph keeps for the entry of a graph, and the Python one opens none: the same two node
+      graph written in both produces three spans there and four here. It arrives named after itself and carrying
+      itself in langgraph_node, which is a node span's exact shape, so it was read as one and reported as an agent
+      that ran without being declared. No repository can declare it, because addNode rejects the name in both
+      ecosystems, and the adapter on the declared side has excluded it since it was written. That was recorded here
+      before it was fixed, because an expectation written afterwards cannot show what the fix moved: three agents
+      and seven components became two and six, and exercised-not-declared went from naming three components to two
+      while still reporting two findings, which is why componentsByRule is beside byRule. open-deep-research-exercised
+      does not move, and it is the control.
+
+      The other disagreement is the provider, and this one is not a defect of this build. The Python instrumentor
+      writes llm.provider and this one writes neither that nor llm.system, so the model here is named gpt-4o-mini
+      where the Python entry names openai/gpt-4.1-mini-2025-04-14. That is what the span said, and inventing the
+      provider from the model name would be a guess.
     exercise:
       why: >-
         The dialect measurement in the other ecosystem. openinference-instrumentation-langchain is the instrumentor
