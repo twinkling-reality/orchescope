@@ -10,6 +10,7 @@ import {
 } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { createDrafts, sourceIdentity } from '../drafts.ts';
+import { routesDeclaredInNodes } from '../graph-node-route.ts';
 import { definitionForCall, importsAny, projectUses } from '../matching.ts';
 import { addModelReference } from '../model-reference.ts';
 
@@ -24,6 +25,10 @@ import { addModelReference } from '../model-reference.ts';
  * The two ecosystems name a node differently. `addNode("planner", planner)` states the name, and Python also
  * accepts `add_node(planner)`, where the library takes the function's own name. Both are read; nothing else is
  * treated as a name.
+ *
+ * A node also declares where it goes from inside itself, by returning a `Command` naming another node.
+ * `graph-node-route.ts` reads that, and what it needs from here is which function implements which node,
+ * because the relation runs between two node names and the call sites are inside the functions.
  */
 
 const PACKAGES = [
@@ -132,12 +137,31 @@ const discoverGraphConstruction = (
   };
 };
 
+/**
+ * The function a node registration names as the node's implementation.
+ *
+ * `add_node("supervisor", supervisor)` names it in the second argument, and Python's `add_node(supervisor)`
+ * makes the function its own node name. Either way this is what lets a call inside that function be read as
+ * a statement about the node, which is what the `Command` idiom needs. A compiled subgraph in that position
+ * is recorded the same way and finds nothing, because no function of that name encloses anything.
+ */
+const recordImplementation = (
+  call: ModuleFacts['calls'][number],
+  name: string,
+  implementations: Map<string, string>,
+): void => {
+  const implementation = call.args[1];
+  if (implementation?.kind === 'identifier') implementations.set(implementation.name, name);
+  else if (call.args[0]?.kind === 'identifier') implementations.set(name, name);
+};
+
 const discoverNodes = (
   module: ModuleFacts,
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   groupIdentity: ComponentIdentity | undefined,
   declaredNodes: Set<string>,
+  implementations: Map<string, string>,
 ): Counts => {
   let components = 0;
   let edges = 0;
@@ -147,6 +171,7 @@ const discoverNodes = (
     const name = nodeNameFrom(module, call, method);
     if (name === undefined) continue;
     declaredNodes.add(name);
+    recordImplementation(call, name, implementations);
     const identity = nodeIdentity(module.file, name);
     builder.addComponent(
       drafts.sourceComponent({
@@ -356,8 +381,16 @@ const discoverModule = (
   builder: SystemGraphBuilder,
 ): Counts => {
   const declaredNodes = new Set<string>();
+  const implementations = new Map<string, string>();
   const construction = discoverGraphConstruction(module, builder);
-  const nodes = discoverNodes(module, context, builder, construction.groupIdentity, declaredNodes);
+  const nodes = discoverNodes(
+    module,
+    context,
+    builder,
+    construction.groupIdentity,
+    declaredNodes,
+    implementations,
+  );
 
   let edges = nodes.edges;
   for (const call of module.calls) {
@@ -367,6 +400,19 @@ const discoverModule = (
     } else if (CONDITIONAL_METHODS.has(method)) {
       edges += addConditionalEdges(module, builder, call, method, declaredNodes);
     }
+  }
+  for (const route of routesDeclaredInNodes(module, implementations, declaredNodes)) {
+    builder.addEdge(
+      drafts.edge({
+        kind: 'hands_off_to',
+        from: nodeIdentity(module.file, route.from),
+        to: nodeIdentity(module.file, route.to),
+        location: route.location,
+        symbol: route.symbol,
+        metadata: { conditional: true },
+      }),
+    );
+    edges += 1;
   }
 
   const react = discoverReactAgents(module, context, builder);

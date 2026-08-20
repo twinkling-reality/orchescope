@@ -20,7 +20,7 @@
     },
     "adapter:langgraph": {
       "componentsFound": 1278,
-      "edgesFound": 1067,
+      "edgesFound": 1083,
       "filesInspected": 230,
       "status": "completed"
     },
@@ -127,11 +127,11 @@
       "calls_service": 4,
       "calls_tool": 3,
       "contains": 450,
-      "hands_off_to": 182,
+      "hands_off_to": 197,
       "publishes_to_queue": 9,
       "queries_database": 6,
       "uses_prompt": 2
     },
-    "total": 656
+    "total": 671
   }
 }

@@ -816,6 +816,126 @@ graph = builder.compile()
 });
 
 /**
+ * A LangGraph node that says where it goes from inside itself.
+ *
+ * The fixture above wires its graph from outside every node, which is how the library's first documentation
+ * writes one and the only shape this adapter read. The modern idiom returns a `Command` naming the next node,
+ * and the pinned `open_deep_research` application is written almost entirely that way: nine nodes, six routes
+ * written as commands, and one `add_edge` between two of them, which was the whole declared graph.
+ */
+describe('a LangGraph route declared inside the node in Python', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writePythonProject(workspace, { name: 'command-py', dependencies: ['langgraph>=0.2'] });
+    workspace.write(
+      'src/graph.py',
+      `from typing import Literal
+
+from typing_extensions import TypedDict
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command
+
+
+class State(TypedDict):
+    question: str
+
+
+async def plan(state: State) -> Command[Literal["research", "__end__"]]:
+    if not state["question"]:
+        return Command(goto=END)
+    return Command(goto="research", update={"question": state["question"]})
+
+
+async def research(state: State) -> Command[Literal["write_answer"]]:
+    return Command(goto="write_answer")
+
+
+async def write_answer(state: State) -> State:
+    return state
+
+
+builder = StateGraph(State)
+builder.add_node(plan)
+builder.add_node("research", research)
+builder.add_node("write_answer", write_answer)
+builder.add_edge(START, "plan")
+
+graph = builder.compile()
+`,
+    );
+  };
+
+  it('records the node a command names as a handoff from the node that returns it', async () => {
+    // Both registration forms are here: `add_node(plan)` takes the function's own name as the node's, and
+    // `add_node("research", research)` names it. Either way what the route needs is which function
+    // implements which node, and a route is read out of each.
+    const { edges } = await scan(build);
+    assert.ok(
+      edges.includes('hands_off_to:agent:plan->agent:research'),
+      `expected the command route in ${edges.join(', ')}`,
+    );
+    assert.ok(
+      edges.includes('hands_off_to:agent:research->agent:write_answer'),
+      `expected the second command route in ${edges.join(', ')}`,
+    );
+  });
+
+  it('reads no route out of a command that names the exit sentinel', async () => {
+    // `goto=END` is an identifier rather than a name, and `__end__` is never a declared node because
+    // `add_node` rejects it, so there is nothing to draw a relation to either way.
+    const { edges, ids } = await scan(build);
+    assert.equal(
+      edges.some((edge) => edge.includes('END') || edge.includes('__end__')),
+      false,
+      `a sentinel became a relation in ${edges.join(', ')}`,
+    );
+    assert.equal(ids.includes('agent:__end__'), false);
+  });
+});
+
+/**
+ * The same idiom in JavaScript, which spells it `new Command({ goto: "..." })`.
+ *
+ * A fact read in one ecosystem is not read in the other. The keyword argument and the object property arrive
+ * as the same fact, which is what lets one reading cover both, and this is the fixture that says so.
+ */
+describe('a LangGraph route declared inside the node in JavaScript', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writeNodeProject(workspace, {
+      name: 'command-js',
+      dependencies: { '@langchain/langgraph': '^0.4.0' },
+    });
+    workspace.write(
+      'src/graph.ts',
+      `import { Command, START, StateGraph } from '@langchain/langgraph';
+
+const plan = async () => new Command({ goto: 'research' });
+const research = async () => new Command({ goto: 'writer' });
+const writeAnswer = async () => ({});
+
+export const graph = new StateGraph({ channels: {} })
+  .addNode('plan', plan)
+  .addNode('research', research)
+  .addNode('writer', writeAnswer)
+  .addEdge(START, 'plan')
+  .compile();
+`,
+    );
+  };
+
+  it('records the node a command names as a handoff, as it does in the other ecosystem', async () => {
+    const { edges } = await scan(build);
+    assert.ok(
+      edges.includes('hands_off_to:agent:plan->agent:research'),
+      `expected the command route in ${edges.join(', ')}`,
+    );
+    assert.ok(
+      edges.includes('hands_off_to:agent:research->agent:writer'),
+      `expected the second command route in ${edges.join(', ')}`,
+    );
+  });
+});
+
+/**
  * The OpenAI Agents SDK in Python.
  *
  * Keyword arguments, the `@function_tool` decorator with and without an override, an MCP server whose command

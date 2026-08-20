@@ -20,7 +20,7 @@
     },
     "adapter:langgraph": {
       "componentsFound": 30,
-      "edgesFound": 31,
+      "edgesFound": 43,
       "filesInspected": 8,
       "status": "completed"
     },
@@ -109,15 +109,16 @@
       "topology-shape": 1
     },
     "bySeverity": {
-      "info": 2,
+      "info": 1,
+      "low": 1,
       "medium": 1
     },
     "componentsByRule": {
       "model-call-without-timeout": 2,
       "observability-coverage": 5,
-      "topology-shape": 5
+      "topology-shape": 8
     },
-    "strengths": 1,
+    "strengths": 0,
     "total": 3
   },
   "foundNothing": [
@@ -130,12 +131,12 @@
     "byKind": {
       "calls_service": 1,
       "contains": 23,
-      "hands_off_to": 8,
+      "hands_off_to": 18,
       "invokes_model": 1,
       "queries_retrieval": 2,
       "served_by_provider": 1,
       "uses_prompt": 3
     },
-    "total": 39
+    "total": 49
   }
 }

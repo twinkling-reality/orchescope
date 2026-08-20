@@ -20,7 +20,7 @@
     },
     "adapter:langgraph": {
       "componentsFound": 30,
-      "edgesFound": 31,
+      "edgesFound": 43,
       "filesInspected": 8,
       "status": "completed"
     },
@@ -120,9 +120,9 @@
       "model-call-without-timeout": 8,
       "observability-coverage": 10,
       "tokens-concentrated-in-one-component": 1,
-      "topology-shape": 5
+      "topology-shape": 8
     },
-    "strengths": 1,
+    "strengths": 0,
     "total": 8
   },
   "foundNothing": [
@@ -136,13 +136,13 @@
       "calls_service": 1,
       "calls_tool": 1,
       "contains": 23,
-      "hands_off_to": 13,
+      "hands_off_to": 23,
       "invokes_model": 6,
       "queries_retrieval": 2,
       "served_by_provider": 1,
       "uses_prompt": 3
     },
-    "total": 50
+    "total": 60
   },
   "runtime": {
     "ambiguousNames": [
@@ -151,7 +151,7 @@
     ],
     "contradictions": 0,
     "declaredComponents": 26,
-    "declaredEdges": 16,
+    "declaredEdges": 26,
     "duplicateSideEffects": 0,
     "exercisedComponents": 7,
     "exercisedEdges": 0,
