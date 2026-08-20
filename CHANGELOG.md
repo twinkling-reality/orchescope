@@ -2,7 +2,7 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
-## Unreleased
+## 0.8.0
 
 **No published document changes.** `packages/schema` and `schemas/` are untouched, so a consumer reading
 0.7.0's shape reads this one.
