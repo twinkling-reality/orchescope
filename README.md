@@ -203,11 +203,23 @@ every dialect measured for the first time has changed what this build reports ab
 | Cloudflare Workers bindings | `wrangler.toml` anywhere in the workspace: `d1_databases` and `kv_namespaces`, joined to the code by the binding name | not yet |
 | OpenTelemetry | OTLP over HTTP, protobuf and JSON, `gen_ai.*` attributes | every run in the corpus |
 
-**One model component has ever joined a declaration, and it is an offline test model.** Every run in the
-corpus that reaches a real provider reports its model as exercised and never declared, because a repository
-declares the model it asks for and a run reports the model that answered: `openai:gpt-4.1-mini` against
-`gpt-4.1-mini-2025-04-14`. Agents, tools and handoffs join; models do not yet. That is the largest known gap
-in the second column and it is the same in both ecosystems.
+**One model component has ever joined a declaration, and it is an offline test model.** Agents, tools and
+handoffs join. Models do not, and the reason is worth stating exactly, because it is not what it looks
+like.
+
+A model is chosen where a run is configured rather than where an agent is written. The pinned deep research
+application names its models in `Field(default="openai:gpt-4.1")` on a configuration class; the pinned
+customer service demonstration names none at all and takes the SDK's default; the pinned memory agent
+defaults to a literal inside the function that reads its configuration. None of those is a position any
+adapter here reads a model reference from, so on all three the static side declares no model for the run to
+match, and the run's model arrives as exercised and never declared. The two entries that do declare models
+drive an offline model, so nothing overlaps there either.
+
+Reading a model named in a configuration default is what would have to change. It would not close the gap
+on its own: that deep research default is `openai:gpt-4.1` and the run measured here asked for
+`openai:gpt-4.1-mini`, which are two models and should not join. Nothing in this corpus yet shows a
+declared model and an observed model that differ only by the version the provider answered with, so no rule
+here matches on one.
 
 `create_react_agent` is read in its Python spelling only. The JavaScript prebuilt helper takes a different shape, and
 reading it the same way would be a guess rather than a fact.

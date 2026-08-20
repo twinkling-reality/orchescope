@@ -53,6 +53,16 @@ Every entry carrying a run either drives an offline model or runs Python, where 
 so all twenty four match unchanged. What the changes are measured against instead is a stored run of the
 pinned OpenAI Agents example against a real provider, held span for span in `packages/traces/test`.
 
+**Why no model has ever joined a declaration was measured rather than assumed, and it is not what it
+looked like.** A model is chosen where a run is configured rather than where an agent is written: the
+pinned deep research application names its models in `Field(default="openai:gpt-4.1")` on a configuration
+class, the pinned customer service demonstration names none and takes the SDK's default, and the pinned
+memory agent defaults to a literal inside the function that reads its configuration. No adapter reads a
+model reference from any of those positions, so on all three the static side declares no model at all for
+the run to match. The two entries that do declare models drive an offline one. A rule matching a declared
+model against an observed model that differs only by the version a provider answered with would have fired
+nowhere in this corpus, so none was written.
+
 **What the shim sees is narrower than a Node run**, which the same measurement showed. It patches
 `globalThis.fetch`, so a target whose HTTP goes through `node-fetch` is invisible to it: the pinned
 LangGraph JavaScript run reaches a real provider twice through `openai@4`, which bundles `node-fetch`, and
