@@ -266,6 +266,39 @@ describe('deriveTopology', () => {
     assert.equal(result.topology.components.length, 3);
   });
 
+  /**
+   * A workflow a run names is the one target kind in `EDGE_KIND_BY_TARGET` that no corpus run reaches, so
+   * nothing outside this test says what a nesting into one means. It is containment for the same reason a
+   * nesting into an agent from anything other than an agent is: what was observed is that the work
+   * happened inside, and calling it a transfer of control would report one that never happened.
+   */
+  it('calls a nesting into a workflow containment, whatever opened it', () => {
+    const result = topologyOf([
+      {
+        name: 'invoke_agent orchestrator',
+        spanId: '1'.repeat(16),
+        start: 0,
+        end: 100,
+        attributes: { [GEN_AI.operationName]: 'invoke_agent', [GEN_AI.agentName]: 'orchestrator' },
+      },
+      {
+        name: 'invoke_workflow nightly-report',
+        spanId: '2'.repeat(16),
+        parentSpanId: '1'.repeat(16),
+        start: 10,
+        end: 90,
+        attributes: {
+          [GEN_AI.operationName]: 'invoke_workflow',
+          [GEN_AI.workflowName]: 'nightly-report',
+        },
+      },
+    ]);
+    assert.deepEqual(
+      result.topology.edges.map((edge) => `${edge.kind} ${edge.fromKind} -> ${edge.toKind}`),
+      ['contains agent -> agent_group'],
+    );
+  });
+
   it('reports the time a component spent on its own work, not the time its children took', () => {
     const result = topologyOf([
       {
