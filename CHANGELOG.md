@@ -4,6 +4,31 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### A nesting is a handoff only between two agents
+
+The third thing that traced run found, and the one the two fixes above made impossible to miss. A span
+nested inside another was read through the child alone: a span that contained an agent span was a
+`hands_off_to`, whatever had contained it. So the guardrail, whose implementation is an agent of the same
+name, produced `hands_off_to` from `evaluator:relevance-guardrail` to `agent:relevance-guardrail`, which
+reads as a component handing off to itself, and a transfer of control that never happened was reported as
+exercised beside the two that did.
+
+Reading the child alone is right for every other kind, because what a nesting means is settled by what
+was nested: a span that contained a tool span called that tool. An agent is the exception, because what
+it means to run an agent depends on what ran it.
+
+**One agent's span containing another's stays a handoff, and that branch is load bearing.** The
+demonstration system declares `hands_off_to` from its orchestrator to each of its workers and its run
+nests the worker inside the orchestrator, so that is the branch which joins the two, and a test now says
+so. Anything else that contains an agent span merely ran it, and `contains` is what that is: containment
+is what was observed, and it stays out of the control flow projection, where a relation this build could
+not name has no business contributing a cycle or a fan out.
+
+`openai-cs-agents-demo-exercised` moves two relations from `hands_off_to` to `contains` and nothing else
+moves, on any entry. Notably `topology-shape` does not: those two agents are still not entry points,
+because containment disqualifies a root exactly as a transfer does. That the number did not move is the
+point, since the edge kind was not chosen to move it.
+
 ### The spans an instrumentation opens for its own structure
 
 The same traced run, and the larger half of what it found. The OpenAI Agents SDK's instrumentor opens a

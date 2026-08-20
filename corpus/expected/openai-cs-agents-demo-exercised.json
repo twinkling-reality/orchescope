@@ -125,7 +125,8 @@
     "byKind": {
       "calls_service": 2,
       "calls_tool": 12,
-      "hands_off_to": 17,
+      "contains": 2,
+      "hands_off_to": 15,
       "invokes_model": 4,
       "publishes_to_queue": 1,
       "validated_by": 12

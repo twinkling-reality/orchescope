@@ -159,10 +159,18 @@ type EdgeAccumulator = {
   evidence: Set<string>;
 };
 
+/**
+ * What one span nested inside another says about the two components, read from the child's kind.
+ *
+ * For most kinds the child settles it whatever the parent was: a span that contained a tool span called
+ * that tool, and one that contained a model span invoked that model. An agent is the exception, because
+ * what it means to run an agent depends on what ran it, which is why `edgeKindFor` asks about the parent
+ * before consulting this table.
+ */
 const EDGE_KIND_BY_TARGET: Readonly<Record<string, string>> = {
   model: 'invokes_model',
   tool: 'calls_tool',
-  agent: 'hands_off_to',
+  agent: 'contains',
   agent_group: 'contains',
   retrieval: 'queries_retrieval',
   memory: 'reads_memory',
@@ -175,6 +183,20 @@ const EDGE_KIND_BY_TARGET: Readonly<Record<string, string>> = {
   mcp_server: 'provides_tool',
 };
 
+/**
+ * A nesting is a handoff only between two agents.
+ *
+ * An agent whose span contains another agent's span gave it the work, and `hands_off_to` is this
+ * vocabulary's word for that: the demonstration system declares exactly that relation between its
+ * orchestrator and its workers, and its run nests them, so this is the branch that joins the two.
+ *
+ * Anything else that contains an agent span merely ran it, and calling that a handoff was reporting a
+ * transfer of control that never happened. A guardrail whose implementation is an agent produced
+ * `hands_off_to` from the evaluator to the agent of the same name, which reads as a component handing
+ * off to itself. Containment is what was observed and `contains` is what it is called, which also keeps
+ * it out of the control flow projection, where a relation this build could not name has no business
+ * contributing a cycle or a fan out.
+ */
 const edgeKindFor = (fromKind: string, toKind: string, operation: string): string => {
   if (operation === 'memory_write') return 'writes_memory';
   if (fromKind === 'agent' && toKind === 'agent') return 'hands_off_to';

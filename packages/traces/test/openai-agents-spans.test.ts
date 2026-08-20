@@ -223,10 +223,39 @@ const RELEVANCE_GUARDRAIL: SpanInput = {
   attributes: { 'openinference.span.kind': 'GUARDRAIL' },
 };
 
+/**
+ * The guardrail is implemented by running an agent, and the run nests the two with the SDK's own trace
+ * span between them. The repository declares both: the decorated function the agent list names, and the
+ * agent that function runs, which on this demonstration carry the same name.
+ */
+const RELEVANCE_GUARDRAIL_CHAIN: SpanInput = {
+  name: 'Agent workflow',
+  spanId: 'b0a1c2d3e4f50617',
+  parentSpanId: '644b59c912477bc4',
+  start: 1,
+  end: 1934,
+  attributes: { 'openinference.span.kind': 'CHAIN' },
+};
+
+const RELEVANCE_GUARDRAIL_AGENT: SpanInput = {
+  name: 'Relevance Guardrail',
+  spanId: 'c9e8d7b6a5f43210',
+  parentSpanId: 'b0a1c2d3e4f50617',
+  start: 1,
+  end: 1933,
+  attributes: {
+    'agent.name': 'Relevance Guardrail',
+    'graph.node.id': 'Relevance Guardrail',
+    'openinference.span.kind': 'AGENT',
+  },
+};
+
 const RECORDED_RUN: readonly SpanInput[] = [
   TRACE_ROOT,
   TRACE_CHAIN,
   RELEVANCE_GUARDRAIL,
+  RELEVANCE_GUARDRAIL_CHAIN,
+  RELEVANCE_GUARDRAIL_AGENT,
   TRIAGE_AGENT,
   TRIAGE_TURN,
   TRIAGE_RESPONSE,
@@ -302,6 +331,7 @@ describe('the spans the instrumentation opens for its own structure', () => {
       [
         'agent:Triage Agent',
         'evaluator:Relevance Guardrail',
+        'agent:Relevance Guardrail',
         'model:gpt-5.2-2025-12-11',
         'agent:Seat and Special Services Agent',
         'tool:update_seat',
@@ -311,8 +341,8 @@ describe('the spans the instrumentation opens for its own structure', () => {
 
   it('says how many spans it declined and why, rather than declining quietly', () => {
     const result = deriveTopology(bundleOf(RECORDED_RUN));
-    // The trace root, the chain beneath it, and the three turns.
-    assert.deepEqual(result.topology.unattributed, [{ reason: 'no_name', count: 5 }]);
+    // The trace root, the chain beneath it, the chain the guardrail opens, and the three turns.
+    assert.deepEqual(result.topology.unattributed, [{ reason: 'no_name', count: 6 }]);
   });
 
   it('leaves what ran attached to the agent that ran it, not to the wrapper between them', () => {
@@ -376,6 +406,34 @@ describe('the spans the instrumentation opens for its own structure', () => {
       named.topology.components.map((component) => `${component.kind}:${component.observedName}`),
       ['agent_group:airline crew'],
     );
+  });
+});
+
+describe('one span nested inside another', () => {
+  it('calls it a handoff only between two agents', () => {
+    /*
+     * The guardrail is implemented by running an agent of the same name, and the run nests the two. Read
+     * as a handoff it said that `evaluator:relevance-guardrail` transferred control to
+     * `agent:relevance-guardrail`, which is a component handing off to itself, and a relation nothing
+     * declares was reported as exercised beside the ones that do.
+     */
+    const edges = deriveTopology(bundleOf(RECORDED_RUN)).topology.edges.map(describeEdge);
+    assert.ok(
+      edges.includes('contains evaluator:Relevance Guardrail -> agent:Relevance Guardrail'),
+      edges.join('\n'),
+    );
+    assert.ok(!edges.some((edge) => edge.startsWith('hands_off_to evaluator:')), edges.join('\n'));
+  });
+
+  it('leaves the transfer of control the run recorded alone', () => {
+    // The two handoffs come from handoff spans, which name both ends. Nesting never produced them.
+    const edges = deriveTopology(bundleOf(RECORDED_RUN))
+      .topology.edges.map(describeEdge)
+      .filter((edge) => edge.startsWith('hands_off_to'));
+    assert.deepEqual(edges, [
+      'hands_off_to agent:Triage Agent -> agent:Seat and Special Services Agent',
+      'hands_off_to agent:Seat and Special Services Agent -> agent:Triage Agent',
+    ]);
   });
 });
 

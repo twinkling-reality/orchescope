@@ -457,6 +457,67 @@ describe('deriveTopology', () => {
     assert.deepEqual(result.topology.unattributed, [{ reason: 'no_operation', count: 1 }]);
   });
 
+  it('reads one agent running another as a handoff, which is the relation a manifest declares', () => {
+    // The demonstration system declares `hands_off_to` from its orchestrator to each worker and its run
+    // nests the worker's span inside the orchestrator's, so this branch is what joins the two. It is the
+    // only nesting that is read as a transfer of control: for both ends to be agents is the whole test.
+    const result = topologyOf([
+      {
+        name: 'invoke_agent orchestrator',
+        spanId: '1'.repeat(16),
+        start: 0,
+        end: 100,
+        attributes: { [GEN_AI.operationName]: 'invoke_agent', [GEN_AI.agentName]: 'orchestrator' },
+      },
+      {
+        name: 'invoke_agent account-worker',
+        spanId: '2'.repeat(16),
+        parentSpanId: '1'.repeat(16),
+        start: 1,
+        end: 50,
+        attributes: {
+          [GEN_AI.operationName]: 'invoke_agent',
+          [GEN_AI.agentName]: 'account-worker',
+        },
+      },
+    ]);
+    assert.deepEqual(
+      result.topology.edges.map(
+        (edge) => `${edge.kind} ${edge.fromObservedName} -> ${edge.toObservedName}`,
+      ),
+      ['hands_off_to orchestrator -> account-worker'],
+    );
+  });
+
+  it('reads anything else running an agent as containment rather than as a transfer', () => {
+    const result = topologyOf([
+      {
+        name: 'execute_tool ask_the_researcher',
+        spanId: '1'.repeat(16),
+        start: 0,
+        end: 100,
+        attributes: {
+          [GEN_AI.operationName]: 'execute_tool',
+          [GEN_AI.toolName]: 'ask_the_researcher',
+        },
+      },
+      {
+        name: 'invoke_agent researcher',
+        spanId: '2'.repeat(16),
+        parentSpanId: '1'.repeat(16),
+        start: 1,
+        end: 50,
+        attributes: { [GEN_AI.operationName]: 'invoke_agent', [GEN_AI.agentName]: 'researcher' },
+      },
+    ]);
+    assert.deepEqual(
+      result.topology.edges.map(
+        (edge) => `${edge.kind} ${edge.fromObservedName} -> ${edge.toObservedName}`,
+      ),
+      ['contains ask_the_researcher -> researcher'],
+    );
+  });
+
   it('reads a span name as a name where the conventions say it is one', () => {
     // The generative AI conventions specify a span name of `{operation} {name}`, so an agent that names
     // itself only there is named. The rule that declines an unnamed span is for the other dialect,

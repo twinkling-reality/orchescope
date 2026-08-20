@@ -72,6 +72,10 @@ Spans are assembled into a forest by parent identifier, then folded into compone
   are asked, because they are the ones whose name this build reads out of an attribute. A relation is then drawn to the
   nearest enclosing component, so a span that is no component does not break the chain between an agent and what it
   called.
+- **A nesting is read through both ends where the child is an agent.** For every other kind the child settles it: a span
+  that contained a tool span called that tool. One agent's span containing another's is a `hands_off_to`, which is the
+  relation a manifest declares between an orchestrator and its workers. Anything else containing an agent span merely ran
+  it, and that is `contains`, which keeps a relation this build cannot name out of the control flow projection.
 - **Handoffs** are recognised where a framework performs one by calling a tool, which is what the OpenAI Agents SDK does and
   what its instrumentor faithfully records. A tool span that names no tool, whose `input.value` and `output.value` are both
   names the same run reported as agents, is a transfer of control between those two agents. The span name is corroboration

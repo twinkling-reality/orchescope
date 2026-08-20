@@ -244,9 +244,10 @@ repositories:
       not one of the forty two relations this application declares had ever been reported as exercised.
 
       What that leaves this entry holding is the counts each fix goes quiet on. The tool count is what a handoff read
-      as a tool inflates. The absence of any agent_group and of any contains relation is what a wrapper read as a
-      component brings back. And validated_by holding at twelve rather than fourteen is the run joining the guardrail
-      relations the repository declares instead of drawing two of its own beside them.
+      as a tool inflates. The absence of any agent_group is what a wrapper read as a component brings back. The two
+      contains relations are the guardrails running their own agents, which used to be read as transfers of control.
+      And validated_by holding at twelve rather than fourteen is the run joining the guardrail relations the repository
+      declares instead of drawing two of its own beside them.
     exercise:
       why: >-
         The join on an application, with a provider actually called. Both other exercised entries are hermetic by
