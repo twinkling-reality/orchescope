@@ -60,14 +60,28 @@ const prepareVirtualEnvironment = (root, entry, checkout) => {
  * than the commit the corpus names. The tree therefore sits at the root of the cache, one directory above every
  * checkout, which is exactly where Node looks next when a bare import inside a checkout finds nothing closer. That is
  * what lets the repository's own modules import the SDK they are written against while the checkout stays untouched.
+ *
+ * There is one tree, it holds one entry's packages, and the marker records the list rather than the entry, so an
+ * entry whose list is not the one installed rebuilds it. Two Node entries cannot share the tree. This corpus pins an
+ * application on `@langchain/core` 0.3, which reads a tool schema through zod 3, beside one on `ai` 7, which needs
+ * the Standard Schema zod added in 3.25 and resolves to 4. Under zod 4 that first application's `tool()` builds a
+ * function declaring no parameters at all, and the run still succeeds, so an entry sharing the tree would measure an
+ * environment nobody asked for. A marker per entry reported the tree as ready while it held the other entry's
+ * packages, which is the failure that could not be seen while there was one Node entry.
+ *
+ * What it costs is an install per Node entry per exercised run, which is why the tree is emptied rather than added
+ * to: npm reconciles against a lock file describing the other entry, and the point is a tree with nothing else in it.
  */
 const prepareNodeEnvironment = (root, entry) => {
   const directory = cacheDirectory(root);
-  const marker = join(directory, `${entry.name}-${MARKER}`);
+  const marker = join(directory, MARKER);
   const wanted = `${JSON.stringify(entry.exercise.nodePackages)}\n`;
   const modules = join(directory, 'node_modules');
   if (existsSync(marker) && readFileSync(marker, 'utf8') === wanted) return { modules };
 
+  rmSync(marker, { force: true });
+  rmSync(modules, { recursive: true, force: true });
+  rmSync(join(directory, 'package-lock.json'), { force: true });
   mkdirSync(directory, { recursive: true });
   writeFileSync(
     join(directory, 'package.json'),
