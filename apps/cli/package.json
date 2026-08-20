@@ -48,8 +48,8 @@
     "@orchescope/usecases": "workspace:*",
     "@orchescope/workspace": "workspace:*",
     "commander": "15.0.0",
-    "oxc-parser": "0.141.0",
+    "oxc-parser": "0.144.0",
     "tree-sitter-python": "0.25.0",
-    "web-tree-sitter": "0.26.11"
+    "web-tree-sitter": "0.26.12"
   }
 }
