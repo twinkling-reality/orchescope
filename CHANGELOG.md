@@ -4,6 +4,12 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## 0.8.0
 
+Cut 2026-08-20. The line naming how it was published and the checksum the tarball was checked against are
+written once it is on the registry, the way 0.7.0's were. What `pnpm package` built from this tag is
+`orchescope-0.8.0.tgz` at `sha256 697b83cc55e54806f889b2e4f009dd07ad611c51ee12b02a1dfee64bf603d60c`, which
+the install smoke test installed into a temporary prefix and audited a TypeScript and a Python project
+with, reporting version 0.8.0 and three components across the two languages.
+
 **No published document changes.** `packages/schema` and `schemas/` are untouched, so a consumer reading
 0.7.0's shape reads this one.
 
