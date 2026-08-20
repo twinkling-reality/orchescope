@@ -9,10 +9,10 @@ and LangChain's two.
 The crew is the repository's own, and so are the agents, the tasks and the roles they carry. What the driver
 supplies is the model, and the rest of this file is the consequences of that.
 
-**The run is hermetic and needs no credential.** `BaseLLM` is CrewAI's own extension point for a model that
-does not go through litellm, so a subclass of it answers from this process and reaches nothing outside it.
-The two tools this crew declares both search the internet, so the script never calls one, and what that costs
-is stated in the entry rather than hidden: this run produces no tool span.
+**No provider is reached and no credential is used.** `BaseLLM` is CrewAI's own extension point for a model
+that does not go through litellm, so a subclass of it answers from this process. The two tools this crew
+declares both search the internet, so the script never calls one, and what that costs is stated in the entry
+rather than hidden: this run produces no tool span.
 
 **A task that declares `output_json` is answered with a document rather than with prose.** Three of the five
 tasks name a Pydantic model for their output, and CrewAI validates the answer against it, so a scripted model
@@ -25,6 +25,10 @@ read by it, but it would make a run that is otherwise hermetic reach a third par
 is the library's own documented opt out. `CREWAI_TRACING_ENABLED` is set for a second reason: without it the
 first run in a project prompts on standard input for a tracing preference and stores the answer outside the
 checkout, so the first run of this entry on a machine would not be the run the next one repeats.
+
+CrewAI keeps per project state of its own outside the checkout, under the platform's application data
+directory in a folder named after the working directory, so a run of this entry leaves two small files there.
+`CREWAI_STORAGE_DIR` renames that folder and does not move it.
 
 Spans go wherever `OTEL_EXPORTER_OTLP_ENDPOINT` points, which is what `orchescope trace` sets before it runs a
 command:
