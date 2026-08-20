@@ -64,17 +64,34 @@ const declaredNotExercised = (graph: SystemGraph): readonly Component[] =>
 const exercisedNotDeclared = (graph: SystemGraph): readonly Component[] =>
   graph.components.filter((component) => component.presence.runtime && !component.presence.static);
 
-const exercisedEdges = (graph: SystemGraph): readonly Edge[] =>
-  graph.edges.filter(
-    (edge) => edge.observation !== undefined && edge.observation.executionCount > 0,
-  );
-
 /**
  * Containment is left out of both halves of the edge fraction. It says what a thing is made of rather
  * than what ran, so a group that was never "exercised" is not a gap a reader can act on.
  */
 const countableDeclaredEdge = (edge: Edge): boolean =>
   partOfDeclaredTopology(edge) && edge.kind !== 'contains';
+
+/**
+ * Declared relations a run performed, which is the numerator of the fraction below.
+ *
+ * The same population has to stand on both sides of it. This counted every observed relation, including
+ * the ones reconciliation could match against no declaration, while the denominator counted declared ones
+ * only, so the two halves of the edge delta stopped adding up to the whole: on the pinned LangGraph
+ * application, sixteen declared relations, sixteen of them reported as never exercised, and an answer of
+ * eleven of sixteen exercised. Every entry in the corpus that carries a run overstated it, and the one
+ * whose declarations a run joined none of read sixty nine percent.
+ *
+ * This is the defect the component fraction beside it already had and had already fixed, which is worth
+ * saying: the comment there notes that edges exclude a runtime only relation from their denominator, and
+ * nobody looked at the numerator.
+ */
+const exercisedEdges = (graph: SystemGraph): readonly Edge[] =>
+  graph.edges.filter(
+    (edge) =>
+      countableDeclaredEdge(edge) &&
+      edge.observation !== undefined &&
+      edge.observation.executionCount > 0,
+  );
 
 const declaredNotExercisedEdges = (graph: SystemGraph): readonly Edge[] =>
   graph.edges.filter(

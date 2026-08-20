@@ -487,6 +487,94 @@ describe('computeDelta', () => {
     assert.equal(result.delta.exercisedNotDeclared.components.length, 1);
     assert.equal(result.delta.coverage.componentExerciseRate, 1 / 3);
   });
+
+  /*
+   * The same fraction for relations, which had the same defect and kept it. The numerator counted every
+   * observed relation and the denominator counted declared ones, so the two halves of the edge delta
+   * stopped adding up: on the pinned LangGraph application, sixteen declared, sixteen never exercised,
+   * and an answer of eleven of sixteen exercised.
+   */
+  it('counts coverage over declared relations only', () => {
+    const base = buildGraph(
+      [orchestrator, refund, inventory],
+      [edgeDraft('calls_tool', orchestrator, refund)],
+    );
+    const reconciled = reconcile(base, [
+      runtimeTopology({
+        components: [
+          observedComponent({ kind: 'agent', observedName: 'orchestrator' }),
+          observedComponent({ kind: 'tool', observedName: 'issue_refund' }),
+          observedComponent({ kind: 'tool', observedName: 'mystery_tool' }),
+        ],
+        edges: [
+          observedEdge({
+            kind: 'calls_tool',
+            fromKind: 'agent',
+            fromObservedName: 'orchestrator',
+            toKind: 'tool',
+            toObservedName: 'issue_refund',
+          }),
+          observedEdge({
+            kind: 'calls_tool',
+            fromKind: 'agent',
+            fromObservedName: 'orchestrator',
+            toKind: 'tool',
+            toObservedName: 'mystery_tool',
+          }),
+        ],
+      }),
+    ]);
+    const result = computeDelta({
+      graph: reconciled.graph,
+      runs: [{ runId: `run_${'c'.repeat(16)}`, sideEffects: [] }],
+      spanToComponent: new Map(),
+      matches: reconciled.matches,
+      ambiguous: reconciled.ambiguous,
+    });
+    assert.equal(result.delta.coverage.declaredEdges, 1);
+    assert.equal(result.delta.coverage.exercisedEdges, 1);
+    assert.equal(result.delta.coverage.edgeExerciseRate, 1);
+    // The relation to a tool nothing declared is the one the numerator used to count twice over.
+    assert.equal(result.delta.exercisedNotDeclared.edges.length, 1);
+  });
+
+  it('keeps the two halves of the relation delta adding up to what was declared', () => {
+    const base = buildGraph(
+      [orchestrator, refund, inventory],
+      [
+        edgeDraft('calls_tool', orchestrator, refund),
+        edgeDraft('calls_tool', orchestrator, inventory),
+      ],
+    );
+    const reconciled = reconcile(base, [
+      runtimeTopology({
+        components: [
+          observedComponent({ kind: 'agent', observedName: 'orchestrator' }),
+          observedComponent({ kind: 'tool', observedName: 'mystery_tool' }),
+        ],
+        edges: [
+          observedEdge({
+            kind: 'calls_tool',
+            fromKind: 'agent',
+            fromObservedName: 'orchestrator',
+            toKind: 'tool',
+            toObservedName: 'mystery_tool',
+          }),
+        ],
+      }),
+    ]);
+    const result = computeDelta({
+      graph: reconciled.graph,
+      runs: [{ runId: `run_${'c'.repeat(16)}`, sideEffects: [] }],
+      spanToComponent: new Map(),
+      matches: reconciled.matches,
+      ambiguous: reconciled.ambiguous,
+    });
+    const { declaredEdges, exercisedEdges } = result.delta.coverage;
+    assert.equal(exercisedEdges + result.delta.declaredNotExercised.edges.length, declaredEdges);
+    assert.equal(exercisedEdges, 0);
+    assert.equal(result.delta.coverage.edgeExerciseRate, 0);
+  });
 });
 
 /**

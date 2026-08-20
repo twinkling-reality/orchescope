@@ -149,8 +149,10 @@
     ],
     "contradictions": 0,
     "declaredComponents": 86,
+    "declaredEdges": 597,
     "duplicateSideEffects": 0,
     "exercisedComponents": 1,
+    "exercisedEdges": 0,
     "exercisedNotDeclared": [
       "agent:agent"
     ],

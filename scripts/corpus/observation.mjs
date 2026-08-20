@@ -36,6 +36,14 @@ const runtimeOf = (exercise, bundle) => {
     spans: exercise.spans,
     declaredComponents: delta.coverage.declaredComponents,
     exercisedComponents: delta.coverage.exercisedComponents,
+    /*
+     * The same pair for relations, which nothing here recorded and which was wrong on every entry that
+     * carries a run. The numerator counted every observed relation while the denominator counted declared
+     * ones, so an entry whose declarations a run joined none of reported eleven of sixteen exercised. The
+     * component pair above would not have moved for any of it.
+     */
+    declaredEdges: delta.coverage.declaredEdges,
+    exercisedEdges: delta.coverage.exercisedEdges,
     joined,
     // How each join was made. A join on kind and name alone is the one that can match the wrong module.
     joinedOnNameAlone: [...delta.joins.onNameAlone].sort(),

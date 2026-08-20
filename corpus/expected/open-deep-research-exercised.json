@@ -151,8 +151,10 @@
     ],
     "contradictions": 0,
     "declaredComponents": 26,
+    "declaredEdges": 16,
     "duplicateSideEffects": 0,
     "exercisedComponents": 7,
+    "exercisedEdges": 0,
     "exercisedNotDeclared": [
       "agent:supervisor",
       "agent:supervisor_tools",
