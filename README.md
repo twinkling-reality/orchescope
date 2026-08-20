@@ -43,6 +43,10 @@ orchescope trace -- node src/main.js
 orchescope audit
 ```
 
+Orchescope never guesses that command. To declare it once instead of typing it each time, `orchescope init
+--scenario` writes a scenario template: fill in `target.command`, move it to `scenarios/`, and every rerun,
+comparison and verdict after that runs from the file.
+
 **A coding agent runs the same loop without you.** `orchescope mcp serve` exposes it over the Model Context Protocol,
 and the server tells a connecting agent to call `audit_agent_system` first and then follow `loop.next.tool`, which names
 the tool and the arguments for the step the repository is standing at. The same facts are on the command line under
@@ -95,6 +99,7 @@ the tool and the arguments for the step the repository is standing at. The same 
 | `orchescope mcp serve` | Speak the Model Context Protocol on stdio (primary agent surface) |
 | `orchescope init` | Create `.orchescope` with a configuration file listing every default |
 | `orchescope init --manifest` | Also write a manifest template for a system no adapter can read from source |
+| `orchescope init --scenario` | Also write a scenario template that declares how the system is started |
 | `orchescope doctor` | Check that this machine can run every command this build offers |
 
 Every command accepts `--json` and then writes exactly one JSON document to standard output, including on failure. The

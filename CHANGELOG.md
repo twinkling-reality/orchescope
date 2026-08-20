@@ -4,8 +4,39 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
-Two changes to how a reader and an agent find the loop, and the first CrewAI run anywhere in this corpus.
-No published document changes: `packages/schema` and `schemas/` are untouched.
+Three changes to how a reader and an agent find the loop, and the first CrewAI run anywhere in this corpus.
+No published document changes: the documents under `schemas/` are byte identical.
+
+### The one command in the loop with a placeholder in it
+
+`orchescope trace -- '<the command that starts your system>'` is what step one offers a repository nobody has
+run, and it is the only argv in the loop a caller cannot execute. That is deliberate: the command that starts
+somebody else's system is not a fact any adapter reads, and inventing one would mean running a guess. What it
+costs is that an agent stalls there on every untraced repository, and a person retypes the command on every
+run.
+
+A scenario is where that command is already declared: an argv executed without a shell, with the directory,
+the environment, the ceiling that stops it and how the target reports its own outcome. `orchescope init
+--scenario` writes the template to declare it in, the same way `--manifest` writes one for components no
+adapter can read. Nothing about the refusal changes; what changes is that the question is answered once
+rather than every time.
+
+**It is written under `.orchescope` and scenarios are read from `scenarios/`.** Everything Orchescope writes
+goes under one directory so that removing it is the whole cleanup, and a template written where scenarios
+load would report a scenario nobody wrote. Landing outside that directory is what lets the template be a
+complete scenario the parser accepts rather than a commented sketch, and `tests/e2e/scenario-template.test.ts`
+walks the whole path: write it, check the audit still counts zero scenarios, move it, run it, and assert it
+passes its own evaluator over the three repetitions it declares.
+
+The measure step now names the flag in its detail when a repository has no scenario at all, and stops naming
+it once one exists. The command it carries is unchanged, because a reader who knows how their system starts is
+one `trace` away and should not be sent to write a file first. The terminal renders at most one detail row per
+step and this is the second, so it arrives on `--json` and over MCP rather than in the human document, which
+is where the caller that could not fill in the placeholder was.
+
+`RESULT_SOURCES` and `SCENARIO_PERMISSIONS` are exported from `packages/schema` so the template lists the
+vocabulary the validator accepts rather than a copy of it. The emitted documents under `schemas/` are byte
+identical, so this is not a schema change.
 
 ### An agent connecting over MCP was told nothing before it had to choose
 
