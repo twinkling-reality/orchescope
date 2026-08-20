@@ -5,9 +5,48 @@ Map, test, and improve agent systems.
 Orchescope reads an agent system's source, ingests what it does when it runs, and reports the difference between the two.
 It runs on your machine, writes only inside the repository you point it at, and sends nothing anywhere.
 
+## Install
+
+Node.js 24 or newer is required. There is no compiler step and no native build on install.
+
 ```
+npm install -g orchescope
+cd <your agent system>
 orchescope audit
 ```
+
+Or without installing anything:
+
+```
+npx orchescope audit
+```
+
+## The loop
+
+There is one thing to learn and it is a loop of five steps. `orchescope audit` prints what it found, which step the
+repository is standing at, and the single next thing to run. Every command answers with the same block, so nothing has
+to be remembered or sequenced by hand.
+
+| Step | What it establishes | What runs it |
+| --- | --- | --- |
+| 1 Audit | what is declared, what has run, and the difference | `orchescope audit` |
+| 2 Goal | one finding as a bounded task, with the check that decides it | `orchescope goal create <finding-id>` |
+| 3 Rerun | the same scenario with the same seed, after the change | `orchescope test --scenario <id>` |
+| 4 Measure | what that run took, cost, retried and duplicated | recorded by the rerun |
+| 5 Did it help | the before against the after, on measured evidence | `orchescope goal validate <goal-id>` |
+
+An audit of a repository with no runs stored says so rather than guessing, and asks for one. Your process reports spans
+to a loopback receiver that exists only for the duration of the run:
+
+```
+orchescope trace -- node src/main.js
+orchescope audit
+```
+
+**A coding agent runs the same loop without you.** `orchescope mcp serve` exposes it over the Model Context Protocol,
+and the server tells a connecting agent to call `audit_agent_system` first and then follow `loop.next.tool`, which names
+the tool and the arguments for the step the repository is standing at. The same facts are on the command line under
+`--json`. Nothing in the loop needs a person, and nothing in it needs a browser.
 
 ## What it does
 
@@ -38,53 +77,6 @@ orchescope audit
 - It does not interpret your repository with a model. Analysis is deterministic: every claim comes from a rule over
   evidence, and a second run reproduces it.
 - It does not claim your system is safe. It reports what it found and what it could not inspect.
-
-## Install
-
-Node.js 24 or newer is required. There is no compiler step and no native build on install.
-
-```
-npm install -g orchescope
-```
-
-Or without installing anything:
-
-```
-npx orchescope audit
-```
-
-The same archive is attached to every release with its sha256 beside it, and `pnpm package` reproduces it from this
-repository, so you can check that what you installed is what this source builds:
-
-```
-pnpm install
-pnpm package                       # builds the bundle, packs, installs and audits with it
-npm install -g release/orchescope-0.8.0.tgz
-```
-
-`pnpm package` also installs the tarball into a temporary prefix and audits a project with it, so a failure there means the
-artifact is broken rather than your machine.
-
-Maintainers: the unit that gets published is `release/stage`, not `apps/cli`. See [docs/guides/release.md](docs/guides/release.md).
-
-## Quickstart
-
-From the root of a repository that contains an agent system:
-
-```
-orchescope audit
-```
-
-That discovers the system, reconciles it against any runs already stored, and prints a terminal document: what was
-found, where you stand in the improvement loop, and what to run next. Agents use the same facts over `--json` or MCP.
-
-To get runtime evidence, run your system under `trace`. Your process reports spans to a loopback receiver that exists
-only for the duration of the run:
-
-```
-orchescope trace -- node src/main.js
-orchescope audit
-```
 
 ## Core commands
 
@@ -124,6 +116,22 @@ codes above still apply where Orchescope itself is what failed, which is every p
 A traced command keeps standard output to itself. The run report is a diagnostic and goes to standard error beside the
 privileges notice, so `orchescope trace -- generate > out.json` writes the file the target wrote. Under `--json` the
 document owns standard output and the target's output moves to standard error rather than being dropped.
+
+## Verify what you installed
+
+The same archive is attached to every release with its sha256 beside it, and `pnpm package` reproduces it from this
+repository, so you can check that what you installed is what this source builds:
+
+```
+pnpm install
+pnpm package                       # builds the bundle, packs, installs and audits with it
+npm install -g release/orchescope-0.8.0.tgz
+```
+
+`pnpm package` also installs the tarball into a temporary prefix and audits a project with it, so a failure there means the
+artifact is broken rather than your machine.
+
+Maintainers: the unit that gets published is `release/stage`, not `apps/cli`. See [docs/guides/release.md](docs/guides/release.md).
 
 ## Architecture
 
