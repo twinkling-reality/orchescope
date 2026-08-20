@@ -41,9 +41,28 @@ export const OPEN_INFERENCE = {
   toolName: 'tool.name',
   agentName: 'agent.name',
   graphNodeId: 'graph.node.id',
-  graphNodeParentId: 'graph.node.parent_id',
   metadata: 'metadata',
 } as const;
+
+/**
+ * `graph.node.parent_id` is written by the CrewAI instrumentor and is not read here.
+ *
+ * It looks like the relation a CrewAI run never reports: every agent span after the first carries it, and on
+ * the pinned marketing crew the values draw exactly the sequence the crew declares. They are not a sequence
+ * the run took. `_find_parent_agent` in `openinference-instrumentation-crewai` walks `crew.agents`, finds the
+ * index of the agent whose task is being executed, and returns the role of the agent at the index before it.
+ * The value is a position in a declared list, evaluated at span time and identical on every execution: the
+ * two tasks the marketing strategist ran both name the market analyst as their parent because the analyst is
+ * the entry before the strategist in `agents=[...]`, not because either task followed the analyst's.
+ *
+ * So reading it would take a declaration this build already reads from source, send it out through the
+ * process being audited, and report it back as a relation a run exercised. That is a declaration wearing an
+ * observation's clothes, and it would make the exercised half of the join agree with the declared half by
+ * construction, which is the one thing this join must never do.
+ *
+ * The name is recorded here rather than in the table above so that the next reader finds the measurement
+ * instead of the attribute.
+ */
 
 export const CODE = {
   filePath: 'code.file.path',

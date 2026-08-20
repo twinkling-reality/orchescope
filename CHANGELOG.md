@@ -8,6 +8,27 @@ Three changes to how a reader and an agent find the loop, the first CrewAI run a
 correction to what that run's join was made by, and then the reading that turns that join into a refusal.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### The relation a CrewAI run looks like it reports and does not
+
+`graph.node.parent_id` was in the trace attribute vocabulary and read nowhere, and a CrewAI run reports zero
+relations against sixteen declared, so it read as the obvious thing to wire up. Every agent span after the
+first carries it, and on the pinned marketing crew the values draw exactly the sequence the crew runs in.
+
+**They are not a sequence anything ran in.** `_find_parent_agent` in
+`openinference-instrumentation-crewai` walks `crew.agents`, finds the index of the agent whose task is
+executing, and returns the role of the entry before it. It is a position in a declared list, evaluated at
+span time. The measured tell is in the run already stored: the marketing strategist ran two tasks, the second
+of them straight after its own first, and both spans name the market analyst as their parent, because the
+analyst is the entry before the strategist in `agents=[...]`.
+
+Reading it would take a declaration this build already reads out of the source, send it through the process
+under audit, and report it back as a relation a run exercised. That makes the two halves of the join agree by
+construction, which is the one thing this join must never do. So the attribute is out of the vocabulary and
+the measurement is written where it was, for the next reader who notices the same gap.
+
+A CrewAI run still reports no relation, and the reason is unchanged and elsewhere: the crew span is a `CHAIN`
+carrying no name, so it is declined and nothing nests inside a declined span.
+
 ### The agents document CrewAI writes inside the package
 
 `crewai create crew` writes every agent's role into `src/<package>/config/agents.yaml`, and CrewAI reports an
