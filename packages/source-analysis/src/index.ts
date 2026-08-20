@@ -19,6 +19,7 @@ export {
 } from './analyzer.ts';
 export {
   type ArgumentFact,
+  type AssignmentFact,
   approximateTokens,
   booleanValue,
   type CalleeOrigin,

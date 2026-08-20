@@ -207,6 +207,25 @@ export type ControlFlowFact = {
   readonly passesBounded?: boolean;
 };
 
+/**
+ * A value written onto something that already exists.
+ *
+ * A constructor argument is not the only way a repository declares a relation, and for a cycle it cannot be: an agent
+ * cannot name a peer that is not constructed yet, so the wiring is written afterwards. The customer service demo
+ * declares `handoffs=[]` on its triage agent and then assigns five of them on the next line, which read as an agent
+ * that hands off to nobody until a run said otherwise.
+ *
+ * The target is the dotted path written on the left, so `triage_agent.handoffs` arrives as two segments and a reader
+ * can ask which name it belongs to. The value is reduced the same way a call argument is, because it is the same
+ * grammar: a list, an identifier, a call, or a literal. Appending and extending are calls and are already recorded as
+ * calls, so this is only the shape that is not one.
+ */
+export type AssignmentFact = {
+  readonly target: readonly string[];
+  readonly value: ArgumentFact;
+  readonly location: SourceLocation;
+};
+
 export type ModuleFacts = {
   readonly file: string;
   readonly language: Language;
@@ -214,6 +233,7 @@ export type ModuleFacts = {
   readonly imports: readonly ImportFact[];
   readonly exportedNames: readonly string[];
   readonly calls: readonly CallFact[];
+  readonly assignments: readonly AssignmentFact[];
   readonly definitions: readonly DefinitionFact[];
   readonly environmentRefs: readonly EnvironmentFact[];
   readonly texts: readonly TextFact[];

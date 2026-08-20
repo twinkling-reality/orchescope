@@ -44,7 +44,7 @@
     },
     "adapter:openai-agents": {
       "componentsFound": 516,
-      "edgesFound": 163,
+      "edgesFound": 165,
       "filesInspected": 349,
       "status": "completed"
     },
@@ -110,15 +110,15 @@
       "observability-coverage": 1,
       "prompt-injection-boundary": 1,
       "retry-around-non-idempotent-operation": 1,
-      "topology-shape": 1
+      "topology-shape": 2
     },
     "bySeverity": {
       "info": 1,
-      "low": 2,
+      "low": 3,
       "medium": 3
     },
     "strengths": 0,
-    "total": 6
+    "total": 7
   },
   "foundNothing": [],
   "kind": "agent_system",
@@ -128,13 +128,13 @@
     "byKind": {
       "calls_service": 13,
       "calls_tool": 79,
-      "hands_off_to": 26,
+      "hands_off_to": 28,
       "invokes_model": 43,
       "provides_tool": 8,
       "queries_database": 4,
       "served_by_provider": 2,
       "uses_prompt": 88
     },
-    "total": 263
+    "total": 265
   }
 }

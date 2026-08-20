@@ -44,7 +44,7 @@
     },
     "adapter:openai-agents": {
       "componentsFound": 2058,
-      "edgesFound": 266,
+      "edgesFound": 326,
       "filesInspected": 315,
       "status": "completed"
     },
@@ -131,7 +131,7 @@
       "calls_service": 4,
       "calls_tool": 82,
       "consumes_from_queue": 2,
-      "hands_off_to": 53,
+      "hands_off_to": 73,
       "invokes_model": 38,
       "provides_tool": 11,
       "publishes_to_queue": 12,
@@ -140,6 +140,6 @@
       "uses_prompt": 2,
       "validated_by": 2
     },
-    "total": 213
+    "total": 233
   }
 }

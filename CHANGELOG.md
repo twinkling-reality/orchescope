@@ -4,6 +4,46 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### A handoff written after the agents exist
+
+The second defect the first traced run found, and it turned out to be larger than it looked. The run of
+the pinned customer service demo reported handoffs the graph had never heard of, and the reason was not
+that the run named them oddly. The repository declares sixteen handoffs and this build read none of them.
+
+`Agent(handoffs=[...])` can only name peers that already exist, so a set of agents that hand off to one
+another cannot be written that way. That demo constructs its triage agent with `handoffs=[]` and assigns
+five on the next line, then appends and extends onto five more:
+
+```
+triage_agent.handoffs = [flight_information_agent, handoff(agent=booking_cancellation_agent, ...), ...]
+faq_agent.handoffs.append(triage_agent)
+seat_special_services_agent.handoffs.extend([refunds_compensation_agent, triage_agent])
+```
+
+**The fact model had no assignment in it at all.** Appending and extending are calls and were already
+recorded; a value written onto a member was recorded nowhere, in either language. `ModuleFacts` carries
+`assignments` now, holding the dotted target and the value reduced the way a call argument already is, so
+a list, an identifier, a call or a literal all arrive in the shape every adapter can already read. Only a
+member target is kept, because a plain `x = ...` is already a variable definition and recording it twice
+would say the same thing twice.
+
+All three spellings are read, and each item is either the agent itself or `handoff(agent=..., ...)`, which
+names its destination in an argument rather than being one. The two analysers are checked against each
+other on it, since the claim that one fact model covers both languages is what lets one adapter read them.
+
+`openai-cs-agents-demo` goes from no handoff to fifteen, and `topology-shape` reports five cycles in the
+declared control flow, which that application genuinely has: triage hands to the specialists and every one
+of them hands back. `openai-agents-python` goes from 53 to 73 and `openai-agents-js` from 26 to 28, all of
+them assignments in their own tests and examples.
+
+**What this does not close is the thing that was reported.** The run still reports
+`tool:to-seat-and-special-services-agent` and `tool:to-triage-agent` as exercised and undeclared, because
+the SDK performs a handoff by calling a tool and the instrumentor records that as a tool: the span is named
+`handoff to Triage Agent`, carries `openinference.span.kind: TOOL`, and names the two agents in
+`input.value` and `output.value`. Reading it as a handoff means deciding that a span name beginning with
+`handoff to` is a handoff, which is an inference from a naming convention, and this build's whole
+discipline is to be careful about those. It is a decision rather than a fix and it is recorded as one.
+
 ### A guardrail the repository declares, and the agent it protects
 
 The first traced run of a third party application found this on its first attempt. The graph held

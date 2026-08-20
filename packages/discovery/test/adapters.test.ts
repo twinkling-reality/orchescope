@@ -831,6 +831,87 @@ graph = builder.compile()
  * and name, and the disagreement made one guardrail into two components with the run's half accused of executing
  * undeclared. The pinned customer service demo is where that was measured.
  */
+/**
+ * A handoff written after the agents exist, which is the only way a cycle can be written.
+ *
+ * `Agent(handoffs=[...])` can only name peers that already exist, so a set of agents that hand off to one another is
+ * always wired afterwards. The pinned customer service demo constructs its triage agent with `handoffs=[]` and
+ * assigns five on the next line, then appends and extends onto five more, and read from the constructor alone it
+ * declares no handoff at all. A traced run of it reported six relations the graph had never heard of.
+ */
+describe('a handoff assigned after the agents are constructed', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writePythonProject(workspace, { name: 'desk-cycle', dependencies: ['openai-agents>=0.4'] });
+    workspace.write(
+      'src/desk.py',
+      `from agents import Agent, handoff
+
+triage_agent = Agent(name="Triage Agent", instructions="Route the customer.", handoffs=[])
+seat_agent = Agent(name="Seat Agent", instructions="Change a seat.")
+faq_agent = Agent(name="FAQ Agent", instructions="Answer a policy question.")
+
+
+async def on_seat(context) -> None:
+    return None
+
+
+triage_agent.handoffs = [faq_agent, handoff(agent=seat_agent, on_handoff=on_seat)]
+faq_agent.handoffs.append(triage_agent)
+seat_agent.handoffs.extend([faq_agent, triage_agent])
+`,
+    );
+  };
+
+  it('reads an assignment, including the agent a handoff call wraps', async () => {
+    const { edges } = await scan(build);
+    assert.ok(
+      edges.includes('hands_off_to:agent:triage-agent->agent:faq-agent'),
+      `a bare agent in an assigned list was not read: ${edges.join(', ')}`,
+    );
+    assert.ok(
+      edges.includes('hands_off_to:agent:triage-agent->agent:seat-agent'),
+      'handoff(agent=...) names its destination in an argument rather than being one',
+    );
+  });
+
+  it('reads an append and an extend, which is how the rest of a cycle is written', async () => {
+    const { edges } = await scan(build);
+    assert.ok(
+      edges.includes('hands_off_to:agent:faq-agent->agent:triage-agent'),
+      `append was not read: ${edges.join(', ')}`,
+    );
+    assert.ok(edges.includes('hands_off_to:agent:seat-agent->agent:faq-agent'));
+    assert.ok(
+      edges.includes('hands_off_to:agent:seat-agent->agent:triage-agent'),
+      'extend takes a list and every item in it is a destination',
+    );
+  });
+
+  it('reads the same wiring written the way JavaScript writes it', async () => {
+    const { edges } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'desk-cycle-js',
+        dependencies: { '@openai/agents': '^0.1.0' },
+      });
+      workspace.write(
+        'src/desk.ts',
+        `import { Agent } from '@openai/agents';
+
+const triageAgent = new Agent({ name: 'Triage Agent', instructions: 'Route the customer.' });
+const seatAgent = new Agent({ name: 'Seat Agent', instructions: 'Change a seat.' });
+
+triageAgent.handoffs = [seatAgent];
+seatAgent.handoffs.push(triageAgent);
+`,
+      );
+    });
+    assert.ok(
+      edges.includes('hands_off_to:agent:triage-agent->agent:seat-agent'),
+      `the fact model claims one shape in two languages, and an assignment is that shape: ${edges.join(', ')}`,
+    );
+  });
+});
+
 describe('a guardrail in the OpenAI Agents SDK', () => {
   const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
     writePythonProject(workspace, { name: 'guarded', dependencies: ['openai-agents>=0.4'] });

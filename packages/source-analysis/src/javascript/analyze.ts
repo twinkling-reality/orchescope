@@ -1,6 +1,7 @@
 import { parseSync } from 'oxc-parser';
 import {
   type ArgumentFact,
+  type AssignmentFact,
   approximateTokens,
   type CalleeOrigin,
   type CallFact,
@@ -166,6 +167,7 @@ type Context = {
   readonly bindings: Map<string, CalleeOrigin>;
   readonly imports: ImportFact[];
   readonly calls: CallFact[];
+  readonly assignments: AssignmentFact[];
   readonly definitions: DefinitionFact[];
   readonly environmentRefs: EnvironmentFact[];
   readonly texts: TextFact[];
@@ -706,6 +708,29 @@ const traverse = (
       recordCall(node, context, frame, awaited, collecting);
       return;
     }
+    /*
+     * A value written onto something that already exists, kept only where the target is a member.
+     *
+     * A plain `x = ...` is already a variable definition and recording it here would say the same thing twice. What
+     * nothing else records is `agent.handoffs = [...]`, which is how a repository wires a cycle it could not name in
+     * a constructor. The right side walks on afterwards, so a call inside the value is still recorded as a call.
+     */
+    case 'AssignmentExpression': {
+      const target = asNode(field(node, 'left'));
+      const value = asNode(field(node, 'right'));
+      const path = target === undefined ? [] : memberPath(target);
+      if (path.length > 1 && value !== undefined) {
+        context.assignments.push({
+          target: path,
+          value: argumentFact(value, context),
+          location: context.index.location(context.file, node.start, node.end),
+        });
+      }
+      for (const child of [target, value]) {
+        if (child !== undefined) traverse(child, context, frame, awaited, collecting);
+      }
+      return;
+    }
     case 'AwaitExpression': {
       const argument = asNode(field(node, 'argument'));
       if (argument !== undefined) traverse(argument, context, frame, true, collecting);
@@ -1027,6 +1052,7 @@ export const analyzeJavaScript = (input: {
     bindings: new Map(),
     imports: [],
     calls: [],
+    assignments: [],
     definitions: [],
     environmentRefs: [],
     texts: [],
@@ -1060,6 +1086,7 @@ export const analyzeJavaScript = (input: {
     definitions: context.definitions,
     environmentRefs: context.environmentRefs,
     texts: context.texts,
+    assignments: context.assignments,
     controlFlow: context.controlFlow,
     parseErrors,
   };

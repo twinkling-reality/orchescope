@@ -2,6 +2,7 @@ import type { SourceLocation } from '@orchescope/schema';
 import type { Node } from 'web-tree-sitter';
 import {
   type ArgumentFact,
+  type AssignmentFact,
   approximateTokens,
   type CalleeOrigin,
   type CallFact,
@@ -122,6 +123,7 @@ type Context = {
   readonly bindings: Map<string, CalleeOrigin>;
   readonly imports: ImportFact[];
   readonly calls: CallFact[];
+  readonly assignments: AssignmentFact[];
   readonly definitions: DefinitionFact[];
   readonly environmentRefs: EnvironmentFact[];
   readonly texts: TextFact[];
@@ -839,7 +841,22 @@ const recordAssignment = (
 ): void => {
   const left = childField(node, 'left');
   const right = childField(node, 'right');
-  const name = left === undefined ? undefined : attributePath(left).join('.');
+  const path = left === undefined ? [] : attributePath(left);
+  /*
+   * A value written onto something that already exists, kept only where the target is a member.
+   *
+   * A plain `x = ...` is already a variable definition and adding it here would say the same thing twice. What is
+   * not said anywhere else is `agent.handoffs = [...]`, which is how a repository wires a cycle it could not name
+   * in a constructor.
+   */
+  if (path.length > 1 && right !== undefined) {
+    context.assignments.push({
+      target: path,
+      value: argumentFact(right, context),
+      location: location(context.file, node),
+    });
+  }
+  const name = left === undefined ? undefined : path.join('.');
   if (name !== undefined && name.length > 0) {
     const initializer =
       right !== undefined && right.type === 'call'
@@ -872,6 +889,7 @@ export const analyzePython = async (input: {
     bindings: new Map(),
     imports: [],
     calls: [],
+    assignments: [],
     definitions: [],
     environmentRefs: [],
     texts: [],
@@ -886,6 +904,7 @@ export const analyzePython = async (input: {
       imports: [],
       exportedNames: [],
       calls: [],
+      assignments: [],
       definitions: [],
       environmentRefs: [],
       texts: [],
@@ -910,6 +929,7 @@ export const analyzePython = async (input: {
       definitions: context.definitions,
       environmentRefs: context.environmentRefs,
       texts: context.texts,
+      assignments: context.assignments,
       controlFlow: context.controlFlow,
       parseErrors: root.hasError ? ['the file contains at least one syntax error'] : [],
     };

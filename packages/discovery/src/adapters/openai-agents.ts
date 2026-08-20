@@ -1,7 +1,12 @@
 import { CONFIDENCE_BANDS } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
-import type { ComponentIdentity, EdgeKind, EdgePolicy } from '@orchescope/schema';
-import type { CallFact, ModuleFacts, ObjectEntryFact } from '@orchescope/source-analysis';
+import type { ComponentIdentity, EdgeKind, EdgePolicy, SourceLocation } from '@orchescope/schema';
+import type {
+  ArgumentFact,
+  CallFact,
+  ModuleFacts,
+  ObjectEntryFact,
+} from '@orchescope/source-analysis';
 import {
   booleanValue,
   findEntry,
@@ -431,6 +436,76 @@ const addAgentRelations = (
   return edges;
 };
 
+/**
+ * A handoff a repository wires after construction, which is the only way it can wire a cycle.
+ *
+ * `Agent(handoffs=[...])` names peers that already exist, so a set of agents that hand off to one another cannot be
+ * written that way and is not: the customer service demo constructs its triage agent with `handoffs=[]` and assigns
+ * five on the next line, then appends and extends onto five more. Read from the constructor alone that repository
+ * declares no handoff at all, and a run of it reported six the graph had never heard of.
+ *
+ * Three spellings, because all three are used in one file: an assignment, an `append` of one, and an `extend` of a
+ * list. Each item is either the agent itself or `handoff(agent=..., on_handoff=...)`, which names it in an argument.
+ */
+const HANDOFF_MEMBER = 'handoffs';
+
+const handoffTargets = (value: ArgumentFact | undefined): readonly string[] => {
+  const items = value?.kind === 'array' ? value.items : value === undefined ? [] : [value];
+  const names: string[] = [];
+  for (const item of items) {
+    if (item.kind === 'identifier') names.push(item.name);
+    // `handoff(agent=X)` names its destination in an argument rather than being one.
+    if (item.kind === 'call') {
+      const entries = item.args.find((argument) => argument.kind === 'object');
+      const agent =
+        entries?.kind === 'object' ? findEntry(entries.entries, 'agent')?.value : undefined;
+      if (agent?.kind === 'identifier') names.push(agent.name);
+    }
+  }
+  return names;
+};
+
+const addAssignedHandoffs = (context: DiscoveryContext, builder: SystemGraphBuilder): number => {
+  let edges = 0;
+  const draw = (
+    file: string,
+    holder: string,
+    value: ArgumentFact | undefined,
+    location: SourceLocation,
+    symbol: string,
+  ): void => {
+    const from = context.bindings.lookup(file, holder);
+    if (from === undefined || from.kind !== 'agent') return;
+    for (const name of handoffTargets(value)) {
+      const to = context.bindings.lookup(file, name);
+      if (to === undefined || to.kind !== 'agent') continue;
+      builder.addEdge(
+        drafts.edge({ kind: 'hands_off_to', from, to, location, symbol: `${symbol}: ${name}` }),
+      );
+      edges += 1;
+    }
+  };
+
+  for (const module of context.modules) {
+    for (const assignment of module.assignments) {
+      if (assignment.target[assignment.target.length - 1] !== HANDOFF_MEMBER) continue;
+      const holder = assignment.target[assignment.target.length - 2];
+      if (holder === undefined) continue;
+      draw(module.file, holder, assignment.value, assignment.location, 'handoffs');
+    }
+    for (const call of module.calls) {
+      const path = call.calleePath;
+      const method = path[path.length - 1];
+      if (method !== 'append' && method !== 'extend') continue;
+      if (path[path.length - 2] !== HANDOFF_MEMBER) continue;
+      const holder = path[path.length - 3];
+      if (holder === undefined) continue;
+      draw(module.file, holder, call.args[0], call.location, `handoffs.${method}`);
+    }
+  }
+  return edges;
+};
+
 const registerAgents = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
@@ -440,6 +515,8 @@ const registerAgents = (
   for (const agent of added.pending) {
     edges += addAgentRelations(context, builder, agent);
   }
+  // After the agents, because both ends of a handoff have to be registered before the relation can resolve.
+  edges += addAssignedHandoffs(context, builder);
   return { components: added.components, edges };
 };
 
