@@ -4,8 +4,42 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
-Three changes to how a reader and an agent find the loop, and the first CrewAI run anywhere in this corpus.
+Three changes to how a reader and an agent find the loop, the first CrewAI run anywhere in this corpus, and
+a correction to what that run's join was made by.
 No published document changes: the documents under `schemas/` are byte identical.
+
+### A runtime name declared for an agent no run will call that
+
+`runtimeName` is a declaration that a running system will report a component under this name, and
+reconciliation trusts it above everything except a code location. A value that is not a name any run can
+report therefore does not merely fail to match. It sits in the strongest lookup in the reconciler waiting to
+match something else.
+
+The CrewAI adapter declared one for every agent it found, set to whatever name it had chosen: the role where
+one is a literal, and otherwise the variable, the method, or the constant `agent`. So the three agents of the
+pinned marketing crew declared that a run would call them `lead_market_analyst`, `chief_marketing_strategist`
+and `creative_content_creator`, which are the methods that build them and are names CrewAI never emits. The
+same held on the two declarative paths: an `agents.yaml` agent declared the key the document files it under
+rather than the `role` beside it, and a crew document declared the file name each member is declared in.
+
+A role is now the only thing that produces one, on both paths, trimmed of the newline that ends a folded
+`role: >` block. Where no role was read there is no runtime name, which is the true statement: this build
+does not know what the run will call that component, and the join is left to the rules that match on what
+was actually read.
+
+**No number in the corpus moves, and that is worth saying rather than leaving as a silence.** The three
+joins `crewai-examples-exercised` records are made against `crews/instagram_post`, whose roles are literals,
+so its declarations are unchanged and it still matches. What changed is that three false declarations left
+the strongest lookup. The witnesses are fixtures: a configured agent whose folded role differs from its key,
+a source agent built inside a decorated method, and a crew document, which had no fixture at all until now
+and so no statement of what it promises.
+
+**This does not fix the wrong answer, and the entry still records it.** The run's own roles are in an
+`agents.yaml` under `src/<package>/config/`, and the config reader opens that name only at the repository
+root. Reading it where it lives is a larger change than it looks: measured on the pinned examples repository
+it would add 48 agent components across 20 files, and adding the name to the set that already finds
+`wrangler.toml` by name would put 40 candidates under one cap of 32 and silently drop both Cloudflare
+manifests, which is the fix 0.6.0 made. It needs its own measurement.
 
 ### The one command in the loop with a placeholder in it
 
@@ -120,8 +154,10 @@ run was of `crews/marketing_strategy`, whose three agents are declared by the me
 roles live in an `agents.yaml` this build does not open, because the config reader looks at the repository
 root and `crewai create crew` writes the file into the package. So no component in the graph carries the
 name the run reports for its own agents, and the join goes looking. `crews/instagram_post` declares three
-agents with a literal role, and its three roles are the same three words. Exactly one declaration of each
-name exists, so `kind_and_name` matches, and the report names a file the run never entered.
+agents with a literal role, and its three roles are the same three words. The adapter declares a role as the
+name a run will report, so the match is made by `runtime_name`, which is the strongest rule reconciliation
+has short of a code location: the entry records `byRuntimeName: 3` and `byKindAndName: 0`. The rule is
+working on a true declaration, and the report still names a file the run never entered.
 
 On a repository holding one application it would have matched nothing at all, which is the ordinary case
 and is a truer answer. Opening the packaged `agents.yaml` is the change that closes it, and it would make

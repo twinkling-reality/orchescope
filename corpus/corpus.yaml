@@ -207,10 +207,13 @@ repositories:
 
       **The three components this entry records as joined are the wrong ones, and that is what it is here to hold.**
       crews/instagram_post declares three agents with a literal role, and its three roles are the same three words:
-      Lead Market Analyst, Chief Marketing Strategist, Creative Content Creator. A join on kind and name finds
-      exactly one declaration of each, so it matches, and the report names a file the run never entered. Reading the
-      packaged agents.yaml would make the same three names ambiguous rather than unique, and a refusal is the right
-      answer where a repository declares one role in two applications.
+      Lead Market Analyst, Chief Marketing Strategist, Creative Content Creator. The adapter declares a role as the
+      name a run will report, so those three carry it as `runtimeName`, and `runtime_name` is the strongest rule
+      reconciliation has short of a code location: this entry records `byRuntimeName: 3` and `byKindAndName: 0`. The
+      match is the rule working on a true declaration. What is missing is the marketing crew's own roles, which live
+      in an agents.yaml this build does not open, so the only declaration of those names in the repository belongs to
+      an application the run never entered. Reading that file would make the same three names ambiguous rather than
+      unique, and a refusal is the right answer where a repository declares one role in two applications.
 
       The crew joins nothing either, for a different reason. Its span is a CHAIN carrying no gen_ai.workflow.name, so
       isStructuralSpan declines it as no_name, and the name it declines is `MarketingPostsCrew.kickoff` where the
