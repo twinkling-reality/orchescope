@@ -24,6 +24,7 @@ import {
   readNumber,
   readString,
 } from './attributes.ts';
+import { graphNodeSpanName } from './graph-node-span.ts';
 import { type ObservedHandoff, recognizeHandoffs } from './handoff.ts';
 import { isStructuralSpan } from './structural-span.ts';
 
@@ -592,6 +593,29 @@ const encloseChildren = (
   if (parentKey !== undefined) state.spanToComponentKey.set(node.span.spanId, parentKey);
 };
 
+/**
+ * The component a span reports, or the reason it reports none.
+ *
+ * The graph node is asked first because it outranks the kind the dialect gives the span: LangChain labels
+ * a graph, a node and a lambda alike as a chain, so the kind decides an operation of `invoke_workflow` for
+ * all three, while the node the span names is one of the application's own agents. Where nothing names a
+ * node this is the reading it always was.
+ */
+const componentOf = (
+  span: NormalizedSpan,
+):
+  | { readonly kind: ComponentKind; readonly observedName: string }
+  | { readonly reason: string } => {
+  const graphNode = graphNodeSpanName(span);
+  if (graphNode !== undefined) return { kind: 'agent', observedName: graphNode };
+  if (isStructuralSpan(span)) return { reason: 'no_name' };
+  const kind = componentKindFor(span.operation);
+  if (kind === undefined) {
+    return { reason: span.operation === 'unclassified' ? 'no_operation' : 'unsupported_dialect' };
+  }
+  return { kind, observedName: observedNameFor(span.operation, span.name, span.attributes) };
+};
+
 /** One span folded into the traversal state, then its children. */
 const visitSpan = (
   state: TraversalState,
@@ -608,20 +632,14 @@ const visitSpan = (
     for (const child of node.children) visitSpan(state, bundle, child, node);
     return;
   }
-  const structural = isStructuralSpan(span);
-  const kind = structural ? undefined : componentKindFor(span.operation);
-  if (kind === undefined) {
-    const reason = structural
-      ? 'no_name'
-      : span.operation === 'unclassified'
-        ? 'no_operation'
-        : 'unsupported_dialect';
-    unattributed.set(reason, (unattributed.get(reason) ?? 0) + 1);
+  const component = componentOf(span);
+  if ('reason' in component) {
+    unattributed.set(component.reason, (unattributed.get(component.reason) ?? 0) + 1);
     encloseChildren(state, node, parent);
     for (const child of node.children) visitSpan(state, bundle, child, node);
     return;
   }
-  const observedName = observedNameFor(span.operation, span.name, span.attributes);
+  const { kind, observedName } = component;
   const key = componentKey(kind, observedName);
   spanToComponentKey.set(span.spanId, key);
 

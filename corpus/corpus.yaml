@@ -221,12 +221,20 @@ repositories:
       the other dialect: they label a graph, a node, a sequence and a lambda alike as CHAIN, and four entries here
       pin that family with no run among them.
 
-      What this entry records first is that the rule deletes the application. A run of thirty one spans walks all
-      nine declared nodes of the deep researcher graph, and twenty three of those spans are declined as naming
-      nothing. What is left is a model and a tool, no observed relation at all, and a join reporting zero exercised
-      components against twenty six declared. The spans do say what they ran: the OpenInference metadata attribute
-      carries langgraph_node, which is the node's own name out of the application's graph. That is recorded here
-      before it is fixed, because an expectation written afterwards cannot show what the fix moved.
+      What it found is that the rule deleted the application. A run of thirty one spans walks all nine declared
+      nodes of the deep researcher graph, and twenty three of those spans were declined as naming nothing: what was
+      left was a model and a tool, no observed relation at all, and a join reporting zero exercised components
+      against twenty six declared. That was recorded here before it was fixed, because an expectation written
+      afterwards cannot show what the fix moved.
+
+      What the entry holds now is the counts that go quiet if the reading stops working. Seven of the nine nodes
+      join, and joinedOnNameAlone is the list of them. Ten spans are still declined and that number is the guard on
+      the other half: the compiled graph, the two subgraph loops and the runnables a node builds inside itself all
+      name nothing, and a reading that admitted them would report a node as having run four times. The two nodes
+      that do not join are the reason the entry is worth having at all. This repository declares supervisor and
+      supervisor_tools twice, once in the deep researcher graph and once in the legacy one, so the adapter
+      disambiguated both and a run naming a bare supervisor cannot say which it ran. They are the first entries in
+      ambiguousNames anywhere in this corpus, and refusing to guess is the behaviour being pinned.
     exercise:
       why: >-
         The dialect measurement, and the second application in this corpus rather than a driver written around a

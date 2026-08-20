@@ -41,6 +41,7 @@ export const OPEN_INFERENCE = {
   agentName: 'agent.name',
   graphNodeId: 'graph.node.id',
   graphNodeParentId: 'graph.node.parent_id',
+  metadata: 'metadata',
 } as const;
 
 export const CODE = {

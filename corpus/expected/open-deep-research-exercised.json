@@ -82,7 +82,7 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 23,
+      "agent": 25,
       "agent_group": 3,
       "entrypoint": 4,
       "external_service": 1,
@@ -93,7 +93,7 @@
       "tool": 1
     },
     "declaredInTest": 0,
-    "total": 65
+    "total": 67
   },
   "discardedRelations": [],
   "files": {
@@ -105,7 +105,6 @@
   },
   "findings": {
     "byRule": {
-      "configured-tool-has-no-caller": 1,
       "declared-not-exercised": 1,
       "exercised-not-declared": 2,
       "latency-concentrated-in-one-component": 1,
@@ -115,17 +114,16 @@
       "topology-shape": 1
     },
     "componentsByRule": {
-      "configured-tool-has-no-caller": 1,
-      "declared-not-exercised": 25,
-      "exercised-not-declared": 2,
+      "declared-not-exercised": 19,
+      "exercised-not-declared": 4,
       "latency-concentrated-in-one-component": 1,
-      "model-call-without-timeout": 2,
+      "model-call-without-timeout": 8,
       "observability-coverage": 10,
       "tokens-concentrated-in-one-component": 1,
       "topology-shape": 5
     },
     "strengths": 1,
-    "total": 9
+    "total": 8
   },
   "foundNothing": [
     "mcp is imported here and its adapter found nothing"
@@ -136,27 +134,49 @@
   "relations": {
     "byKind": {
       "calls_service": 1,
+      "calls_tool": 1,
       "contains": 23,
-      "hands_off_to": 8,
-      "invokes_model": 1,
+      "hands_off_to": 13,
+      "invokes_model": 6,
       "queries_retrieval": 2,
       "served_by_provider": 1,
       "uses_prompt": 3
     },
-    "total": 39
+    "total": 50
   },
   "runtime": {
-    "ambiguousNames": [],
+    "ambiguousNames": [
+      "supervisor",
+      "supervisor_tools"
+    ],
     "contradictions": 0,
     "declaredComponents": 26,
     "duplicateSideEffects": 0,
-    "exercisedComponents": 0,
+    "exercisedComponents": 7,
     "exercisedNotDeclared": [
+      "agent:supervisor",
+      "agent:supervisor_tools",
       "model:openai/gpt-4.1-mini-2025-04-14",
       "tool:think_tool"
     ],
-    "joined": [],
-    "joinedOnNameAlone": [],
+    "joined": [
+      "agent:clarify_with_user",
+      "agent:compress_research",
+      "agent:final_report_generation",
+      "agent:research_supervisor",
+      "agent:researcher",
+      "agent:researcher_tools",
+      "agent:write_research_brief"
+    ],
+    "joinedOnNameAlone": [
+      "agent:clarify_with_user",
+      "agent:compress_research",
+      "agent:final_report_generation",
+      "agent:research_supervisor",
+      "agent:researcher",
+      "agent:researcher_tools",
+      "agent:write_research_brief"
+    ],
     "runs": 1,
     "spans": 31
   }
