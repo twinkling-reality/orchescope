@@ -7,7 +7,10 @@ Notable changes per released version. Nothing here is generated; a release is a 
 **No published document changes.** `packages/schema` and `schemas/` are untouched, so a consumer reading
 0.7.0's shape reads this one.
 
-The changes below came out of LangGraph applications, one read and two traced, one in each ecosystem.
+The changes below came out of LangGraph and OpenAI Agents applications, one read and three traced, and
+every one of them says the same thing: a fact read in one ecosystem is not read in the other. Three of the
+four readings this build has of these two dialects were argued from Python spans alone, and each of the
+JavaScript instrumentors writes at least one of them differently.
 
 **A reader with a LangGraph application sees their declared graph grow whether or not they have ever traced
 it**, because the routes a node declares by returning a `Command` were invisible and are now relations. That
@@ -15,6 +18,31 @@ moves reachability, cycles, entry points and the coordination fan out, and on th
 turns a strength into four cycles. A reader with a stored run sees their component counts and their join
 move as well, without retracing, because every reading here is derived when a report is built rather than
 when a span is stored.
+
+### The same handoff, written two ways
+
+The OpenAI Agents SDK performs a handoff by calling a tool, and 0.7.0 taught this build to read that: a
+tool span naming no tool, whose input and output are both names the same run reported as agents, is a
+transfer of control between them. That was argued from one instrumentor's spans, the Python one, and the
+SDK has two.
+
+The JavaScript instrumentor writes the same handoff differently in both halves the reading depends on. It
+names the span's tool `handoff_to_Seat Booking Agent`, where the Python one names no tool at all. And it
+writes each agent inside a JSON document, `{"from_agent": "Triage Agent"}` and `{"to_agent": "Seat Booking
+Agent"}`, where the Python one writes the two names bare. So the span was declined twice over, and a
+transfer of control was reported as a call to a tool nothing declared: the same defect 0.7.0 fixed,
+untouched in the other ecosystem.
+
+**The documented form is read even where the span names a tool, and the bare form still is not.** That
+asymmetry is the argument rather than an exception to it. A tool name is a repository's to choose, so once
+a span has said which tool it called, two bare strings that happen to match agent names say nothing more.
+A document whose two keys are `from_agent` and `to_agent`, whose values are both agents the same run
+reported, has said what it is. Both ends still have to be agents the run itself reported, which is the
+check neither form skips.
+
+`openai-agents-js-exercised` moves `hands_off_to` from twenty eight relations to twenty nine, `calls_tool`
+from eighty to seventy nine, and drops the tool component from the graph, so `exercised-not-declared` names
+one component where it named two. `openai-cs-agents-demo-exercised` does not move, and it is the control.
 
 ### A graph declared from inside its own nodes
 

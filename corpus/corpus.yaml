@@ -82,7 +82,12 @@ repositories:
       Booking Agent"} as JSON documents. Both halves of the existing test therefore fail: a span that names a
       tool is a call to that tool, and neither value is a name any agent was reported under. So a transfer of
       control was reported as a call to a tool nothing declared, which is exactly the defect 0.7.0 fixed in the
-      other ecosystem, unfixed in this one. That was recorded here before it was fixed.
+      other ecosystem, unfixed in this one. That was recorded here before it was fixed, because an expectation
+      written afterwards cannot show what the fix moved: hands_off_to reads twenty nine where it read twenty
+      eight, calls_tool seventy nine where it read eighty, and the tool component is gone from the graph
+      entirely, so exercised-not-declared names one component where it named two.
+      openai-cs-agents-demo-exercised does not move, and it is the control: the bare form is still read exactly
+      as it was, and only where the span names no tool.
 
       Two things the entry pins that are properties of the repository rather than defects. Triage Agent is in
       joins.ambiguous because this repository declares 292 agents across its examples and more than one of them
