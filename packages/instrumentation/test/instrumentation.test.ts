@@ -382,6 +382,40 @@ describe('the fetch that was patched', () => {
     );
   });
 
+  /*
+   * The same join, for a model call. A span naming the host it reached cannot be matched to a model a
+   * repository declared, and `orchescope.component` overrides every other name the topology would read.
+   * Set to the host it reported every model a run called as one component named `api.openai.com`.
+   */
+  it('names the model a call was for, rather than the host that served it', async () => {
+    // A published provider host, answered by a stub, because what is under test is the description of the
+    // request rather than the request. Nothing leaves this process.
+    const tracer = countedTracer();
+    const answered = instrumentedFetch({
+      tracer,
+      original: () =>
+        Promise.resolve(
+          new Response(JSON.stringify({ model: 'gpt-4.1-mini' }), {
+            headers: { 'content-type': 'application/json' },
+          }),
+        ),
+      receiverOrigin: RECEIVER_ORIGIN,
+    });
+    await answered('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      body: JSON.stringify({ model: 'gpt-4.1-mini', input: 'ignored' }),
+    });
+    const span = collected.at(-1);
+    assert.equal(span?.name, 'chat gpt-4.1-mini');
+    assert.equal(span?.attributes['gen_ai.request.model'], 'gpt-4.1-mini');
+    assert.equal(span?.attributes['server.address'], 'api.openai.com');
+    assert.equal(
+      span?.attributes['orchescope.component'],
+      undefined,
+      'naming the host here would bury the model name the join needs',
+    );
+  });
+
   it('leaves a protocol message that names no tool as a request to the server', async () => {
     await patched().fetch(`${origin}/mcp`, {
       method: 'POST',

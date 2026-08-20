@@ -216,10 +216,17 @@ const describeRequest = (
 } => {
   const model = recogniseModelCall(url, body);
   if (model !== undefined) {
+    /*
+     * The host is an attribute here and never the component. A model call's component is the model, which
+     * the span names and `gen_ai.request.model` carries, and `orchescope.component` overrides both: set to
+     * the host it reported the two models of a run as one component called `api.openai.com`, which is a
+     * name no repository declares and no reader asked about. That is the case the rule above describes as
+     * a request whose component genuinely is the host, and a model call is not one.
+     */
     return {
       name: `${model.operation} ${model.model ?? model.system}`,
       attributes: {
-        ...outboundAttributes(url, method),
+        ...httpAttributes(url, method),
         ...modelAttributes(model.system, model.operation, model.model),
       },
       isModelCall: true,
