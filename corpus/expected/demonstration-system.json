@@ -121,6 +121,14 @@
       "low": 1,
       "medium": 2
     },
+    "componentsByRule": {
+      "bounded-retry-with-declared-idempotency": 3,
+      "model-call-without-timeout": 3,
+      "observability-coverage": 5,
+      "retry-around-non-idempotent-operation": 2,
+      "side-effect-approval-boundary": 2,
+      "topology-shape": 1
+    },
     "strengths": 2,
     "total": 7
   },

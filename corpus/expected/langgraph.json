@@ -111,6 +111,10 @@
       "info": 1,
       "low": 1
     },
+    "componentsByRule": {
+      "observability-coverage": 5,
+      "topology-shape": 10
+    },
     "strengths": 0,
     "total": 2
   },

@@ -104,6 +104,9 @@
     "bySeverity": {
       "info": 1
     },
+    "componentsByRule": {
+      "observability-coverage": 4
+    },
     "strengths": 0,
     "total": 1
   },

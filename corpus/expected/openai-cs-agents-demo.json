@@ -113,6 +113,12 @@
       "low": 3,
       "medium": 1
     },
+    "componentsByRule": {
+      "configured-tool-has-no-caller": 1,
+      "observability-coverage": 5,
+      "prompt-injection-boundary": 6,
+      "topology-shape": 23
+    },
     "strengths": 0,
     "total": 5
   },

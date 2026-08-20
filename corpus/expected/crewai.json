@@ -115,6 +115,13 @@
       "info": 2,
       "medium": 3
     },
+    "componentsByRule": {
+      "model-call-without-timeout": 25,
+      "observability-coverage": 5,
+      "retry-around-non-idempotent-operation": 2,
+      "topology-shape": 5,
+      "unbounded-retry": 2
+    },
     "strengths": 1,
     "total": 5
   },

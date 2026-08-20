@@ -96,6 +96,7 @@
   "findings": {
     "byRule": {},
     "bySeverity": {},
+    "componentsByRule": {},
     "strengths": 0,
     "total": 0
   },

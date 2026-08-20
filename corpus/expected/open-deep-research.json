@@ -112,6 +112,11 @@
       "info": 2,
       "medium": 1
     },
+    "componentsByRule": {
+      "model-call-without-timeout": 2,
+      "observability-coverage": 5,
+      "topology-shape": 5
+    },
     "strengths": 1,
     "total": 3
   },

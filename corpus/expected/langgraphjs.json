@@ -112,6 +112,11 @@
       "low": 1,
       "medium": 1
     },
+    "componentsByRule": {
+      "observability-coverage": 5,
+      "retry-around-non-idempotent-operation": 8,
+      "topology-shape": 10
+    },
     "strengths": 0,
     "total": 3
   },

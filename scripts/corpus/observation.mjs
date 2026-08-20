@@ -119,6 +119,25 @@ export const observationOf = (entry, audit, bundle, exercise) => {
         ? { bySeverity: sortedCounts(findings.map((finding) => finding.severity)) }
         : {}),
       byRule: sortedCounts(findings.map((finding) => finding.ruleId)),
+      /*
+       * How many components each rule's findings name, which `byRule` cannot see.
+       *
+       * A rule that groups its occurrences reports one finding whatever it found, so the count above
+       * holds at one while the subject moves. Reachability went from naming one component to naming
+       * nineteen and back to seventeen across three changes to the traversal underneath it, and every
+       * number in this file stayed still for all three. A rule whose answer can swing by eighteen
+       * components with no diff is the silence this file exists to break.
+       */
+      componentsByRule: Object.fromEntries(
+        [...new Set(findings.map((finding) => finding.ruleId))]
+          .sort()
+          .map((ruleId) => [
+            ruleId,
+            findings
+              .filter((finding) => finding.ruleId === ruleId)
+              .reduce((total, finding) => total + finding.components.length, 0),
+          ]),
+      ),
     },
   };
 };

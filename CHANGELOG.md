@@ -4,6 +4,20 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### What each rule names, which the corpus could not see
+
+The three changes above moved `topology-shape` from naming one component to nineteen and back to
+seventeen, and every number in every expectation file stayed still for all three. `findings.byRule`
+counts findings, a rule that groups its occurrences reports one finding whatever it found, and there was
+nothing else to look at. A rule whose answer can swing by eighteen components with no diff is the silence
+the corpus exists to break, so it now records `componentsByRule` beside it.
+
+Nothing moved when it was recorded: twenty files, a hundred and thirteen insertions and no deletion. What
+it buys is an invariant the corpus was already holding both halves of and never compared. Three entries
+pin the same commit twice, once scanned and once scanned with a run, and a rule about the declared graph
+has to answer both the same way. All three now read 23, 12 and 5 on either side. Before the change above,
+the first pair read 23 and 25.
+
 ### A question about the declared topology stops reading what only a run produced
 
 `topology-shape` reports fan out, reachability and cycles "in the declared control flow", every draft it

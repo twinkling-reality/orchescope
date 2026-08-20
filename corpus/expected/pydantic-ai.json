@@ -115,6 +115,12 @@
       "low": 1,
       "medium": 2
     },
+    "componentsByRule": {
+      "model-call-without-timeout": 25,
+      "observability-coverage": 5,
+      "prompt-injection-boundary": 9,
+      "topology-shape": 12
+    },
     "strengths": 0,
     "total": 4
   },

@@ -116,6 +116,14 @@
       "low": 2,
       "medium": 5
     },
+    "componentsByRule": {
+      "declared-not-exercised": 43,
+      "model-call-without-timeout": 25,
+      "observability-coverage": 10,
+      "observed-name-carries-no-identity": 1,
+      "prompt-injection-boundary": 9,
+      "topology-shape": 12
+    },
     "strengths": 0,
     "total": 7
   },

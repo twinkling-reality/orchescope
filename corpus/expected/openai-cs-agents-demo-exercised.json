@@ -114,6 +114,17 @@
       "tokens-concentrated-in-one-component": 1,
       "topology-shape": 2
     },
+    "componentsByRule": {
+      "configured-tool-has-no-caller": 1,
+      "declared-not-exercised": 17,
+      "exercised-not-declared": 2,
+      "latency-concentrated-in-one-component": 1,
+      "model-call-without-timeout": 6,
+      "observability-coverage": 10,
+      "prompt-injection-boundary": 6,
+      "tokens-concentrated-in-one-component": 1,
+      "topology-shape": 23
+    },
     "strengths": 0,
     "total": 11
   },
