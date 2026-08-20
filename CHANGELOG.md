@@ -4,6 +4,59 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
+### The spans an instrumentation opens for its own structure
+
+The same traced run, and the larger half of what it found. The OpenAI Agents SDK's instrumentor opens a
+span for the trace it wraps a run in, named `Agent workflow`, and one per iteration of the agent loop,
+named `turn`. Each carries an OpenInference kind and no other attribute at all. Read as components they
+became `agent:agent-workflow`, `agent_group:agent-workflow` and `agent_group:turn`, reported at medium
+severity as three parts of the system that ran undeclared, which no reader could act on because there
+was nothing in the repository to declare.
+
+**The noise was the cheap half.** Every relation the run observed hung off a wrapper rather than off the
+agent. The run said `turn` called `update_seat`, `turn` invoked both models, `turn` ran both guardrails.
+So the declared `calls_tool` and the twelve declared `validated_by` relations had nothing to join, and
+not one of the forty two relations that application declares had ever been reported as exercised.
+
+**What settles it is that the span names nothing.** Every agent span in that run carries `agent.name` and
+`graph.node.id`; the two wrappers carry neither, and no chain span carries `gen_ai.workflow.name`. A span
+name is a name only where a convention says so: the generative AI conventions specify `{operation} {name}`
+and are read that way, and OpenInference specifies nothing of the kind, so a span there carrying a kind
+and no name has said that something is nested here and nothing about what. Minting a component from it
+means inventing one out of the instrumentation's own label.
+
+Only the two kinds whose whole content is a name are asked. A `GUARDRAIL` span in that same run carries
+exactly what `turn` carries, one attribute naming its kind, and its name is the guardrail's own: this
+build has never read an attribute for an evaluator's name, so there is no absent name to notice, and
+declining would drop an evaluator that joins. That near miss is a test.
+
+Declining is stated rather than silent. Each one is counted in the topology's `unattributed` as
+`no_name`, which is a reason the schema has declared since before anything produced it.
+
+**A span that is no component no longer ends the chain.** A relation is drawn to the nearest component
+that enclosed the work, and severing at a span this build could not read loses a relation the run does
+show. That was costing more than the wrappers: the AI SDK opens a step span around every model call and
+every tool call an agent makes and labels it `gen_ai.operation.name: agent_step`, which this build does
+not read, and `vercel-ai-chatbot-exercised` is a recorded run of six spans that reached a model and a
+tool and reported **no observed relation at all**. It now reports both.
+
+On `openai-cs-agents-demo-exercised` the three wrappers are gone, what ran undeclared drops from five
+components to the two models the demo genuinely pins nowhere, and the run joins the declared
+`calls_tool` from the seat agent to `update_seat` and both declared guardrail relations. `invokes_model`
+goes from two relations to four, because a model call is now attributed to the agent that made it rather
+than to the turn it happened in. `pydantic-ai-exercised` opens no wrapper span and does not move, which
+is the control.
+
+**One number moved a long way and it is worth reading.** `topology-shape` went from one component
+unreachable to nineteen. The demo's declared handoffs are fully cyclic, so no agent has an inbound
+relation to spare and none of them qualifies as a root; the scan without a run has reported seventeen
+unreachable for as long as that entry has existed. The exercised entry reported one because
+`agent:agent-workflow` had nothing pointing at it and served as the root that reached the whole graph.
+**A tracing wrapper was supplying the answer to a question about the declared topology**, so auditing
+that commit with a run and without it gave two different architecture answers. They now differ by two
+rather than by sixteen, and the remaining two are the guardrail agents, which a runtime only relation
+still disqualifies as roots.
+
 ### A handoff the instrumentor recorded as a tool call
 
 The section below deferred this rather than guessing at it, and what closed it is that the guess was

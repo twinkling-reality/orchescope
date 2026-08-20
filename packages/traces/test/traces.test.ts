@@ -415,6 +415,68 @@ describe('deriveTopology', () => {
     assert.ok(result.topology.unattributed.length >= 1);
   });
 
+  it('leaves a span it could not read out of the chain rather than breaking it', () => {
+    /*
+     * The AI SDK opens a `step` span around every model call and tool call an agent makes, and labels
+     * it `gen_ai.operation.name: agent_step`, which this build does not read. Severing the chain there
+     * left a recorded run of six spans that reached a model and a tool reporting no observed relation
+     * at all, so the one thing it proved about the system was thrown away.
+     */
+    const result = topologyOf([
+      {
+        name: 'invoke_agent planner',
+        spanId: '1'.repeat(16),
+        start: 0,
+        end: 100,
+        attributes: { [GEN_AI.operationName]: 'invoke_agent', [GEN_AI.agentName]: 'planner' },
+      },
+      {
+        name: 'step 1',
+        spanId: '2'.repeat(16),
+        parentSpanId: '1'.repeat(16),
+        start: 1,
+        end: 90,
+        attributes: { [GEN_AI.operationName]: 'agent_step' },
+      },
+      {
+        name: 'execute_tool issue_refund',
+        spanId: '3'.repeat(16),
+        parentSpanId: '2'.repeat(16),
+        start: 2,
+        end: 40,
+        attributes: { [GEN_AI.operationName]: 'execute_tool', [GEN_AI.toolName]: 'issue_refund' },
+      },
+    ]);
+    assert.deepEqual(
+      result.topology.edges.map(
+        (edge) => `${edge.kind} ${edge.fromObservedName} -> ${edge.toObservedName}`,
+      ),
+      ['calls_tool planner -> issue_refund'],
+    );
+    // The span is still reported as one this build could not attribute to a component.
+    assert.deepEqual(result.topology.unattributed, [{ reason: 'no_operation', count: 1 }]);
+  });
+
+  it('reads a span name as a name where the conventions say it is one', () => {
+    // The generative AI conventions specify a span name of `{operation} {name}`, so an agent that names
+    // itself only there is named. The rule that declines an unnamed span is for the other dialect,
+    // where a span name is a label the instrumentation chose.
+    const result = topologyOf([
+      {
+        name: 'invoke_agent planner',
+        spanId: '1'.repeat(16),
+        start: 0,
+        end: 10,
+        attributes: { [GEN_AI.operationName]: 'invoke_agent' },
+      },
+    ]);
+    assert.deepEqual(
+      result.topology.components.map((component) => component.observedName),
+      ['planner'],
+    );
+    assert.deepEqual(result.topology.unattributed, []);
+  });
+
   it('produces the same topology for the same spans in a different arrival order', () => {
     const spans: SpanInput[] = [
       {

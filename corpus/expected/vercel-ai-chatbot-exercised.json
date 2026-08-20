@@ -126,12 +126,12 @@
   "relations": {
     "byKind": {
       "calls_service": 18,
-      "calls_tool": 5,
-      "invokes_model": 6,
+      "calls_tool": 6,
+      "invokes_model": 7,
       "queries_database": 1,
       "uses_prompt": 1
     },
-    "total": 31
+    "total": 33
   },
   "runtime": {
     "ambiguousNames": [],

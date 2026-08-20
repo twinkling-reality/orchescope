@@ -43,7 +43,8 @@ Two are understood:
 - **OpenInference**, used by several tracing libraries: `openinference.span.kind` and its associated attributes.
 
 A span with neither is not discarded; it is counted as unattributed with a reason (`no_operation` when nothing said what
-it was, `unsupported_dialect` when something did but this build does not read it), and the count appears in the report.
+it was, `unsupported_dialect` when something did but this build does not read it, `no_name` when it said what kind of
+thing it is and did not name it), and the count appears in the report.
 
 Two attribute families are load bearing beyond identification. `code.*` gives a span a source location, which is the
 strongest join back to the static graph. `vcs.*` gives it a revision, which is how a run can be tied to the state of the
@@ -63,6 +64,14 @@ Spans are assembled into a forest by parent identifier, then folded into compone
   from "these two tools ran one after the other".
 - **Retries** are recognised from an explicit attempt attribute, or from a repeated operation on the same component after a
   failure. A retried operation is one component attempted twice, never two components.
+- **Structure is not a component.** An instrumentation opens spans for its own shape as well as for the system it is
+  watching: the OpenAI Agents SDK's instrumentor opens one for the trace and one per iteration of the agent loop, and
+  the AI SDK opens one around every model call and tool call an agent makes. A span carrying an OpenInference `AGENT`
+  or `CHAIN` kind and no attribute naming the thing has said that something is nested here and nothing about what, so
+  no component is minted from its label and it is counted as unattributed with reason `no_name`. Only those two kinds
+  are asked, because they are the ones whose name this build reads out of an attribute. A relation is then drawn to the
+  nearest enclosing component, so a span that is no component does not break the chain between an agent and what it
+  called.
 - **Handoffs** are recognised where a framework performs one by calling a tool, which is what the OpenAI Agents SDK does and
   what its instrumentor faithfully records. A tool span that names no tool, whose `input.value` and `output.value` are both
   names the same run reported as agents, is a transfer of control between those two agents. The span name is corroboration

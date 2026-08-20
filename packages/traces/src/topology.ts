@@ -25,6 +25,7 @@ import {
   readString,
 } from './attributes.ts';
 import { type ObservedHandoff, recognizeHandoffs } from './handoff.ts';
+import { isStructuralSpan } from './structural-span.ts';
 
 /**
  * Runtime topology derivation.
@@ -547,6 +548,28 @@ const recordHandoff = (
   countOperation(state.metrics, span, 'handoff');
 };
 
+/**
+ * What a span that is no component of its own leaves its children attached to.
+ *
+ * A relation is drawn to the nearest component that enclosed the work, and a span this build could not
+ * attribute to one does not break that chain. The alternative is to draw nothing, which loses a relation
+ * the run does show and is quieter rather than more honest: the AI SDK opens a `step` span around every
+ * model call and tool call an agent makes, and severing there left a run of six spans that reached a
+ * model and a tool reporting no observed relation at all.
+ *
+ * A side effect recorded on such a span belongs to the same component, which is what this map is read
+ * for elsewhere.
+ */
+const encloseChildren = (
+  state: TraversalState,
+  node: SpanNode,
+  parent: SpanNode | undefined,
+): void => {
+  const parentKey =
+    parent === undefined ? undefined : state.spanToComponentKey.get(parent.span.spanId);
+  if (parentKey !== undefined) state.spanToComponentKey.set(node.span.spanId, parentKey);
+};
+
 /** One span folded into the traversal state, then its children. */
 const visitSpan = (
   state: TraversalState,
@@ -559,13 +582,20 @@ const visitSpan = (
   const handoff = state.handoffs.get(span.spanId);
   if (handoff !== undefined) {
     recordHandoff(state, bundle, node, parent, handoff);
+    encloseChildren(state, node, parent);
     for (const child of node.children) visitSpan(state, bundle, child, node);
     return;
   }
-  const kind = componentKindFor(span.operation);
+  const structural = isStructuralSpan(span);
+  const kind = structural ? undefined : componentKindFor(span.operation);
   if (kind === undefined) {
-    const reason = span.operation === 'unclassified' ? 'no_operation' : 'unsupported_dialect';
+    const reason = structural
+      ? 'no_name'
+      : span.operation === 'unclassified'
+        ? 'no_operation'
+        : 'unsupported_dialect';
     unattributed.set(reason, (unattributed.get(reason) ?? 0) + 1);
+    encloseChildren(state, node, parent);
     for (const child of node.children) visitSpan(state, bundle, child, node);
     return;
   }

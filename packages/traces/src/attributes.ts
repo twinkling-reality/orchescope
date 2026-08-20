@@ -38,6 +38,7 @@ export const OPEN_INFERENCE = {
   promptTokens: 'llm.token_count.prompt',
   completionTokens: 'llm.token_count.completion',
   toolName: 'tool.name',
+  agentName: 'agent.name',
   graphNodeId: 'graph.node.id',
   graphNodeParentId: 'graph.node.parent_id',
 } as const;
@@ -238,7 +239,15 @@ export const observedNameFor = (
     case 'create_agent':
     case 'plan':
     case 'handoff':
-      return readString(attributes, GEN_AI.agentName, GEN_AI.agentId) ?? stripPrefix(name);
+      return (
+        readString(
+          attributes,
+          GEN_AI.agentName,
+          GEN_AI.agentId,
+          OPEN_INFERENCE.agentName,
+          OPEN_INFERENCE.graphNodeId,
+        ) ?? stripPrefix(name)
+      );
     case 'invoke_workflow':
       return readString(attributes, GEN_AI.workflowName) ?? stripPrefix(name);
     case 'chat':

@@ -6,16 +6,21 @@ import { decodeTraceJson } from '../src/otlp.ts';
 import { deriveTopology } from '../src/topology.ts';
 
 /**
- * The handoff the OpenAI Agents SDK records as a tool call.
+ * What the OpenAI Agents SDK's spans mean to this build.
  *
  * The spans below are copied from the stored run of the pinned `openai-cs-agents-demo` checkout, which
  * is the first traced run of a third party application this build measured. Identifiers, names,
  * attributes and nesting are the instrumentor's own; only the timestamps are rounded, because nothing
  * asserted here depends on a sub millisecond duration.
  *
+ * Two of its spans say something other than what they appear to say, and both were found by running
+ * this on somebody else's application. A handoff arrives as a tool call. The trace and the agent loop
+ * arrive as an agent and two workflows, and reading those as components put a wrapper between every
+ * agent and everything it did.
+ *
  * They are held verbatim so that a rename in `openinference-instrumentation-openai-agents` fails here
  * rather than going quiet. The quiet failure is the one this build keeps hitting: an attribute moves,
- * the handoff stops joining, and every report afterwards says a tool nothing declared ran instead of
+ * the join stops happening, and every report afterwards names something nothing declared instead of
  * saying that it could not tell.
  */
 
@@ -73,6 +78,7 @@ const bundleOf = (spans: readonly SpanInput[]) => {
 const TRIAGE_AGENT: SpanInput = {
   name: 'Triage Agent',
   spanId: '97d4e2197c40e6fe',
+  parentSpanId: '3d2b8d9a3c4f5e61',
   start: 0,
   end: 2003,
   attributes: {
@@ -94,6 +100,7 @@ const TRIAGE_TURN: SpanInput = {
 const SEAT_AGENT: SpanInput = {
   name: 'Seat and Special Services Agent',
   spanId: '5202d55cca0bb3a1',
+  parentSpanId: '3d2b8d9a3c4f5e61',
   start: 2003,
   end: 4263,
   attributes: {
@@ -149,6 +156,25 @@ const HANDOFF_TO_TRIAGE: SpanInput = {
   },
 };
 
+/**
+ * The model call inside the triage agent's turn. This one span is trimmed: the instrumentor also
+ * records every message and every invocation parameter, and none of that is read here.
+ */
+const TRIAGE_RESPONSE: SpanInput = {
+  name: 'response',
+  spanId: '7c1e4b0a55d2f318',
+  parentSpanId: 'a52f04ee7c01366a',
+  start: 1934,
+  end: 2001,
+  attributes: {
+    'llm.model_name': 'gpt-5.2-2025-12-11',
+    'llm.system': 'openai',
+    'llm.token_count.completion': '39',
+    'llm.token_count.prompt': '224',
+    'openinference.span.kind': 'LLM',
+  },
+};
+
 /** A tool the same run called, recorded by the same instrumentor, which names the tool it called. */
 const UPDATE_SEAT: SpanInput = {
   name: 'update_seat',
@@ -166,9 +192,44 @@ const UPDATE_SEAT: SpanInput = {
   },
 };
 
+/**
+ * The trace the SDK opens around a run, and the iteration of the agent loop inside it. Each carries an
+ * OpenInference kind and no other attribute: nothing names an agent, and nothing names a workflow.
+ */
+const TRACE_ROOT: SpanInput = {
+  name: 'Agent workflow',
+  spanId: '1029198d42df072c',
+  start: 0,
+  end: 4263,
+  attributes: { 'openinference.span.kind': 'AGENT' },
+};
+
+const TRACE_CHAIN: SpanInput = {
+  name: 'Agent workflow',
+  spanId: '3d2b8d9a3c4f5e61',
+  parentSpanId: '1029198d42df072c',
+  start: 0,
+  end: 4263,
+  attributes: { 'openinference.span.kind': 'CHAIN' },
+};
+
+/** The guardrail, whose span also carries nothing but its kind and whose name is the guardrail's own. */
+const RELEVANCE_GUARDRAIL: SpanInput = {
+  name: 'Relevance Guardrail',
+  spanId: '644b59c912477bc4',
+  parentSpanId: 'a52f04ee7c01366a',
+  start: 1,
+  end: 1934,
+  attributes: { 'openinference.span.kind': 'GUARDRAIL' },
+};
+
 const RECORDED_RUN: readonly SpanInput[] = [
+  TRACE_ROOT,
+  TRACE_CHAIN,
+  RELEVANCE_GUARDRAIL,
   TRIAGE_AGENT,
   TRIAGE_TURN,
+  TRIAGE_RESPONSE,
   HANDOFF_TO_SEAT,
   SEAT_AGENT,
   SEAT_TOOL_TURN,
@@ -230,6 +291,91 @@ describe('a handoff recorded as a tool call', () => {
     );
     assert.equal(handoff?.executionCount, 1);
     assert.equal(handoff?.totalDurationMs, 1);
+  });
+});
+
+describe('the spans the instrumentation opens for its own structure', () => {
+  it('reports no component for the trace it opens or for an iteration of the agent loop', () => {
+    const result = deriveTopology(bundleOf(RECORDED_RUN));
+    assert.deepEqual(
+      result.topology.components.map((component) => `${component.kind}:${component.observedName}`),
+      [
+        'agent:Triage Agent',
+        'evaluator:Relevance Guardrail',
+        'model:gpt-5.2-2025-12-11',
+        'agent:Seat and Special Services Agent',
+        'tool:update_seat',
+      ],
+    );
+  });
+
+  it('says how many spans it declined and why, rather than declining quietly', () => {
+    const result = deriveTopology(bundleOf(RECORDED_RUN));
+    // The trace root, the chain beneath it, and the three turns.
+    assert.deepEqual(result.topology.unattributed, [{ reason: 'no_name', count: 5 }]);
+  });
+
+  it('leaves what ran attached to the agent that ran it, not to the wrapper between them', () => {
+    // The relation this application declares is that the seat agent calls `update_seat`, and the run
+    // has three wrapper spans between the two. Anchoring on the wrapper is why none of the declared
+    // relations of this application had ever been reported as exercised.
+    const edges = deriveTopology(bundleOf(RECORDED_RUN)).topology.edges.map(describeEdge);
+    assert.ok(
+      edges.includes('calls_tool agent:Seat and Special Services Agent -> tool:update_seat'),
+      edges.join('\n'),
+    );
+    assert.ok(
+      edges.includes('validated_by agent:Triage Agent -> evaluator:Relevance Guardrail'),
+      edges.join('\n'),
+    );
+    assert.ok(
+      edges.includes('invokes_model agent:Triage Agent -> model:gpt-5.2-2025-12-11'),
+      edges.join('\n'),
+    );
+  });
+
+  it('keeps a guardrail, whose span carries nothing but its kind and whose name is its own', () => {
+    // The near miss. `Relevance Guardrail` carries exactly what `turn` carries, one attribute naming
+    // its kind. It stays a component because this build reads no attribute for an evaluator's name, so
+    // there is no absent name to notice, and the span name has always been the only carrier.
+    const result = deriveTopology(bundleOf(RECORDED_RUN));
+    assert.ok(
+      result.topology.components.some(
+        (component) =>
+          component.kind === 'evaluator' && component.observedName === 'Relevance Guardrail',
+      ),
+    );
+  });
+
+  it('keeps an agent, which this instrumentor names in an attribute', () => {
+    const named = deriveTopology(
+      bundleOf([
+        { ...TRACE_ROOT, attributes: { ...TRACE_ROOT.attributes, 'agent.name': 'Airline' } },
+      ]),
+    );
+    assert.deepEqual(
+      named.topology.components.map((component) => `${component.kind}:${component.observedName}`),
+      ['agent:Airline'],
+    );
+    assert.deepEqual(named.topology.unattributed, []);
+  });
+
+  it('keeps a workflow that a span names, which is what tells a group from a nesting', () => {
+    const named = deriveTopology(
+      bundleOf([
+        {
+          name: TRACE_CHAIN.name,
+          spanId: TRACE_CHAIN.spanId,
+          start: TRACE_CHAIN.start,
+          end: TRACE_CHAIN.end,
+          attributes: { ...TRACE_CHAIN.attributes, 'gen_ai.workflow.name': 'airline crew' },
+        },
+      ]),
+    );
+    assert.deepEqual(
+      named.topology.components.map((component) => `${component.kind}:${component.observedName}`),
+      ['agent_group:airline crew'],
+    );
   });
 });
 

@@ -154,6 +154,11 @@ repositories:
       The same commit as the entry above, measured with a run in it. The join had only ever been shown on Python, and
       instrumentation is the half of it that differs most between languages: a decoder that reads one dialect says
       nothing about the other. This is the entry that holds the JavaScript half.
+
+      It is also where a run that reached a model and a tool reported no relation between them and anything else. The
+      AI SDK opens a step span around each of them, this build could not read it, and a span it cannot read used to
+      end the chain rather than pass through it. The two relations that now appear are what a run of six spans had
+      been proving and throwing away, so they are the number this entry holds against that going quiet again.
     exercise:
       why: >-
         The application's own offline model and its own tool, driven through the SDK's OpenTelemetry integration. No
@@ -233,9 +238,15 @@ repositories:
       agent it transferred to while the repository declared a hands_off_to relation, and the two never met. Both were
       recorded here before either was fixed, because an expectation that hides a defect makes the entry agree with it.
 
-      What that leaves this entry holding is the two counts either fix goes quiet on. The tool count is what a handoff
-      read as a tool inflates, and hands_off_to holds at nineteen only while the run's two transfers join declarations
-      instead of adding relations of their own, so a join that broke in either direction moves a number here.
+      It found a third, and that one was the expensive one. The instrumentor opens a span for the trace and one per
+      iteration of the agent loop, each carrying a kind and no name, and reading those as components put a wrapper
+      between every agent and everything it did: the run said a turn called update_seat and ran both guardrails, so
+      not one of the forty two relations this application declares had ever been reported as exercised.
+
+      What that leaves this entry holding is the counts each fix goes quiet on. The tool count is what a handoff read
+      as a tool inflates. The absence of any agent_group and of any contains relation is what a wrapper read as a
+      component brings back. And validated_by holding at twelve rather than fourteen is the run joining the guardrail
+      relations the repository declares instead of drawing two of its own beside them.
     exercise:
       why: >-
         The join on an application, with a provider actually called. Both other exercised entries are hermetic by

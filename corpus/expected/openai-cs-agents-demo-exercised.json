@@ -82,8 +82,7 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 9,
-      "agent_group": 2,
+      "agent": 8,
       "entrypoint": 3,
       "evaluator": 2,
       "external_service": 2,
@@ -93,7 +92,7 @@
       "tool": 11
     },
     "declaredInTest": 0,
-    "total": 46
+    "total": 43
   },
   "discardedRelations": [],
   "files": {
@@ -107,7 +106,7 @@
     "byRule": {
       "configured-tool-has-no-caller": 1,
       "declared-not-exercised": 2,
-      "exercised-not-declared": 2,
+      "exercised-not-declared": 1,
       "latency-concentrated-in-one-component": 1,
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
@@ -116,7 +115,7 @@
       "topology-shape": 2
     },
     "strengths": 0,
-    "total": 12
+    "total": 11
   },
   "foundNothing": [],
   "kind": "agent_system",
@@ -125,14 +124,13 @@
   "relations": {
     "byKind": {
       "calls_service": 2,
-      "calls_tool": 13,
-      "contains": 7,
-      "hands_off_to": 19,
-      "invokes_model": 2,
+      "calls_tool": 12,
+      "hands_off_to": 17,
+      "invokes_model": 4,
       "publishes_to_queue": 1,
-      "validated_by": 14
+      "validated_by": 12
     },
-    "total": 58
+    "total": 48
   },
   "runtime": {
     "ambiguousNames": [],
@@ -141,9 +139,6 @@
     "duplicateSideEffects": 0,
     "exercisedComponents": 7,
     "exercisedNotDeclared": [
-      "agent:agent-workflow",
-      "agent_group:agent-workflow",
-      "agent_group:turn",
       "model:gpt-4.1-mini-2025-04-14",
       "model:gpt-5.2-2025-12-11"
     ],

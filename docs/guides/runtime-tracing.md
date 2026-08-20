@@ -135,6 +135,14 @@ A framework that performs a handoff by calling a tool, as the OpenAI Agents SDK 
 handoff. Orchescope reads it as a handoff only when both of those two values name agents the same run reported, so a tool
 that happens to take and return a string is unaffected, and so is a tool span that names the tool it called.
 
+An instrumentation also opens spans for its own structure, such as the trace around a run or one iteration of an agent
+loop. A span carrying `openinference.span.kind` of `AGENT` or `CHAIN` and no attribute naming what it is becomes no
+component: its name is the instrumentation's label rather than the system's, and inventing a component from it puts a
+wrapper between an agent and everything it calls. Such a span is reported in the topology's `unattributed` count with
+reason `no_name`, and what ran under it is attributed to the nearest component that enclosed it. Naming an agent in
+`gen_ai.agent.name`, `agent.name` or `graph.node.id`, or a workflow in `gen_ai.workflow.name`, is what tells a component
+from a nesting.
+
 **To join back to source**, which is the strongest match rule:
 
 | Attribute | Meaning |
