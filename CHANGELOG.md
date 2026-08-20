@@ -4,11 +4,21 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## 0.7.0
 
-Cut 2026-08-19. The line naming how it was published and the checksum the tarball was checked against
-are written once it is on the registry, the way 0.6.0's were. What `pnpm package` built from this tag is
-`orchescope-0.7.0.tgz` at `sha256 04aaf71e623d9eb119b88e6e08b86a295311da8cda40de5bbd4fa03ccc2f1120`,
-which the install smoke test installed into a temporary prefix and audited a TypeScript and a Python
-project with.
+Released 2026-08-20 from npm as `orchescope@0.7.0`, published locally with `npm publish --no-provenance`,
+so this release carries no registry attestation. `pnpm package` builds from this tag a tarball byte
+identical to the one on the registry, which was checked by downloading the published one and comparing:
+
+```
+sha256  04aaf71e623d9eb119b88e6e08b86a295311da8cda40de5bbd4fa03ccc2f1120
+```
+
+That is a weaker guarantee than a registry attestation and it is worth naming as such. It says the bytes
+match this source; it does not say who published them. npm reports correcting `bin[orchescope]` while
+publishing, which is the normalisation the release guide describes and which the comparison above shows
+changed no byte. Installed from the registry the binary reports `0.7.0` and `orchescope doctor` passes
+every required check, which is the one that matters: the parsers resolve a native binding and a
+WebAssembly grammar relative to their own package directories, and only a real audit from an installed
+tree proves those resolve.
 
 **No published document changes.** `packages/schema` and `schemas/` are untouched, so a consumer reading
 0.6.0's shape reads this one. `unattributed[].reason` gains its first producer of `no_name`, which the
