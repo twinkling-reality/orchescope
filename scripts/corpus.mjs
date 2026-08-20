@@ -71,6 +71,21 @@ for (const entry of entries) {
     });
     continue;
   }
+  /*
+   * A credential this machine does not have is a skip and not a failure. Two of these entries are hermetic and one
+   * reaches a provider, so a contributor running the full corpus without a key has to be told which entry went
+   * unmeasured and why, rather than reading a stack trace out of somebody else's SDK.
+   */
+  const missing = (entry.exercise?.requiresEnvironment ?? []).filter(
+    (name) => (process.env[name] ?? '') === '',
+  );
+  if (missing.length > 0) {
+    results.push({
+      entry,
+      skipped: `needs ${missing.join(' and ')} in the environment, which this run reaches a provider with`,
+    });
+    continue;
+  }
   try {
     const directory = checkout(root, entry, !offline);
     clearStoredState(directory);

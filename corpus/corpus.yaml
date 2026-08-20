@@ -17,7 +17,9 @@
 #
 # An entry may also carry an `exercise` block, which names a script that makes the repository emit spans so the
 # declared against exercised delta can be measured on it. Those entries install an environment and run third party
-# code, so they are skipped unless `--exercise` is passed, and the skip is printed rather than silent.
+# code, so they are skipped unless `--exercise` is passed, and the skip is printed rather than silent. An exercise
+# that reaches a provider names the variables it cannot start without in `requiresEnvironment`, and a machine
+# without them skips that entry with the reason printed rather than failing inside somebody else's SDK.
 #
 # Both polarities count. A repository that is not an agent system is a precision test: the number it holds is a
 # ceiling, and the guard against a reader being loosened until it matches ordinary English.
@@ -212,6 +214,43 @@ repositories:
       topology-shape are both right about it. A rule loosened until it stops seeing that, or tightened until it
       reports the tools that are wired, moves this entry. Forty three files, so the whole of what it claims can be
       read against the source.
+
+  - name: openai-cs-agents-demo-exercised
+    source: git
+    url: https://github.com/openai/openai-cs-agents-demo.git
+    commit: bd7bfca0f5abf50529370814c3e7c88542011925
+    kind: agent_system
+    why: >-
+      The same commit as the entry above, measured with a run in it, and the only entry where the run is of an
+      application rather than of a driver written around a library example. The two entries beside it drive an offline
+      model, which answers from a schema and never hands off, so the handoff was the one relation the join had never
+      been shown. Here the triage agent hands off to the seat agent, which calls update_seat, with two guardrails
+      running around it: five components declared and exercised on code this repository did not write.
+
+      It is also the entry that found how the join breaks. A guardrail is declared as an agent and reported by the run
+      as an evaluation, so reconciliation matches on kind and name, the kinds disagree, and one guardrail becomes two
+      components. And the SDK performs a handoff as a tool call, so a run exercises a tool named for the agent it
+      transfers to while the repository declares a hands_off_to relation, and the two never meet. Both are recorded
+      here rather than fixed, because an expectation that hides them would make this entry agree with the defect.
+    exercise:
+      why: >-
+        The join on an application, with a provider actually called. Both other exercised entries are hermetic by
+        design and neither can take a handoff, since an offline model answers in one turn. What this costs is that the
+        entry cannot run without a credential, which is stated rather than discovered: `requiresEnvironment` names it
+        and a run without it is skipped with the reason printed.
+      script: corpus/runs/openai-cs-agents-demo/exercise.py
+      # The OpenAI Agents SDK carries its own tracing, which exports to OpenAI's platform rather than over OTLP, so
+      # the spans this join needs come from the OpenInference instrumentor. It emits the conventions
+      # packages/traces/src/attributes.ts already decodes, so nothing in this build was changed to read them.
+      pythonPackages:
+        - openai-agents
+        - openai-chatkit
+        - pydantic
+        - openinference-instrumentation-openai-agents
+        - opentelemetry-sdk
+        - opentelemetry-exporter-otlp-proto-http
+      requiresEnvironment:
+        - OPENAI_API_KEY
 
   - name: flask
     source: git

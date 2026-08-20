@@ -1,0 +1,176 @@
+{
+  "adapters": {
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 6,
+      "edgesFound": 3,
+      "filesInspected": 2,
+      "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 19,
+      "edgesFound": 12,
+      "filesInspected": 4,
+      "status": "completed"
+    },
+    "adapter:prompts": {
+      "componentsFound": 15,
+      "edgesFound": 0,
+      "filesInspected": 4,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:search-index": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": true,
+  "components": {
+    "byKind": {
+      "agent": 9,
+      "agent_group": 2,
+      "entrypoint": 3,
+      "evaluator": 2,
+      "external_service": 2,
+      "model": 2,
+      "prompt": 14,
+      "queue": 1,
+      "tool": 13
+    },
+    "declaredInTest": 0,
+    "total": 48
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 35,
+    "inSupportedLanguages": 30,
+    "parsed": 30,
+    "skipped": 0,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "configured-tool-has-no-caller": 1,
+      "declared-not-exercised": 2,
+      "exercised-not-declared": 2,
+      "latency-concentrated-in-one-component": 1,
+      "model-call-without-timeout": 1,
+      "observability-coverage": 1,
+      "prompt-injection-boundary": 1,
+      "tokens-concentrated-in-one-component": 1,
+      "topology-shape": 1
+    },
+    "bySeverity": {
+      "high": 1,
+      "low": 5,
+      "medium": 5
+    },
+    "strengths": 0,
+    "total": 11
+  },
+  "foundNothing": [],
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "openai-cs-agents-demo-exercised",
+  "relations": {
+    "byKind": {
+      "calls_service": 2,
+      "calls_tool": 15,
+      "contains": 7,
+      "hands_off_to": 4,
+      "invokes_model": 2,
+      "publishes_to_queue": 1,
+      "validated_by": 2
+    },
+    "total": 33
+  },
+  "runtime": {
+    "ambiguousNames": [],
+    "contradictions": 0,
+    "declaredComponents": 22,
+    "duplicateSideEffects": 0,
+    "exercisedComponents": 5,
+    "exercisedNotDeclared": [
+      "agent:agent-workflow",
+      "agent_group:agent-workflow",
+      "agent_group:turn",
+      "evaluator:jailbreak-guardrail",
+      "evaluator:relevance-guardrail",
+      "model:gpt-4.1-mini-2025-04-14",
+      "model:gpt-5.2-2025-12-11",
+      "tool:to-seat-and-special-services-agent",
+      "tool:to-triage-agent"
+    ],
+    "joined": [
+      "agent:jailbreak-guardrail",
+      "agent:relevance-guardrail",
+      "agent:seat-and-special-services-agent",
+      "agent:triage-agent",
+      "tool:update_seat"
+    ],
+    "joinedOnNameAlone": [
+      "agent:jailbreak-guardrail",
+      "agent:relevance-guardrail",
+      "agent:seat-and-special-services-agent",
+      "agent:triage-agent",
+      "tool:update_seat"
+    ],
+    "runs": 1,
+    "spans": 26
+  }
+}

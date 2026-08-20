@@ -87,6 +87,26 @@ const checkExercise = (exercise, problem) => {
   if (typeof exercise.why !== 'string' || exercise.why.trim().length === 0) {
     problem('exercise.why has to say what this run is meant to show');
   }
+  /*
+   * A credential the run needs is declared rather than discovered when the run fails without it.
+   *
+   * Two of these entries are hermetic: they drive their library's own offline model, so they need nothing and cost
+   * nothing. An entry that reaches a provider cannot be either, and the difference has to be visible before the run
+   * rather than in a stack trace after it, so the variables are named here and a run without them is skipped with
+   * the reason printed.
+   */
+  if (exercise.requiresEnvironment !== undefined) {
+    const names = exercise.requiresEnvironment;
+    if (
+      !Array.isArray(names) ||
+      names.length === 0 ||
+      names.some((name) => typeof name !== 'string' || !/^[A-Z][A-Z0-9_]*$/.test(name))
+    ) {
+      problem(
+        'exercise.requiresEnvironment has to name the environment variables the run cannot start without',
+      );
+    }
+  }
 };
 
 const checkEntry = (entry, index, names, problems) => {

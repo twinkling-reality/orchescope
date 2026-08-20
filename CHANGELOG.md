@@ -2,6 +2,50 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
+## Unreleased
+
+### The join, on an application, with a provider actually called
+
+The two entries that carried a run before this one are hermetic by design: each drives its library's own
+offline model, so neither needs a credential and neither costs anything. That is the right property for a
+corpus entry and it is also a limit. An offline model answers from a schema in one turn, so it never hands
+off, and the handoff is the relation an agent application exists to demonstrate. Ten spans, both from
+drivers written here, and no handoff among them.
+
+`openai-cs-agents-demo-exercised` is the same pinned commit as the entry beside it, measured with a run.
+Twenty six spans, more than the rest of the corpus together. The triage agent hands off to the seat agent,
+which calls `update_seat`, with two guardrails running around it, and it answers "Your seat has been
+changed to 14A for confirmation IR-D204". Five components are declared and exercised on code this
+repository did not write: both guardrails, the triage agent, the seat agent and the tool.
+
+The SDK carries its own tracing, which exports to OpenAI's platform rather than over OTLP, so the spans
+come from `openinference-instrumentation-openai-agents`. It emits `openinference.span.kind`,
+`llm.model_name` and `tool.name`, which `packages/traces/src/attributes.ts` already decoded. Nothing here
+was changed to read them, which is the first evidence that the OpenInference reading was worth having.
+
+**It cannot be hermetic and that is stated rather than discovered.** An exercise may now declare
+`requiresEnvironment`, and a machine without those variables skips the entry with the reason printed
+instead of failing inside somebody else's SDK. `pnpm corpus --exercise` without an `OPENAI_API_KEY` reports
+nineteen measured and one skipped, and says which.
+
+**The run found two defects, and the expectation records them rather than hiding them.** A guardrail is
+counted twice: the graph holds `agent:jailbreak-guardrail`, declared and exercised, beside
+`evaluator:jailbreak-guardrail`, which only the run produced, and the same pair for the relevance
+guardrail. Discovery reads a guardrail as an agent, the run reports it as an evaluation, reconciliation
+matches on kind and name, so the kinds disagree and one thing becomes two. It is what fires
+`exercised-not-declared` at high severity, telling a reader something ran undeclared that is declared a
+few lines away. And a handoff arrives as a tool call: the run produced `tool:to-triage-agent` and
+`tool:to-seat-and-special-services-agent`, because the SDK performs a handoff by calling a tool named for
+its destination, while the repository declares a `hands_off_to` relation. The two never meet.
+
+Neither is fixed here. An expectation written to agree with a defect is how a corpus stops being a
+measurement, so both are named in the entry's `why` and both are what the next cycle starts from.
+
+Two rules fired on third party runtime evidence for the first time,
+`tokens-concentrated-in-one-component` and `latency-concentrated-in-one-component`, and both are on the
+list `packages/findings/test/audited-population.test.ts` records as unmovable by a declaration. A run is
+what moves them.
+
 ## 0.6.0
 
 Released 2026-08-19 from npm as `orchescope@0.6.0`, published locally with `npm publish --no-provenance`,
