@@ -252,7 +252,7 @@ export class SystemGraphBuilder {
   }
 
   addEdge(draft: EdgeDraft): void {
-    const key = `${draft.kind} ${identityKey(draft.from)} ${identityKey(draft.to)}`;
+    const key = `${draft.kind}\u0000${identityKey(draft.from)}\u0000${identityKey(draft.to)}`;
     const sourceLocations = (draft.sourceLocations ?? []).map((location) =>
       stampSource(this.digests, location),
     );

@@ -15,6 +15,23 @@ for. And four measurements that ended in a decline, each recorded where the next
 than rediscover it.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### Three source files git read as binary, one of them where every component identity is minted
+
+A single literal NUL byte makes git treat a file as binary, and a binary file produces no diff. Three held
+seven between them: `packages/domain/src/identity.ts`, which mints the key of every component identity and
+the identifier of every relation, `packages/graph/src/graph-builder.ts`, which is the only place component
+identifiers are assigned, and `packages/findings/src/grouping.ts`. Every change any of them has ever
+received went in without a reviewable diff, including the ones in this release.
+
+The byte itself is right. It is the separator in a composite key, and a NUL is the correct choice precisely
+because no identity can contain one. What was wrong is writing it as a raw byte rather than as `\u0000`,
+which is the identical string at run time and leaves the file as text. No key changes, and all nineteen
+measurable corpus entries are byte identical.
+
+**And the index is now asked.** Every tracked text file is checked for a literal NUL, so this covers a file
+that does not exist yet rather than the three that did. It is the hazard that had already produced one
+binary source file before this and would have gone on producing them silently.
+
 ### Two corpus runs at once measure each other, and now one of them refuses
 
 Every pinned entry is scanned in place: stored state is cleared inside the checkout before the audit, and
