@@ -13,6 +13,13 @@ import { evidenceId } from './ids.ts';
  * Each builder takes the facts and returns a content addressed record: the same fact discovered twice
  * produces the same identifier, so evidence deduplicates naturally and a finding can point at
  * evidence produced by a different subsystem.
+ *
+ * There is a builder here for a kind only where something writes it. `Evidence` carries ten kinds and this
+ * file holds seven, because `dependency`, `scenario_outcome` and `model_interpretation` are terms in a
+ * published contract that no build has ever produced. A builder for one of those is not a smaller version
+ * of the feature: it is the shape ADR 0002 removed, a path assembled up to the point where something would
+ * have to call it. Narrowing the union to match is a change to a published document and is a decision on
+ * its own evidence rather than a tidy up.
  */
 
 type WithoutId<T> = Omit<T, 'id'>;
@@ -49,23 +56,6 @@ export const configEntryEvidence = (input: {
     producer: input.producer,
     location: input.location,
     ...(input.value === undefined ? {} : { value: input.value }),
-  });
-
-export const dependencyEvidence = (input: {
-  readonly producer: string;
-  readonly manifest: string;
-  readonly packageName: string;
-  readonly ecosystem: 'npm' | 'pypi';
-  readonly versionRange?: string;
-}): Evidence =>
-  withId({
-    kind: 'dependency' as const,
-    basis: 'discovered' as const,
-    producer: input.producer,
-    manifest: input.manifest,
-    packageName: input.packageName,
-    ecosystem: input.ecosystem,
-    ...(input.versionRange === undefined ? {} : { versionRange: input.versionRange }),
   });
 
 export const spanEvidence = (input: {
@@ -109,27 +99,6 @@ export const metricEvidence = (input: {
     unit: input.unit,
     sampleSize: input.sampleSize,
     ...(input.componentId === undefined ? {} : { componentId: input.componentId }),
-  });
-
-export const scenarioOutcomeEvidence = (input: {
-  readonly producer: string;
-  readonly runId: string;
-  readonly scenarioId: string;
-  readonly outcome: 'success' | 'failure' | 'timeout' | 'budget_exceeded' | 'error';
-  readonly variantId?: string;
-  readonly evaluator?: string;
-  readonly detail?: string;
-}): Evidence =>
-  withId({
-    kind: 'scenario_outcome' as const,
-    basis: 'observed' as const,
-    producer: input.producer,
-    runId: input.runId,
-    scenarioId: input.scenarioId,
-    outcome: input.outcome,
-    ...(input.variantId === undefined ? {} : { variantId: input.variantId }),
-    ...(input.evaluator === undefined ? {} : { evaluator: input.evaluator }),
-    ...(input.detail === undefined ? {} : { detail: input.detail }),
   });
 
 export const faultInjectionEvidence = (input: {

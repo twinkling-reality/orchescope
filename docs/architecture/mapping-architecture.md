@@ -379,9 +379,15 @@ nowhere, and carries `role: developer_tooling`. **Zero violations under either r
 eight package declaring adapters the property is true by construction, because `appliesTo` is
 `projectUses`. The two exceptions are `crewai` and `mcp`, each of which ORs a configuration door into
 `appliesTo`, and those two adapters produced both recorded detection failures. The property is a check on
-exactly the two doors that have ever leaked. Roughly 60 lines, and it covers adapters that do not exist
-yet. Wire `dependencyEvidence` while doing it: `packages/domain/src/evidence.ts:54` exports it and nothing
-calls it, 0 of 20,873 evidence records.
+exactly the two doors that have ever leaked, and it covers adapters that do not exist yet because the
+adapter set is `DEFAULT_ADAPTERS` filtered by whether the adapter claims a package.
+
+`dependencyEvidence` was to be wired while doing it, and it is deleted instead. It records that a manifest
+declares a package, and a manifest declaration answers this question on 12 of the 27 entries: on 15 a
+framework adapter's packages are used and named in no manifest this build reads, and 9 of those declare
+nothing at all because `readManifests` reads the repository root and they are monorepos. `crewai-examples`
+has no root manifest, answers `crewai` entirely by imports, and holds 18 of the 21 components declared only
+by a configuration document, so the evidence would have fired on 1 of those 21.
 
 **And on the pinned corpus that property has almost no population, which is why it is second rather than
 first.** At most one component satisfies its antecedent across all twenty seven entries and none at all
@@ -389,6 +395,12 @@ under `projectUses`, so a gate holding it over the pinned entries alone asserts 
 generated negatives are what give it a population: an injected `.mcp.json` in a repository depending on
 express is a component attributed to `adapter:mcp` in a repository importing no MCP SDK, which is the
 antecedent by construction, on every negative at once. The two families are one change, not two.
+
+**Stated as a universal invariant the property is false, and the counterexample is a correct answer.** A
+`crew.jsonc` injected into a repository depending on express declares the two agents it lists and reports
+an agent system, none of it carrying `developer_tooling`. `crew.jsonc` is a name CrewAI owns outright, so
+that answer is right. The table of shapes is therefore drawn along a narrower line than the property: the
+names that belong to nobody.
 
 **An anti circularity check between the halves.** *An observed relation or identity that is exactly
 rederivable from a declaration is a circular join, not a join.* This is `graph.node.parent_id` stated as a

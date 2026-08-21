@@ -46,11 +46,9 @@ export {
   absenceEvidence,
   configEntryEvidence,
   dedupeEvidence,
-  dependencyEvidence,
   derivedEvidence,
   faultInjectionEvidence,
   metricEvidence,
-  scenarioOutcomeEvidence,
   sourceSpanEvidence,
   spanEvidence,
 } from './evidence.ts';

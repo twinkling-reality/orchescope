@@ -10,6 +10,29 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### Three evidence kinds nothing writes, and two builders that were waiting for a caller
+
+`Evidence` carries ten kinds. Seven are written. `dependency` and `scenario_outcome` each had a builder in
+`packages/domain/src/evidence.ts` and no caller anywhere, 0 of 20,873 records across the pinned corpus, and
+`model_interpretation` has had none since [ADR 0002](docs/architecture/adr/0002-deterministic-analysis.md)
+removed the path that would have produced it. Neither builder was reported by `knip`, because both leave
+through the package entry point and entry exports are not checked.
+
+`dependencyEvidence` was to be wired rather than deleted, because the dependency property in
+[ADR 0005](docs/architecture/adr/0005-corpus-invariants.md) was to be answered from the bundle with it.
+Measured, it cannot be. It records that a manifest declares a package, and a manifest declaration answers
+that question on **12 of the 27 entries**: on 15 a framework adapter's packages are used and named in no
+manifest this build reads, and 9 of those declare nothing at all, because `readManifests` reads the
+repository root and they are monorepos or per directory applications. `crewai-examples` is the sharpest
+case. It has no root manifest of any kind, `crewai` is answered there entirely by imports, and it holds 18
+of the 21 components in this corpus declared only by a configuration document, which is exactly the
+population that evidence would have been worth having on. It would have fired on 1 of those 21.
+
+So both builders are deleted rather than wired. What is left is three terms in a published contract that
+nothing produces, which is a true statement about this build and is recorded as one: narrowing the
+`Evidence` union to match moves a published document version, and that is a decision on its own evidence
+rather than a tidy up attached to this one.
+
 ### The dependency property, and what it turned out to be
 
 [ADR 0005](docs/architecture/adr/0005-corpus-invariants.md) proposes a property that holds with no

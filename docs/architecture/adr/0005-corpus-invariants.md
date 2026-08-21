@@ -1,6 +1,6 @@
 # ADR 0005: The corpus gate holds invariants that `--record` cannot rewrite
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-20
 - Deciders: repository maintainers
 
@@ -84,19 +84,37 @@ stricter reading of a source import alone**. That one is `mcp_server:gpt-researc
 recorded failure.** For six of the eight package declaring adapters the property is true by construction,
 because `appliesTo` is `projectUses`. The two exceptions are `crewai` and `mcp`, each of which ORs a
 configuration door into `appliesTo`, and those two adapters produced both recorded detection failures.
-`dependencyEvidence` is wired at manifest read time as part of this, so the property is answerable from
-the bundle: it is exported at `packages/domain/src/evidence.ts:54` and called by nothing, 0 of 20,873
-evidence records.
+`dependencyEvidence` cannot be what makes this answerable, which was the mechanism proposed here and is
+measurably the wrong one. It records that a manifest declares a package, and a manifest declaration answers
+the question on 12 of the 27 entries: on 15 a framework adapter's packages are used and named in no manifest
+this build reads, and 9 of those declare nothing at all because `readManifests` reads the repository root
+and they are monorepos or per directory applications. `crewai-examples` is the sharpest case, with no root
+manifest of any kind and `crewai` answered entirely by imports, and it is also the entry holding 18 of the
+21 components declared only by a configuration document. So the evidence would fire on 1 of those 21. It is
+deleted rather than wired, and it is not alone: `scenarioOutcomeEvidence` has no producer either, and
+`model_interpretation` has none by decision, so three of the ten `Evidence` kinds are terms in a published
+contract that nothing writes.
 
-**And the property has almost no population on the pinned corpus, which decides how it is built.** At
-most one component satisfies its antecedent across all twenty seven entries, and none at all under the
-predicate the build uses to decide whether an adapter runs. A gate holding this property over the pinned
-entries alone asserts over an empty set, which is the shape named three paragraphs above and the reason
-`rule-input-producers.test.ts` exists. The generated negatives are what give it a population: an injected
-`.mcp.json` in a repository depending on express is a component attributed to `adapter:mcp` in a
-repository importing no MCP SDK, which is the antecedent, by construction, on every negative at once.
-That is why family 1 comes first, and why this property is checked over the generated negatives as well
-as over the pinned entries rather than over the pinned entries alone.
+**And the property has almost no population on the pinned corpus, which is what decides where it is
+held.** At most one component satisfies its antecedent across all twenty seven entries, and none at all
+under the predicate the build uses to decide whether an adapter runs. A gate holding this property over the
+pinned entries alone asserts over an empty set, which is the shape named three paragraphs above and the
+reason `rule-input-producers.test.ts` exists. The generated negatives are what give it a population by
+construction: an injected `.mcp.json` in a repository depending on express is a component attributed to
+`adapter:mcp` in a repository importing no MCP SDK, which is the antecedent, on every negative at once. So
+this is not a second family. It is the first family read over a wider set of components, and it is asserted
+where that set exists: over the same table of shapes crossed with a repository declaring one ordinary web
+framework, with the adapters read from `DEFAULT_ADAPTERS` rather than written down.
+
+**Stated as a universal invariant it is also false, and the counterexample is a correct answer.**
+`crew.jsonc` is a name CrewAI owns outright: its generator writes one and its `pyproject.toml` names it.
+Injected into a repository depending on express, the CrewAI adapter reads it through its configuration
+door, declares the two agents the document lists, and reports an agent system, none of it carrying
+`developer_tooling`. That is the property violated and the answer right. The line the table is drawn along
+is therefore narrower than the property: these are the names that belong to nobody, where `agents.yaml` is
+a word and `servers` is a word and a `.mcp.json` belongs to whoever is reading the repository. A shape whose
+name a framework owns is not a lookalike, and a property that cannot tell the two apart is a check on the
+doors rather than a law about them.
 
 **3. An anti circularity check between the two halves.** *An observed relation or identity that is exactly
 rederivable from a declaration is a circular join, not a join.* This is the fourth recorded failure stated
@@ -105,9 +123,17 @@ rederives exactly. It also catches a `runtime_name` join made against a name an 
 the third failure from the other side. It requires per attribute provenance on the trace side, which
 `packages/traces` does not carry, and that prerequisite is the reason it is third rather than first.
 
-**And every list the build can derive, it derives.** `FRAMEWORK_ADAPTERS` comes from `DEFAULT_ADAPTERS`.
-Every `Evidence` kind is asked against something that writes it, which fails immediately on `dependency`
-and is the point.
+**And every list the build can derive, it derives.** `FRAMEWORK_ADAPTERS` comes from `DEFAULT_ADAPTERS`,
+and so does the adapter set the dependency property is asked over, which is what covers a fourteenth reader
+on the day it declares its `packages`.
+
+Asking every `Evidence` kind against something that writes it is not adopted, and the measurement is why.
+Three of the ten have no producer: `dependency` and `scenario_outcome` had a builder each and no caller,
+and `model_interpretation` is a term ADR 0002 kept on purpose after removing the path that would have
+written it. The builders are deleted, which leaves the kinds in the published `Evidence` union with nothing
+writing them, and closing that gap means narrowing the union, which moves a published document version.
+That is a decision on its own evidence and not a check to bolt onto this one. What is recorded here instead
+is the number, so the next reader finds three rather than rediscovering it.
 
 Expectations stay. They are what catches a framework moving in the field, and nothing else does. What
 changes is that they stop being the only thing between a wrong answer and a release.
@@ -127,6 +153,40 @@ system become a table row. Circular joins become a property. Neither depends on 
 **One thing is deliberately not fixed here.** 25 of 27 entries still run outside the required gate,
 because third party source is not vendored for licence reasons. A cached clone job or a pinned tarball
 digest would close that, and it is a packaging decision rather than a verification one.
+
+## What the measurement said
+
+Two of the three families are built and the third is not, for the reason this record already gave.
+
+**The generated negatives found five live precision failures on their first run.** Eleven shapes crossed
+with the five pinned repositories that are not agent systems is 55 injections, and 5 of the 11 broke the
+invariant on every one of them. All five were one defect: the ten paths this build opens on every scan were
+recorded as one reason for opening when they are three, so `agents.yaml`, `config/agents.yaml` and this
+build's own manifest were handed to whichever reader recognised a key inside them. A roster of account
+executives at the root declared two agents in a repository depending on express and nothing else, and an
+`mcpServers` key in any of the three declared a server the repository was said to connect to. The same
+documents one directory down, found by the traversal, were declined. The fix is that the origin travels
+with the path; neither adapter needed a new gate, because both were already asking the right question and
+being handed the wrong answer.
+
+That is the family working as proposed, and it is the number this record cared about: two of the four
+recorded failures were found by hand outside the corpus, and the next five were found inside it, before a
+release rather than after a field report.
+
+**The dependency property was measured and not reversed, and it turned out to be the same family.** The
+count that would have demoted it is 0. Its antecedent is empty on the pinned corpus and non empty by
+construction on the negatives, so it is asserted there, over the adapter set derived from
+`DEFAULT_ADAPTERS`. Its proposed mechanism, `dependencyEvidence` at manifest read time, is measurably
+insufficient and is deleted rather than wired.
+
+**The anti circularity check is not built and its prerequisite has not moved.** `packages/traces` still
+carries no per attribute provenance, and `byCodeLocation` is still 0 on all eight exercised entries. It
+stays third.
+
+**And the premise this record opened on was wrong.** `--record` overwrites every leaf including
+`agentSystemDetected`. What it cannot do is silence the claim, which is checked against `corpus.yaml` in two
+places that a recording never touches. The distinction matters because it names what an invariant actually
+is here: not a leaf `--record` skips, but an assertion that has no leaf at all.
 
 ## What would reverse this
 
