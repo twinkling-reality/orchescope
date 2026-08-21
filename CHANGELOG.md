@@ -83,7 +83,7 @@ which writes the same three roles as literals and which the run never entered. T
 perfectly true. **`crewai-examples-exercised` recorded three exercised components and all three were the
 wrong file.**
 
-**Three separate things had to change together, and reading the file was the least of them.**
+**Reading the file was the least of what had to change.**
 
 **Where a document found by name is allowed to live.** `platformConfigPaths` filtered the bounded traversal
 by basename against three `wrangler.*` names, sorted, and cut at 32. Adding `agents.yaml` and `tasks.yaml` to
@@ -106,12 +106,14 @@ and as the name the document binds the component under, which is what a caller w
 
 **A role with a placeholder in it.** CrewAI interpolates a role before it uses it, and four of the seven
 agents in the framework repository's own three documents declare one of the form `{topic} Senior Data
-Researcher`. That string is a name no run will ever report. Those are named by their key, declare no runtime
-name, and the adapter run now carries a detail saying it declined four, because a decline nobody states reads
-as an absence. That detail arrives on `--json` and over MCP: the terminal renders an adapter's detail only
-when the adapter failed, and this one completed. A call site is treated differently and keeps naming itself
-by whatever literal it carries: it has no second name to fall back to, and declining the literal sent
-fourteen calls in one test file to the variable `agent` they share, which is the collapse 0.8.0 fixed.
+Researcher`. That string is a name no run will ever report, so those are named by their key and declare no
+runtime name. A call site is treated differently and keeps naming itself by whatever literal it carries: it
+has no second name to fall back to, and declining the literal sent fourteen calls in one test file to the
+variable `agent` they share, which is the collapse 0.8.0 fixed. Both sides decline the promise, and the
+adapter run now carries a detail counting every decline in the repository: on the pinned framework it reads
+24, four in documents and twenty at call sites. A decline nobody states reads as an absence. That detail
+arrives on `--json` and over MCP: the terminal renders an adapter's detail only when the adapter failed, and
+this one completed.
 
 **`agents.yaml` is a file name and not a framework.** The adapter applied whenever any config document path
 ended in `agents.yaml`, with no check that the document looked like a crew. Once the name is found wherever
@@ -187,9 +189,11 @@ one it had inspected, which is now counted where a server is actually read.
 **Two silences the widening made worse, both now audible.** `readConfigDocuments` recorded every read and
 parse failure and had no consumer: `discover` took its documents and left its problems, so a crew whose only
 agents document has a syntax error reported no agent and no reason, which reads exactly like a repository
-that declares none. That was eleven fixed paths before this change and is up to ninety six after it, so the
-failure now goes in `coverage.skipped` under `parse_error` or `unreadable`, and in the count beside it. Both
-names were already in the vocabulary; neither had ever been written by a configuration document.
+that declares none. The population that can hit it was at most forty three paths before this change, eleven
+fixed plus a cap of thirty two deployment manifests, and is at most a hundred and six after, ten fixed plus
+caps of thirty two and sixty four. So the failure now goes in `coverage.skipped` under `parse_error` or
+`unreadable`, and in the count beside it. Both names were already in the vocabulary; neither had ever been
+written by a configuration document.
 
 And a cap that truncates and says nothing reports its own ceiling as though it were the answer: seventy
 agents documents under a cap of sixty four produced sixty four agents, `truncated: false`, an empty skip list
