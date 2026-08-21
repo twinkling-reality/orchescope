@@ -10,6 +10,27 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### Two decisions accepted, each on the measurement it named in advance
+
+[ADR 0004](docs/architecture/adr/0004-provenance-not-confidence.md) and
+[ADR 0005](docs/architecture/adr/0005-corpus-invariants.md) were proposed with the measurement that would
+reverse each of them written down first. Both were run. Neither reversed.
+
+**0004 was strengthened by five failures it did not know about.** Its claim is that recognition is widened
+by provenance and never by lowering a confidence band, on the evidence that all four recorded confidently
+wrong answers were identity or provenance errors. The generated negatives then found five more, and all
+five were the same mechanism failing at the one place it could not see: `ConfigOrigin` records why a
+document was opened, and the fixed list of paths collapsed three reasons into one value. The fix is data,
+no band would have changed any of the five in either direction, and the amendment it asks of the adapter
+guide has landed.
+
+**0005's falsifier is 0.** Its dependency property would have been demoted with more than one exception on
+the corpus once the fact model work landed, and the count of components attributed to a framework adapter
+whose packages the repository does not use and that do not carry `developer_tooling` is zero. Two of its
+three families are built, the third is built in the half its prerequisite allows, and what changed about it
+is recorded rather than quietly dropped: `--record` does overwrite the boolean that record said it could
+not, and `dependencyEvidence` cannot answer the property it was going to be wired for.
+
 ### Where breadth comes from as agent systems proliferate, asked and answered with measurements
 
 Thirteen hand written per framework readers produce the declared half of this build's join, 5,493 lines

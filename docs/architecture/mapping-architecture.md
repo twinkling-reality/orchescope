@@ -9,8 +9,8 @@ The plan below is staged, and each stage states what measures it and what would 
 was re-derived against the corpus at `5466223`, and the command that produced it is beside it, so a reader
 who distrusts a figure can run it rather than take it.
 
-Three decisions follow from it, proposed separately so each can be accepted or refused on its own
-evidence:
+Three decisions follow from it, proposed separately so each could be accepted or refused on its own
+evidence. All three are accepted, each on a measurement pre-registered before it was run:
 
 - [ADR 0003](adr/0003-fact-model-breadth.md), the fact model is the breadth lever and a fact records only
   what the syntax says.

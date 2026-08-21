@@ -1,6 +1,6 @@
 # ADR 0004: Recognition is widened by provenance, never by lowering a confidence band
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-20
 - Deciders: repository maintainers
 
@@ -113,6 +113,31 @@ half.
 **One documented claim is corrected rather than kept.** The adapter guide's confidence advice reads as
 though a band travels with a component into every decision. It does not, and an author following it
 believes their component is being held to a standard nothing applies.
+
+## What the measurement said
+
+**Five more confidently wrong answers were found after this was written, and all five were provenance.** The
+generated negatives in [ADR 0005](0005-corpus-invariants.md) crossed eleven shapes with five pinned
+repositories that are not agent systems, and five shapes broke the invariant on every one of them. A roster
+of account executives in a root `agents.yaml` declared two agents in a repository depending on express and
+nothing else. An `mcpServers` key in the document CrewAI names, or in this build's own manifest, declared a
+server that repository was said to connect to. The same documents one directory down, found by the
+traversal instead of by the fixed list, were declined.
+
+The cause is the mechanism this record identifies, failing at the one place it could not see. `ConfigOrigin`
+records why a document was opened and is the load bearing half of five of the six gates listed above, and
+the ten paths this build opens on every scan collapsed three reasons into one value. Both readers were
+already asking the right question. Both were handed the wrong answer.
+
+**The fix is data and it is provenance.** The origin travels with the path, so the fixed list says which
+reader each name was collected for, and neither adapter needed a new gate or a new number. No confidence
+band would have changed any of the five, in either direction: what was wrong was not how sure the reader
+was, it was whose document it had been handed.
+
+The amendment this record asks of `docs/guides/adapter-development.md` has landed. Its confidence section
+now says that a band is an input to severity through `MIN_CONFIDENCE_BY_SEVERITY`, that nothing deciding
+identity, detection or a reconciliation match reads one, and that emitting at `heuristic` is the same claim
+with a decoration.
 
 ## What would reverse this
 
