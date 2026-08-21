@@ -4,10 +4,15 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
-The first CrewAI run anywhere in this corpus and the reading that turns its join into a refusal, four
-changes to how a reader and an agent find the loop, and three measurements that ended in a decline: a trace
-attribute that carries a declaration rather than an observation, a configuration path nothing read, and a
-corpus metric that had been reporting its own ceiling.
+Where breadth comes from as agent systems proliferate, asked with measurements and answered in three
+accepted decisions: the fact model rather than the adapter count, provenance rather than a confidence band,
+and a corpus gate that holds invariants a recording cannot rewrite. The first CrewAI run anywhere in this
+corpus and the reading that turns its join into a refusal. Five live precision failures found by the corpus
+on the first run of the invariants written to catch them, all of them one defect. Every location now says
+which revision of which file it was read from, and every manifest citation is checked against the repository
+rather than taken. Four interfaces with no producer, three deleted and one given the process it was written
+for. And four measurements that ended in a decline, each recorded where the next reader will find it rather
+than rediscover it.
 No published document changes: the documents under `schemas/` are byte identical.
 
 ### Two corpus runs at once measure each other, and now one of them refuses
