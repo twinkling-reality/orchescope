@@ -66,11 +66,18 @@ drafts:
 export type AgentSystemAdapter = {
   readonly id: string;
   readonly version: string;
-  readonly ecosystem: 'javascript' | 'python' | 'configuration' | 'manifest';
+  /** The packages this adapter claims to read. A convention reader claims none. */
+  readonly packages: readonly string[];
   readonly appliesTo: (context: DiscoveryContext) => boolean;
   readonly discover: (context: DiscoveryContext, builder: SystemGraphBuilder) => AdapterFindings;
 };
 ```
+
+There is no `ecosystem` field, and there was never a use for one: the fact model is language neutral, so one adapter usually
+covers a framework in both ecosystems and any answer it gave in advance would be wrong for half the repositories it runs on.
+`packages` is the coverage claim instead. Discovery compares it against what the repository actually imports, so an adapter
+that claims a framework the repository uses and then finds nothing is reported as a gap in Orchescope rather than left to
+read as "no agent system here".
 
 Four rules, and the tooling enforces the first three:
 
@@ -96,8 +103,11 @@ type DiscoveryContext = {
   manifests: ManifestSet;          // declared dependencies, both ecosystems
   modules: readonly ModuleFacts[]; // imports, calls, definitions, texts, control flow
   configs: readonly ConfigDocument[];
+  files: readonly { path: string; byteLength?: number }[]; // every path the traversal walked
   symbols: SymbolIndex;            // exported names across the repository
   bindings: BindingRegistry;       // local name to the component it produced
+  implementations: ImplementationSpanRegistry; // the body of a component someone else declared
+  callSiteEffects: CallSiteEffects;            // the operation a call site performed, for calls no name stands for
   deadline: Deadline;
 };
 ```
@@ -108,10 +118,10 @@ TypeScript and `Agent(name=...)` in Python reduce to the same call fact with the
 ### A minimal adapter
 
 ```ts
-import { CONFIDENCE_BANDS } from '@orchescope/domain';
+import { findEntry, objectArgument, stringValue } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter } from '../adapter.ts';
 import { createDrafts, sourceIdentity } from '../drafts.ts';
-import { findEntry, matchCalls, objectArgument, projectUses, stringValue } from '../matching.ts';
+import { matchCalls, projectUses } from '../matching.ts';
 
 const ADAPTER_ID = 'adapter:my-framework';
 const PACKAGES = ['my-framework'];
@@ -120,7 +130,7 @@ const drafts = createDrafts(ADAPTER_ID);
 export const myFrameworkAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
-  ecosystem: 'javascript',
+  packages: PACKAGES,
   appliesTo: (context) => projectUses(context, PACKAGES),
   discover: (context, builder): AdapterFindings => {
     let components = 0;
@@ -149,7 +159,7 @@ export const myFrameworkAdapter: AgentSystemAdapter = {
       context.bindings.register(match.module.file, name, identity);
     }
 
-    return { componentsFound: components, edgesFound: 0, filesInspected: files.size };
+    return { componentsFound: components, edgesFound: 0, filesInspected: [...files] };
   },
 };
 ```
@@ -173,6 +183,20 @@ const target = context.bindings.lookup(module.file, 'issueRefund');
 Use the bands rather than inventing a number: `CONFIDENCE_BANDS.deterministic` (0.98) for something read directly,
 `strongStructural` (0.85) for a resolved framework call, `structural` (0.75) for a structural match, `heuristic` (0.6) for a
 guess from shape. A reader compares two findings on the assumption that the numbers mean the same thing.
+
+**What a band is for.** It is an input to severity, and it is measurably nothing else. `MIN_CONFIDENCE_BY_SEVERITY` caps how
+severe a finding may be given the confidence of the evidence under it, so a weak reading cannot produce a critical finding.
+
+**What a band is not for.** It does not decide identity, it does not decide whether a repository is an agent system, and it
+does not decide a reconciliation match. `agentSystemDetected` reads a component's kind and whether it belongs to the audited
+system, and no threshold; `mergeConfidence` is `Math.max`, so a weak component merged with a strong one takes the strong
+number. Every one of the four confidently wrong answers this build has recorded was an identity or a provenance error, and
+none is in the range a scalar can express.
+
+So "emit it at `heuristic`" is not a weaker claim than "emit it". It is the same claim with a decoration. A reader who
+believes a low band will keep a doubtful component out of the answer is wrong about this build, and an author who reaches
+for one instead of naming the provenance that keeps a reading precise has not made the reading safer.
+[ADR 0004](../architecture/adr/0004-provenance-not-confidence.md) is the record and the measurement.
 
 ## Testing an adapter
 

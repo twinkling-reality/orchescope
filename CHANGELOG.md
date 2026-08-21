@@ -10,6 +10,26 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### The adapter guide, which did not compile against the interface it documents
+
+The page an author copies to write a reader declared an `ecosystem` field that does not exist, omitted
+`packages` entirely, returned `filesInspected: files.size` where the type is a list of paths, and imported
+three helpers from a module that does not export them. Every one of those is a compile error in an adapter
+written by following it, and the page had no way to fail.
+
+Both halves are checked now, and both derive their expectation from the build. The fields the example
+declares have to be the fields a registered adapter declares, so a fourteenth one fails here on the day it
+is added rather than on the day somebody rereads the page. Every value import in every TypeScript block has
+to name a binding the module it cites actually exports.
+
+**And the confidence section says what a band is for and what it is not for**, which
+[ADR 0004](docs/architecture/adr/0004-provenance-not-confidence.md) requires of it. It is an input to
+severity: `MIN_CONFIDENCE_BY_SEVERITY` caps how severe a finding may be given the evidence under it. It is
+not read to decide identity, detection or a reconciliation match, `mergeConfidence` is `Math.max`, and every
+one of the four confidently wrong answers on record was an identity or provenance error that no scalar
+expresses. An author following the old advice believed a low band was holding their component to a standard
+that nothing applies.
+
 ### A manifest that can be wrong, and is told so
 
 The manifest is a first class input and the documented first step for a system no adapter reads, and it is
