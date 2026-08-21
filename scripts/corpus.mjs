@@ -13,7 +13,7 @@
  *   node scripts/corpus.mjs --record <name>...   rewrite expectations, to be read before committing
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { auditRepository, clearStoredState } from './corpus/audit.mjs';
@@ -38,6 +38,51 @@ if (record && argv.includes('--check')) {
   console.error('--check and --record ask for opposite things. Pass one.');
   process.exit(2);
 }
+
+/**
+ * One run at a time, because two runs share the checkouts they measure.
+ *
+ * Every entry is scanned in place: stored state is cleared inside the checkout before the audit, and the
+ * shapes crossed with a repository that is not an agent system are written into it and removed after. Two
+ * runs at once therefore measure each other. It is not theoretical, and it does not fail loudly on its own:
+ * a full run overlapping the offline one the gate performs reported `mcp_server:docs` declared by an
+ * injection that declares no server, because the other run's `.mcp.json` was on disk at the time, and
+ * reported a second shape as never reaching a reader because the other run had already removed it. Both
+ * read as this build being wrong about a repository.
+ *
+ * A held lock names the process holding it, and a lock whose process is gone is taken over rather than left
+ * to be deleted by hand after a run is interrupted.
+ */
+const lockPath = join(cacheDirectory(root), 'run.lock');
+
+const takeLock = () => {
+  mkdirSync(dirname(lockPath), { recursive: true });
+  for (const attempt of [1, 2]) {
+    try {
+      const handle = openSync(lockPath, 'wx');
+      writeFileSync(handle, `${process.pid}\n`);
+      return () => {
+        rmSync(lockPath, { force: true });
+      };
+    } catch (error) {
+      if (error.code !== 'EEXIST' || attempt === 2) throw error;
+      const holder = Number.parseInt(readFileSync(lockPath, 'utf8').trim(), 10);
+      try {
+        process.kill(holder, 0);
+        console.error(
+          `another corpus run is in progress as process ${holder}. Two runs measure each other, because both scan the pinned checkouts in place.`,
+        );
+        process.exit(2);
+      } catch {
+        rmSync(lockPath, { force: true });
+      }
+    }
+  }
+  throw new Error('the corpus lock could not be taken');
+};
+
+const releaseLock = takeLock();
+process.once('exit', releaseLock);
 
 const expectationPath = (name) => join(root, 'corpus/expected', `${name}.json`);
 

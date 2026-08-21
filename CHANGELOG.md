@@ -10,6 +10,20 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### Two corpus runs at once measure each other, and now one of them refuses
+
+Every pinned entry is scanned in place: stored state is cleared inside the checkout before the audit, and
+the shapes crossed with a repository that is not an agent system are written into it and removed after. So
+two runs at once measure each other, and it does not fail loudly on its own. A full run overlapping the
+offline one the gate performs reported `mcp_server:docs` declared by an injection that declares no server,
+because the other run's `.mcp.json` was on disk at the time, and reported a second shape as never reaching a
+reader because the other run had already taken it away. Both read as this build being wrong about a
+repository, which is the one thing a corpus exists not to say by accident.
+
+A run takes a lock naming the process holding it and a second one refuses with that name, rather than
+producing a measurement nobody can tell from a regression. A lock whose process is gone is taken over, so an
+interrupted run does not leave a file to be deleted by hand.
+
 ### Two node types the JavaScript reader answered to and the parser never emits
 
 `StaticMemberExpression` and `StringLiteral` were checked at seven sites: in the literal reader, in the
