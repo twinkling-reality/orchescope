@@ -32,6 +32,8 @@ with the quickstart; read the architecture when you want to change something.
 - [Runtime observation](architecture/runtime-observation.md): spans to topology to reconciliation.
 - [Finding lifecycle](architecture/finding-lifecycle.md): rule to draft to finding, and how severity is bounded.
 - [Goal lifecycle](architecture/goal-lifecycle.md): finding to goal to verified change.
+- [Mapping architecture](architecture/mapping-architecture.md): where breadth comes from as agent systems
+  proliferate, staged, with what falsifies each stage.
 - [Decision records](architecture/adr/): why the stack is what it is.
 
 ## Protocols
