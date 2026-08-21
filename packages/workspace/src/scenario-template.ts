@@ -1,6 +1,7 @@
 import { existsSync, writeFileSync } from 'node:fs';
 import { RESULT_SOURCES, SCENARIO_PERMISSIONS, SCHEMA_VERSIONS } from '@orchescope/schema';
 import type { WorkspacePaths } from './paths.ts';
+import { type StartCommandCandidate, startCommandCandidates } from './start-command-candidates.ts';
 
 /**
  * The scenario template.
@@ -27,7 +28,26 @@ import type { WorkspacePaths } from './paths.ts';
 const commented = (heading: string, values: readonly string[]): string =>
   `# ${heading}: ${values.join(', ')}`;
 
-export const scenarioTemplate = (): string =>
+/**
+ * Commands the repository already declares, offered beside the placeholder and never in place of it.
+ *
+ * The placeholder is the honest answer where nothing is known, and it stays the value the parser reads.
+ * These sit above it as comments with the file and line each was read from, so filling the field in is a
+ * choice a reader makes from their own repository rather than a command this build picked for them. A
+ * `start` script is often a server that never exits, which is exactly why the field it would go in carries a
+ * timeout and a stop signal.
+ */
+const candidateLines = (candidates: readonly StartCommandCandidate[]): readonly string[] =>
+  candidates.length === 0
+    ? []
+    : [
+        '  # Declared in this repository, read and not run. Pick one, or write your own:',
+        ...candidates.map(
+          (candidate) => `  #   ${candidate.command}    (${candidate.file}:${candidate.line})`,
+        ),
+      ];
+
+export const scenarioTemplate = (candidates: readonly StartCommandCandidate[] = []): string =>
   [
     '# Orchescope scenario.',
     '#',
@@ -58,6 +78,7 @@ export const scenarioTemplate = (): string =>
     '',
     'target:',
     '  # The command that starts your system. Orchescope never guesses this.',
+    ...candidateLines(candidates),
     "  command: ['node', 'src/main.js']",
     '  resultSource: exit_code',
     '  timeoutMs: 60000',
@@ -120,6 +141,8 @@ export const writeScenarioTemplate = (paths: WorkspacePaths): ScenarioTemplateRe
   if (existsSync(paths.scenarioTemplateFile)) {
     return { created: false, scenarioFile: paths.scenarioTemplateFile };
   }
-  writeFileSync(paths.scenarioTemplateFile, scenarioTemplate(), { mode: 0o600 });
+  writeFileSync(paths.scenarioTemplateFile, scenarioTemplate(startCommandCandidates(paths.root)), {
+    mode: 0o600,
+  });
   return { created: true, scenarioFile: paths.scenarioTemplateFile };
 };

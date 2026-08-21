@@ -4,8 +4,10 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
-Three changes to how a reader and an agent find the loop, the first CrewAI run anywhere in this corpus, a
-correction to what that run's join was made by, and then the reading that turns that join into a refusal.
+The first CrewAI run anywhere in this corpus and the reading that turns its join into a refusal, four
+changes to how a reader and an agent find the loop, and three measurements that ended in a decline: a trace
+attribute that carries a declaration rather than an observation, a configuration path nothing read, and a
+corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
 ### A corpus metric that reported its own ceiling
@@ -237,6 +239,35 @@ root. Reading it where it lives is a larger change than it looks: measured on th
 it would add 48 agent components across 20 files, and adding the name to the set that already finds
 `wrangler.toml` by name would put 40 candidates under one cap of 32 and silently drop both Cloudflare
 manifests, which is the fix 0.6.0 made. It needs its own measurement.
+
+### The other half of that placeholder, which the repository already wrote down
+
+The scenario template gave a caller somewhere to declare the command that starts their system and still
+handed them `['node', 'src/main.js']` to replace. Most repositories have already written the answer down:
+`scripts.start` and `scripts.dev` in `package.json`, a console entry point under `[project.scripts]` in
+`pyproject.toml`, a line of a `Procfile`.
+
+Those are now read and offered as comments above the placeholder, each with the file and the line it came
+from, so a reader checks a candidate against their own repository rather than trusting one this build picked:
+
+```
+target:
+  # The command that starts your system. Orchescope never guesses this.
+  # Declared in this repository, read and not run. Pick one, or write your own:
+  #   npm run start    (package.json:6)
+  #   node src/main.js    (Procfile:1)
+  command: ['node', 'src/main.js']
+```
+
+**None of them is ever run and none of them becomes the value the parser reads.** A `start` script is often
+a server that never exits, which is why the field they sit above carries a timeout and a stop signal at all,
+and a test asserts that the placeholder is still what the runner would execute. A candidate whose declaring
+line cannot be located is left out rather than cited at a guessed line, and the command is redacted before it
+is written back, because a declared command is repository text and may carry a credential inline. Redaction
+is not a guarantee, which is one more reason these arrive as comments a person reads.
+
+The refusal is unchanged: `orchescope trace` still carries a placeholder, because a candidate is a thing the
+repository declares and not a statement that running it produces the run you want.
 
 ### The one command in the loop with a placeholder in it
 

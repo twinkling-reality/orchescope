@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, describe, it } from 'node:test';
@@ -52,7 +52,10 @@ const run = async (args: readonly string[]): Promise<Result> => {
 const project = (): string => {
   const root = mkdtempSync(join(tmpdir(), 'orchescope-scenario-'));
   roots.push(root);
-  writeFileSync(join(root, 'package.json'), '{ "name": "example", "private": true }\n');
+  writeFileSync(
+    join(root, 'package.json'),
+    '{\n  "name": "example",\n  "private": true,\n  "scripts": { "start": "node src/main.js" }\n}\n',
+  );
   mkdirSync(join(root, 'src'), { recursive: true });
   writeFileSync(join(root, 'src/main.js'), "process.stdout.write('done\\n');\n");
   return root;
@@ -89,6 +92,16 @@ describe('the scenario template', () => {
     const init = await run(['--cwd', root, 'init', '--scenario']);
     assert.equal(init.code, 0, `init failed: ${init.stdout}${init.stderr}`);
     assert.match(init.stdout, /wrote .*\.orchescope\/scenario\.yaml/);
+
+    /*
+     * The command the repository already declares, offered beside the placeholder with the line it was read
+     * from, and never in place of it. The template that runs below is still the one the parser reads.
+     */
+    const template = readFileSync(join(root, '.orchescope/scenario.yaml'), 'utf8');
+    assert.ok(
+      template.includes('#   npm run start    (package.json:4)'),
+      `the declared start command was not offered: ${template}`,
+    );
 
     /*
      * Written under .orchescope and loaded from scenarios/, so the template on disk cannot report a

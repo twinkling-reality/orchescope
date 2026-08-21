@@ -45,7 +45,8 @@ orchescope audit
 
 Orchescope never guesses that command. To declare it once instead of typing it each time, `orchescope init
 --scenario` writes a scenario template: fill in `target.command`, move it to `scenarios/`, and every rerun,
-comparison and verdict after that runs from the file.
+comparison and verdict after that runs from the file. The template offers whatever the repository already
+declares as commented candidates, each with the file and line it was read from, and runs none of them.
 
 **A coding agent runs the same loop without you.** `orchescope mcp serve` exposes it over the Model Context Protocol,
 and the server tells a connecting agent to call `audit_agent_system` first and then follow `loop.next.tool`, which names
