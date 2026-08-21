@@ -15,6 +15,7 @@ import type {
   Evidence,
   ScanCoverage,
   Sha256Hex,
+  SkippedFile,
   SystemGraph,
   UnsupportedArea,
 } from '@orchescope/schema';
@@ -34,7 +35,7 @@ import {
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from './adapter.ts';
 import { createBindingRegistry } from './bindings.ts';
 import { createCallSiteEffects } from './call-site-effect.ts';
-import { namedConfigPaths, readConfigDocuments } from './config-files.ts';
+import { type ConfigProblem, namedConfigPaths, readConfigDocuments } from './config-files.ts';
 import { createImplementationSpanRegistry } from './implementation-span.ts';
 import { DEFAULT_ADAPTERS } from './registry.ts';
 import { buildSymbolIndex } from './symbol-index.ts';
@@ -299,6 +300,21 @@ const runAdapter = (
   };
 };
 
+/**
+ * Configuration documents the scan opened and could not use.
+ *
+ * Bounded like every other sample here, because the named kinds can offer as many documents as their caps
+ * allow and a list that long is not a report. The count beside it is the whole.
+ */
+const MAX_UNREAD_CONFIGS = 10;
+
+const unreadConfigs = (problems: readonly ConfigProblem[]): readonly SkippedFile[] =>
+  problems.slice(0, MAX_UNREAD_CONFIGS).map((problem) => ({
+    file: problem.file,
+    reason: problem.reason,
+    detail: problem.detail.slice(0, 500),
+  }));
+
 export const discover = async (request: ScanRequest): Promise<ScanResult> => {
   const startedAtMs = request.clock.monotonicMs();
   const startedAt = request.clock.now();
@@ -310,10 +326,8 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
    * the cheap deterministic layer still runs before the expensive one: parsing is what `analyzeFileSet` does next.
    */
   const fileSet = collectFiles(request.root, request.traversal);
-  const configs = readConfigDocuments(
-    request.root,
-    namedConfigPaths(fileSet.files.map((file) => file.path)),
-  );
+  const named = namedConfigPaths(fileSet.files.map((file) => file.path));
+  const configs = readConfigDocuments(request.root, named.paths);
   request.deadline.check('static discovery');
 
   const analysis = await analyzeFileSet(fileSet, {
@@ -371,9 +385,16 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
       fileSet.skipped.filter((entry) => isSupportedLanguage(languageOf(entry.file))).length,
     filesParsed: analysis.facts.length,
     bytesParsed: analysis.bytesParsed,
-    // Counted from the whole list, listed from a bounded sample of it.
-    filesSkipped: analysis.skipped.length,
-    skipped: [...boundSkipped(analysis.skipped)],
+    /*
+     * Counted from the whole list, listed from a bounded sample of it.
+     *
+     * A configuration document the scan opened and could not parse belongs here and was reaching nobody: the
+     * reader is `readConfigDocuments`, its `problems` had no consumer, and a repository whose only agents
+     * document has a syntax error reported no agent and no reason, which reads as a repository that declares
+     * none.
+     */
+    filesSkipped: analysis.skipped.length + configs.problems.length,
+    skipped: [...boundSkipped(analysis.skipped), ...unreadConfigs(configs.problems)],
     languages: [...analysis.languages],
     adapters: adapterRuns,
     unsupported: [
@@ -382,7 +403,12 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
       ...adaptersThatFoundNothing(adapters, adapterRuns, analysis.facts),
     ],
     durationMs: request.clock.monotonicMs() - startedAtMs,
-    truncated: fileSet.truncated,
+    /*
+     * A named configuration kind past its cap cut the scan short as surely as the traversal's file limit did,
+     * and the reader is owed the same sentence. What this does not say is which ceiling was reached, because
+     * the coverage vocabulary has one flag and naming the ceiling would be a schema decision.
+     */
+    truncated: fileSet.truncated || named.declined > 0,
   };
 
   const provenance = {

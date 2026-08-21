@@ -7,7 +7,13 @@ import {
   stringValue,
 } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
-import { asRecord, asString, asStringArray, jsonPointer } from '../config-files.ts';
+import {
+  asRecord,
+  asString,
+  asStringArray,
+  type ConfigOrigin,
+  jsonPointer,
+} from '../config-files.ts';
 import { configIdentity, createDrafts, sourceIdentity } from '../drafts.ts';
 import { definitionForCall, matchCalls, projectUses } from '../matching.ts';
 
@@ -41,12 +47,13 @@ import { definitionForCall, matchCalls, projectUses } from '../matching.ts';
  * kind and name. So a value that is not a name any run can report does not merely fail to match, it sits in
  * the strongest lookup in the reconciler waiting to match something else.
  *
- * CrewAI reports an agent by its role, and two spellings of a role are not one. Folded YAML keeps the
- * newline that ends a `role: >` block, and every one of the 48 roles in the pinned examples repository is
- * written that way, so a raw value would match none of them. And CrewAI interpolates a role before it uses
- * it: the templates its own CLI writes declare `{topic} Senior Data Researcher`, which is two of the five
- * distinct roles in the pinned framework repository. A run reports whatever `{topic}` was, so the literal
- * string is a name no run can report and is declined here rather than filed as one.
+ * CrewAI reports an agent by its role. Folded YAML keeps the newline that ends a `role: >` block and every
+ * one of the 48 roles in the pinned examples repository is written that way, so the value is trimmed here:
+ * `normalizeLocalName` would trim it again on both sides of any comparison, but a component that carries a
+ * newline inside its declared name puts it into every document a reader sees. And CrewAI interpolates a role
+ * before it uses it: the templates its own CLI writes declare `{topic} Senior Data Researcher`, which is two
+ * of the five distinct roles in the pinned framework repository. A run reports whatever `{topic}` was, so
+ * the literal string is a name no run can report and is declined here rather than filed as one.
  *
  * Where no role survives that, this returns nothing at all. An absent runtime name says this build does not
  * know what the run will call the component, which is true, and leaves the join to the rules that match on
@@ -80,10 +87,11 @@ const runtimeNameOf = (reported: string | undefined): { readonly runtimeName?: s
  * and on axios, with a root `agents.yaml` holding hosts and ports, were both reported as detected agent
  * systems with the entries of that file as their agents.
  *
- * CrewAI's `Agent` takes a role, a goal and a backstory, and all 60 agent entries readable across the
- * examples repository, the framework's own templates and its tests declare all three as strings. The test
- * asks for the first two. A backstory is present in every field document and in neither entry of the two
- * agent fixture this repository writes, so requiring it would reject a document CrewAI accepts.
+ * CrewAI's `Agent` takes a role, a goal and a backstory, and all 55 agent entries in the two pinned
+ * checkouts, 48 across the examples repository and 7 across the framework's own templates and tests, declare
+ * all three as strings. The test asks for the first two. A backstory is present in every one of those and in
+ * neither entry of the two agent fixture this repository writes, so requiring it would reject a document
+ * CrewAI accepts.
  */
 const declaresAnAgent = (root: Record<string, unknown>): boolean =>
   Object.values(root).some((entry) => {
@@ -99,8 +107,26 @@ const AGENTS_DOCUMENT = 'agents.yaml';
 
 const isAgentsDocumentPath = (path: string): boolean => path.split('/').at(-1) === AGENTS_DOCUMENT;
 
-const isAgentsDocument = (path: string, root: Record<string, unknown>): boolean =>
-  isAgentsDocumentPath(path) && declaresAnAgent(root);
+/**
+ * A document found by file name is read only where the repository declares the framework that names it.
+ *
+ * `agents.yaml` is found wherever the bounded traversal walked, and the shape below is a shape rather than a
+ * framework: a roster whose entries carry a role and a goal passes it, and a repository depending on express
+ * and nothing else was reported as a detected agent system with two CrewAI agents in it. The layout this
+ * reading exists for cannot occur without the dependency, because `Agent(config=self.agents_config[...])`
+ * imports `crewai` to run at all, so requiring it costs nothing measurable and closes the whole widening.
+ *
+ * The two fixed paths are not gated this way, because they were already read before the traversal found any
+ * of these and gating them would be a second change wearing this one's clothes.
+ */
+const isAgentsDocument = (
+  document: { readonly path: string; readonly origin: ConfigOrigin },
+  root: Record<string, unknown>,
+  declaresTheFramework: boolean,
+): boolean =>
+  isAgentsDocumentPath(document.path) &&
+  (document.origin !== 'agent_declaration' || declaresTheFramework) &&
+  declaresAnAgent(root);
 
 const PACKAGES = ['crewai', 'crewai_tools', 'crewai-tools'];
 const ADAPTER_ID = 'adapter:crewai';
@@ -108,7 +134,12 @@ const drafts = createDrafts(ADAPTER_ID);
 
 type Counts = { components: number; edges: number };
 
-/** A role declined as a name is counted so the decline can be stated rather than left as a silence. */
+/**
+ * A role declined as a name is counted so the decline can be stated rather than left as a silence.
+ *
+ * The count spans both passes: a role is declined the same way whether it was written in a document or in a
+ * call, and counting only the documents told a reader that one of two declined templates had been declined.
+ */
 type AgentsDocumentCounts = Counts & { declinedRoles: number };
 
 type ConfigCounts = AgentsDocumentCounts & { files: readonly string[] };
@@ -322,6 +353,7 @@ const discoverFromConfig = (
   let edges = 0;
   let declinedRoles = 0;
   const files: string[] = [];
+  const declaresTheFramework = projectUses(context, PACKAGES);
 
   for (const document of context.configs) {
     const root = asRecord(document.data);
@@ -333,7 +365,7 @@ const discoverFromConfig = (
       files.push(document.path);
       continue;
     }
-    if (!isAgentsDocument(document.path, root)) continue;
+    if (!isAgentsDocument(document, root, declaresTheFramework)) continue;
     const found = discoverAgentsDocument(context, builder, document, root);
     components += found.components;
     edges += found.edges;
@@ -343,7 +375,12 @@ const discoverFromConfig = (
   return { components, edges, declinedRoles, files };
 };
 
-type SourceCounts = { components: number; edges: number; files: Set<string> };
+type SourceCounts = {
+  components: number;
+  edges: number;
+  declinedRoles: number;
+  files: Set<string>;
+};
 
 /**
  * The name an `Agent(...)` call gives the agent it builds.
@@ -383,12 +420,15 @@ const discoverAgentCalls = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   files: Set<string>,
-): number => {
+): { components: number; declinedRoles: number } => {
   let components = 0;
+  let declinedRoles = 0;
   for (const match of matchCalls(context.modules, { names: ['Agent'], packages: PACKAGES })) {
     const entries = objectArgument(match.call);
     const definition = definitionForCall(match.module, match.call);
     const role = stringValue(findEntry(entries, 'role')?.value);
+    const reported = reportedRole(role);
+    if (role !== undefined && reported === undefined) declinedRoles += 1;
     const name = agentNameFor(role, definition?.name, match.call.enclosing);
     const goal = stringValue(findEntry(entries, 'goal')?.value);
     const identity = sourceIdentity('agent', match.module.file, name);
@@ -402,7 +442,7 @@ const discoverAgentCalls = (
         confidence: match.confidence,
         ...(goal === undefined ? {} : { description: goal.slice(0, 240) }),
         details: { for: 'agent', framework: 'crewai', role: 'worker' },
-        metadata: { framework: 'crewai', ...runtimeNameOf(reportedRole(role)) },
+        metadata: { framework: 'crewai', ...runtimeNameOf(reported) },
         tags: ['crewai'],
       }),
     );
@@ -413,7 +453,7 @@ const discoverAgentCalls = (
     }
     context.bindings.register(match.module.file, name, identity);
   }
-  return components;
+  return { components, declinedRoles };
 };
 
 /** Crews are read after agents so that a member reference resolves to the agent it names. */
@@ -471,7 +511,12 @@ const discoverFromSource = (
   const files = new Set<string>();
   const agents = discoverAgentCalls(context, builder, files);
   const crews = discoverCrewCalls(context, builder, files);
-  return { components: agents + crews.components, edges: crews.edges, files };
+  return {
+    components: agents.components + crews.components,
+    edges: crews.edges,
+    declinedRoles: agents.declinedRoles,
+    files,
+  };
 };
 
 export const crewAiAdapter: AgentSystemAdapter = {
@@ -483,19 +528,24 @@ export const crewAiAdapter: AgentSystemAdapter = {
     context.configs.some((document) => {
       if (document.path === 'crew.jsonc') return true;
       const root = asRecord(document.data);
-      return root !== undefined && isAgentsDocument(document.path, root);
+      return root !== undefined && isAgentsDocument(document, root, false);
     }),
   discover: (context, builder): AdapterFindings => {
     const fromConfig = discoverFromConfig(context, builder);
     const fromSource = discoverFromSource(context, builder);
+    /*
+     * Counted from both passes, because a role is declined the same way wherever it was written and a count
+     * of only one half told a reader that one of two templates had been declined.
+     */
+    const declinedRoles = fromConfig.declinedRoles + fromSource.declinedRoles;
     return {
       componentsFound: fromConfig.components + fromSource.components,
       edgesFound: fromConfig.edges + fromSource.edges,
       filesInspected: [...fromSource.files, ...fromConfig.files],
-      ...(fromConfig.declinedRoles === 0
+      ...(declinedRoles === 0
         ? {}
         : {
-            note: `${formatCount(fromConfig.declinedRoles, 'declared role is', 'declared roles are')} not a name a run can report, a template such as {topic} Researcher or a value that is not a string, so the key in the document names the component and no runtime name is claimed`,
+            note: `${formatCount(declinedRoles, 'declared role is', 'declared roles are')} not a name a run can report, a template such as {topic} Researcher or a value that is not a string, so none of them is claimed as one`,
           }),
     };
   },

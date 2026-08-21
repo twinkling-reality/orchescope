@@ -530,6 +530,41 @@ otel-collector:
     );
   };
 
+  /*
+   * Role and goal is a shape, and a shape is not a framework. A sales roster whose entries carry both would
+   * pass it, so a document found by file name is read only where the repository declares CrewAI, which the
+   * layout this reading exists for cannot do without.
+   */
+  it('is not read from a repository that declares no CrewAI, whatever shape it is in', async () => {
+    const { ids, result, adapters } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'sales', dependencies: { express: '^4.19.0' } });
+      workspace.write(
+        'deploy/agents.yaml',
+        `east:
+  role: Account Executive
+  goal: Close the quarter.
+west:
+  role: Account Executive
+  goal: Open the territory.
+`,
+      );
+      workspace.write(
+        'src/server.js',
+        "const express = require('express');\nmodule.exports = express();\n",
+      );
+    });
+    assert.equal(
+      adapters.find((adapter) => adapter.adapterId === 'adapter:crewai')?.status,
+      'not_applicable',
+    );
+    assert.equal(
+      ids.some((id) => id.startsWith('agent:')),
+      false,
+      `a roster in a repository with no crewai is not a crew, saw ${ids.join(', ')}`,
+    );
+    assert.equal(result.agentSystemDetected, false);
+  });
+
   it('is not read as a crew, and does not make the repository an agent system', async () => {
     const { ids, result, adapters } = await scan(build);
     const run = adapters.find((adapter) => adapter.adapterId === 'adapter:crewai');
@@ -633,7 +668,7 @@ describe('a CrewAI agent whose role is interpolated at run time', () => {
     const run = adapters.find((adapter) => adapter.adapterId === 'adapter:crewai');
     assert.equal(
       run?.detail,
-      '1 declared role is not a name a run can report, a template such as {topic} Researcher or a value that is not a string, so the key in the document names the component and no runtime name is claimed',
+      '1 declared role is not a name a run can report, a template such as {topic} Researcher or a value that is not a string, so none of them is claimed as one',
     );
   });
 
@@ -644,7 +679,7 @@ describe('a CrewAI agent whose role is interpolated at run time', () => {
    * a run will report the string.
    */
   it('keeps a templated literal as the name of the call that carries it, and claims no runtime name', async () => {
-    const { ids, result } = await scan((workspace) => {
+    const { ids, result, adapters } = await scan((workspace) => {
       writePythonProject(workspace, { name: 'templated-crew', dependencies: ['crewai>=0.80'] });
       workspace.write(
         'src/crew.py',
@@ -675,6 +710,11 @@ def build():
         `${id} promises a run will report a template`,
       );
     }
+    const run = adapters.find((adapter) => adapter.adapterId === 'adapter:crewai');
+    assert.ok(
+      run?.detail?.startsWith('2 declared roles are not a name'),
+      `a role declined at a call site should be stated too, saw ${String(run?.detail)}`,
+    );
   });
 
   /*

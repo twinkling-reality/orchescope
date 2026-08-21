@@ -88,7 +88,7 @@ by basename against three `wrangler.*` names, sorted, and cut at 32. Adding `age
 that set puts 40 candidates under one cap of 32 on the examples repository and drops eight; adding a root
 `wrangler.toml` and a `packages/worker/wrangler.toml` to the same repository drops **both of those too**,
 because the list sorts by path and `c`, `f` and `i` sort before `w`. That is the 0.6.0 fix undone by a name
-put in the wrong set, and no test and no corpus entry would have caught it: nothing anywhere referenced
+put in the wrong set, and no test and no corpus entry would have caught it: no test anywhere referenced
 `platformConfigPaths`, and all 26 expectations record `adapter:workers-bindings` finding nothing. So the
 mechanism is now a table of named kinds with a cap each, `namedConfigPaths`, and a fixture with forty agents
 documents and one `wrangler.toml` in it asserts the manifest still comes back. The agent declaration cap is
@@ -117,11 +117,17 @@ the traversal walked, that makes any repository holding a file of that name a ca
 constructed repositories depending on express and on axios, with a root `agents.yaml` holding hosts and
 ports, were both reported as detected agent systems whose agents were the entries of that file. This is the
 failure already recorded for `.mcp.json`. A document now has to declare at least one entry carrying a
-non-empty string `role` and `goal`, which admits all 60 real agent entries readable across the examples
-repository, the framework's templates and its tests, and admits this repository's own two entry fixture,
-whose entries carry no backstory. The match on the file name is exact rather than a suffix on both sides: the
-framework repository holds four VCR cassettes named `test_..._agents.yaml`, and the selection that finds a
-path in the traversal declines them before the adapter is asked.
+non-empty string `role` and `goal`, which admits all 55 real agent entries in the two pinned checkouts, 48
+across the examples repository and 7 across the framework's templates and tests, and admits this
+repository's own two entry fixture, whose entries carry no backstory.
+
+**A shape is not a framework.** A roster whose entries carry a role and a goal passes that test, and a
+repository depending on express and holding a `deploy/agents.yaml` of account executives was reported as a
+detected agent system with two CrewAI agents in it. So a document found by file name is read only where the
+repository declares CrewAI. The layout this whole reading exists for cannot occur without the dependency,
+because the call that selects an entry imports the framework to run at all, and the two fixed root paths are
+left as they were: they were read before the traversal found any of these, and gating them would be a second
+change wearing this one's clothes.
 
 **Two components for one agent, on purpose.** This adapter's own comment claimed that "configuration wins
 when both are present and the source pass fills in what configuration does not declare", and neither half was
@@ -169,10 +175,27 @@ adapter that had no shape gate of its own. A document now records why it was ope
 declines a document opened for another. The MCP adapter also counted a document with an empty server map as
 one it had inspected, which is now counted where a server is actually read.
 
-**Also stated rather than fixed.** A named kind that exceeds its cap still drops the remainder without saying
-so in the document. Saying so needs a fifth `UnsupportedAreaKind` or an eighth `SkippedFile.reason`, both
-closed sets, and a schema change is the maintainer's decision. The caps are stated in the module beside the
-population each was measured against, and neither is reached by anything in this corpus.
+**Two silences the widening made worse, both now audible.** `readConfigDocuments` recorded every read and
+parse failure and had no consumer: `discover` took its documents and left its problems, so a crew whose only
+agents document has a syntax error reported no agent and no reason, which reads exactly like a repository
+that declares none. That was eleven fixed paths before this change and is up to ninety six after it, so the
+failure now goes in `coverage.skipped` under `parse_error` or `unreadable`, and in the count beside it. Both
+names were already in the vocabulary; neither had ever been written by a configuration document.
+
+And a cap that truncates and says nothing reports its own ceiling as though it were the answer: seventy
+agents documents under a cap of sixty four produced sixty four agents, `truncated: false`, an empty skip list
+and nothing anywhere to separate it from a repository that declares sixty four. `coverage.truncated` is
+documented as true when analysis was cut short by a deadline or a resource limit, a cap is a resource limit,
+and that flag is now set when one truncates. **What the reader is not told is which ceiling was reached**,
+because there is one flag and naming the ceiling means a fifth `UnsupportedAreaKind` or an eighth
+`SkippedFile.reason`, both closed sets and both the maintainer's decision. Neither cap is reached by anything
+in this corpus, so both of these are held by tests and by nothing else.
+
+**Left alone and worth naming.** A component read out of a document carries no source location, and
+`declaredInTest` is derived from source locations, so the two agents in the framework repository's
+`lib/crewai/tests/config/agents.yaml` count as part of the system under audit rather than as something only
+a test declares. Deriving that flag from configuration locations as well would change it for every adapter
+that reads a document, which is its own change with its own evidence.
 
 `adapter:mcp` reported every configuration document the scan parsed as a file it had inspected, which cost
 nothing until `agents.yaml` became a name found in the traversal and it began claiming three documents on the

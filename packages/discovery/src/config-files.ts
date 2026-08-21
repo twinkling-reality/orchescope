@@ -40,7 +40,18 @@ export type ConfigDocument = {
 
 export type NamedConfigPath = { readonly path: string; readonly origin: ConfigOrigin };
 
-export type ConfigProblem = { readonly file: string; readonly detail: string };
+/**
+ * A configuration document the scan opened and could not use.
+ *
+ * Carried out of this module with the reason, because a document that failed to parse is a document this
+ * build did not read and the reader has to be told which. Reported as `parse_error` and `unreadable`, the
+ * two names the coverage vocabulary already has for exactly those two failures.
+ */
+export type ConfigProblem = {
+  readonly file: string;
+  readonly reason: 'parse_error' | 'unreadable';
+  readonly detail: string;
+};
 
 /**
  * Configuration paths read on every scan, relative to the repository root.
@@ -200,14 +211,28 @@ const NAMED_CONFIG_KINDS: readonly NamedConfigKind[] = [
   { origin: 'agent_declaration', names: AGENT_DECLARATION_NAMES, max: MAX_AGENT_DECLARATIONS },
 ];
 
-export const namedConfigPaths = (paths: readonly string[]): readonly NamedConfigPath[] =>
-  NAMED_CONFIG_KINDS.flatMap((kind) =>
-    paths
-      .filter((path) => kind.names.has(path.split('/').at(-1) ?? ''))
-      .sort()
-      .slice(0, kind.max)
-      .map((path) => ({ path, origin: kind.origin })),
-  );
+export type NamedConfigSelection = {
+  readonly paths: readonly NamedConfigPath[];
+  /**
+   * How many candidates a cap declined.
+   *
+   * Returned rather than dropped inside, because a scan that read sixty four of seventy agents documents and
+   * a scan of a repository that declares sixty four produce the same graph, and nothing else in the report
+   * separates them.
+   */
+  readonly declined: number;
+};
+
+export const namedConfigPaths = (paths: readonly string[]): NamedConfigSelection => {
+  const selected: NamedConfigPath[] = [];
+  let declined = 0;
+  for (const kind of NAMED_CONFIG_KINDS) {
+    const candidates = paths.filter((path) => kind.names.has(path.split('/').at(-1) ?? '')).sort();
+    declined += Math.max(0, candidates.length - kind.max);
+    for (const path of candidates.slice(0, kind.max)) selected.push({ path, origin: kind.origin });
+  }
+  return { paths: selected, declined };
+};
 
 export const readConfigDocuments = (
   root: string,
@@ -241,6 +266,7 @@ export const readConfigDocuments = (
       if ((error as { code?: string }).code !== 'ENOENT') {
         problems.push({
           file: relativePath,
+          reason: 'unreadable',
           detail: error instanceof Error ? error.message : 'could not be read',
         });
       }
@@ -264,6 +290,7 @@ export const readConfigDocuments = (
     } catch (error) {
       problems.push({
         file: relativePath,
+        reason: 'parse_error',
         detail: error instanceof Error ? error.message : 'could not be parsed',
       });
     }
