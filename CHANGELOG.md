@@ -10,6 +10,20 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### A list of six inside the test that guards the corpus, where the set is eight
+
+`tests/e2e/corpus.test.ts` checked that every framework adapter this repository claims is exercised by at
+least one pinned repository, against a hand written array of six. `adapter:mcp` and `adapter:search-index`
+were not in it. Both happen to be covered, so nothing failed, which is exactly the failure: a list written
+by hand covers what its author remembered on the day, and an adapter nobody listed can go quiet without the
+check that exists to notice noticing.
+
+It is derived from `DEFAULT_ADAPTERS` now, by whether the adapter declares the packages it reads, which is
+the same field discovery compares against what a repository imports. Eight today, and a fourteenth reader is
+covered on the day it declares one rather than on the day somebody remembers this file. That is the pattern
+`rule-input-producers.test.ts` and `goal-eligible-rules.test.ts` exist to set, and this was the last hand
+written list of its kind sitting inside the corpus gate.
+
 ### The adapter guide, which did not compile against the interface it documents
 
 The page an author copies to write a reader declared an `ecosystem` field that does not exist, omitted

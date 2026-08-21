@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { DEFAULT_ADAPTERS } from '../../packages/discovery/src/index.ts';
 import { claimDifference, differences } from '../../scripts/corpus/comparison.mjs';
 import { isOffline, readCorpus } from '../../scripts/corpus/definition.mjs';
 
@@ -20,14 +21,23 @@ import { isOffline, readCorpus } from '../../scripts/corpus/definition.mjs';
 const repositoryRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const execFileAsync = promisify(execFile);
 
-const FRAMEWORK_ADAPTERS = [
-  'adapter:openai-agents',
-  'adapter:langgraph',
-  'adapter:crewai',
-  'adapter:pydantic-ai',
-  'adapter:vercel-ai-sdk',
-  'adapter:model-sdk',
-];
+/**
+ * The adapters that claim a framework, derived rather than listed.
+ *
+ * This was a hand written array of six where the set is eight, omitting `adapter:mcp` and
+ * `adapter:search-index`. Both happen to be covered, so nothing failed, and that is the point: a list
+ * written by hand covers what its author remembered on the day, and a corpus entry that stops exercising
+ * an adapter nobody listed goes quiet exactly as if it had never been added. It is the anti pattern
+ * `rule-input-producers.test.ts` and `goal-eligible-rules.test.ts` were written to replace, and it was
+ * sitting inside the test that guards the corpus.
+ *
+ * An adapter claims a framework by declaring the packages it reads, which is the same field discovery
+ * compares against what a repository imports. A fourteenth reader is covered here on the day it declares
+ * one.
+ */
+const FRAMEWORK_ADAPTERS = DEFAULT_ADAPTERS.filter((adapter) => adapter.packages.length > 0).map(
+  (adapter) => adapter.id,
+);
 
 type Expectation = {
   readonly name: string;
@@ -62,6 +72,13 @@ describe('the corpus', () => {
         `${entry.name} is pinned as ${entry.kind} and its expectation disagrees`,
       );
     }
+  });
+
+  it('has a framework adapter set to cover, derived from the registry', () => {
+    assert.ok(
+      FRAMEWORK_ADAPTERS.length >= 8,
+      `only ${FRAMEWORK_ADAPTERS.length} adapters claim a package, so this file covers less than it says`,
+    );
   });
 
   it('covers every framework adapter this repository claims', () => {
