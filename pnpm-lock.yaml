@@ -60,6 +60,9 @@ importers:
       '@orchescope/schema':
         specifier: workspace:*
         version: link:../../packages/schema
+      '@orchescope/source-analysis':
+        specifier: workspace:*
+        version: link:../../packages/source-analysis
       '@orchescope/usecases':
         specifier: workspace:*
         version: link:../../packages/usecases
@@ -212,6 +215,9 @@ importers:
       '@orchescope/schema':
         specifier: workspace:*
         version: link:../schema
+      '@orchescope/source-analysis':
+        specifier: workspace:*
+        version: link:../source-analysis
       '@orchescope/usecases':
         specifier: workspace:*
         version: link:../usecases

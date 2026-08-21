@@ -10,6 +10,32 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### A cache with no producer, given the one it was written for
+
+`inMemoryFactCache`, `cacheKey` and `ANALYZER_VERSION` had no caller anywhere. A scan accepted an optional
+`cache` and `analyzeFileSet` read it, and nothing constructed one, so the whole path was assembled up to the
+point where something would have to use it. `knip` misses it for the same reason it missed two evidence
+builders: it leaves through the package entry point, and entry exports are not checked. That is a gate
+opening onto nothing, which is what
+[ADR 0002](docs/architecture/adr/0002-deterministic-analysis.md) was written about.
+
+**The producer is `orchescope mcp serve`.** A command line audit parses a repository once and exits, so a
+cache there is filled and thrown away. The MCP server is a process a coding agent holds open while it
+works, and the loop this repository documents is to scan, change something and scan again. Parsing is what
+the second scan spends. Measured on the pinned checkouts, in one process:
+
+| checkout | files | first scan | second scan |
+| --- | --- | --- | --- |
+| `open-agent-platform` | 203 | 229ms | **27ms** |
+| `crewai` | 2,027 | 4.8s | **375ms** |
+| `pydantic-ai` | 1,807 | 5.0s | **352ms** |
+
+**And it is bounded, which it was not.** A server watching a repository being edited would have kept a copy
+of every version of every file it ever parsed, which is a queue with no ceiling wearing a cache's name. The
+capacity is the caller's `analysis.maxFiles`, the same number that bounds a traversal, so one whole scan
+always fits and nothing older than one scan survives. An edit reparses the one file that changed and serves
+the rest, and the revision before it does not stay beside it.
+
 ### Two decisions accepted, each on the measurement it named in advance
 
 [ADR 0004](docs/architecture/adr/0004-provenance-not-confidence.md) and

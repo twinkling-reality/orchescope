@@ -14,6 +14,7 @@
     "@orchescope/goals": "workspace:*",
     "@orchescope/report": "workspace:*",
     "@orchescope/schema": "workspace:*",
+    "@orchescope/source-analysis": "workspace:*",
     "@orchescope/usecases": "workspace:*",
     "@orchescope/workspace": "workspace:*",
     "@sinclair/typebox": "0.34.52"

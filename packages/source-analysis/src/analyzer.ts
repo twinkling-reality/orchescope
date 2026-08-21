@@ -29,12 +29,28 @@ export type FactCache = {
   readonly set: (key: string, facts: ModuleFacts) => void;
 };
 
-export const inMemoryFactCache = (): FactCache & { readonly size: () => number } => {
+/**
+ * A cache for a process that scans one repository more than once, bounded by how many files a scan may hold.
+ *
+ * The bound is the caller's `analysis.maxFiles`, which is the same number that bounds a traversal, so one
+ * whole scan always fits and nothing older than one scan survives. A long lived server watching a
+ * repository being edited would otherwise keep a copy of every version of every file it ever parsed, which
+ * is a queue with no ceiling wearing a cache's name. Oldest first, by insertion, because what is worth
+ * keeping is the revision on disk and the revisions before it are what the editing produced.
+ */
+export const inMemoryFactCache = (
+  capacity: number,
+): FactCache & { readonly size: () => number } => {
   const entries = new Map<string, ModuleFacts>();
   return {
     get: (key) => entries.get(key),
     set: (key, facts) => {
       entries.set(key, facts);
+      while (entries.size > capacity) {
+        const oldest = entries.keys().next();
+        if (oldest.done === true) break;
+        entries.delete(oldest.value);
+      }
     },
     size: () => entries.size,
   };

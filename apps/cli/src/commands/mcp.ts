@@ -1,6 +1,7 @@
 import { homedir } from 'node:os';
 import { stableJson } from '@orchescope/domain';
 import { installServer, installTargets, serveOverStdio, TOOL_DEFINITIONS } from '@orchescope/mcp';
+import { inMemoryFactCache } from '@orchescope/source-analysis';
 import type { CommandContext } from '../context.ts';
 import { EXIT_CODES } from '../exit.ts';
 
@@ -12,8 +13,18 @@ import { EXIT_CODES } from '../exit.ts';
  */
 
 export const mcpServeCommand = async (context: CommandContext): Promise<number> => {
+  /*
+   * One cache for the life of the server, because this is the one command that scans a repository more than
+   * once. A command line audit parses everything and exits; an agent holding this server open scans, changes
+   * something and scans again, and parsing is what the second scan spends. It is bounded by the same
+   * `maxFiles` that bounds a traversal, so one whole scan fits and nothing older than one scan survives.
+   */
   const stop = await serveOverStdio({
-    context: { workspace: context.workspace, orchescopeVersion: context.version },
+    context: {
+      workspace: context.workspace,
+      orchescopeVersion: context.version,
+      cache: inMemoryFactCache(context.workspace.config.analysis.maxFiles),
+    },
     onNotice: (message) => {
       process.stderr.write(`${message}\n`);
     },

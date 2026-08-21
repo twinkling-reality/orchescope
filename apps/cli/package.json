@@ -45,6 +45,7 @@
     "@orchescope/observability": "workspace:*",
     "@orchescope/report": "workspace:*",
     "@orchescope/schema": "workspace:*",
+    "@orchescope/source-analysis": "workspace:*",
     "@orchescope/usecases": "workspace:*",
     "@orchescope/workspace": "workspace:*",
     "commander": "15.0.0",

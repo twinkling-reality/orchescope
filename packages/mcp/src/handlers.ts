@@ -9,6 +9,7 @@ import {
   toSarif,
 } from '@orchescope/report';
 import type { Component, Edge, Finding } from '@orchescope/schema';
+import type { FactCache } from '@orchescope/source-analysis';
 import { formatIssues, validate } from '@orchescope/schema';
 import {
   compareUseCase,
@@ -63,6 +64,18 @@ export type ToolOutcome = {
 export type HandlerContext = {
   readonly workspace: Workspace;
   readonly orchescopeVersion: string;
+  /**
+   * Facts kept across tool calls, because this surface is the one that scans the same repository again.
+   *
+   * A command line process scans once and exits, so a cache there would be filled and thrown away. This is
+   * a server a coding agent holds open while it works, and the loop this repository documents is to scan,
+   * change something, and scan again. Parsing is what a repeat scan spends: a second scan of the pinned
+   * `crewai` checkout in one process is 375ms where the first is 4.0s, and `pydantic-ai` is 352ms where the
+   * first is 5.5s.
+   *
+   * Optional, so a caller that scans once does not have to hold one.
+   */
+  readonly cache?: FactCache;
 };
 
 const DEFAULT_LIMIT = 20;
@@ -151,6 +164,7 @@ const scanAgentSystem = async (
     workspace,
     orchescopeVersion: context.orchescopeVersion,
     runLimit: number(args['runLimit'], 0),
+    ...(context.cache === undefined ? {} : { cache: context.cache }),
   });
   const byKind = new Map<string, number>();
   for (const component of result.graph.components) {
@@ -208,6 +222,7 @@ const auditAgentSystem = async (
     workspace,
     orchescopeVersion: context.orchescopeVersion,
     runLimit: number(args['runLimit'], 10),
+    ...(context.cache === undefined ? {} : { cache: context.cache }),
   });
   const maxFindings = number(args['maxFindings'], 10);
   const risks = result.bundle.findings.filter((finding) => finding.polarity === 'risk');
