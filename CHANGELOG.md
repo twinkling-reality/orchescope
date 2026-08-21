@@ -164,9 +164,16 @@ three tests, so it is not in this change. `joins.ambiguous` carries the true sta
 **A role is not unique inside a document and a key is.** Naming by the role alone let two entries of one
 document collapse: the builder merges on identity, and the survivor of two agents declaring `Market Analyst`
 carried the first one's goal beside the second one's runtime name and the second one's model, with nothing in
-the output saying two declarations had become one. A role that names two entries of one document is not a
-name for either, so both take their key. Both still declare the role, which is what makes a run reporting it
-ambiguous rather than attributed to whichever entry the document listed first.
+the output saying two declarations had become one. And the merged component was then *unique*, because
+`uniqueCandidate` dedupes by component id, so a run reporting that role joined it by `runtime_name`, which is
+the wrong answer this whole change is about, reappearing one level down.
+
+A role that names two entries of one document is not a name for either, so both take their key. Each still
+declares the role, so a run reporting it matches two components and is joined to neither. Measured on that
+repository: no match, one runtime only component, and `joins.ambiguous` does not name it either, because the
+reconciler records an ambiguity only where kind and name found more than one and a tie in the runtime name
+lookup alone falls through to unmatched. That is a second place where a refusal is made and not stated, and
+it is the reconciler's to fix rather than this adapter's.
 
 **A document opened for one kind is not another kind's to interpret.** `mcpServers` is a key nothing else
 writes; `servers` is a word anything may use. Once `agents.yaml` is found wherever the traversal walked, a

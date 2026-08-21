@@ -785,8 +785,8 @@ analyst_eu:
   });
 
   /*
-   * Both still declare the role, which is what makes a run reporting it ambiguous rather than attributed to
-   * whichever entry the document happened to list first.
+   * Both still declare the role, so a run reporting it matches two components and is joined to neither,
+   * rather than being attributed to whichever entry the document happened to list first.
    */
   it('links each to the model it names, and claims the role on both', async () => {
     const { edges, result } = await scan(build);

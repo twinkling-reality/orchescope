@@ -169,9 +169,15 @@ const agentEntriesOf = (root: Record<string, unknown>): readonly AgentEntry[] =>
  * A key is unique inside a document; a role is not. Two entries may declare one role, and one entry's role
  * may be another entry's key. Naming by the role alone let those collapse into a single component, because
  * the builder merges on identity, and the survivor carried one entry's goal beside the other's runtime name
- * and the other's model. A role that names two entries of one document is not a name for either of them, so
- * both take their key. The role each declares is still recorded and still claimed as a runtime name, which
- * is what makes a run reporting it ambiguous rather than attributed to whichever entry was read first.
+ * and the other's model. Worse than losing a declaration, it made the merged one unique: `uniqueCandidate`
+ * dedupes by component id, so a run reporting that role joined it by `runtime_name` and nothing recorded
+ * that two declarations had gone in.
+ *
+ * A role that names two entries of one document is not a name for either of them, so both take their key.
+ * Each still declares the role, so a run reporting it now matches two components, is joined to neither, and
+ * is reported as exercised and never declared. Measured: no match, and `joins.ambiguous` does not name it
+ * either, because the reconciler records an ambiguity only where kind and name found more than one and a tie
+ * in the runtime name lookup alone falls through.
  */
 const namesFor = (entries: readonly AgentEntry[]): ReadonlyMap<string, string> => {
   const claims = new Map<string, number>();
