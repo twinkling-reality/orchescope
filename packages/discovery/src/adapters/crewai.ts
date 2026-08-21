@@ -1,4 +1,4 @@
-import { CONFIDENCE_BANDS, formatCount } from '@orchescope/domain';
+import { CONFIDENCE_BANDS, formatCount, normalizeLocalName } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import {
   findEntry,
@@ -108,10 +108,56 @@ const drafts = createDrafts(ADAPTER_ID);
 
 type Counts = { components: number; edges: number };
 
-/** A role CrewAI interpolates is counted so the decline can be stated rather than left as a silence. */
-type AgentsDocumentCounts = Counts & { interpolatedRoles: number };
+/** A role declined as a name is counted so the decline can be stated rather than left as a silence. */
+type AgentsDocumentCounts = Counts & { declinedRoles: number };
 
 type ConfigCounts = AgentsDocumentCounts & { files: readonly string[] };
+
+type AgentEntry = {
+  readonly key: string;
+  readonly agent: Record<string, unknown>;
+  /** Verbatim, so `declaredRole` records what the document says even where it is not a name. */
+  readonly role: string | undefined;
+  readonly reported: string | undefined;
+};
+
+const agentEntriesOf = (root: Record<string, unknown>): readonly AgentEntry[] => {
+  const entries: AgentEntry[] = [];
+  for (const [key, rawAgent] of Object.entries(root)) {
+    const agent = asRecord(rawAgent);
+    if (agent === undefined) continue;
+    const role = asString(agent['role']);
+    entries.push({ key, agent, role, reported: reportedRole(role) });
+  }
+  return entries;
+};
+
+/**
+ * The name each entry of one document takes.
+ *
+ * A key is unique inside a document; a role is not. Two entries may declare one role, and one entry's role
+ * may be another entry's key. Naming by the role alone let those collapse into a single component, because
+ * the builder merges on identity, and the survivor carried one entry's goal beside the other's runtime name
+ * and the other's model. A role that names two entries of one document is not a name for either of them, so
+ * both take their key. The role each declares is still recorded and still claimed as a runtime name, which
+ * is what makes a run reporting it ambiguous rather than attributed to whichever entry was read first.
+ */
+const namesFor = (entries: readonly AgentEntry[]): ReadonlyMap<string, string> => {
+  const claims = new Map<string, number>();
+  for (const entry of entries) {
+    const candidate = normalizeLocalName(entry.reported ?? entry.key);
+    claims.set(candidate, (claims.get(candidate) ?? 0) + 1);
+  }
+  const names = new Map<string, string>();
+  for (const entry of entries) {
+    const candidate = entry.reported ?? entry.key;
+    names.set(
+      entry.key,
+      (claims.get(normalizeLocalName(candidate)) ?? 0) > 1 ? entry.key : candidate,
+    );
+  }
+  return names;
+};
 
 /** A crew document declares the group and the agents it contains. */
 const discoverCrewDocument = (
@@ -186,10 +232,9 @@ const discoverCrewDocument = (
  * repository that declares one role in two applications gets a refusal, which is the true answer.
  *
  * The key is still what the document is indexed by and is still what a caller writes to select an entry, so
- * it stays as the pointer the evidence carries and as the name this document binds the component under.
- *
- * Where no role survives `reportedRole` the key names the component, because it is then the only name that
- * was read.
+ * it stays as the pointer the evidence carries and as the name this document binds the component under, and
+ * it is what names the component wherever the role cannot: where no role survives `reportedRole`, and where
+ * one role names two entries.
  */
 const discoverAgentsDocument = (
   context: DiscoveryContext,
@@ -199,15 +244,19 @@ const discoverAgentsDocument = (
 ): AgentsDocumentCounts => {
   let components = 0;
   let edges = 0;
-  let interpolatedRoles = 0;
+  let declinedRoles = 0;
+  const entries = agentEntriesOf(root);
+  const naming = namesFor(entries);
 
-  for (const [agentName, rawAgent] of Object.entries(root)) {
-    const agent = asRecord(rawAgent);
-    if (agent === undefined) continue;
-    const role = asString(agent['role']);
-    const reported = reportedRole(role);
-    if (reported === undefined && (role ?? '').includes('{')) interpolatedRoles += 1;
-    const name = reported ?? agentName;
+  for (const entry of entries) {
+    const { key: agentName, agent, role, reported } = entry;
+    /*
+     * Counted off the raw value rather than off `role`, which is the value only where it parsed as a string.
+     * `role: {topic}` in flow style is a mapping, so it is declined by a second branch and would otherwise be
+     * declined without being counted, which is the one case this count exists for.
+     */
+    if (agent['role'] !== undefined && reported === undefined) declinedRoles += 1;
+    const name = naming.get(agentName) ?? agentName;
     const identity = configIdentity('agent', document.path, name);
     const goal = asString(agent['goal']);
     builder.addComponent(
@@ -255,7 +304,7 @@ const discoverAgentsDocument = (
     );
     edges += 1;
   }
-  return { components, edges, interpolatedRoles };
+  return { components, edges, declinedRoles };
 };
 
 /**
@@ -271,7 +320,7 @@ const discoverFromConfig = (
 ): ConfigCounts => {
   let components = 0;
   let edges = 0;
-  let interpolatedRoles = 0;
+  let declinedRoles = 0;
   const files: string[] = [];
 
   for (const document of context.configs) {
@@ -288,10 +337,10 @@ const discoverFromConfig = (
     const found = discoverAgentsDocument(context, builder, document, root);
     components += found.components;
     edges += found.edges;
-    interpolatedRoles += found.interpolatedRoles;
+    declinedRoles += found.declinedRoles;
     files.push(document.path);
   }
-  return { components, edges, interpolatedRoles, files };
+  return { components, edges, declinedRoles, files };
 };
 
 type SourceCounts = { components: number; edges: number; files: Set<string> };
@@ -443,10 +492,10 @@ export const crewAiAdapter: AgentSystemAdapter = {
       componentsFound: fromConfig.components + fromSource.components,
       edgesFound: fromConfig.edges + fromSource.edges,
       filesInspected: [...fromSource.files, ...fromConfig.files],
-      ...(fromConfig.interpolatedRoles === 0
+      ...(fromConfig.declinedRoles === 0
         ? {}
         : {
-            note: `${formatCount(fromConfig.interpolatedRoles, 'declared role interpolates', 'declared roles interpolate')} a value at run time, so the key in the document names the component and no runtime name is claimed`,
+            note: `${formatCount(fromConfig.declinedRoles, 'declared role is', 'declared roles are')} not a name a run can report, a template such as {topic} Researcher or a value that is not a string, so the key in the document names the component and no runtime name is claimed`,
           }),
     };
   },

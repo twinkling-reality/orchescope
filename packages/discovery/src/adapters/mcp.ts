@@ -13,6 +13,7 @@ import {
   asRecord,
   asString,
   asStringArray,
+  type ConfigOrigin,
   isAgentClientConfig,
   jsonPointer,
 } from '../config-files.ts';
@@ -137,6 +138,19 @@ const addDeclaredServer = (
   return { unresolved: unresolvedNames.length > 0 || entry['envFile'] !== undefined };
 };
 
+/**
+ * Documents this adapter is entitled to read by their content.
+ *
+ * `mcpServers` is a key nothing else writes, and `servers` is a word anything may use for anything. A
+ * document opened because it carried some other kind's file name is not this adapter's to interpret: a
+ * `servers` inventory of hosts and ports under a `deploy/agents.yaml` produced two MCP servers, one of them
+ * declaring permission to execute `/usr/sbin/nginx`, and made a repository depending on express and nothing
+ * else a detected agent system. A path on the fixed list was opened because this build knows the name, which
+ * is the entitlement this asks for.
+ */
+const readableHere = (document: { readonly origin: ConfigOrigin }): boolean =>
+  document.origin === 'known_path';
+
 /** Only the documents that declare a server, because the rest were parsed by the scan and read by nobody. */
 const discoverFromConfig = (
   context: DiscoveryContext,
@@ -147,12 +161,12 @@ const discoverFromConfig = (
   const files: string[] = [];
 
   for (const document of context.configs) {
+    if (!readableHere(document)) continue;
     const root = asRecord(document.data);
     if (root === undefined) continue;
     for (const configKey of CONFIG_KEYS) {
       const servers = asRecord(root[configKey]);
       if (servers === undefined) continue;
-      files.push(document.path);
       for (const [name, rawEntry] of Object.entries(servers)) {
         const entry = asRecord(rawEntry);
         if (entry === undefined) continue;
@@ -163,6 +177,8 @@ const discoverFromConfig = (
           entry,
         );
         components += 1;
+        // Counted where a server was read, so a document holding an empty server map is not claimed as read.
+        files.push(document.path);
         if (added.unresolved) unresolved += 1;
       }
     }
@@ -433,6 +449,7 @@ export const mcpAdapter: AgentSystemAdapter = {
   appliesTo: (context) =>
     projectUses(context, SDK_PACKAGES) ||
     context.configs.some((document) => {
+      if (!readableHere(document)) return false;
       const root = asRecord(document.data);
       return root !== undefined && CONFIG_KEYS.some((key) => root[key] !== undefined);
     }),

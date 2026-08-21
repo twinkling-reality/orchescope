@@ -98,8 +98,9 @@ ports, were both reported as detected agent systems whose agents were the entrie
 failure already recorded for `.mcp.json`. A document now has to declare at least one entry carrying a
 non-empty string `role` and `goal`, which admits all 60 real agent entries readable across the examples
 repository, the framework's templates and its tests, and admits this repository's own two entry fixture,
-whose entries carry no backstory. The match on the file name is now exact rather than a suffix, which also
-drops four VCR cassettes named `test_..._agents.yaml` in the framework repository.
+whose entries carry no backstory. The match on the file name is exact rather than a suffix on both sides: the
+framework repository holds four VCR cassettes named `test_..._agents.yaml`, and the selection that finds a
+path in the traversal declines them before the adapter is asked.
 
 **Two components for one agent, on purpose.** This adapter's own comment claimed that "configuration wins
 when both are present and the source pass fills in what configuration does not declare", and neither half was
@@ -131,6 +132,22 @@ for `open-deep-research-exercised` since it was pinned. Diverting the population
 declaration, which is a worse falsehood than the one it replaces. It needs its own rule, and a rule needs the
 three tests, so it is not in this change. `joins.ambiguous` carries the true statement until then.
 
+**A role is not unique inside a document and a key is.** Naming by the role alone let two entries of one
+document collapse: the builder merges on identity, and the survivor of two agents declaring `Market Analyst`
+carried the first one's goal beside the second one's runtime name and the second one's model, with nothing in
+the output saying two declarations had become one. A role that names two entries of one document is not a
+name for either, so both take their key. Both still declare the role, which is what makes a run reporting it
+ambiguous rather than attributed to whichever entry the document listed first.
+
+**A document opened for one kind is not another kind's to interpret.** `mcpServers` is a key nothing else
+writes; `servers` is a word anything may use. Once `agents.yaml` is found wherever the traversal walked, a
+`servers` inventory of hosts and ports under `deploy/agents.yaml` was read as two MCP servers, one of them
+declaring permission to execute `/usr/sbin/nginx`, and a repository depending on express and nothing else was
+reported as a detected agent system. That is the `.mcp.json` failure arriving through a different door, in an
+adapter that had no shape gate of its own. A document now records why it was opened, and a reader of one kind
+declines a document opened for another. The MCP adapter also counted a document with an empty server map as
+one it had inspected, which is now counted where a server is actually read.
+
 **Also stated rather than fixed.** A named kind that exceeds its cap still drops the remainder without saying
 so in the document. Saying so needs a fifth `UnsupportedAreaKind` or an eighth `SkippedFile.reason`, both
 closed sets, and a schema change is the maintainer's decision. The caps are stated in the module beside the
@@ -141,7 +158,8 @@ nothing until `agents.yaml` became a name found in the traversal and it began cl
 CrewAI framework repository that it read no server from. It now reports the documents that declare one, the
 same way the CrewAI adapter now reports only the documents it read. Four expectations move by one each:
 `openai-agents-js` was counting `integration-tests/cloudflare-workers/worker/wrangler.jsonc`, and
-`pydantic-ai` was counting `.claude/settings.json`.
+`pydantic-ai` was counting `.claude/settings.json`. Neither claim was pinned by a test, which is why the
+CrewAI fixture now carries a `.mcp.json` neither adapter reads a word of and asserts what each one counts.
 
 ### A runtime name declared for an agent no run will call that
 

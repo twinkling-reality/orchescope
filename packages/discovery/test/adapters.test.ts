@@ -180,6 +180,15 @@ reviewer:
   goal: Check the plan against the request.
 `,
     );
+    /*
+     * A configuration document neither adapter that reads this repository declines silently. Each of them
+     * used to report every document the scan parsed as one it had inspected, whether or not it read a word
+     * of it.
+     */
+    workspace.write(
+      '.mcp.json',
+      `{ "mcpServers": { "inventory": { "command": "node", "args": ["mcp/inventory.js"] } } }\n`,
+    );
   };
 
   it('discovers agents from source and from the configuration file', async () => {
@@ -231,6 +240,23 @@ reviewer:
     assert.ok(planner !== undefined, 'the configured planner is not in the graph');
     assert.equal(planner.metadata['runtimeName'], 'Planning Expert');
     assert.equal(planner.metadata['declaredRole'], 'Planning Expert');
+  });
+
+  /*
+   * Each adapter used to report every configuration document the scan parsed as one it had inspected. Two
+   * of them read this repository and each reads one document of it, so a count of two would be a claim
+   * about a file neither opened.
+   */
+  it('reports as inspected only the configuration documents each adapter read', async () => {
+    const { adapters } = await scan(build);
+    const crewai = adapters.find((adapter) => adapter.adapterId === 'adapter:crewai');
+    const mcp = adapters.find((adapter) => adapter.adapterId === 'adapter:mcp');
+    assert.equal(
+      crewai?.filesInspected,
+      3,
+      'the crewai adapter should count its two source files and config/agents.yaml, and not .mcp.json',
+    );
+    assert.equal(mcp?.filesInspected, 1, 'the mcp adapter should count .mcp.json and nothing else');
   });
 
   /*
@@ -407,24 +433,37 @@ class MarketingPostsCrew():
    * than a silence.
    */
   it('reports the call that builds an agent separately from the document that declares it', async () => {
-    const { ids } = await scan(build);
-    assert.ok(
-      ids.includes('agent:lead_market_analyst'),
-      `expected the call named after its method, saw ${ids.join(', ')}`,
+    const { ids, result } = await scan(build);
+    assert.deepEqual(
+      ids.filter((id) => id.startsWith('agent:')).sort(),
+      ['agent:chief-creative-director', 'agent:lead-market-analyst', 'agent:lead_market_analyst'],
+      'two agents read from the document and one call that builds one of them are three components',
     );
-    assert.equal(
-      ids.filter((id) => id.startsWith('agent:')).length,
-      3,
-      `two declared agents and one call are three components, saw ${ids.join(', ')}`,
-    );
-  });
-
-  it('claims no runtime name for the call, which named no role', async () => {
-    const { result } = await scan(build);
     const fromCall = result.graph.components.find(
       (component) => component.id === 'agent:lead_market_analyst',
     );
-    assert.equal(fromCall?.metadata['runtimeName'], undefined);
+    assert.equal(
+      fromCall?.metadata['runtimeName'],
+      undefined,
+      'the call named no role, so nothing knows what a run will call it',
+    );
+    /*
+     * Each half cites where it was read, and the two citations are what makes them two facts rather than
+     * one component seen twice.
+     */
+    const fromDocument = result.graph.components.find(
+      (component) => component.id === 'agent:lead-market-analyst',
+    );
+    assert.equal(fromCall?.sourceLocations[0]?.file, 'src/marketing_posts/crew.py');
+    assert.equal(fromCall?.configLocations.length, 0);
+    assert.equal(fromDocument?.sourceLocations.length, 0);
+    const cited = new Set(result.evidence.map((entry) => entry.id));
+    for (const component of [fromCall, fromDocument]) {
+      assert.ok((component?.evidence.length ?? 0) > 0, 'a component was reported with no evidence');
+      for (const id of component?.evidence ?? []) {
+        assert.ok(cited.has(id), `evidence ${id} is referenced and was not recorded`);
+      }
+    }
   });
 
   /*
@@ -502,6 +541,55 @@ otel-collector:
     );
     assert.equal(result.agentSystemDetected, false);
   });
+
+  /*
+   * The same document inside a repository that does use CrewAI, where `appliesTo` is already satisfied by
+   * the dependency. That is the half of the gate the reader holds: without it the adapter is applying for a
+   * true reason and reading a document that declares nothing it understands.
+   */
+  it('is still declined in a repository that does use CrewAI', async () => {
+    const { ids, adapters } = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'crew-and-roster', dependencies: ['crewai>=0.80'] });
+      workspace.write(
+        'agents.yaml',
+        `node-exporter:
+  host: metrics.internal
+  port: 9100
+sales_lead:
+  role: Sales Lead
+  goal:
+`,
+      );
+      workspace.write(
+        'src/crew.py',
+        `from crewai import Agent
+
+researcher = Agent(role="researcher", goal="Find the sources.")
+`,
+      );
+    });
+    assert.equal(
+      adapters.find((adapter) => adapter.adapterId === 'adapter:crewai')?.status,
+      'completed',
+      'the adapter should apply on the dependency',
+    );
+    assert.ok(ids.includes('agent:researcher'), `expected the source agent, saw ${ids.join(', ')}`);
+    assert.equal(
+      ids.includes('agent:node-exporter'),
+      false,
+      'a host and a port were read as an agent',
+    );
+    /*
+     * `sales_lead` declares a role and an empty goal. CrewAI's Agent takes both, and a document where the
+     * second is missing is not the shape this adapter reads, which is what separates the two halves of the
+     * test.
+     */
+    assert.equal(
+      ids.includes('agent:sales-lead'),
+      false,
+      'a document with a role and no goal was read as a crew',
+    );
+  });
 });
 
 /**
@@ -545,8 +633,173 @@ describe('a CrewAI agent whose role is interpolated at run time', () => {
     const run = adapters.find((adapter) => adapter.adapterId === 'adapter:crewai');
     assert.equal(
       run?.detail,
-      '1 declared role interpolates a value at run time, so the key in the document names the component and no runtime name is claimed',
+      '1 declared role is not a name a run can report, a template such as {topic} Researcher or a value that is not a string, so the key in the document names the component and no runtime name is claimed',
     );
+  });
+
+  /*
+   * The two sides of an interpolated role are treated differently on purpose. A document holds a second
+   * name for the agent and the component takes it; a call site holds one, and declining it sends every call
+   * in a file to the variable they share, which is the collapse 0.8.0 fixed. Both decline the promise that
+   * a run will report the string.
+   */
+  it('keeps a templated literal as the name of the call that carries it, and claims no runtime name', async () => {
+    const { ids, result } = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'templated-crew', dependencies: ['crewai>=0.80'] });
+      workspace.write(
+        'src/crew.py',
+        `from crewai import Agent
+
+def build():
+    researcher = Agent(role="{topic} Senior Data Researcher", goal="Research it.")
+    analyst = Agent(role="{topic} Reporting Analyst", goal="Report it.")
+    return [researcher, analyst]
+`,
+      );
+    });
+    assert.ok(
+      ids.includes('agent:topic-senior-data-researcher'),
+      `expected each call to keep its own literal, saw ${ids.join(', ')}`,
+    );
+    assert.ok(ids.includes('agent:topic-reporting-analyst'));
+    assert.equal(
+      ids.includes('agent:build'),
+      false,
+      'two calls declining their literals collapsed into the function that builds them',
+    );
+    for (const id of ['agent:topic-senior-data-researcher', 'agent:topic-reporting-analyst']) {
+      const component = result.graph.components.find((entry) => entry.id === id);
+      assert.equal(
+        component?.metadata['runtimeName'],
+        undefined,
+        `${id} promises a run will report a template`,
+      );
+    }
+  });
+
+  /*
+   * `role: {topic}` in flow style parses as a mapping rather than a string, so the role is declined for a
+   * second reason and by a different branch. The decline is the same fact and has to be stated the same way.
+   */
+  it('counts a role it could not read as a string among the roles it declined', async () => {
+    const { ids, adapters } = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'flow-role', dependencies: ['crewai>=0.80'] });
+      workspace.write(
+        'config/agents.yaml',
+        `researcher:
+  role: {topic}
+  goal: Research the topic.
+writer:
+  role: Report Writer
+  goal: Write the report.
+`,
+      );
+    });
+    assert.ok(
+      ids.includes('agent:researcher'),
+      `expected the key to name it, saw ${ids.join(', ')}`,
+    );
+    const run = adapters.find((adapter) => adapter.adapterId === 'adapter:crewai');
+    assert.ok(
+      run?.detail?.startsWith('1 declared role is not a name'),
+      `expected the decline to be stated, saw ${String(run?.detail)}`,
+    );
+  });
+});
+
+/**
+ * A role is not unique inside a document and a key is.
+ *
+ * Naming by the role alone let two entries collapse into one component, because the builder merges on
+ * identity: the survivor carried the first entry's goal, the second entry's runtime name and the second
+ * entry's model, and nothing in the output said two declarations had become one.
+ */
+describe('two CrewAI agents in one document declaring one role', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writePythonProject(workspace, { name: 'twin-roles', dependencies: ['crewai>=0.80'] });
+    workspace.write(
+      'config/agents.yaml',
+      `analyst_us:
+  role: >
+    Market Analyst
+  goal: Read the American market.
+  llm: gpt-4o-mini
+analyst_eu:
+  role: >
+    Market Analyst
+  goal: Read the European market.
+  llm: gpt-4o
+`,
+    );
+  };
+
+  it('files both under the key each is declared under, rather than merging them', async () => {
+    const { ids, result } = await scan(build);
+    assert.ok(ids.includes('agent:analyst_us'), `expected both agents, saw ${ids.join(', ')}`);
+    assert.ok(ids.includes('agent:analyst_eu'));
+    const american = result.graph.components.find(
+      (component) => component.id === 'agent:analyst_us',
+    );
+    assert.equal(american?.description, 'Read the American market.');
+    assert.equal(american?.metadata['runtimeName'], 'Market Analyst');
+  });
+
+  /*
+   * Both still declare the role, which is what makes a run reporting it ambiguous rather than attributed to
+   * whichever entry the document happened to list first.
+   */
+  it('links each to the model it names, and claims the role on both', async () => {
+    const { edges, result } = await scan(build);
+    assert.ok(
+      edges.includes('invokes_model:agent:analyst_us->model:gpt-4o-mini'),
+      `expected each agent to reach its own model, saw ${edges.join(', ')}`,
+    );
+    assert.ok(edges.includes('invokes_model:agent:analyst_eu->model:gpt-4o'));
+    const european = result.graph.components.find(
+      (component) => component.id === 'agent:analyst_eu',
+    );
+    assert.equal(european?.metadata['runtimeName'], 'Market Analyst');
+  });
+});
+
+/**
+ * A document opened because it carried one kind's file name is not another kind's to interpret.
+ *
+ * `agents.yaml` is now found wherever the traversal walked, and `servers` is a word anything may use. A
+ * host inventory under that name was read as two MCP servers, one declaring permission to execute a binary,
+ * and made a repository depending on express and nothing else a detected agent system.
+ */
+describe('an agents.yaml holding a servers inventory', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writeNodeProject(workspace, { name: 'deployments', dependencies: { express: '^4.19.0' } });
+    workspace.write(
+      'deploy/agents.yaml',
+      `servers:
+  web-01:
+    command: /usr/sbin/nginx
+    args: ['-g', 'daemon off;']
+  db-01:
+    url: https://db.internal:5432
+`,
+    );
+    workspace.write(
+      'src/server.js',
+      "const express = require('express');\nmodule.exports = express();\n",
+    );
+  };
+
+  it('is read by neither adapter, and declares no agent system', async () => {
+    const { ids, result, adapters } = await scan(build);
+    assert.equal(
+      ids.some((id) => id.startsWith('mcp_server:')),
+      false,
+      `a host inventory declares no server, saw ${ids.join(', ')}`,
+    );
+    assert.equal(
+      adapters.find((adapter) => adapter.adapterId === 'adapter:mcp')?.status,
+      'not_applicable',
+    );
+    assert.equal(result.agentSystemDetected, false);
   });
 });
 

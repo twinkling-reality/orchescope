@@ -18,12 +18,27 @@ import { parse as parseYaml } from 'yaml';
 
 export type ConfigFormat = 'json' | 'yaml' | 'toml';
 
+/**
+ * Why a document was opened, which decides who may read it by its content.
+ *
+ * A path on the fixed list below was opened because this build knows the name. A path found by file name in
+ * the traversal was opened for the one kind whose name it carries, and handing it to a reader of another
+ * kind is how a generic key in somebody else's document becomes a declaration. `servers` is such a key: an
+ * inventory of hosts under `deploy/agents.yaml` was read as two MCP servers, one of them carrying permission
+ * to execute `/usr/sbin/nginx`, and an application depending on express and nothing else was reported as a
+ * detected agent system. That is the `.mcp.json` failure below, arriving through a different door.
+ */
+export type ConfigOrigin = 'known_path' | 'platform_manifest' | 'agent_declaration';
+
 export type ConfigDocument = {
   readonly path: string;
+  readonly origin: ConfigOrigin;
   readonly format: ConfigFormat;
   readonly data: unknown;
   readonly byteLength: number;
 };
+
+export type NamedConfigPath = { readonly path: string; readonly origin: ConfigOrigin };
 
 export type ConfigProblem = { readonly file: string; readonly detail: string };
 
@@ -160,6 +175,7 @@ const formatOf = (path: string): ConfigFormat => {
  * was measured against rather than left as a number in a slice.
  */
 type NamedConfigKind = {
+  readonly origin: ConfigOrigin;
   readonly names: ReadonlySet<string>;
   readonly max: number;
 };
@@ -180,21 +196,22 @@ const AGENT_DECLARATION_NAMES: ReadonlySet<string> = new Set(['agents.yaml']);
 export const MAX_AGENT_DECLARATIONS = 64;
 
 const NAMED_CONFIG_KINDS: readonly NamedConfigKind[] = [
-  { names: PLATFORM_CONFIG_NAMES, max: MAX_PLATFORM_CONFIGS },
-  { names: AGENT_DECLARATION_NAMES, max: MAX_AGENT_DECLARATIONS },
+  { origin: 'platform_manifest', names: PLATFORM_CONFIG_NAMES, max: MAX_PLATFORM_CONFIGS },
+  { origin: 'agent_declaration', names: AGENT_DECLARATION_NAMES, max: MAX_AGENT_DECLARATIONS },
 ];
 
-export const namedConfigPaths = (paths: readonly string[]): readonly string[] =>
+export const namedConfigPaths = (paths: readonly string[]): readonly NamedConfigPath[] =>
   NAMED_CONFIG_KINDS.flatMap((kind) =>
     paths
       .filter((path) => kind.names.has(path.split('/').at(-1) ?? ''))
       .sort()
-      .slice(0, kind.max),
+      .slice(0, kind.max)
+      .map((path) => ({ path, origin: kind.origin })),
   );
 
 export const readConfigDocuments = (
   root: string,
-  extraPaths: readonly string[] = [],
+  extraPaths: readonly NamedConfigPath[] = [],
 ): {
   readonly documents: readonly ConfigDocument[];
   readonly problems: readonly ConfigProblem[];
@@ -204,11 +221,17 @@ export const readConfigDocuments = (
   /*
    * A name on the explicit list is also a name the traversal finds, so `agents.yaml` at the root arrives twice.
    * Reading it twice would hand every adapter the same document twice and double what each one reports having
-   * found in it.
+   * found in it. The fixed list wins, because a path this build knows the name of was not opened on the
+   * strength of the name a traversal happened to see.
    */
   const read = new Set<string>();
+  const candidates: readonly NamedConfigPath[] = [
+    ...KNOWN_CONFIG_PATHS.map((path) => ({ path, origin: 'known_path' as const })),
+    ...extraPaths,
+  ];
 
-  for (const relativePath of [...KNOWN_CONFIG_PATHS, ...extraPaths]) {
+  for (const candidate of candidates) {
+    const relativePath = candidate.path;
     if (read.has(relativePath)) continue;
     read.add(relativePath);
     let text: string;
@@ -233,6 +256,7 @@ export const readConfigDocuments = (
             : (JSON.parse(stripJsonComments(text)) as unknown);
       documents.push({
         path: relativePath,
+        origin: candidate.origin,
         format,
         data,
         byteLength: Buffer.byteLength(text, 'utf8'),
