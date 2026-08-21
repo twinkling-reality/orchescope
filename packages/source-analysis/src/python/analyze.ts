@@ -11,6 +11,7 @@ import {
   type DefinitionFact,
   type EnvironmentFact,
   type ImportFact,
+  isLiteralFact,
   type ModuleFacts,
   type ObjectEntryFact,
   TEXT_FACT_MIN_LENGTH,
@@ -886,6 +887,20 @@ const aliasedNames = (right: Node): readonly (readonly string[])[] => {
   return [];
 };
 
+/**
+ * The literals an assignment binds, which is every one it offers rather than the one it probably takes.
+ *
+ * `a or 'b'` and `'a' if c else 'b'` each bind more than one and the syntax does not say which, so both sides
+ * are read for the same reason `aliasedNames` reads both sides of a boolean operator.
+ */
+const boundLiterals = (right: Node, context: Context): readonly ArgumentFact[] => {
+  if (right.type === 'boolean_operator' || right.type === 'conditional_expression') {
+    return namedChildren(right).flatMap((child) => boundLiterals(child, context));
+  }
+  const fact = argumentFact(right, context);
+  return isLiteralFact(fact) ? [fact] : [];
+};
+
 const recordAssignment = (
   node: Node,
   context: Context,
@@ -916,6 +931,7 @@ const recordAssignment = (
         ? attributePath(childField(right, 'function') ?? right)
         : undefined;
     const aliasedFrom = right === undefined ? [] : aliasedNames(right);
+    const literals = right === undefined ? [] : boundLiterals(right, context);
     context.definitions.push({
       kind: 'variable',
       name,
@@ -925,6 +941,7 @@ const recordAssignment = (
       location: location(context.file, node),
       initializer: initializer !== undefined && initializer.length > 0 ? initializer : undefined,
       ...(aliasedFrom.length === 0 ? {} : { aliasedFrom }),
+      ...(literals.length === 0 ? {} : { literals }),
       enclosing: frame.name,
     });
   }

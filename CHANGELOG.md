@@ -10,6 +10,36 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### A definition with a location and no value in it
+
+`DefinitionFact` recorded a dotted path when the right hand side was a call, through `initializer`, and had
+no field for a value at all. So `agents_config = 'config/agents.yaml'` in a `@CrewBase` class, which names
+the document every agent in that crew is configured from, was a definition with a location and nothing in
+it. JavaScript was worse: `class C { x = 'y' }` produced **no fact of any kind**, in the language where a
+field holding a configuration path is how the shape Python writes as a class attribute gets written.
+
+Both are recorded now, as `literals`, under two rules that are the whole of what makes it safe.
+
+**Recorded and never substituted.** "The class body writes this literal to this name at this line" is
+unconditionally true. "This name holds this literal where it is read" is not, and `@CrewBase` is the case
+that proves it: the decorator replaces the attribute before any method runs. `initializer` stays beside it,
+so a rebinding by a call is visible rather than hidden behind a value.
+
+**Every candidate listed, never one.** `a or 'b'` and a conditional expression each bind more than one and
+the syntax does not say which is taken, which is the rule `aliasedFrom` already states one field above.
+
+Measured on the pinned repositories. On `crewai-examples`, 21 of 22 `agents_config` definitions carry the
+literal, and the twenty second is `screenplay_writer.py:16`, `agents_config = yaml.safe_load(file)`, which
+records `initializer: ['yaml','safe_load']` and no literal. That is the refusal working: the document is
+read at run time and the syntax says so. In JavaScript the class field branch is new rather than a value
+added, and `openai-agents-js` goes from 27,947 definitions to 29,121, so **1,174 class fields that were
+recorded nowhere now exist as facts**, 1,483 of its definitions carrying a literal.
+
+Nothing a reader sees moves. All nineteen measurable corpus entries are byte identical, including
+`open-agent-platform`, which gains 102 definitions carrying literals and two class fields and still reads
+`agentSystemDetected: false` at 26 components. A fact nothing reads yet changes nothing, and that is the
+order the two halves have to land in.
+
 ### The largest hole in the Python fact model, which is a subscript
 
 The fact model says at `facts.ts:5-12` that it is language neutral, and that this is what lets one adapter

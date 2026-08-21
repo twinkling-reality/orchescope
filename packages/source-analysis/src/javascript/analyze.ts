@@ -10,6 +10,7 @@ import {
   type DefinitionFact,
   type EnvironmentFact,
   type ImportFact,
+  isLiteralFact,
   type ModuleFacts,
   type ObjectEntryFact,
   TEXT_FACT_MIN_LENGTH,
@@ -872,6 +873,39 @@ const recordFunction = (
   }
 };
 
+/**
+ * A class field, which was recorded nowhere at all.
+ *
+ * `class C { x = 'y' }` produced no fact of any kind, in a language where a field holding a configuration
+ * path is how the shape Python writes as a class attribute gets written. It is recorded as a variable under
+ * the bare name with the class as its enclosing scope, which is exactly what the Python reader does for the
+ * same shape, so one rule reads both.
+ */
+const recordClassField = (
+  member: Node,
+  context: Context,
+  frame: Frame,
+  className: string | undefined,
+): void => {
+  const fieldName = identifierName(asNode(field(member, 'key')));
+  if (fieldName === undefined) return;
+  const value = asNode(field(member, 'value'));
+  const literals = value === undefined ? [] : boundLiterals(value, context);
+  const aliasedFrom = value === undefined ? [] : aliasedNames(value);
+  context.definitions.push({
+    kind: 'variable',
+    name: fieldName,
+    exported: frame.exported,
+    async: false,
+    decorators: decoratorFacts(member, context),
+    location: context.index.location(context.file, member.start, member.end),
+    initializer: initializerPath(value),
+    ...(aliasedFrom.length === 0 ? {} : { aliasedFrom }),
+    ...(literals.length === 0 ? {} : { literals }),
+    enclosing: className ?? frame.name,
+  });
+};
+
 const recordClass = (
   node: Node,
   context: Context,
@@ -916,6 +950,7 @@ const recordClass = (
       }
       continue;
     }
+    if (member.type === 'PropertyDefinition') recordClassField(member, context, frame, name);
     traverse(
       member,
       context,
@@ -975,6 +1010,40 @@ const aliasedNames = (init: Node): readonly (readonly string[])[] => {
   return [];
 };
 
+/** The dotted path of an initialising call, which is the whole of what `initializer` records. */
+const initializerPath = (init: Node | undefined): readonly string[] | undefined => {
+  if (init === undefined) return undefined;
+  if (init.type !== 'CallExpression' && init.type !== 'NewExpression') return undefined;
+  const callee = asNode(field(init, 'callee'));
+  return callee === undefined ? undefined : calleePath(callee);
+};
+
+/**
+ * The literals a binding offers, which is every one rather than the one it probably takes.
+ *
+ * `a ?? 'b'` and a ternary each bind more than one and the syntax does not say which is taken, so both sides
+ * are read for the same reason `aliasedNames` reads both sides of a logical expression.
+ */
+const boundLiterals = (init: Node, context: Context): readonly ArgumentFact[] => {
+  if (
+    init.type === 'LogicalExpression' ||
+    init.type === 'BinaryExpression' ||
+    init.type === 'ConditionalExpression'
+  ) {
+    const sides =
+      init.type === 'ConditionalExpression'
+        ? [asNode(field(init, 'consequent')), asNode(field(init, 'alternate'))]
+        : [asNode(field(init, 'left')), asNode(field(init, 'right'))];
+    return sides.flatMap((side) => (side === undefined ? [] : boundLiterals(side, context)));
+  }
+  if (init.type === 'TSNonNullExpression' || init.type === 'TSAsExpression') {
+    const inner = asNode(field(init, 'expression'));
+    return inner === undefined ? [] : boundLiterals(inner, context);
+  }
+  const fact = argumentFact(init, context);
+  return isLiteralFact(fact) ? [fact] : [];
+};
+
 const recordVariables = (
   node: Node,
   context: Context,
@@ -984,12 +1053,9 @@ const recordVariables = (
   for (const declarator of nodeArray(field(node, 'declarations'))) {
     const name = identifierName(asNode(field(declarator, 'id')));
     const init = asNode(field(declarator, 'init'));
-    let initializer: readonly string[] | undefined;
-    if (init !== undefined && (init.type === 'CallExpression' || init.type === 'NewExpression')) {
-      const callee = asNode(field(init, 'callee'));
-      initializer = callee === undefined ? undefined : calleePath(callee);
-    }
+    const initializer = initializerPath(init);
     const aliasedFrom = init === undefined ? [] : aliasedNames(init);
+    const literals = init === undefined ? [] : boundLiterals(init, context);
     if (name !== undefined) {
       context.definitions.push({
         kind: 'variable',
@@ -1000,6 +1066,7 @@ const recordVariables = (
         location: context.index.location(context.file, declarator.start, declarator.end),
         initializer,
         ...(aliasedFrom.length === 0 ? {} : { aliasedFrom }),
+        ...(literals.length === 0 ? {} : { literals }),
         enclosing: frame.name,
       });
     }

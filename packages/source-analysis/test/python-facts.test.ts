@@ -319,3 +319,54 @@ def build(self, chosen):
     }
   });
 });
+
+/**
+ * `DefinitionFact` carried a dotted path when the right hand side was a call and had no field for a value, so
+ * `agents_config = 'config/agents.yaml'` in a `@CrewBase` class was a definition with a location and nothing
+ * in it. The literal is recorded and never substituted: the class body writing it is unconditionally true,
+ * and the decorator replacing the attribute before any method runs is why "this name holds this where it is
+ * read" is not.
+ */
+describe('a definition binding a literal', () => {
+  it('records the literal, keeps the initialising call beside it, and lists every candidate', async () => {
+    const facts = await analyze(`
+class MarketingPostsCrew:
+    agents_config = 'config/agents.yaml'
+    loaded = yaml.safe_load(file)
+    chosen = override or 'config/default.yaml'
+    built = f'config/{name}.yaml'
+    aliased = other_name
+
+LIMIT = 3
+`);
+    const byName = new Map(facts.definitions.map((entry) => [entry.name, entry]));
+
+    const configured = byName.get('agents_config');
+    assert.equal(configured?.enclosing, 'MarketingPostsCrew');
+    assert.deepEqual(configured?.literals, [{ kind: 'string', value: 'config/agents.yaml' }]);
+
+    assert.deepEqual(
+      byName.get('loaded')?.initializer,
+      ['yaml', 'safe_load'],
+      'a call is the syntactic signal that the value is not written here',
+    );
+    assert.equal(byName.get('loaded')?.literals, undefined);
+
+    assert.deepEqual(byName.get('chosen')?.literals, [
+      { kind: 'string', value: 'config/default.yaml' },
+    ]);
+    assert.deepEqual(
+      byName.get('chosen')?.aliasedFrom,
+      [['override']],
+      'both candidates are listed, because the syntax does not say which is taken',
+    );
+
+    assert.equal(
+      byName.get('built')?.literals,
+      undefined,
+      'a path the program assembles is not a path the author wrote',
+    );
+    assert.equal(byName.get('aliased')?.literals, undefined);
+    assert.deepEqual(byName.get('LIMIT')?.literals, [{ kind: 'number', value: 3 }]);
+  });
+});

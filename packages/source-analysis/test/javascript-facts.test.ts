@@ -201,3 +201,41 @@ describe('a computed member access', () => {
     assert.equal(findEntry(entries, 'config')?.value.kind, 'unknown');
   });
 });
+
+/**
+ * A class field produced no fact of any kind, in the language where a field holding a configuration path is
+ * how the shape Python writes as a class attribute gets written. It is recorded the way Python records that
+ * shape, so that one rule reads both.
+ */
+describe('a class field', () => {
+  it('is a definition under its bare name, carrying the literal it binds', () => {
+    const facts = analyze(`
+      export class MarketingPostsCrew {
+        agentsConfig = 'config/agents.yaml';
+        static tasksConfig = 'config/tasks.yaml';
+        loaded = readYaml(file);
+        chosen = override ?? 'config/default.yaml';
+        built = \`config/\${name}.yaml\`;
+        run() { return 1; }
+      }
+    `);
+    const byName = new Map(facts.definitions.map((entry) => [entry.name, entry]));
+
+    const configured = byName.get('agentsConfig');
+    assert.equal(configured?.kind, 'variable');
+    assert.equal(configured?.enclosing, 'MarketingPostsCrew');
+    assert.deepEqual(configured?.literals, [{ kind: 'string', value: 'config/agents.yaml' }]);
+    assert.deepEqual(byName.get('tasksConfig')?.literals, [
+      { kind: 'string', value: 'config/tasks.yaml' },
+    ]);
+
+    assert.deepEqual(byName.get('loaded')?.initializer, ['readYaml']);
+    assert.equal(byName.get('loaded')?.literals, undefined);
+    assert.deepEqual(byName.get('chosen')?.literals, [
+      { kind: 'string', value: 'config/default.yaml' },
+    ]);
+    assert.deepEqual(byName.get('chosen')?.aliasedFrom, [['override']]);
+    assert.equal(byName.get('built')?.literals, undefined);
+    assert.ok(byName.has('MarketingPostsCrew.run'), 'methods are still recorded as methods');
+  });
+});

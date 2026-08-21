@@ -122,6 +122,25 @@ export type DefinitionFact = {
    * name and the syntax does not say which is taken, so choosing would be a guess where listing is a fact.
    */
   readonly aliasedFrom?: readonly (readonly string[])[];
+  /**
+   * The literals this definition binds to the name, when it binds any.
+   *
+   * `agents_config = 'config/agents.yaml'` in a `@CrewBase` class names the document every agent in that crew
+   * is configured from, and it was the one step of that chain the model did not carry: `initializer` records a
+   * dotted path when the right hand side is a call and there was no field for a value at all, so a class
+   * attribute holding a path was a definition with a location and nothing in it.
+   *
+   * Recorded and never substituted, which is the whole of what makes it safe. "The class body writes this
+   * literal to this name at this line" is unconditionally true. "This name holds this literal where it is
+   * read" is not, and `@CrewBase` is the case that proves it, because the decorator replaces the attribute
+   * before any method runs. `initializer` stays beside this so a rebinding by a call is visible rather than
+   * hidden behind a value.
+   *
+   * Every literal the binding offers is listed rather than one, for the reason `aliasedFrom` gives above:
+   * `a or 'b'` and a conditional expression each offer more than one and the syntax does not say which is
+   * taken, so choosing would be a guess where listing is a fact.
+   */
+  readonly literals?: readonly ArgumentFact[];
   readonly enclosing: string | undefined;
 };
 
@@ -246,6 +265,19 @@ export const TEXT_FACT_MIN_LENGTH = 40;
 
 /** Rough token estimate used only for reporting relative prompt size, never for billing. */
 export const approximateTokens = (text: string): number => Math.ceil(text.length / 4);
+
+/**
+ * Whether this value is written out in the source rather than computed, named or called.
+ *
+ * A template counts only where it substitutes nothing: `f"config/{name}.yaml"` is a path the program assembles
+ * and `f"config/agents.yaml"` is a path the author typed, and the difference is the whole question.
+ */
+export const isLiteralFact = (fact: ArgumentFact): boolean =>
+  fact.kind === 'string' ||
+  fact.kind === 'number' ||
+  fact.kind === 'boolean' ||
+  fact.kind === 'null' ||
+  (fact.kind === 'template' && !fact.hasSubstitutions);
 
 export const findEntry = (
   entries: readonly ObjectEntryFact[],
