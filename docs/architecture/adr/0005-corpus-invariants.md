@@ -28,10 +28,16 @@ and fewer refusals, and a reviewer would have committed it as an improvement. Th
 caught it was a person reading the instrumentor's source. No expectation key can distinguish an edge
 derived from a declaration echoed through a span from an edge a run exercised.
 
-**`--record` can overwrite everything except one boolean.** `claimDifference` at
-`scripts/corpus/comparison.mjs:57` checks `agentSystemDetected` against the `kind` declared in
-`corpus.yaml`. Every other leaf, 2,497 of them, is a recorded number that a reviewer either reads or does
-not.
+**`--record` overwrites every leaf, and the claim is held somewhere it cannot reach.** An expectation is
+written whole from the observation, so `agentSystemDetected` is as rewritable as any count: flipping
+`corpus/expected/flask.json` to `true` by hand and running `node scripts/corpus.mjs --record flask`
+writes it straight back to `false`. What no recording can do is silence the claim, because the claim is
+not read from the expectation. `claimDifference` at `scripts/corpus/comparison.mjs:57` checks the scan
+against the `kind` declared in `corpus.yaml`, and `tests/e2e/corpus.test.ts:52-65` asserts the recorded
+leaf against that same `kind` out of band: with `flask` recorded as detected, the corpus test fails with
+"flask is pinned as not_agent_system and its expectation disagrees". So one claim per entry is held by a
+file `--record` does not write, and the other 2,468 of the 2,495 leaves are held by a reviewer reading a
+diff.
 
 **And the corpus did not catch two of the four failures it is credited with.** The `.mcp.json` failure was
 found by a field sweep across 33 to 36 real repositories; no corpus entry pins a `.mcp.json` in a
@@ -68,17 +74,29 @@ this grows with the failure log rather than with the reader count. Two of the fo
 found this way already, by hand.
 
 **2. A dependency property, checked on every entry with no expectation.** *A component attributed to an
-adapter whose declared packages the repository does not import must carry `details.role:
-'developer_tooling'` and must not count toward `agentSystemDetected`.* Measured over the corpus today,
-6,116 components are attributed to a framework adapter and 104 are declared only by a configuration
-document; 103 of those sit in repositories that do declare `crewai`, and the one remaining is
-`mcp_server:gpt-researcher`, which carries `role: developer_tooling`. **One exception, and the exception is
-the fix for the first recorded failure.** For six of the eight package declaring adapters the property is
-true by construction, because `appliesTo` is `projectUses`. The two exceptions are `crewai` and `mcp`, each
-of which ORs a configuration door into `appliesTo`, and those two adapters produced both recorded
-detection failures. `dependencyEvidence` is wired at manifest read time as part of this, so the property is
-answerable from the bundle: it is exported at `packages/domain/src/evidence.ts:54` and called by nothing,
-0 of 20,873 evidence records.
+adapter whose declared packages the repository does not use must carry `details.role:
+'developer_tooling'` and must not count toward `agentSystemDetected`.* Re-derived over the corpus after
+the fact model work landed, 6,032 components are attributed to a framework adapter, and the count the
+property asks for is **0 under `projectUses`, the predicate `appliesTo` itself asks, and 1 under the
+stricter reading of a source import alone**. That one is `mcp_server:gpt-researcher`, which declares
+`mcp>=1.9.1` in `requirements.txt` and imports it in no file, and it carries `role: developer_tooling`.
+**Zero violations under either reading, and the exception under the stricter one is the fix for the first
+recorded failure.** For six of the eight package declaring adapters the property is true by construction,
+because `appliesTo` is `projectUses`. The two exceptions are `crewai` and `mcp`, each of which ORs a
+configuration door into `appliesTo`, and those two adapters produced both recorded detection failures.
+`dependencyEvidence` is wired at manifest read time as part of this, so the property is answerable from
+the bundle: it is exported at `packages/domain/src/evidence.ts:54` and called by nothing, 0 of 20,873
+evidence records.
+
+**And the property has almost no population on the pinned corpus, which decides how it is built.** At
+most one component satisfies its antecedent across all twenty seven entries, and none at all under the
+predicate the build uses to decide whether an adapter runs. A gate holding this property over the pinned
+entries alone asserts over an empty set, which is the shape named three paragraphs above and the reason
+`rule-input-producers.test.ts` exists. The generated negatives are what give it a population: an injected
+`.mcp.json` in a repository depending on express is a component attributed to `adapter:mcp` in a
+repository importing no MCP SDK, which is the antecedent, by construction, on every negative at once.
+That is why family 1 comes first, and why this property is checked over the generated negatives as well
+as over the pinned entries rather than over the pinned entries alone.
 
 **3. An anti circularity check between the two halves.** *An observed relation or identity that is exactly
 rederivable from a declaration is a circular join, not a join.* This is the fourth recorded failure stated
@@ -115,7 +133,17 @@ digest would close that, and it is a packaging decision rather than a verificati
 **The dependency property having more than one exception on the corpus after the fact model work lands.**
 An invariant with a growing exception list is an expectation wearing an invariant's name, and it must be
 demoted rather than excused. The measurement is the count of components attributed to a framework adapter
-whose packages the repository does not import and that do not carry `developer_tooling`.
+whose packages the repository does not use and that do not carry `developer_tooling`.
+
+That measurement was run once [ADR 0003](0003-fact-model-breadth.md) landed, which is what it was waiting
+for, and **it did not reverse this: the count is 0.** The fact model work moved the proxy the first
+version of this record quoted and did not move the answer. Components attributed to a framework adapter
+fell from 6,116 to 6,032, the 84 being the CrewAI join folding one declared agent and the call that
+builds it into one component, 40 on each `crewai-examples` entry and 4 on `crewai`. The ones declared
+only by a configuration document fell from 104 to 21, because 39 agents on each of those two entries now
+carry a source location beside their config location. Neither number is the property. The property's own
+count was 1 before and is 1 now under a source import alone, 0 under `projectUses`, and 0 violations
+throughout.
 
 **Or a generated negative that fails for a true reason.** If an injected shape genuinely makes a repository
 an agent system, the injection table is wrong rather than the build, and a row that has to be excused per

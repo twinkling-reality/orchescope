@@ -10,6 +10,42 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### What `--record` can rewrite, and the invariant that was waiting on a measurement
+
+[ADR 0005](docs/architecture/adr/0005-corpus-invariants.md) opened on a premise that is not true.
+`--record` does not stop at one boolean: an expectation is written whole from the observation, so
+`agentSystemDetected` is as rewritable as any count. Flipping `corpus/expected/flask.json` to `true` by
+hand and running `node scripts/corpus.mjs --record flask` writes it straight back to `false`, which is the
+leaf that record was written to say could not be written.
+
+**What no recording can do is silence the claim, because the claim is not read from the expectation.**
+`claimDifference` checks the scan against the `kind` in `corpus.yaml`, and `tests/e2e/corpus.test.ts`
+asserts the recorded leaf against that same `kind` out of band. Recorded as detected, `flask` fails the
+corpus test with "flask is pinned as not_agent_system and its expectation disagrees". One claim per entry
+is held somewhere `--record` does not write. The other 2,468 of the 2,495 leaves are held by a reviewer.
+
+**And the measurement that decides whether the dependency property is an invariant has been run.** It was
+waiting on the fact model work, which has now landed, and the criterion is the count of components
+attributed to a framework adapter whose packages the repository does not use and that do not carry
+`developer_tooling`. **It is 0.** More than one would have demoted the property from an invariant to an
+expectation wearing an invariant's name.
+
+The fact model work moved the proxy that record quoted and did not move the answer. Components attributed
+to a framework adapter fell from 6,116 to 6,032, the 84 being the CrewAI join folding a declared agent and
+the call that builds it into one component: 40 on each `crewai-examples` entry and 4 on `crewai`. The ones
+declared only by a configuration document fell from 104 to 21, because 39 agents on each of those two
+entries now carry a source location beside their config location. Neither of those is the property. The
+property's own count was 1 before and is 1 now under a source import alone, and 0 under `projectUses`,
+which is the predicate `appliesTo` itself asks. The one is `mcp_server:gpt-researcher`, which declares
+`mcp>=1.9.1` in `requirements.txt`, imports it in no file, and carries `role: developer_tooling`.
+
+**The finding that changes how it gets built is that it has almost no population.** At most one component
+across all twenty seven pinned entries satisfies the property's antecedent, and none at all under
+`projectUses`. A gate holding it over the pinned corpus alone asserts over an empty set, which is the
+shape `rule-input-producers.test.ts` exists to prevent and which that record names two paragraphs before
+proposing it. The generated negatives are what give it a population, so the two are one change rather than
+two.
+
 ### The CrewAI join this build declined to make
 
 `crewai create crew` writes an agent's role into `config/agents.yaml` and selects it with

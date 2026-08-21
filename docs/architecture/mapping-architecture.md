@@ -347,9 +347,13 @@ unavailable, and it stops one adapter producing two components for one agent. Bo
 
 ### Stage 2: invariants that `--record` cannot rewrite
 
-The corpus is 49.8% of the diff for a framework and the only assertion `--record` cannot overwrite is one
-boolean, `claimDifference` at `scripts/corpus/comparison.mjs:57`. Every other leaf is a recorded number
-that a reviewer either reads or does not. There are 2,497 of them across 27 entries.
+The corpus is 49.8% of the diff for a framework and `--record` overwrites every leaf of an expectation,
+`agentSystemDetected` included: flipping `corpus/expected/flask.json` to `true` by hand and recording that
+entry writes it straight back to `false`. What no recording can silence is the claim, because the claim is
+read from `corpus.yaml` rather than from the expectation, by `claimDifference` at
+`scripts/corpus/comparison.mjs:57` and again out of band by `tests/e2e/corpus.test.ts:52-65`. So one claim
+per entry is held somewhere `--record` does not write, and the other 2,468 of the 2,495 leaves across 27
+entries are recorded numbers that a reviewer either reads or does not.
 
 Three families, ranked by failures caught over lines maintained.
 
@@ -365,17 +369,26 @@ Adding a shape is one table row, and it applies to every negative at once, so th
 log rather than with the reader count.
 
 **A dependency property, checked on every entry with no expectation.** Stated correctly: *a component
-attributed to an adapter whose declared packages the repository does not import must carry
+attributed to an adapter whose declared packages the repository does not use must carry
 `details.role: 'developer_tooling'` and must not count toward `agentSystemDetected`.* Measured over the
-corpus today: 6,116 components are attributed to a framework adapter, 104 of them declared only by a
-configuration document, 103 of those in repositories that do declare `crewai`, and the one remaining is
-`mcp_server:gpt-researcher`, which carries `role: developer_tooling`. **One exception, and the exception
-is the fix for the `.mcp.json` failure.** For six of the eight package declaring adapters the property is
-true by construction, because `appliesTo` is `projectUses`. The two exceptions are `crewai` and `mcp`,
-each of which ORs a configuration door into `appliesTo`, and those two adapters produced both recorded
-detection failures. The property is a check on exactly the two doors that have ever leaked. Roughly 60
-lines, and it covers adapters that do not exist yet. Wire `dependencyEvidence` while doing it:
-`packages/domain/src/evidence.ts:54` exports it and nothing calls it, 0 of 20,873 evidence records.
+corpus once Stage 1 had landed, which is what the measurement was waiting for: 6,032 components are
+attributed to a framework adapter, and the count the property asks for is **0 under `projectUses`, which
+is the predicate `appliesTo` itself asks, and 1 under the stricter reading of a source import alone**.
+That one is `mcp_server:gpt-researcher`, which declares `mcp>=1.9.1` in `requirements.txt` and imports it
+nowhere, and carries `role: developer_tooling`. **Zero violations under either reading.** For six of the
+eight package declaring adapters the property is true by construction, because `appliesTo` is
+`projectUses`. The two exceptions are `crewai` and `mcp`, each of which ORs a configuration door into
+`appliesTo`, and those two adapters produced both recorded detection failures. The property is a check on
+exactly the two doors that have ever leaked. Roughly 60 lines, and it covers adapters that do not exist
+yet. Wire `dependencyEvidence` while doing it: `packages/domain/src/evidence.ts:54` exports it and nothing
+calls it, 0 of 20,873 evidence records.
+
+**And on the pinned corpus that property has almost no population, which is why it is second rather than
+first.** At most one component satisfies its antecedent across all twenty seven entries and none at all
+under `projectUses`, so a gate holding it over the pinned entries alone asserts over an empty set. The
+generated negatives are what give it a population: an injected `.mcp.json` in a repository depending on
+express is a component attributed to `adapter:mcp` in a repository importing no MCP SDK, which is the
+antecedent by construction, on every negative at once. The two families are one change, not two.
 
 **An anti circularity check between the halves.** *An observed relation or identity that is exactly
 rederivable from a declaration is a circular join, not a join.* This is `graph.node.parent_id` stated as a
