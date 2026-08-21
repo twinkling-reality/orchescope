@@ -72,7 +72,8 @@ Order is deliberate. Configuration adapters run first, because a declaration is 
 framework adapters; then the cross cutting adapters that attach effects and prompts to whatever the earlier ones found.
 
 ```
-mcp → manifest → openai-agents → langgraph → crewai → vercel-ai-sdk → model-sdk → effects → prompts
+mcp → manifest → workers-bindings → openai-agents → langgraph → crewai → pydantic-ai → vercel-ai-sdk
+  → model-sdk → search-index → effects → prompts → implementation-reach
 ```
 
 Each adapter declares `appliesTo`, which is checked before it runs, and returns what it found. An adapter that does not

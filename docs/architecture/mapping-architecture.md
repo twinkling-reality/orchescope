@@ -153,8 +153,9 @@ decide them are the ones above. The two supporting numbers worth carrying:
   differences that require the declared set. `declared-not-exercised` names 1,114 components against
   `exercised-not-declared`'s 9.
 - **Direction 3 is already the policy.** `docs/guides/adapter-development.md:3-4` says start with the
-  manifest. What is new is the word "verifies", and it is worth building: the engine today accepts
-  `definedIn: src/does-not-exist.rb`, and `fileHash` is written 0 of 17,115 times.
+  manifest. What was new is the word "verifies", and it was worth building: the engine accepted
+  `definedIn: src/does-not-exist.rb`, and `fileHash` was written 0 of 17,115 times. Both are closed in
+  Stage 3 below, and what a citation still cannot be checked against is named there.
 
 ## The claim
 

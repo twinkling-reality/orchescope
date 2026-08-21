@@ -19,6 +19,7 @@ import { DEFAULT_ADAPTERS } from '../../packages/discovery/src/index.ts';
 
 const repositoryRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const guide = join(repositoryRoot, 'docs/guides/adapter-development.md');
+const lifecycle = join(repositoryRoot, 'docs/architecture/discovery-lifecycle.md');
 
 const typescriptBlocks = (markdown: string): readonly string[] => {
   const blocks: string[] = [];
@@ -75,6 +76,20 @@ describe('the adapter guide', () => {
         }
       }
     }
+  });
+
+  it('names the adapters in the order they run, all of them', () => {
+    const document = readFileSync(lifecycle, 'utf8');
+    const arrows = /```\n((?:[a-z-]+ *(?:\n *)?→ *(?:\n *)?)+[a-z-]+)\n```/.exec(document)?.[1];
+    assert.ok(arrows !== undefined, 'the lifecycle document no longer shows the adapter order');
+    assert.deepEqual(
+      arrows
+        .split('→')
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0),
+      DEFAULT_ADAPTERS.map((adapter) => adapter.id.replace('adapter:', '')),
+      'the documented order and the registry disagree',
+    );
   });
 
   it('declares exactly the fields an adapter declares', () => {

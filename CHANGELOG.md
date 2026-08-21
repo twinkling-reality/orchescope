@@ -149,6 +149,16 @@ covered on the day it declares one rather than on the day somebody remembers thi
 `rule-input-producers.test.ts` and `goal-eligible-rules.test.ts` exist to set, and this was the last hand
 written list of its kind sitting inside the corpus gate.
 
+### The documented adapter order, which was missing four of the thirteen
+
+`docs/architecture/discovery-lifecycle.md` draws the order adapters run in, and it drew nine:
+`workers-bindings`, `pydantic-ai`, `search-index` and `implementation-reach` were not in it. Order is the
+document's own point, because a relation can only be drawn once both endpoints exist, so a reader working
+out where to register a new adapter was reading a picture with four missing from it.
+
+It is derived now, from `DEFAULT_ADAPTERS`, in the same check that holds the adapter guide to the interface.
+A reordering or a fourteenth reader fails there rather than going unnoticed.
+
 ### The adapter guide, which did not compile against the interface it documents
 
 The page an author copies to write a reader declared an `ecosystem` field that does not exist, omitted
