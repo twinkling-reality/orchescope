@@ -74,22 +74,26 @@ const literalString = (node: Node | undefined): string | undefined => {
   return undefined;
 };
 
-/** Resolves `a.b.c` and `a["b"]` into a dotted path. Returns an empty path for dynamic access. */
+/**
+ * Resolves `a.b.c` and `a["b"]` into a dotted path. Returns an empty path for dynamic access.
+ *
+ * The `computed` flag is what separates the two, and reading the property without it recorded a property name
+ * the source never wrote. `arr[i]` and `arr.i` are both a `MemberExpression` whose property is the identifier
+ * `i`, so `listeners[i](1)` arrived with the callee path `["listeners","i"]` and nothing downstream could tell
+ * it from `listeners.i(1)`. A subscript selects by the value the name holds at run time, which the syntax does
+ * not say, so a computed access is a path only where its key is a literal: `x['k']` selects the entry named
+ * `k` by the language definition and nothing is left open.
+ */
 const memberPath = (node: Node): readonly string[] => {
   const parts: string[] = [];
   let current: Node | undefined = node;
   while (current !== undefined) {
     if (current.type === 'MemberExpression' || current.type === 'StaticMemberExpression') {
       const property = asNode(field(current, 'property'));
-      const name = identifierName(property) ?? literalString(property);
-      if (name === undefined) return [];
-      parts.unshift(name);
-      current = asNode(field(current, 'object'));
-      continue;
-    }
-    if (current.type === 'ComputedMemberExpression') {
-      const expression = asNode(field(current, 'expression'));
-      const name = literalString(expression);
+      const name =
+        field(current, 'computed') === true
+          ? literalString(property)
+          : (identifierName(property) ?? literalString(property));
       if (name === undefined) return [];
       parts.unshift(name);
       current = asNode(field(current, 'object'));
@@ -118,11 +122,7 @@ const memberPath = (node: Node): readonly string[] => {
 const calleePath = (callee: Node): readonly string[] => {
   const name = identifierName(callee);
   if (name !== undefined) return [name];
-  if (
-    callee.type === 'MemberExpression' ||
-    callee.type === 'StaticMemberExpression' ||
-    callee.type === 'ComputedMemberExpression'
-  ) {
+  if (callee.type === 'MemberExpression' || callee.type === 'StaticMemberExpression') {
     return memberPath(callee);
   }
   return [];
@@ -230,8 +230,7 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
       return { kind: 'array', items };
     }
     case 'MemberExpression':
-    case 'StaticMemberExpression':
-    case 'ComputedMemberExpression': {
+    case 'StaticMemberExpression': {
       const path = memberPath(node);
       return path.length === 0
         ? { kind: 'unknown', nodeType: node.type }
@@ -770,8 +769,7 @@ const traverse = (
       return;
     }
     case 'MemberExpression':
-    case 'StaticMemberExpression':
-    case 'ComputedMemberExpression': {
+    case 'StaticMemberExpression': {
       const path = memberPath(node);
       const envName = isEnvironmentAccess(path);
       if (envName !== undefined) {

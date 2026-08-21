@@ -10,6 +10,31 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### A property name the source never wrote
+
+`memberPath` walked a `MemberExpression` without reading its `computed` flag. Under `oxc-parser` 0.141 both
+`arr.i` and `arr[i]` are a `MemberExpression` whose property is the identifier `i`, so `listeners[i](1)` was
+recorded with the callee path `listeners.i` and nothing downstream could tell it from a property the source
+actually wrote. A subscript selects by whatever the name holds when the program runs, which the syntax does
+not say, and recording the variable's own name as a property name is an inference presented as an
+observation, sitting in the fact model rather than in a reader.
+
+**It was latent in the graph and it was not latent in the facts.** Across all twenty seven pinned
+repositories not one component, relation, adapter count or coverage claim moves: nineteen measurable entries
+are byte identical against their committed expectations. What moves is underneath. Over 5,254 corpus files
+the correction removes 206 callee paths, 494 `member` argument facts and 1,621 assignment target segments,
+and 374 arguments that carried a fabricated path now record `unknown`, which is what the syntax supports.
+
+**The clearest case is the demonstration system this build ships.** `apps/demo/src/main.ts` writes
+`flags.get(flag) ?? process.env[variable]`, and the analyser recorded an environment read named `variable`.
+That program has no such variable and never had one; it reads whichever name the parameter holds. Sixty
+three environment reads across the corpus were of that shape, and every one of them was a name invented by
+the reader and reported as a fact about the program.
+
+A literal key is unchanged and stays a path, because `x['k']` selects the entry named `k` by the language
+definition and leaves nothing open. The `ComputedMemberExpression` branch written to handle that case is
+removed: `parseSync` returns an ESTree shaped tree, and that node type occurs 0 times in 5,253 corpus files.
+
 ### A framework gap naming a distribution the repository does not have
 
 `crewai-examples` reported `agents is imported here and its adapter found nothing`, and there is no such

@@ -151,3 +151,53 @@ describe('javascript fact extraction', () => {
     assert.ok(facts.parseErrors.length > 0);
   });
 });
+
+/**
+ * A subscript selects by the value a name holds when the program runs, and the syntax does not say what that
+ * is. Reading the property of a `MemberExpression` without its `computed` flag recorded the variable's own
+ * name as a property name: `listeners[i](1)` arrived as the callee path `listeners.i`, which is a claim the
+ * source never made and which nothing downstream could tell from a real one. A literal key is the case where
+ * nothing is left open, and it stays a path.
+ */
+describe('a computed member access', () => {
+  it('records a literal key as a path segment and refuses a variable one', () => {
+    const facts = analyze(`
+      export function dispatch(i: number, key: string) {
+        listeners[i](1);
+        listeners.i(2);
+        handlers['refund'](3);
+        handlers[key](4);
+      }
+    `);
+    const paths = facts.calls.map((call) => dotted(call.calleePath));
+    assert.ok(
+      paths.includes('handlers.refund'),
+      "handlers['refund'] selects the entry literally named refund",
+    );
+    assert.ok(paths.includes('listeners.i'), 'listeners.i is a property the source wrote');
+    assert.equal(
+      paths.filter((path) => path === 'listeners.i').length,
+      1,
+      'listeners[i] must not be recorded as the property name listeners.i',
+    );
+    assert.ok(
+      !paths.includes('handlers.key'),
+      'a variable key names a value at run time, not a property',
+    );
+  });
+
+  it('leaves a variable subscript argument unknown rather than naming it', () => {
+    const facts = analyze(`
+      import { Agent } from '@openai/agents';
+      export const made = new Agent({ config: settings[chosen], preset: settings['fast'] });
+    `);
+    const call = facts.calls.find((candidate) => dotted(candidate.calleePath) === 'Agent');
+    assert.ok(call, 'expected an Agent call');
+    const entries = objectArgument(call);
+    assert.deepEqual(findEntry(entries, 'preset')?.value, {
+      kind: 'member',
+      path: ['settings', 'fast'],
+    });
+    assert.equal(findEntry(entries, 'config')?.value.kind, 'unknown');
+  });
+});
