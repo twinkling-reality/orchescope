@@ -1,6 +1,21 @@
 import type { Component } from '@orchescope/schema';
 
 /**
+ * Component kinds whose presence means this repository builds something worth auditing as an agent system.
+ *
+ * Beside `partOfAuditedSystem` because detection asks both in one breath: a component counts only where its
+ * kind is one of these and it belongs to the system rather than to whoever works on the repository. Kept
+ * here rather than beside the one call site so that a check on what detection can be moved by reads the set
+ * detection decides with, instead of a copy of it that goes stale the day a kind is added.
+ */
+export const AGENT_SYSTEM_KINDS: ReadonlySet<string> = new Set([
+  'agent',
+  'model',
+  'tool',
+  'mcp_server',
+]);
+
+/**
  * The difference between the system under audit and the tools of whoever works on it.
  *
  * A repository can hold configuration that belongs to a developer's editor or coding agent rather than

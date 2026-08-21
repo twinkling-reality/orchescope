@@ -7,7 +7,7 @@
  * filesystem, opens a socket or writes to a terminal.
  */
 
-export { partOfAuditedSystem } from './audited-system.ts';
+export { AGENT_SYSTEM_KINDS, partOfAuditedSystem } from './audited-system.ts';
 export { canonicalJson, type JsonValue, stableJson } from './canonical-json.ts';
 export { type Clock, fixedClock, formatTimestamp } from './clock.ts';
 export { agree, formatCount } from './counting.ts';

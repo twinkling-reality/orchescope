@@ -10,6 +10,37 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### A corpus entry that holds an invariant instead of a number
+
+Every assertion this corpus makes is a number a scan produced, and `--record` writes all of them. That is
+the wrong instrument for a precision failure, because a precision failure arrives as a repository nobody
+pinned. Both of the ones on record were found somewhere else: the `.mcp.json` one by a sweep across thirty
+odd real repositories, and the `agents.yaml` one by two fixture repositories written by hand. No entry in
+this corpus held either shape, and the two fixtures cost a repository each.
+
+**Every repository pinned as not an agent system is now crossed with the shapes that have fooled this
+build.** A `.mcp.json` naming one server, a monitoring inventory under `agents.yaml`, a roster of account
+executives carrying a role and a goal, hosts under a `servers` key, an `mcpServers` key, a Workers
+deployment manifest. Each is written into the checkout, the repository is scanned again, and the file is
+removed. What is asserted is the invariant: the repository stays not an agent system, and every component
+of an agent system kind carries the role saying whose it is.
+
+Nothing is recorded, so there is nothing for a reviewer to wave through and nothing for `--record` to
+rewrite, and a broken invariant fails a recording run as surely as a checking one. Adding a shape is one
+row and it applies to every negative at once, so this grows with the failure log rather than with the
+number of readers, and it covers readers that do not exist yet.
+
+**A row states the outcome it expects rather than leaving it as a disjunction.** "Declines or carries the
+role" is satisfied by a reader that has stopped reading the document altogether, and a row whose reader
+went quiet is a row that tests nothing. For the same reason the injected scan has to differ from the base
+scan somewhere: a shape a `.gitignore` swallowed would otherwise pass every assertion by not being there.
+That is the check that says `.orchescope/manifest.yaml` arrived through the manifest reader rather than
+through the traversal, which never walks that directory.
+
+The kinds that decide detection moved to `packages/domain` beside `partOfAuditedSystem`, because the two
+are asked in one breath and a check on what detection can be moved by has to read the set detection
+decides with rather than a copy of it.
+
 ### What `--record` can rewrite, and the invariant that was waiting on a measurement
 
 [ADR 0005](docs/architecture/adr/0005-corpus-invariants.md) opened on a premise that is not true.

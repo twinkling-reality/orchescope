@@ -20,6 +20,7 @@ import { auditRepository, clearStoredState } from './corpus/audit.mjs';
 import { cacheDirectory, checkout } from './corpus/checkout.mjs';
 import { claimDifference, differences } from './corpus/comparison.mjs';
 import { isOffline, readCorpus } from './corpus/definition.mjs';
+import { injectionVerdicts } from './corpus/negatives.mjs';
 import { exerciseRepository, missingInterpreter, prepareEnvironment } from './corpus/exercise.mjs';
 import { observationOf } from './corpus/observation.mjs';
 import { describe } from './corpus/summary.mjs';
@@ -115,7 +116,17 @@ for (const entry of entries) {
         : differences(expected, observation)),
       ...[claimDifference(entry, observation)].filter(Boolean),
     ];
-    results.push({ entry, observation, differences: found });
+    /*
+     * The injection table runs on every entry pinned as not an agent system, in both modes. It holds an
+     * invariant rather than a number, so there is nothing for `--record` to write and no reason to skip it
+     * while recording: a recording run that stopped checking precision would be the one run where a shape
+     * could get through.
+     */
+    const injections =
+      entry.kind === 'not_agent_system'
+        ? injectionVerdicts(root, entry, directory, observation)
+        : [];
+    results.push({ entry, observation, differences: found, injections });
   } catch (error) {
     results.push({ entry, error: error instanceof Error ? error.message : String(error) });
   }
@@ -124,6 +135,26 @@ for (const entry of entries) {
 let differing = 0;
 let failed = 0;
 let skipped = 0;
+let broken = 0;
+
+/**
+ * An injection that broke an invariant is printed with the shape, the file and the sentence, and one that
+ * held is printed as a count. A row is a failure log entry, so a reader who sees the count go up wants to
+ * know which shapes are being held rather than reading six lines saying nothing happened.
+ */
+const describeInjections = (injections) => {
+  const failures = injections.filter((injection) => injection.broken.length > 0);
+  const lines = [
+    `  injections    ${injections.length - failures.length}/${injections.length} shapes held`,
+  ];
+  for (const injection of failures) {
+    for (const sentence of injection.broken) {
+      lines.push(`    ${injection.injection} (${injection.file}): ${sentence}`);
+    }
+  }
+  return lines;
+};
+
 for (const result of results) {
   console.log('');
   if (result.skipped !== undefined) {
@@ -138,6 +169,10 @@ for (const result of results) {
     continue;
   }
   for (const line of describe(result.observation)) console.log(line);
+  if (result.injections.length > 0) {
+    for (const line of describeInjections(result.injections)) console.log(line);
+    if (result.injections.some((injection) => injection.broken.length > 0)) broken += 1;
+  }
   if (record) {
     mkdirSync(dirname(expectationPath(result.entry.name)), { recursive: true });
     writeFileSync(expectationPath(result.entry.name), `${stableJson(result.observation)}\n`, {
@@ -170,7 +205,11 @@ writeFileSync(
       kind: result.entry.kind,
       ...(result.skipped !== undefined ? { skipped: result.skipped } : {}),
       ...(result.error === undefined && result.skipped === undefined
-        ? { observation: result.observation, differences: result.differences ?? [] }
+        ? {
+            observation: result.observation,
+            differences: result.differences ?? [],
+            injections: result.injections ?? [],
+          }
         : {}),
       ...(result.error === undefined ? {} : { error: result.error }),
     })),
@@ -184,6 +223,10 @@ console.log(
     `${results.length - differing - failed - skipped} ${record ? 'recorded' : 'matched'}, ${differing} differing, ` +
     `${failed} not measured, ${skipped} skipped`,
 );
+const injected = results.reduce((total, result) => total + (result.injections?.length ?? 0), 0);
+console.log(
+  `${injected} injected shape(s) across the repositories that are not agent systems: ${injected - results.reduce((total, result) => total + (result.injections ?? []).filter((injection) => injection.broken.length > 0).length, 0)} held, ${broken} repositor${broken === 1 ? 'y' : 'ies'} broke one`,
+);
 console.log(`summary written to ${summaryPath.slice(root.length + 1)}`);
 
 if (record) {
@@ -192,4 +235,8 @@ if (record) {
   console.log('and this script cannot tell you which.');
 }
 
-process.exit(differing + failed > 0 && !record ? 1 : failed > 0 ? 1 : 0);
+/*
+ * A broken invariant fails a recording run too. `--record` rewrites what a scan produced and cannot rewrite
+ * this, which is the whole point of holding it here rather than in an expectation.
+ */
+process.exit(broken > 0 || failed > 0 ? 1 : differing > 0 && !record ? 1 : 0);

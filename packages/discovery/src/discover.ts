@@ -1,4 +1,5 @@
 import {
+  AGENT_SYSTEM_KINDS,
   asOrchescopeError,
   type Clock,
   type Deadline,
@@ -120,9 +121,6 @@ const unsupportedAreas = (
   }
   return areas;
 };
-
-/** Component kinds whose presence means this repository builds something worth auditing as an agent system. */
-const AGENT_SYSTEM_KINDS: ReadonlySet<string> = new Set(['agent', 'model', 'tool', 'mcp_server']);
 
 /** The top level distribution a specifier belongs to: `langgraph.func` and `langgraph/prebuilt` are both `langgraph`. */
 const distributionOf = (specifier: string): string => {
