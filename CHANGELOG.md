@@ -74,6 +74,10 @@ components against three ambiguous names. `orchescope-discovery` counts one file
 rule is a file of its own and that entry is this repository's own `packages/discovery` copied from the index;
 its ceiling of zero components is unmoved, which is the number that entry is pinned to hold.
 
+`docs/architecture/mapping-architecture.md` proposed this as two defects and it is three. The document now
+says so, and says which one was load bearing, because the two it named could both have been repaired without
+moving the entry.
+
 ### One model call, two producers, and the first corpus entry that can see it
 
 0.8.0 taught the reader to keep the better placed of two spans watching one model call, and to stop naming a

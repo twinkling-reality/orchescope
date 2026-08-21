@@ -307,10 +307,17 @@ Small enough to prove or kill the claim. Three changes, all in `packages/source-
 2. **A literal value on a definition**, recording every literal bound to the name and keeping `initializer`
    beside it. JavaScript additionally needs a `PropertyDefinition` branch in the class walker, which
    records nothing today. Estimated +13 `facts.ts`, +8 Python, +21 JavaScript.
-3. **The coverage claim stops naming a distribution the repository does not use.**
-   `adaptersThatFoundNothing` at `discover.ts:146-156` builds its import set without the local root filter
-   that `projectUses` already applies, and the filter itself only recognises a package at the repository
-   root or under `src/`. Both halves are wrong for a repository of per directory applications.
+3. **The coverage claim stops naming a distribution the repository does not use.** Shipped, and the cause
+   was three layers rather than the two stated here. `adaptersThatFoundNothing` at `discover.ts:146-156`
+   built its import set with no local root filter, `localPythonRoots` recognised a package only at the
+   repository root or under `src/` and therefore collected the **empty set** on `crewai-examples`, and
+   `moduleMatches` consulted its local roots only for a dotted specifier, so the bare `agents` matched by
+   exact equality before locality was reached. Repairing either of the first two alone would not have moved
+   the entry. What replaced them is per file and filesystem exact: a module beside a script shadows a
+   distribution of that name, and an `__init__.py` in the importing file's own directory is what says the
+   file is a package member rather than a script. Locality by root still answers only for a submodule
+   reference, because `openai-agents-python` defines `src/agents/` and imports `agents` meaning both its own
+   package and the framework, and suppressing there would cost that entry every component it has.
 
 **What measures it.** `node scripts/corpus.mjs --check crewai-examples crewai-examples-exercised
 crewai open-deep-research`, against the committed expectations, then `--record` and read the diff.
