@@ -1,6 +1,6 @@
 # ADR 0003: The fact model is the breadth lever, and a fact records only what the syntax says
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-20
 - Deciders: repository maintainers
 
@@ -114,13 +114,37 @@ render identically. The resolved import index is what separates them.
 
 **One live defect is closed.** `arr[i]` stops being recorded as `arr.i`.
 
+## What the measurement said
+
+Both criteria were pre-registered before anything was recorded, and both were met.
+
+**`crewai-examples` `components.byKind.agent` fell from 121 to 81.** The arithmetic closes with nothing left
+over. That repository writes 71 `Agent(` calls, 49 selecting a document entry and 22 carrying a literal role.
+Of the 49, **41 resolve and 8 decline**, reproducing the simulation this decision was funded on to the call.
+78 of the 81 are CrewAI's and decompose as 39 agents carrying both a document entry and a call site, 9
+entries no call selects, and 30 calls with nothing to join to: 39 plus 9 is the 48 entries the documents
+declare, and 41 plus 30 is the 71 calls. The 8 declines are the two cases named in advance, five where
+`agents_config = yaml.safe_load(file)` carries no literal and three where the code selects keys the document
+does not declare.
+
+**`crewai-examples-exercised` still reports 0 exercised components and the same three ambiguous names**,
+verbatim with their trailing newlines, and `joined` and `joinedOnNameAlone` are still empty. The join is
+between two declarations and it did not become a join to a run.
+
+The per language measurements held too. The Python subscript fact reads 141 of 165 previously unknown
+subscripts on `crewai-examples`, 34 of 48 on `open-deep-research` and 122 of 183 on `gpt-researcher`, with
+the `member` count rising by exactly the amount the unknown count falls on each. The JavaScript correction
+removed 206 callee paths, 494 member argument facts and 63 environment reads that named a variable rather
+than a variable's value, one of them in this build's own demonstration system. 21 of 22 `agents_config`
+definitions carry their literal, and the twenty second is the `yaml.safe_load` case.
+
 ## What would reverse this
 
 **A fact that records only syntax, measured to produce a confidently wrong answer on a pinned repository.**
-The specific measurement is `crewai-examples-exercised`: if `runtime.exercisedComponents` rises above 0 or
+The standing measurement is `crewai-examples-exercised`: if `runtime.exercisedComponents` rises above 0 or
 `runtime.ambiguousNames` empties, a fact resolved something the syntax left open, the two halves of the
-join now agree by construction, and this decision was wrong rather than the change being wrong.
+join agree by construction, and this decision was wrong rather than the change being wrong.
 
-**Or a fact model rich enough that the adapters do not shrink and the confidently wrong count does not
-fall.** After the accepted set ships, `crewai-examples` `components.byKind.agent` must fall from 121 toward
-the roughly 70 that repository declares. If it does not, the ceiling was not here.
+**Or a later fact whose payoff is bought by resolving rather than recording.** Intra module constant
+propagation stays rejected on the measurement above, and a proposal that reaches for it under another name
+is the same proposal.

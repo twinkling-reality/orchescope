@@ -1,7 +1,7 @@
 {
   "adapters": {
     "adapter:crewai": {
-      "componentsFound": 149,
+      "componentsFound": 108,
       "edgesFound": 5,
       "filesInspected": 55,
       "status": "completed"
@@ -82,14 +82,14 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 124,
+      "agent": 84,
       "agent_group": 29,
       "entrypoint": 9,
       "external_service": 9,
       "prompt": 24
     },
     "declaredInTest": 0,
-    "total": 195
+    "total": 155
   },
   "discardedRelations": [],
   "files": {
@@ -111,7 +111,7 @@
       "medium": 2
     },
     "componentsByRule": {
-      "declared-not-exercised": 130,
+      "declared-not-exercised": 90,
       "observability-coverage": 10,
       "observed-name-matches-many-declarations": 3,
       "topology-shape": 3
@@ -139,7 +139,7 @@
       "Lead Market Analyst\n"
     ],
     "contradictions": 0,
-    "declaredComponents": 130,
+    "declaredComponents": 90,
     "declaredEdges": 16,
     "duplicateSideEffects": 0,
     "exercisedComponents": 0,

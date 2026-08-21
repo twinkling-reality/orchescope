@@ -10,6 +10,50 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### The CrewAI join this build declined to make
+
+`crewai create crew` writes an agent's role into `config/agents.yaml` and selects it with
+`Agent(config=self.agents_config['lead_market_analyst'])`, and this build read both halves and joined
+neither. The declared entry and the call that builds it were two components, and the adapter carried
+forty nine lines saying why: the subscript key and the class attribute's literal were the two steps of that
+chain the fact model did not carry. Both are facts now, so the join is made.
+
+Every step of it is syntax. The subscript carries its literal key, the class attribute carries the literal
+path, the path resolves against the directory of the file that wrote it, and the key has to be one the
+document at that path declares. Where all four hold, the call adds a source location to the agent the
+document declared. Where any one fails, the call names itself and stays its own component.
+
+**Measured on `crewai-examples`, and it closes exactly.** That repository writes 71 `Agent(` calls: 49
+select a document entry and 22 carry a literal role. Of the 49, **41 resolve and 8 decline**, which is the
+simulation this was funded on reproduced to the call. `components.byKind.agent` falls from **121 to 81**.
+The arithmetic closes with nothing left over: 78 of those 81 are CrewAI's, and they are 39 agents carrying
+both a document entry and a call site, 9 document entries no call selects, and 30 calls with nothing to
+join to. 39 plus 9 is the 48 entries the documents declare; 41 plus 30 is the 71 calls. The 8 declines are
+the two cases named in advance: five in `screenplay_writer.py`, where `agents_config = yaml.safe_load(file)`
+carries no literal because the document is assembled while the program runs, and three in
+`email_filter_crew.py`, where the code selects three keys from a document that declares none of them, which
+is a defect in that repository and worth reporting rather than papering over.
+
+**The clearest single case is the one that was silently wrong.** `stock_analysis/crew.py` declares
+`financial_agent` and `financial_analyst_agent`, and both select `financial_analyst`. Under the enclosing
+method name that was two components, one declared agent split in two with nothing recording that it had
+been. It is now one agent carrying both call sites.
+
+**And the falsifier held.** `crewai-examples-exercised` still reports **zero exercised components** against
+the same three ambiguous names, verbatim, trailing newline and all. `joined` and `joinedOnNameAlone` are
+still empty. This is a join between two declarations and it is not a join to a run: the marketing crew's
+three roles are still declared three times over, `uniqueCandidate` still returns nothing, and the reconciler
+still refuses. A fact that records what the syntax says cannot make the two halves of that join agree, and
+that is now a corpus number rather than an argument. `declaredComponents` falls from 130 to 90 with it,
+which is the same forty components ceasing to be counted twice.
+
+`crewai` moves by four agents and one more `declaredInTest`. The four are the framework's own CLI template
+and its test project, and one of the components that went was named `test_multiple_before_after_kickoff`
+after the test function it sat in, which is the enclosing name failing in the open. The extra
+`declaredInTest` is `researcher` and `reporting_analyst` in `lib/crewai/tests/`: declared in a document
+under `tests/` and built in `test_project.py`, they had no source location before and so were not counted
+as declared in a test, which they plainly are.
+
 ### A definition with a location and no value in it
 
 `DefinitionFact` recorded a dotted path when the right hand side was a call, through `initializer`, and had

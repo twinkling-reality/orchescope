@@ -1,5 +1,11 @@
 import { CONFIDENCE_BANDS, formatCount, normalizeLocalName } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
+import type {
+  CallFact,
+  DefinitionFact,
+  ModuleFacts,
+  ObjectEntryFact,
+} from '@orchescope/source-analysis';
 import {
   findEntry,
   identifierItems,
@@ -20,23 +26,26 @@ import { definitionForCall, matchCalls, projectUses } from '../matching.ts';
 /**
  * CrewAI, from source and from its declarative files.
  *
- * CrewAI describes a crew as agents plus tasks plus a process, and recent versions moved that
- * description into declarative files. Both passes run and neither wins, because nothing in the
- * repository says which call builds which declared agent.
+ * CrewAI describes a crew as agents plus tasks plus a process, and recent versions moved that description
+ * into declarative files. Both passes run and they meet where the repository says they do:
+ * `Agent(config=self.agents_config['lead_market_analyst'])` names a document and an entry of it, and every
+ * step of that is now a fact rather than a guess. The subscript carries its literal key, the class attribute
+ * carries the literal path, and the path resolves beside the file that wrote it. Where the three hold, the
+ * call and the entry are one agent and the call adds a source location to what the document declared.
  *
- * `Agent(config=self.agents_config['lead_market_analyst'])` is the whole of the link, and the fact model
- * records that argument as an unknown subscript with no key in it: `analyze.ts` has no subscript case, and
- * the string `config/agents.yaml` the class attribute holds is a definition with a location and no value.
- * The obvious substitute is the method the call sits in, and it is measurably wrong: across the pinned
- * examples repository, 31 of the 50 `Agent` calls that sit beside an `agents.yaml` have an enclosing name
- * that is a key in it, and the other 19 would attach a call to the wrong declared agent. A method with an
- * `_agent` suffix the key lacks, a call in a class body naming the class, and a crew whose document
- * describes a different crew are each enough to break it.
+ * Where any of them does not hold, the call names itself and stays its own component. The substitute that
+ * refusing avoids is the enclosing method name, measured on the pinned examples repository at 31 of 50
+ * correct: a method with an `_agent` suffix the key lacks, a call in a class body naming the class, and a
+ * crew whose document describes a different crew each break it, and none of the three can be told from a
+ * match. `stock_analysis/crew.py` is the case that shows the cost, where `financial_agent` and
+ * `financial_analyst_agent` both select `financial_analyst`: under the enclosing name one declared agent
+ * became two components and nothing recorded that it had.
  *
- * So a configured agent and the call that builds it are two components. The cost is visible: on one pinned
- * crew, four declared agents and three calls produce seven agent components where the repository has four
- * agents. The alternative is a guess that reads like a measurement, which is the failure this join exists
- * to avoid, and closing it means teaching a parser to carry a subscript key first.
+ * **The join is between two declarations and it is not a join to a run.** Reading it moved
+ * `crewai-examples` from 121 agent components to 81 and left `crewai-examples-exercised` reporting zero
+ * exercised components against the same three ambiguous names, because a repository that declares one role
+ * in three places still gets a refusal. A fact that records what the syntax says cannot make the two halves
+ * of that join agree, and the corpus is where that is checked rather than argued.
  */
 
 /**
@@ -142,7 +151,11 @@ type Counts = { components: number; edges: number };
  */
 type AgentsDocumentCounts = Counts & { declinedRoles: number };
 
-type ConfigCounts = AgentsDocumentCounts & { files: readonly string[] };
+type ConfigCounts = AgentsDocumentCounts & {
+  files: readonly string[];
+  /** What each document named each of its keys, which is what a call selecting a key has to resolve to. */
+  documents: ReadonlyMap<string, ReadonlyMap<string, string>>;
+};
 
 type AgentEntry = {
   readonly key: string;
@@ -278,7 +291,7 @@ const discoverAgentsDocument = (
   builder: SystemGraphBuilder,
   document: { readonly path: string },
   root: Record<string, unknown>,
-): AgentsDocumentCounts => {
+): AgentsDocumentCounts & { naming: ReadonlyMap<string, string> } => {
   let components = 0;
   let edges = 0;
   let declinedRoles = 0;
@@ -341,7 +354,7 @@ const discoverAgentsDocument = (
     );
     edges += 1;
   }
-  return { components, edges, declinedRoles };
+  return { components, edges, declinedRoles, naming };
 };
 
 /**
@@ -359,6 +372,7 @@ const discoverFromConfig = (
   let edges = 0;
   let declinedRoles = 0;
   const files: string[] = [];
+  const documents = new Map<string, ReadonlyMap<string, string>>();
   const declaresTheFramework = projectUses(context, PACKAGES);
 
   for (const document of context.configs) {
@@ -377,8 +391,9 @@ const discoverFromConfig = (
     edges += found.edges;
     declinedRoles += found.declinedRoles;
     files.push(document.path);
+    documents.set(document.path, found.naming);
   }
-  return { components, edges, declinedRoles, files };
+  return { components, edges, declinedRoles, files, documents };
 };
 
 type SourceCounts = {
@@ -408,9 +423,9 @@ type SourceCounts = {
  * new. It is read after the definition rather than instead of it, because where both exist they are the
  * same name and the definition carries the location the rest of this adapter binds against.
  *
- * **This does not make such an agent join a run**, and the corpus records that it does not. CrewAI names
- * an agent by its role at run time, the role of an agent written this way is in the `agents.yaml` the
- * crew names, and the subscript that selects an entry of it is not a fact this model carries.
+ * This is reached only where `configuredEntry` found nothing, so it names a call that selects no declared
+ * entry rather than one whose entry this build failed to follow. It remains a name and not a claim about a
+ * run: CrewAI reports an agent by its role, and a method name is not one.
  *
  * The role is taken here as it was written, template braces and all, which is not what `reportedRole`
  * hands to `runtimeName`. A literal is the only name a call site carries, and declining it sends fourteen
@@ -422,10 +437,121 @@ const agentNameFor = (
   enclosing: string | undefined,
 ): string => role ?? definitionName ?? enclosing ?? 'agent';
 
+/** Each agents document this adapter read, by path, with the name it gave each of its keys. */
+type AgentsDocuments = ReadonlyMap<string, ReadonlyMap<string, string>>;
+
+/**
+ * A path written beside the file that writes it, resolved against that file's directory.
+ *
+ * Kept to string manipulation because nothing here touches a filesystem: the answer is only ever compared
+ * against the paths of documents the scan already read, and a path that climbs out of the repository matches
+ * none of them and is refused rather than normalised into one that does.
+ */
+const resolveBeside = (file: string, relative: string): string | undefined => {
+  if (relative.startsWith('/') || relative.includes('\\')) return undefined;
+  const segments = file.split('/').slice(0, -1);
+  for (const segment of relative.split('/')) {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..') {
+      if (segments.length === 0) return undefined;
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  return segments.length === 0 ? undefined : segments.join('/');
+};
+
+/** The innermost class a line sits inside, which is the one whose attributes that line reads. */
+const enclosingClass = (module: ModuleFacts, line: number): DefinitionFact | undefined => {
+  let innermost: DefinitionFact | undefined;
+  for (const definition of module.definitions) {
+    if (definition.kind !== 'class') continue;
+    const end = definition.location.endLine ?? definition.location.startLine;
+    if (definition.location.startLine > line || end < line) continue;
+    const width = end - definition.location.startLine;
+    const best =
+      innermost === undefined
+        ? undefined
+        : (innermost.location.endLine ?? innermost.location.startLine) -
+          innermost.location.startLine;
+    if (best === undefined || width < best) innermost = definition;
+  }
+  return innermost;
+};
+
+/**
+ * The one literal a class body binds to this attribute, or nothing where it binds more than one.
+ *
+ * Listing every literal is what the fact model does and choosing between them is what it refuses to do, so a
+ * class that writes two different paths to one attribute has said nothing this can act on. An attribute whose
+ * value comes from a call carries no literal at all, which is `screenplay_writer.py` writing
+ * `agents_config = yaml.safe_load(file)`: the document is assembled while the program runs and the syntax
+ * says so.
+ */
+const classAttributeLiteral = (
+  module: ModuleFacts,
+  owner: DefinitionFact,
+  attribute: string,
+): string | undefined => {
+  const ownerEnd = owner.location.endLine ?? owner.location.startLine;
+  const values = new Set<string>();
+  for (const definition of module.definitions) {
+    if (definition.kind !== 'variable' || definition.name !== attribute) continue;
+    if (definition.enclosing !== owner.name) continue;
+    if (definition.location.startLine < owner.location.startLine) continue;
+    if (definition.location.startLine > ownerEnd) continue;
+    for (const literal of definition.literals ?? []) {
+      const value = stringValue(literal);
+      if (value !== undefined) values.add(value);
+    }
+  }
+  const [only] = values;
+  return values.size === 1 ? only : undefined;
+};
+
+/**
+ * The declared entry an `Agent(config=self.agents_config['lead_market_analyst'])` call selects.
+ *
+ * This is the join `crewai create crew` writes and this build declined to make, and every step of it is now
+ * a fact rather than a guess: the subscript carries its literal key, the class attribute carries the literal
+ * path, and the path resolves beside the file that wrote it. Where all three hold, the call and the document
+ * entry are one agent and the call adds a source location to the component the document already declared.
+ *
+ * Where any of them does not hold this returns nothing and the call names itself as before. The substitute
+ * that returning nothing avoids is the enclosing method name, which was measured on the pinned examples
+ * repository at 31 of 50 correct: an `_agent` suffix the key lacks, a call in a class body naming the class,
+ * and a crew whose document describes a different crew each break it, and none of the three can be told apart
+ * from a match. A key the document does not declare is refused for the same reason: three keys selected in
+ * `email_filter_crew.py` name entries a document declaring one does not have, which is a defect in that
+ * repository rather than a licence to attach the call to whatever else is there.
+ */
+const configuredEntry = (
+  module: ModuleFacts,
+  call: CallFact,
+  entries: readonly ObjectEntryFact[],
+  documents: AgentsDocuments,
+): { readonly documentPath: string; readonly name: string } | undefined => {
+  const selector = findEntry(entries, 'config')?.value;
+  if (selector === undefined || selector.kind !== 'member') return undefined;
+  const key = selector.path.at(-1);
+  const attribute = selector.path.at(-2);
+  if (key === undefined || attribute === undefined) return undefined;
+  const owner = enclosingClass(module, call.location.startLine);
+  if (owner === undefined) return undefined;
+  const declared = classAttributeLiteral(module, owner, attribute);
+  if (declared === undefined) return undefined;
+  const documentPath = resolveBeside(module.file, declared);
+  if (documentPath === undefined) return undefined;
+  const name = documents.get(documentPath)?.get(key);
+  return name === undefined ? undefined : { documentPath, name };
+};
+
 const discoverAgentCalls = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   files: Set<string>,
+  documents: AgentsDocuments,
 ): { components: number; declinedRoles: number } => {
   let components = 0;
   let declinedRoles = 0;
@@ -435,14 +561,19 @@ const discoverAgentCalls = (
     const role = stringValue(findEntry(entries, 'role')?.value);
     const reported = reportedRole(role);
     if (role !== undefined && reported === undefined) declinedRoles += 1;
-    const name = agentNameFor(role, definition?.name, match.call.enclosing);
+    const configured = configuredEntry(match.module, match.call, entries, documents);
+    const name = configured?.name ?? agentNameFor(role, definition?.name, match.call.enclosing);
     const goal = stringValue(findEntry(entries, 'goal')?.value);
-    const identity = sourceIdentity('agent', match.module.file, name);
+    const identity =
+      configured === undefined
+        ? sourceIdentity('agent', match.module.file, name)
+        : configIdentity('agent', configured.documentPath, name);
     builder.addComponent(
       drafts.sourceComponent({
         kind: 'agent',
         file: match.module.file,
         name,
+        identity,
         location: match.call.location,
         symbol: definition?.name ?? 'Agent',
         confidence: match.confidence,
@@ -452,7 +583,12 @@ const discoverAgentCalls = (
         tags: ['crewai'],
       }),
     );
-    components += 1;
+    /*
+     * A call that resolved to a declared entry is the same agent the document already added, so it adds a
+     * source location to that component rather than a component. Counting it again would report two found
+     * where one exists, which is what the two passes did before this join was available.
+     */
+    if (configured === undefined) components += 1;
     files.add(match.module.file);
     if (definition !== undefined) {
       context.bindings.register(match.module.file, definition.name, identity);
@@ -513,9 +649,10 @@ const discoverCrewCalls = (
 const discoverFromSource = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
+  documents: AgentsDocuments,
 ): SourceCounts => {
   const files = new Set<string>();
-  const agents = discoverAgentCalls(context, builder, files);
+  const agents = discoverAgentCalls(context, builder, files, documents);
   const crews = discoverCrewCalls(context, builder, files);
   return {
     components: agents.components + crews.components,
@@ -538,7 +675,7 @@ export const crewAiAdapter: AgentSystemAdapter = {
     }),
   discover: (context, builder): AdapterFindings => {
     const fromConfig = discoverFromConfig(context, builder);
-    const fromSource = discoverFromSource(context, builder);
+    const fromSource = discoverFromSource(context, builder, fromConfig.documents);
     /*
      * Counted from both passes, because a role is declined the same way wherever it was written and a count
      * of only one half told a reader that one of two templates had been declined.

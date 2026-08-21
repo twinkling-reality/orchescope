@@ -427,44 +427,166 @@ class MarketingPostsCrew():
   });
 
   /*
-   * Nothing in the repository says which call builds which declared agent: the subscript that selects an
-   * entry is not a fact this model carries, and the enclosing method is a name that agrees with the key on
-   * 31 of the 50 calls measured in the field. So both are reported, and the doubling is a stated cost rather
-   * than a silence.
+   * The call that builds a declared agent is that agent, and every step of saying so is a fact: the
+   * subscript carries its literal key, the class attribute carries the literal path, and the path resolves
+   * beside the file that wrote it. This used to be two components, and the doubling was a stated cost of a
+   * join the fact model could not express.
    */
-  it('reports the call that builds an agent separately from the document that declares it', async () => {
+  it('reads the call that builds a declared agent as that agent', async () => {
     const { ids, result } = await scan(build);
     assert.deepEqual(
       ids.filter((id) => id.startsWith('agent:')).sort(),
-      ['agent:chief-creative-director', 'agent:lead-market-analyst', 'agent:lead_market_analyst'],
-      'two agents read from the document and one call that builds one of them are three components',
+      ['agent:chief-creative-director', 'agent:lead-market-analyst'],
+      'the document declares two agents and the call builds one of them, so there are two',
     );
-    const fromCall = result.graph.components.find(
-      (component) => component.id === 'agent:lead_market_analyst',
-    );
-    assert.equal(
-      fromCall?.metadata['runtimeName'],
-      undefined,
-      'the call named no role, so nothing knows what a run will call it',
-    );
-    /*
-     * Each half cites where it was read, and the two citations are what makes them two facts rather than
-     * one component seen twice.
-     */
-    const fromDocument = result.graph.components.find(
+    const analyst = result.graph.components.find(
       (component) => component.id === 'agent:lead-market-analyst',
     );
-    assert.equal(fromCall?.sourceLocations[0]?.file, 'src/marketing_posts/crew.py');
-    assert.equal(fromCall?.configLocations.length, 0);
-    assert.equal(fromDocument?.sourceLocations.length, 0);
+    assert.deepEqual(analyst?.configLocations, [
+      { file: 'src/marketing_posts/config/agents.yaml', pointer: '/lead_market_analyst' },
+    ]);
+    assert.equal(
+      analyst?.sourceLocations[0]?.file,
+      'src/marketing_posts/crew.py',
+      'the call site is where this agent is built and belongs on the agent',
+    );
+    assert.equal(
+      analyst?.metadata['runtimeName'],
+      'Lead Market Analyst',
+      'the role the document declares is still what a run will report',
+    );
     const cited = new Set(result.evidence.map((entry) => entry.id));
-    for (const component of [fromCall, fromDocument]) {
-      assert.ok((component?.evidence.length ?? 0) > 0, 'a component was reported with no evidence');
-      for (const id of component?.evidence ?? []) {
-        assert.ok(cited.has(id), `evidence ${id} is referenced and was not recorded`);
-      }
+    assert.ok((analyst?.evidence.length ?? 0) > 0, 'a component was reported with no evidence');
+    for (const id of analyst?.evidence ?? []) {
+      assert.ok(cited.has(id), `evidence ${id} is referenced and was not recorded`);
     }
   });
+
+  /*
+   * Two methods selecting one entry are one agent, and under the enclosing method name they were two.
+   * `stock_analysis/crew.py` in the pinned examples repository writes exactly this: `financial_agent` and
+   * `financial_analyst_agent` both select `financial_analyst`, so one declared agent became two components
+   * and nothing recorded that it had.
+   */
+  it('reads two calls selecting one entry as one agent carrying both call sites', async () => {
+    const { ids, result } = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'stock-analysis', dependencies: ['crewai>=0.80'] });
+      workspace.write(
+        'src/stock_analysis/config/agents.yaml',
+        `financial_analyst:
+  role: >
+    The Best Financial Analyst
+  goal: >
+    Impress all customers with your financial data analysis.
+  backstory: >
+    You are the most seasoned financial analyst.
+`,
+      );
+      workspace.write(
+        'src/stock_analysis/crew.py',
+        `from crewai import Agent
+from crewai.project import CrewBase, agent
+
+@CrewBase
+class StockAnalysisCrew():
+    agents_config = 'config/agents.yaml'
+
+    @agent
+    def financial_agent(self) -> Agent:
+        return Agent(config=self.agents_config['financial_analyst'], verbose=True)
+
+    @agent
+    def financial_analyst_agent(self) -> Agent:
+        return Agent(config=self.agents_config['financial_analyst'], verbose=True)
+`,
+      );
+    });
+    assert.deepEqual(
+      ids.filter((id) => id.startsWith('agent:')).sort(),
+      ['agent:the-best-financial-analyst'],
+      'one declared entry selected twice is one agent',
+    );
+    const analyst = result.graph.components.find(
+      (component) => component.id === 'agent:the-best-financial-analyst',
+    );
+    assert.equal(
+      analyst?.sourceLocations.length,
+      2,
+      'both methods build it, and both are where it is built',
+    );
+  });
+
+  /*
+   * The three refusals, each of which leaves the call naming itself rather than attaching it to whatever
+   * else is there. A variable key selects by a value the syntax does not state. A path that comes from a
+   * call is assembled while the program runs, which is `screenplay_writer.py` writing
+   * `agents_config = yaml.safe_load(file)`. And a key the document does not declare is a defect in the
+   * repository, which `email_filter_crew.py` has and which reporting is worth more than papering over.
+   */
+  const refusing =
+    (selector: string, attribute: string) =>
+    (workspace: ReturnType<typeof createTempWorkspace>): void => {
+      writePythonProject(workspace, { name: 'refusing', dependencies: ['crewai>=0.80'] });
+      workspace.write(
+        'src/refusing/config/agents.yaml',
+        `researcher:
+  role: >
+    Senior Researcher
+  goal: >
+    Find the answer.
+  backstory: >
+    You have done this for years.
+`,
+      );
+      workspace.write(
+        'src/refusing/crew.py',
+        `from crewai import Agent
+from crewai.project import CrewBase, agent
+
+@CrewBase
+class RefusingCrew():
+    ${attribute}
+
+    @agent
+    def researcher(self) -> Agent:
+        return Agent(config=${selector}, verbose=True)
+`,
+      );
+    };
+
+  for (const [what, selector, attribute] of [
+    [
+      'a key that is a name rather than a literal',
+      'self.agents_config[chosen]',
+      "agents_config = 'config/agents.yaml'",
+    ],
+    [
+      'a document path the program assembles',
+      "self.agents_config['researcher']",
+      'agents_config = yaml.safe_load(file)',
+    ],
+    [
+      'a key the document does not declare',
+      "self.agents_config['analyst']",
+      "agents_config = 'config/agents.yaml'",
+    ],
+  ] as const) {
+    it(`refuses to attach a call selecting ${what}`, async () => {
+      const { ids } = await scan(refusing(selector, attribute));
+      const agents = ids.filter((id) => id.startsWith('agent:')).sort();
+      assert.ok(
+        agents.includes('agent:senior-researcher'),
+        `the document still declares its agent, saw ${agents.join(', ')}`,
+      );
+      const declared = agents.filter((id) => id === 'agent:senior-researcher');
+      assert.equal(declared.length, 1);
+      assert.equal(
+        agents.length,
+        2,
+        `the call names itself rather than joining, so there are two, saw ${agents.join(', ')}`,
+      );
+    });
+  }
 
   /*
    * A shared cap sorted by path and cut at thirty two, so `crews/` and `flows/` crowded out `wrangler.toml`
