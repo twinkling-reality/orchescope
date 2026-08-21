@@ -10,6 +10,39 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### The largest hole in the Python fact model, which is a subscript
+
+The fact model says at `facts.ts:5-12` that it is language neutral, and that this is what lets one adapter
+cover a framework in both ecosystems. Run one program through both analysers and it was not.
+`Agent(config=agents_config['lead_market_analyst'])` recorded `{"kind":"member","path":[...]}` in TypeScript
+and `{"kind":"unknown","nodeType":"subscript"}` in Python. `subscript` is the most common unknown node type
+in all seven Python checkouts in the corpus, without exception.
+
+Python now reads it, on the one condition that keeps it a fact rather than a resolution: **the key has to be
+a literal.** `x['k']` selects the entry named `k` by the language definition and leaves nothing open. `x[k]`
+selects by whatever the name holds when the program runs, and recording the variable's own name there is
+precisely the defect this release removed from the JavaScript reader. An f-string key is not a literal
+either, and neither is `x[a, b]`, where more than one key is written and taking the first would be a guess.
+A chain is walked whole, so `x['a']['b']` keeps both keys rather than losing the inner one.
+
+Measured over three pinned Python repositories, counting every argument and assignment value including
+nested ones:
+
+| entry | subscripts reduced to unknown before | after | read |
+| --- | --- | --- | --- |
+| `crewai-examples` | 165 | 24 | **141, 85%** |
+| `open-deep-research` | 48 | 14 | 34, 71% |
+| `gpt-researcher` | 183 | 61 | 122, 67% |
+
+The `member` count rises by exactly the number the unknown count falls by on each of the three, so nothing
+else moved shape. What did not move is anything a reader can see: all nineteen measurable corpus entries are
+byte identical against their committed expectations, because no adapter asks for this path yet. A fact that
+records what the syntax says and is read by nobody changes nothing, which is the order these two halves have
+to land in.
+
+The two analysers are now checked against each other on this shape. `analysers-agree.test.ts` gains the
+literal key pair and the variable key pair, so the parity claim is a test rather than a sentence.
+
 ### A property name the source never wrote
 
 `memberPath` walked a `MemberExpression` without reading its `computed` flag. Under `oxc-parser` 0.141 both

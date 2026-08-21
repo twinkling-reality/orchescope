@@ -274,3 +274,48 @@ SHORT = "hi"
     assert.ok(facts.parseErrors.length > 0);
   });
 });
+
+/**
+ * The fact model is described as language neutral so that one adapter covers a framework in both ecosystems,
+ * and `subscript` was where that stopped being true. `Agent(config=self.agents_config['k'])` recorded
+ * `{"kind":"unknown","nodeType":"subscript"}` here while the identical TypeScript recorded a member path, and
+ * `subscript` is the most common unknown node type in every Python checkout in the corpus. A literal key
+ * selects the entry it names by the language definition, so it is a path. Everything else selects by a value
+ * the syntax does not state, and stays unknown.
+ */
+describe('a subscript argument', () => {
+  it('reads a literal key as a member path and refuses every key that is not one', async () => {
+    const facts = await analyze(`
+from crewai import Agent
+
+def build(self, chosen):
+    return Agent(
+        literal=self.agents_config['lead_market_analyst'],
+        variable=self.agents_config[chosen],
+        index=rows[0],
+        sliced=rows[1:2],
+        several=table['a', 'b'],
+        formatted=table[f'{chosen}'],
+        nested=self.config['agents']['lead'],
+    )
+`);
+    const call = facts.calls.find((candidate) => dotted(candidate.calleePath) === 'Agent');
+    assert.ok(call, 'expected an Agent call');
+    const entries = objectArgument(call);
+    assert.deepEqual(findEntry(entries, 'literal')?.value, {
+      kind: 'member',
+      path: ['self', 'agents_config', 'lead_market_analyst'],
+    });
+    assert.deepEqual(findEntry(entries, 'nested')?.value, {
+      kind: 'member',
+      path: ['self', 'config', 'agents', 'lead'],
+    });
+    for (const key of ['variable', 'index', 'sliced', 'several', 'formatted']) {
+      assert.deepEqual(
+        findEntry(entries, key)?.value,
+        { kind: 'unknown', nodeType: 'subscript' },
+        `${key} selects by something the syntax does not state`,
+      );
+    }
+  });
+});

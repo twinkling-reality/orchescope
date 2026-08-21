@@ -120,6 +120,18 @@ const PAIRS: readonly Pair[] = [
     expected:
       'name=string:triage,tools=array[identifier:lookup_account,identifier:check_inventory]',
   },
+  {
+    what: 'an entry selected by a literal key',
+    python: 'Agent(config=settings["lead_market_analyst"], verbose=True)\n',
+    javascript: "new Agent({ config: settings['lead_market_analyst'], verbose: true });\n",
+    expected: 'config=member:settings.lead_market_analyst,verbose=boolean:true',
+  },
+  {
+    what: 'an entry selected by a name rather than a key',
+    python: 'Agent(config=settings[chosen], verbose=True)\n',
+    javascript: 'new Agent({ config: settings[chosen], verbose: true });\n',
+    expected: 'config=unknown,verbose=boolean:true',
+  },
 ];
 
 describe('the two analysers', () => {

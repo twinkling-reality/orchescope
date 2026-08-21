@@ -59,6 +59,22 @@ const namedChildren = (node: Node): readonly Node[] => {
 const childField = (node: Node, name: string): Node | undefined =>
   node.childForFieldName(name) ?? undefined;
 
+/**
+ * Every child under one field name, which is how a subscript says how many keys were written.
+ *
+ * `d['a']` and `d['a', 'b']` are both a `subscript` node and only the count separates them. Reading the
+ * first child of a repeated field would take `a` from both, which is a guess wearing the shape of a fact.
+ * The nodes a query returns are fresh wrappers rather than the ones a field lookup returns, so they cannot
+ * be told apart from the value by identity, and asking for the field by name is what avoids needing to.
+ */
+const childFields = (node: Node, name: string): readonly Node[] => {
+  const children: Node[] = [];
+  for (const child of node.childrenForFieldName(name)) {
+    if (child !== null && child.type !== 'comment') children.push(child);
+  }
+  return children;
+};
+
 /** Strips the quotes and prefix from a Python string literal without evaluating escapes. */
 const stringLiteralValue = (node: Node): string | undefined => {
   if (node.type !== 'string') return undefined;
@@ -130,6 +146,41 @@ type Context = {
   readonly controlFlow: ControlFlowFact[];
 };
 
+/**
+ * A subscript reduced to the member path it selects, where every key it is given is a literal.
+ *
+ * The fact model is described as language neutral so that one adapter covers a framework in both ecosystems,
+ * and this is where that stopped being true. `Agent(config=self.agents_config['k'])` recorded
+ * `{"kind":"unknown","nodeType":"subscript"}` while the identical TypeScript recorded a member path, and
+ * `subscript` is the most common unknown node type in every Python checkout in the corpus without exception.
+ *
+ * Only a literal key. `x['k']` selects the entry named `k` by the language definition and leaves nothing
+ * open. `x[k]` selects by whatever the name holds when the program runs, which the syntax does not say, and
+ * recording the variable's own name there is the defect just removed from the JavaScript reader. An f-string
+ * is not a literal for this purpose, and neither is `x[a, b]`, where more than one key is written and taking
+ * the first would be a guess. A chain is walked whole, so `x['a']['b']` keeps both keys rather than losing
+ * the inner one to the reduction of its own value.
+ */
+const subscriptPath = (node: Node): ArgumentFact => {
+  const unknown = { kind: 'unknown', nodeType: node.type } as const;
+  const keys: string[] = [];
+  let current: Node = node;
+  while (current.type === 'subscript') {
+    const written = childFields(current, 'subscript');
+    const [key] = written;
+    if (written.length !== 1 || key === undefined || key.type !== 'string') return unknown;
+    if (hasInterpolation(key)) return unknown;
+    const literal = stringLiteralValue(key);
+    if (literal === undefined) return unknown;
+    keys.unshift(literal);
+    const value = childField(current, 'value');
+    if (value === undefined) return unknown;
+    current = value;
+  }
+  const path = attributePath(current);
+  return path.length === 0 ? unknown : { kind: 'member', path: [...path, ...keys] };
+};
+
 const argumentFact = (node: Node, context: Context): ArgumentFact => {
   switch (node.type) {
     case 'string': {
@@ -165,6 +216,8 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
         ? { kind: 'unknown', nodeType: node.type }
         : { kind: 'member', path };
     }
+    case 'subscript':
+      return subscriptPath(node);
     case 'call': {
       /*
        * Reduced the same way a call at the top level is, because it is the same shape and a reader
