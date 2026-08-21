@@ -28,7 +28,11 @@ export type ConfigFormat = 'json' | 'yaml' | 'toml';
  * to execute `/usr/sbin/nginx`, and an application depending on express and nothing else was reported as a
  * detected agent system. That is the `.mcp.json` failure below, arriving through a different door.
  */
-export type ConfigOrigin = 'known_path' | 'platform_manifest' | 'agent_declaration';
+export type ConfigOrigin =
+  | 'agent_client'
+  | 'agent_declaration'
+  | 'platform_manifest'
+  | 'orchescope_manifest';
 
 export type ConfigDocument = {
   readonly path: string;
@@ -54,48 +58,41 @@ export type ConfigProblem = {
 };
 
 /**
- * Configuration paths read on every scan, relative to the repository root.
+ * Configuration paths read on every scan, relative to the repository root, each with the reason it is here.
  *
  * Every name here is one some adapter opens. `config/tasks.yaml` was on this list and no adapter read it,
  * which is a file opened on every scan of every repository and thrown away. Reading a CrewAI task needs a
  * component kind for a task and `COMPONENT_KINDS` has none, so what it costs to add is a schema decision and
  * not a parser.
+ *
+ * The origin travels with the path because being on this list is not itself a reason. These names were
+ * collected for three different readers, and handing all ten to whichever reader recognises a key in them is
+ * the widening the origin exists to stop, arriving through the one door the origin could not see: a root
+ * `agents.yaml` is here because CrewAI's layout puts agents there, and an `mcpServers` key written into one
+ * was read as a declared server, which made a repository depending on express and nothing else a detected
+ * agent system. The same document one directory down, found by the traversal instead, was declined.
+ *
+ * `agent_client` is a coding agent's or an editor's own configuration. A `.mcp.json` naming a server is a
+ * developer telling their own tool where to connect. It is not the repository declaring part of the system
+ * under audit, and reading it as one reported a 220 component Cloudflare Workers application as a detected
+ * agent system with no agent, tool or model in it, on the strength of a single entry naming Orchescope. The
+ * reachability rule then raised a finding against the repository for the contradiction, which is the tool
+ * noticing something is wrong and blaming the wrong party. What those files declare is still read and still
+ * appears in the graph, carrying the role that says whose it is: a developer's own tooling is a true fact
+ * about a repository and is not evidence that the repository builds an agent system.
  */
-export const KNOWN_CONFIG_PATHS: readonly string[] = [
-  '.mcp.json',
-  '.vscode/mcp.json',
-  '.cursor/mcp.json',
-  'claude_desktop_config.json',
-  '.claude/settings.json',
-  '.orchescope/manifest.yaml',
-  '.orchescope/manifest.yml',
-  'crew.jsonc',
-  'agents.yaml',
-  'config/agents.yaml',
+const KNOWN_CONFIG_PATHS: readonly NamedConfigPath[] = [
+  { path: '.mcp.json', origin: 'agent_client' },
+  { path: '.vscode/mcp.json', origin: 'agent_client' },
+  { path: '.cursor/mcp.json', origin: 'agent_client' },
+  { path: 'claude_desktop_config.json', origin: 'agent_client' },
+  { path: '.claude/settings.json', origin: 'agent_client' },
+  { path: '.orchescope/manifest.yaml', origin: 'orchescope_manifest' },
+  { path: '.orchescope/manifest.yml', origin: 'orchescope_manifest' },
+  { path: 'crew.jsonc', origin: 'agent_declaration' },
+  { path: 'agents.yaml', origin: 'agent_declaration' },
+  { path: 'config/agents.yaml', origin: 'agent_declaration' },
 ];
-
-/**
- * Configuration that belongs to a coding agent or an editor rather than to the system in the repository.
- *
- * A `.mcp.json` naming a server is a developer telling their own tool where to connect. It is not the
- * repository declaring part of the system under audit, and reading it as one reported a 220 component
- * Cloudflare Workers application as a detected agent system with no agent, tool or model in it, on the
- * strength of a single entry naming Orchescope. The reachability rule then raised a finding against the
- * repository for the contradiction, which is the tool noticing something is wrong and blaming the wrong
- * party.
- *
- * What is declared in these files is still read and still appears in the graph. A developer's own tooling
- * is a true fact about a repository; it is not evidence that the repository builds an agent system.
- */
-const AGENT_CLIENT_CONFIG_PATHS: ReadonlySet<string> = new Set([
-  '.mcp.json',
-  '.vscode/mcp.json',
-  '.cursor/mcp.json',
-  'claude_desktop_config.json',
-  '.claude/settings.json',
-]);
-
-export const isAgentClientConfig = (path: string): boolean => AGENT_CLIENT_CONFIG_PATHS.has(path);
 
 /**
  * Strips JSONC style comments and trailing commas so a `.jsonc` file can be parsed as JSON.
@@ -246,14 +243,11 @@ export const readConfigDocuments = (
   /*
    * A name on the explicit list is also a name the traversal finds, so `agents.yaml` at the root arrives twice.
    * Reading it twice would hand every adapter the same document twice and double what each one reports having
-   * found in it. The fixed list wins, because a path this build knows the name of was not opened on the
-   * strength of the name a traversal happened to see.
+   * found in it. The fixed list wins, and both spellings now carry the same origin, so which one wins decides
+   * only how the path was reached and never who is entitled to read it.
    */
   const read = new Set<string>();
-  const candidates: readonly NamedConfigPath[] = [
-    ...KNOWN_CONFIG_PATHS.map((path) => ({ path, origin: 'known_path' as const })),
-    ...extraPaths,
-  ];
+  const candidates: readonly NamedConfigPath[] = [...KNOWN_CONFIG_PATHS, ...extraPaths];
 
   for (const candidate of candidates) {
     const relativePath = candidate.path;

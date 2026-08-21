@@ -13,13 +13,7 @@ import {
   stringValue,
 } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
-import {
-  asRecord,
-  asString,
-  asStringArray,
-  type ConfigOrigin,
-  jsonPointer,
-} from '../config-files.ts';
+import { asRecord, asString, asStringArray, jsonPointer } from '../config-files.ts';
 import { configIdentity, createDrafts, sourceIdentity } from '../drafts.ts';
 import { definitionForCall, matchCalls, projectUses } from '../matching.ts';
 
@@ -117,7 +111,7 @@ const AGENTS_DOCUMENT = 'agents.yaml';
 const isAgentsDocumentPath = (path: string): boolean => path.split('/').at(-1) === AGENTS_DOCUMENT;
 
 /**
- * A document found by file name is read only where the repository declares the framework that names it.
+ * An agents document is read only where the repository declares the framework whose layout puts one there.
  *
  * `agents.yaml` is found wherever the bounded traversal walked, and the shape below is a shape rather than a
  * framework: a roster whose entries carry a role and a goal passes it, and a repository depending on express
@@ -125,17 +119,18 @@ const isAgentsDocumentPath = (path: string): boolean => path.split('/').at(-1) =
  * reading exists for cannot occur without the dependency, because `Agent(config=self.agents_config[...])`
  * imports `crewai` to run at all, so requiring it costs nothing measurable and closes the whole widening.
  *
- * The two fixed paths are not gated this way, because they were already read before the traversal found any
- * of these and gating them would be a second change wearing this one's clothes.
+ * The two paths this build opens without waiting for the traversal, the root `agents.yaml` and
+ * `config/agents.yaml`, were exempt from that gate on the reasoning that they were read first and gating
+ * them would be a second change. They were not exempt from the widening: the same express repository with
+ * the same roster at the root rather than under `deploy/` declared its account executives as agents and was
+ * reported as an agent system. Where a document sits decides how it was found and decides nothing about who
+ * may read it, so the gate is asked of every agents document and the origin no longer comes into it.
  */
 const isAgentsDocument = (
-  document: { readonly path: string; readonly origin: ConfigOrigin },
+  path: string,
   root: Record<string, unknown>,
   declaresTheFramework: boolean,
-): boolean =>
-  isAgentsDocumentPath(document.path) &&
-  (document.origin !== 'agent_declaration' || declaresTheFramework) &&
-  declaresAnAgent(root);
+): boolean => isAgentsDocumentPath(path) && declaresTheFramework && declaresAnAgent(root);
 
 const PACKAGES = ['crewai', 'crewai_tools', 'crewai-tools'];
 const ADAPTER_ID = 'adapter:crewai';
@@ -385,7 +380,7 @@ const discoverFromConfig = (
       files.push(document.path);
       continue;
     }
-    if (!isAgentsDocument(document, root, declaresTheFramework)) continue;
+    if (!isAgentsDocument(document.path, root, declaresTheFramework)) continue;
     const found = discoverAgentsDocument(context, builder, document, root);
     components += found.components;
     edges += found.edges;
@@ -666,13 +661,15 @@ export const crewAiAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '1',
   packages: PACKAGES,
+  /*
+   * A crew document is a name CrewAI owns outright, so its presence is the repository saying so even where
+   * the dependency is installed outside the manifest this build can read. An agents document is not: the
+   * name belongs to no framework, and the gate above requires the dependency for every one of them, which
+   * leaves nothing here for an agents document to open.
+   */
   appliesTo: (context) =>
     projectUses(context, PACKAGES) ||
-    context.configs.some((document) => {
-      if (document.path === 'crew.jsonc') return true;
-      const root = asRecord(document.data);
-      return root !== undefined && isAgentsDocument(document, root, false);
-    }),
+    context.configs.some((document) => document.path === 'crew.jsonc'),
   discover: (context, builder): AdapterFindings => {
     const fromConfig = discoverFromConfig(context, builder);
     const fromSource = discoverFromSource(context, builder, fromConfig.documents);

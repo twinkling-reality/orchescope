@@ -106,6 +106,62 @@ west:
 `,
   },
   {
+    name: 'root-mcp-servers',
+    file: 'agents.yaml',
+    outcome: 'declines',
+    why: 'the same key, in the document CrewAI names, at the one path this build opens without waiting for the traversal, which is the door being on a fixed list opened and the origin could not see',
+    contents: `mcpServers:
+  fetch:
+    command: uvx
+    args: ['mcp-server-fetch']
+`,
+  },
+  {
+    name: 'root-roster',
+    file: 'agents.yaml',
+    outcome: 'declines',
+    why: 'the roster above at the root instead of under deploy, which is the express failure at the path that was exempt from the gate that fixed it',
+    contents: `east:
+  role: Account Executive
+  goal: Close the quarter.
+west:
+  role: Account Executive
+  goal: Open the territory.
+`,
+  },
+  {
+    name: 'packaged-roster',
+    file: 'config/agents.yaml',
+    outcome: 'declines',
+    why: 'the same roster where a CrewAI project keeps its agents, which is the other path the gate exempted',
+    contents: `east:
+  role: Account Executive
+  goal: Close the quarter.
+`,
+  },
+  {
+    name: 'packaged-mcp-servers',
+    file: 'config/agents.yaml',
+    outcome: 'declines',
+    why: "the same key at the same path, so that neither reader may read the other reader's document wherever this build knows the name",
+    contents: `mcpServers:
+  fetch:
+    command: uvx
+    args: ['mcp-server-fetch']
+`,
+  },
+  {
+    name: 'manifest-mcp-servers',
+    file: '.orchescope/manifest.yaml',
+    outcome: 'declines',
+    why: "this build's own manifest carrying another reader's key, which is the same door and the one path the traversal never walks, so what proves this shape arrived is the manifest reader refusing it rather than a file count",
+    contents: `mcpServers:
+  fetch:
+    command: uvx
+    args: ['mcp-server-fetch']
+`,
+  },
+  {
     name: 'workers-manifest',
     file: 'wrangler.toml',
     outcome: 'declines',

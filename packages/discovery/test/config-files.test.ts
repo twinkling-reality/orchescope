@@ -76,7 +76,14 @@ describe('config documents found by file name', () => {
 });
 
 describe('a path the fixed list and the traversal both name', () => {
-  it('is read once, and as a path this build knows the name of', () => {
+  /*
+   * Both spellings have to agree on why the document was opened. They did not: the fixed list handed
+   * `agents.yaml` and `config/agents.yaml` to every reader as a path this build knows the name of, while the
+   * same document one directory down arrived as an agent declaration and was declined. So an `mcpServers`
+   * key was read as a declared server at the root and refused under `deploy/`, and a roster of account
+   * executives declared agents at the root in a repository with no CrewAI in it.
+   */
+  it('is read once, and as the kind of document it is wherever it sits', () => {
     const workspace = createTempWorkspace('orchescope-config-');
     workspaces.push(workspace);
     workspace.write('config/agents.yaml', 'planner:\n  role: Planner\n  goal: Plan it.\n');
@@ -87,7 +94,12 @@ describe('a path the fixed list and the traversal both name', () => {
     );
     const opened = documents.filter((document) => document.path === 'config/agents.yaml');
     assert.equal(opened.length, 1, 'the same document was handed to every adapter twice');
-    assert.equal(opened[0]?.origin, 'known_path');
+    assert.equal(opened[0]?.origin, 'agent_declaration');
+    assert.equal(
+      opened[0]?.origin,
+      namedConfigPaths(['deploy/agents.yaml']).paths[0]?.origin,
+      'the same document is a different kind of thing depending on where it sits',
+    );
   });
 });
 

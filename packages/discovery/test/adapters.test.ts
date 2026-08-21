@@ -700,6 +700,45 @@ west:
   });
 
   /*
+   * The same roster at the two paths this build opens without waiting for the traversal. Those were exempt
+   * from the gate above on the reasoning that they are read first, and the exemption carried the whole
+   * widening with it: the express repository with its roster moved from `deploy/agents.yaml` to the root
+   * declared its account executives as agents and was reported as an agent system.
+   */
+  for (const path of ['agents.yaml', 'config/agents.yaml']) {
+    it(`is not read from ${path}, which this build opens without the traversal`, async () => {
+      const { ids, result, adapters } = await scan((workspace) => {
+        writeNodeProject(workspace, { name: 'sales', dependencies: { express: '^4.19.0' } });
+        workspace.write(
+          path,
+          `east:
+  role: Account Executive
+  goal: Close the quarter.
+west:
+  role: Account Executive
+  goal: Open the territory.
+`,
+        );
+        workspace.write(
+          'src/server.js',
+          "const express = require('express');\nmodule.exports = express();\n",
+        );
+      });
+      assert.equal(
+        adapters.find((adapter) => adapter.adapterId === 'adapter:crewai')?.status,
+        'not_applicable',
+        `the crewai adapter applied on ${path} alone`,
+      );
+      assert.equal(
+        ids.some((id) => id.startsWith('agent:')),
+        false,
+        `a roster at ${path} is not a crew, saw ${ids.join(', ')}`,
+      );
+      assert.equal(result.agentSystemDetected, false);
+    });
+  }
+
+  /*
    * The same document inside a repository that does use CrewAI, where `appliesTo` is already satisfied by
    * the dependency. That is the half of the gate the reader holds: without it the adapter is applying for a
    * true reason and reading a document that declares nothing it understands.
@@ -962,6 +1001,72 @@ describe('an agents.yaml holding a servers inventory', () => {
       'not_applicable',
     );
     assert.equal(result.agentSystemDetected, false);
+  });
+});
+
+/**
+ * A key belongs to the reader whose document it is in, and the fixed list is not itself a reason.
+ *
+ * The ten paths this build opens on every scan were collected for three readers, and every one of them was
+ * handed to whichever reader recognised a key inside it. So `mcpServers` written into the document CrewAI
+ * names, or into this build's own manifest, was read as a declared server that the repository connects to,
+ * which made a repository depending on express and nothing else a detected agent system. The same key one
+ * directory down, in a document the traversal found, was declined. Where a document sits decides how it was
+ * found and decides nothing about who may read it.
+ */
+describe('an mcpServers key in a document opened for another reader', () => {
+  for (const path of ['agents.yaml', 'config/agents.yaml', '.orchescope/manifest.yaml']) {
+    it(`is not read as a declared server from ${path}`, async () => {
+      const { ids, result } = await scan((workspace) => {
+        writeNodeProject(workspace, { name: 'deployments', dependencies: { express: '^4.19.0' } });
+        workspace.write(
+          path,
+          `mcpServers:
+  fetch:
+    command: uvx
+    args: ['mcp-server-fetch']
+`,
+        );
+        workspace.write(
+          'src/server.js',
+          "const express = require('express');\nmodule.exports = express();\n",
+        );
+      });
+      assert.equal(
+        ids.some((id) => id.startsWith('mcp_server:')),
+        false,
+        `a key in ${path} declared a server, saw ${ids.join(', ')}`,
+      );
+      assert.equal(result.agentSystemDetected, false);
+    });
+  }
+
+  /*
+   * The quiet side. A coding agent's own configuration is what this key belongs in, and what it declares is
+   * still read and still says whose it is.
+   */
+  it('is read from a coding agent configuration, and says whose the server is', async () => {
+    const { ids, result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'deployments', dependencies: { express: '^4.19.0' } });
+      workspace.write(
+        '.mcp.json',
+        `{ "mcpServers": { "fetch": { "command": "uvx", "args": ["mcp-server-fetch"] } } }\n`,
+      );
+      workspace.write(
+        'src/server.js',
+        "const express = require('express');\nmodule.exports = express();\n",
+      );
+    });
+    assert.ok(ids.includes('mcp_server:fetch'), `expected the server, saw ${ids.join(', ')}`);
+    const details = result.graph.components.find(
+      (component) => component.id === 'mcp_server:fetch',
+    )?.details;
+    assert.equal(details?.for === 'mcp_server' ? details.role : undefined, 'developer_tooling');
+    assert.equal(
+      result.agentSystemDetected,
+      false,
+      'a developer telling their own tool where to connect is not this repository declaring a system',
+    );
   });
 });
 

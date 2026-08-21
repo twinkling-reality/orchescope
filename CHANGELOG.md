@@ -10,6 +10,45 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### Five shapes the fixed list let through, found by the corpus on its first run
+
+The generated negatives were built to catch a precision failure before a field report does. On the first
+run they caught five, all of them the same defect, and all of them live in this build until now.
+
+`ConfigOrigin` records why a document was opened, and it is the mechanism five of the six gates that have
+ever held precision are built on. The ten paths this build opens on every scan defeated it, because being
+on that list was recorded as one reason when it is three. `.mcp.json` and its four siblings are there
+because a coding agent writes them. `.orchescope/manifest.yaml` is there because this build writes it.
+`agents.yaml`, `config/agents.yaml` and `crew.jsonc` are there because CrewAI's layout puts agents there.
+All ten arrived as `known_path`, and every reader that recognised a key in any of them read it.
+
+**So where a document sat decided who could read it.** A roster of account executives under
+`deploy/agents.yaml`, found by the traversal, is declined in a repository that declares no CrewAI, which is
+the fix on record for the second recorded failure. The same roster at the root, or under `config/`, was
+read: two agents declared, and a repository depending on express and nothing else reported as a detected
+agent system. An `mcpServers` key is declined under `deploy/agents.yaml` and was read at the root, under
+`config/`, and out of this build's own manifest, each time as a server the repository connects to.
+
+**The origin now travels with the path**, so the fixed list says which reader each name was collected for.
+`agent_client` is a coding agent's or an editor's own configuration, `agent_declaration` is a document a
+framework's layout puts agents in wherever it sits, `orchescope_manifest` is this build's own, and
+`platform_manifest` is unchanged. Neither adapter needed a new gate: the MCP adapter already asked whether
+it was entitled to read a document by its content, and the CrewAI adapter already required the framework
+for a document found by name. Both were being handed the wrong answer.
+
+Two exemptions went with it. The CrewAI gate no longer excuses the two paths read before the traversal,
+which is the whole of that widening, and its `appliesTo` no longer offers an agents document a door that
+the gate would close anyway. A server declared in configuration is now always a developer's own tooling,
+because every document this adapter may read by content is a coding agent's configuration; the 57
+components in this corpus that a repository genuinely connects to are all read from the source that
+constructs the client, and none has ever come from a configuration file.
+
+**Measured across the pinned repositories: nothing moves.** All nineteen measurable entries are byte
+identical, `gpt-researcher` still declares the one MCP server it configures for a coding agent, and
+`crewai-examples` still reads all twenty of its packaged agents documents, because that repository declares
+CrewAI and always did. What moves is eleven injected shapes across every repository pinned as not an agent
+system, six of which held before and five of which did not.
+
 ### A corpus entry that holds an invariant instead of a number
 
 Every assertion this corpus makes is a number a scan produced, and `--record` writes all of them. That is

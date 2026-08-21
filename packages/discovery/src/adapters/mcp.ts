@@ -14,7 +14,6 @@ import {
   asString,
   asStringArray,
   type ConfigOrigin,
-  isAgentClientConfig,
   jsonPointer,
 } from '../config-files.ts';
 import { configIdentity, createDrafts, sourceIdentity } from '../drafts.ts';
@@ -108,11 +107,13 @@ const addDeclaredServer = (
         argsCount: args.length,
         ...(envKeys.length === 0 ? {} : { envKeys }),
         /*
-         * A coding agent's configuration file is the developer's, not the repository's. Any other file
-         * carrying an `mcpServers` key is the repository declaring a server it connects to, which is
-         * part of the system whether or not this repository implements it.
+         * Every document this adapter is entitled to read by its content is a coding agent's or an
+         * editor's own configuration, so what is declared in one is the developer's and not the
+         * repository's. A server the repository itself connects to is read from the source that
+         * constructs the client, which is where `consumed` comes from and where it can be attributed to
+         * the file making the connection rather than to a file naming a command.
          */
-        role: isAgentClientConfig(where.configFile) ? 'developer_tooling' : 'consumed',
+        role: 'developer_tooling',
       },
       permissions:
         url === undefined
@@ -145,11 +146,16 @@ const addDeclaredServer = (
  * document opened because it carried some other kind's file name is not this adapter's to interpret: a
  * `servers` inventory of hosts and ports under a `deploy/agents.yaml` produced two MCP servers, one of them
  * declaring permission to execute `/usr/sbin/nginx`, and made a repository depending on express and nothing
- * else a detected agent system. A path on the fixed list was opened because this build knows the name, which
- * is the entitlement this asks for.
+ * else a detected agent system.
+ *
+ * Being on the fixed list is not the entitlement, because that list was collected for three readers. Asking
+ * for it admitted `agents.yaml`, `config/agents.yaml`, `crew.jsonc` and this build's own manifest, and an
+ * `mcpServers` key written into any of the four was read here as a declared server. The entitlement is that
+ * the document was opened as a coding agent's own configuration, which is the one reason a key naming a
+ * command belongs to this adapter at all.
  */
 const readableHere = (document: { readonly origin: ConfigOrigin }): boolean =>
-  document.origin === 'known_path';
+  document.origin === 'agent_client';
 
 /** Only the documents that declare a server, because the rest were parsed by the scan and read by nobody. */
 const discoverFromConfig = (

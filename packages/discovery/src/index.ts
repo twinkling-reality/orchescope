@@ -18,7 +18,6 @@ export {
   type ConfigFormat,
   type ConfigProblem,
   jsonPointer,
-  KNOWN_CONFIG_PATHS,
   readConfigDocuments,
   stripJsonComments,
 } from './config-files.ts';
