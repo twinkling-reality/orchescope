@@ -62,17 +62,19 @@ const identifierName = (node: Node | undefined): string | undefined => {
   return undefined;
 };
 
+/**
+ * A string the source wrote as one.
+ *
+ * `Literal` is the only node that carries one. `parseSync` returns an ESTree shaped tree, where a string, a
+ * number, a boolean, `null` and a regular expression are all `Literal` with a `value`, and the Babel names
+ * this reader also answered to, `StringLiteral` and `StaticMemberExpression`, are emitted by a different
+ * parser. Counted under the pinned `oxc-parser` across 5,123 JavaScript and TypeScript files in the corpus:
+ * `MemberExpression` 349,683, `Literal` 367,281, and each of those two names **0**.
+ */
 const literalString = (node: Node | undefined): string | undefined => {
-  if (node === undefined) return undefined;
-  if (node.type === 'Literal') {
-    const value = field(node, 'value');
-    return typeof value === 'string' ? value : undefined;
-  }
-  if (node.type === 'StringLiteral') {
-    const value = field(node, 'value');
-    return typeof value === 'string' ? value : undefined;
-  }
-  return undefined;
+  if (node?.type !== 'Literal') return undefined;
+  const value = field(node, 'value');
+  return typeof value === 'string' ? value : undefined;
 };
 
 /**
@@ -89,7 +91,7 @@ const memberPath = (node: Node): readonly string[] => {
   const parts: string[] = [];
   let current: Node | undefined = node;
   while (current !== undefined) {
-    if (current.type === 'MemberExpression' || current.type === 'StaticMemberExpression') {
+    if (current.type === 'MemberExpression') {
       const property = asNode(field(current, 'property'));
       const name =
         field(current, 'computed') === true
@@ -123,9 +125,7 @@ const memberPath = (node: Node): readonly string[] => {
 const calleePath = (callee: Node): readonly string[] => {
   const name = identifierName(callee);
   if (name !== undefined) return [name];
-  if (callee.type === 'MemberExpression' || callee.type === 'StaticMemberExpression') {
-    return memberPath(callee);
-  }
+  if (callee.type === 'MemberExpression') return memberPath(callee);
   return [];
 };
 
@@ -186,12 +186,6 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
       if (value === null) return { kind: 'null' };
       return { kind: 'unknown', nodeType: node.type };
     }
-    case 'StringLiteral': {
-      const value = field(node, 'value');
-      return typeof value === 'string'
-        ? { kind: 'string', value }
-        : { kind: 'unknown', nodeType: node.type };
-    }
     case 'NumericLiteral': {
       const value = field(node, 'value');
       return typeof value === 'number'
@@ -230,8 +224,7 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
       }
       return { kind: 'array', items };
     }
-    case 'MemberExpression':
-    case 'StaticMemberExpression': {
+    case 'MemberExpression': {
       const path = memberPath(node);
       return path.length === 0
         ? { kind: 'unknown', nodeType: node.type }
@@ -763,14 +756,12 @@ const traverse = (
       visitChildren(node, context, frame, awaited, collecting);
       return;
     }
-    case 'Literal':
-    case 'StringLiteral': {
+    case 'Literal': {
       const value = literalString(node);
       if (value !== undefined) recordText(value, false, node, context, frame);
       return;
     }
-    case 'MemberExpression':
-    case 'StaticMemberExpression': {
+    case 'MemberExpression': {
       const path = memberPath(node);
       const envName = isEnvironmentAccess(path);
       if (envName !== undefined) {
@@ -972,7 +963,6 @@ const NAMING_INITIALIZERS = new Set([
   'FunctionExpression',
   'ClassExpression',
   'Literal',
-  'StringLiteral',
   'TemplateLiteral',
   'TaggedTemplateExpression',
 ]);

@@ -10,6 +10,19 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### Two node types the JavaScript reader answered to and the parser never emits
+
+`StaticMemberExpression` and `StringLiteral` were checked at seven sites: in the literal reader, in the
+member path walk, in the callee path, in two argument switches, in the text visitor and in the list of
+initialisers that give a definition its name. `parseSync` returns an ESTree shaped tree, where a string, a
+number, a boolean, `null` and a regular expression are all `Literal`, and both of those names belong to a
+different parser.
+
+Counted under the pinned `oxc-parser` across **5,123** JavaScript and TypeScript files in the corpus:
+`MemberExpression` **349,683**, `Literal` **367,281**, and each of those two names **0**. This is the same
+measurement that justified deleting the `ComputedMemberExpression` branch, and it was left alone then
+rather than widening a defect fix into a sweep. Every corpus entry is byte identical without them.
+
 ### A cache with no producer, given the one it was written for
 
 `inMemoryFactCache`, `cacheKey` and `ANALYZER_VERSION` had no caller anywhere. A scan accepted an optional
