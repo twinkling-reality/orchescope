@@ -434,9 +434,13 @@ declared only by a configuration document, and a component with only a `ConfigLo
 `declaredInTest`, which is derived from source locations alone, and loses any module namespace, which is
 what the `code_location` join rule reaches for. The generalisation is that a declared half is anything
 pinnable by content hash, and the schema is closer than it looks: both `SourceLocation` and
-`ConfigLocation` already carry an optional `fileHash`. It is written 0 of 17,115 times. Writing it is the
-prerequisite for pinning a declaration to something other than a revision, and it makes staleness
-detectable, which is what a manifest needs before it can be trusted.
+`ConfigLocation` already carry an optional `fileHash`. It was written 0 times. **It is written now**, in the
+graph builder, which is where every draft from thirteen adapters and the manifest reader meets: 29,965 of
+29,965 locations across the nineteen entries the required corpus measures, against 0 before, and no
+expectation moves because an expectation records counts and kinds rather than locations. The bundles grow
+about 15%, which is `pydantic-ai` at 4,077 KB becoming 4,690 KB, because 6,933 locations over 284 distinct
+files repeat each digest about twenty four times. Recording each file once is a published document change
+and is worth deciding separately.
 
 Ordered by what can still honestly be claimed:
 
@@ -467,9 +471,28 @@ that does not contain the name. The checks a deterministic engine can run with n
   applies to an interpolated role,
 - the file hash recorded at write time still matches, or the manifest is reported stale rather than read.
 
-**And the measurement that bounds this direction.** A maximally honest one component manifest for
-`open-agent-platform`, declaring only the `mcp_server` that `use-mcp.tsx` genuinely constructs, still
-flips `agentSystemDetected` from `false` to `true`, because `ManifestComponent` has no `details` field and
+**Four of those are built and the rest are named.** A `definedIn` naming no file the scan walked, a line
+beyond what the file is long enough to hold, a `runtimeName` carrying a placeholder, and an edge endpoint
+naming nothing declared or discovered are all refuted, and a manifest failing any of them is a failed
+adapter run naming each claim while what it got right is still read. Two are not built and the reason is the
+same in both cases: checking that the cited line's text contains the name means opening the file, and an
+adapter never opens one, and there is no field on the manifest for a hash recorded at write time. The
+traversal now records every path it walked whatever the language, because `collectFiles` keeps only what a
+parser reads and the manifest exists for exactly the languages it does not.
+
+The location this build was inventing is also gone: a component with `definedIn` and no `definedAtLine`
+recorded line 1, which is a claim no manifest makes, and that citation is refused rather than completed.
+
+**This repository's own reference manifest failed the standard it documents, measured**: 16 of 18 cited line
+1, and 4 of those cited a file that does not contain the component's name at all, `account-worker` and
+`inventory-worker` naming `src/agents/workers.ts` where they are declared in `src/agents/definitions.ts`,
+and `demo-small` and `demo-large` naming `src/model.ts` where they are named in `src/main.ts`. All 18 now
+cite a line containing the name they declare, which is four errors the engine still cannot catch.
+
+**And the measurement that bounds this direction, re-run against the checks above and unchanged by them.** A
+maximally honest one component manifest for `open-agent-platform`, declaring only the `mcp_server` that
+`use-mcp.tsx` genuinely constructs and passing every refutation, still flips `agentSystemDetected` from
+`false` to `true`, at **26 components becoming 27**, because `ManifestComponent` has no `details` field and
 `mcp_server` is in `AGENT_SYSTEM_KINDS`, so `partOfAuditedSystem` has nothing to read. A manifest cannot
 say "consumed" the way an adapter can. Fixing that is a manifest document version and owes its own ADR at
 the point it is decided.
