@@ -122,6 +122,73 @@ repositories:
         - '@opentelemetry/sdk-trace-node'
         - '@opentelemetry/exporter-trace-otlp-http'
 
+  - name: openai-agents-js-provider-exercised
+    source: git
+    url: https://github.com/openai/openai-agents-js.git
+    commit: 52b2702fc034fb47f79ec50fad173f0e9b068ca6
+    kind: agent_system
+    why: >-
+      The same commit as the two entries above, measured with a run that reaches a real provider. It is here for
+      one fact neither of them can hold: what this build reports when its own `fetch` shim and the target's
+      instrumentation watch the same model call.
+
+      0.8.0 taught the reader to keep the better placed of the two and to stop naming a model call after the host
+      that served it, and said plainly that no corpus entry witnessed either change. Every entry carrying a run
+      drove an offline model, or ran Python where the shim does not apply, or reached a provider through
+      `openai@4`, which bundles `node-fetch` and is invisible to a patch on `globalThis.fetch`. The hermetic
+      sibling is the first of those by construction: it supplies its own model provider, so the SDK opens a
+      generation span from somebody else's implementation, no request leaves the process, and it reports no model
+      span at all. What held the two fixes instead was one stored run in `packages/traces/test`.
+
+      This run makes both readable in the corpus. `@openai/agents` resolves `openai@6`, which has no dependencies
+      and makes its requests with `globalThis.fetch`, so four spans arrive from two producers: three from
+      `@arizeai/openinference-instrumentation-openai-agents` for the workflow, the agent and the response, and one
+      from this build for the POST to `/v1/responses`. **They describe one call and one model is reported.** The
+      two producers name a model differently, `gen_ai.request.model` being what was sent and `llm.model_name`
+      being what came back. **The witness is a component count.** The graph without a run holds 9 models; this
+      entry records 10, and a run read as two calls would record 11, because `gpt-5.4-mini` and
+      `gpt-5.4-mini-2026-03-17` are two names. The one it keeps is the response's, which is the second fix as
+      well: `orchescope.component` is no longer set on a model call, and set to the host every model a run
+      called would arrive as one component named `api.openai.com`.
+
+      The whole graph is the entry above plus what this run added, which is the arithmetic worth checking: 668
+      components with no run, 669 with the hermetic one, which adds an agent nothing declared, and 670 here,
+      which adds that agent and the model.
+
+      **The dated model is the provider's and not this repository's.** `hello-world.ts` names no model, so the
+      alias comes from the SDK version pinned below and the snapshot behind it comes from OpenAI. When they move
+      it this entry differs on one identifier, which is a true report of the provider having changed rather than
+      a defect, and open-deep-research-exercised has carried a dated snapshot the same way since it was pinned.
+
+      The agent does not join, and the reason is a property of the repository rather than a defect. This checkout
+      declares 292 agents across its examples and four of them are named `Assistant`, so the name the run reports
+      has four declarations and the reconciler refuses, which is the same refusal the hermetic sibling holds for
+      `Triage Agent`. The model does not join either, which is the gap the README states: a model is chosen where
+      a run is configured rather than where an agent is written, and this example names none at all.
+    exercise:
+      why: >-
+        The repository's own `examples/basic/hello-world.ts`, which is one agent holding no tool and no handoff,
+        answering one turn. That shape is the whole reason a provider run can be pinned here at all: the hermetic
+        sibling drives the customer service example, where the same conversation against a real gpt-4o-mini
+        produced eight spans, then eleven, then eight, because whether the seat agent asks for a confirmation
+        number again is the model's decision. An agent with nothing to call has no decision to make, so one turn
+        is one model call whatever the answer says, and the driver supplies nothing but the instrumentation.
+
+        What it costs is a credential, which is stated rather than discovered, and a run without it is skipped
+        with the reason printed.
+      script: corpus/runs/openai-agents-js-provider/exercise.mjs
+      # The same pins as the hermetic sibling, for the same reasons, so that the only difference between the two
+      # runs is the one this entry exists to measure.
+      nodePackages:
+        - '@openai/agents@0.13.5'
+        - '@openai/agents-core@0.13.5'
+        - zod@4.3.5
+        - '@arizeai/openinference-instrumentation-openai-agents'
+        - '@opentelemetry/sdk-trace-node'
+        - '@opentelemetry/exporter-trace-otlp-http'
+      requiresEnvironment:
+        - OPENAI_API_KEY
+
   - name: langgraph
     source: git
     url: https://github.com/langchain-ai/langgraph.git

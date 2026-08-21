@@ -10,6 +10,47 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### One model call, two producers, and the first corpus entry that can see it
+
+0.8.0 taught the reader to keep the better placed of two spans watching one model call, and to stop naming a
+model call after the host that served it. It also said plainly that **no corpus entry witnessed either
+change**, and named the reason: every entry carrying a run drove an offline model, or ran Python where the
+`fetch` shim does not apply, or reached a provider through `openai@4`, which bundles `node-fetch` and is
+invisible to a patch on `globalThis.fetch`. What held both fixes instead was one stored run in
+`packages/traces/test`.
+
+`openai-agents-js-provider-exercised` is the entry that can hold them. It is the same commit as the two
+`openai-agents-js` entries, and it runs the repository's own `examples/basic/hello-world.ts`: one agent
+holding no tool and no handoff, answering one turn. `@openai/agents` resolves `openai@6`, which has no
+dependencies and makes its requests with `globalThis.fetch`, so four spans arrive from two producers, three
+from `@arizeai/openinference-instrumentation-openai-agents` and one from this build.
+
+**The witness is a component count.** The graph without a run holds 9 models. This entry records 10. A run
+read as two calls would record 11, because the two producers name a model differently and both names are
+real: `gen_ai.request.model` is `gpt-5.4-mini`, what was sent, and `llm.model_name` is
+`gpt-5.4-mini-2026-03-17`, what came back. The one kept is the response's, which is the second fix as well:
+were `orchescope.component` still set on a model call, every model this run reached would arrive as one
+component named `api.openai.com`.
+
+**The shape is what makes a provider run pinnable at all, and the hermetic sibling is why that had to be
+solved.** That entry drives the customer service example, and its own prose records why it drives an offline
+model: against a real `gpt-4o-mini` the same conversation produced eight spans, then eleven, then eight,
+because whether the seat agent asks for a confirmation number again is the model's decision. An agent with
+nothing to call has no decision to make. One turn is one model call whatever the answer says, so the driver
+registers the instrumentation and supplies nothing else.
+
+Three entries now sit on that commit and the arithmetic between them is the check: 668 components with no
+run, 669 with the hermetic one, which adds an agent nothing declared, and 670 here, which adds that agent and
+the model. Neither the agent nor the model joins, and both reasons are already on the record: this checkout
+declares 292 agents across its examples and four of them are named `Assistant`, so the reconciler refuses the
+name the way it refuses `Triage Agent` on the sibling, and no model has ever joined a declaration anywhere in
+this corpus because a model is chosen where a run is configured rather than where an agent is written.
+
+**The dated model is the provider's and not the repository's.** `hello-world.ts` names no model, so the alias
+comes from the pinned SDK and the snapshot behind it comes from OpenAI. When they move it this entry differs
+on one identifier, which is a true report that the provider changed. `open-deep-research-exercised` has
+carried a dated snapshot the same way since it was pinned.
+
 ### A corpus metric that reported its own ceiling
 
 `componentsByRule` exists because `byRule` cannot see a grouped rule move: one finding is reported whatever

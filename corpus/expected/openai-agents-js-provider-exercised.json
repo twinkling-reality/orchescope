@@ -1,0 +1,168 @@
+{
+  "adapters": {
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 34,
+      "edgesFound": 18,
+      "filesInspected": 13,
+      "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 2,
+      "edgesFound": 1,
+      "filesInspected": 1,
+      "status": "completed"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 36,
+      "edgesFound": 6,
+      "filesInspected": 26,
+      "status": "completed"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 516,
+      "edgesFound": 165,
+      "filesInspected": 349,
+      "status": "completed"
+    },
+    "adapter:prompts": {
+      "componentsFound": 211,
+      "edgesFound": 94,
+      "filesInspected": 136,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:search-index": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 10,
+      "edgesFound": 1,
+      "filesInspected": 9,
+      "status": "completed"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    }
+  },
+  "agentSystemDetected": true,
+  "components": {
+    "byKind": {
+      "agent": 293,
+      "database": 2,
+      "entrypoint": 17,
+      "external_service": 12,
+      "mcp_server": 15,
+      "model": 10,
+      "prompt": 195,
+      "provider": 1,
+      "tool": 125
+    },
+    "declaredInTest": 36,
+    "total": 670
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 1020,
+    "inSupportedLanguages": 895,
+    "parsed": 895,
+    "skipped": 1,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "configured-tool-has-no-caller": 1,
+      "declared-not-exercised": 2,
+      "exercised-not-declared": 1,
+      "model-call-without-timeout": 1,
+      "observability-coverage": 1,
+      "observed-name-matches-many-declarations": 1,
+      "prompt-injection-boundary": 1,
+      "retry-around-non-idempotent-operation": 1,
+      "topology-shape": 2
+    },
+    "componentsByRule": {
+      "configured-tool-has-no-caller": 34,
+      "declared-not-exercised": 419,
+      "exercised-not-declared": 1,
+      "model-call-without-timeout": 52,
+      "observability-coverage": 10,
+      "observed-name-matches-many-declarations": 1,
+      "prompt-injection-boundary": 22,
+      "retry-around-non-idempotent-operation": 2,
+      "topology-shape": 53
+    },
+    "strengths": 0,
+    "total": 11
+  },
+  "foundNothing": [],
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "openai-agents-js-provider-exercised",
+  "relations": {
+    "byKind": {
+      "calls_service": 13,
+      "calls_tool": 79,
+      "hands_off_to": 28,
+      "invokes_model": 44,
+      "provides_tool": 8,
+      "queries_database": 4,
+      "served_by_provider": 2,
+      "uses_prompt": 88
+    },
+    "total": 266
+  },
+  "runtime": {
+    "ambiguousNames": [
+      "Assistant"
+    ],
+    "contradictions": 0,
+    "declaredComponents": 419,
+    "declaredEdges": 265,
+    "duplicateSideEffects": 0,
+    "exercisedComponents": 0,
+    "exercisedEdges": 0,
+    "exercisedNotDeclared": [
+      "agent:assistant",
+      "model:openai/gpt-5.4-mini-2026-03-17"
+    ],
+    "joined": [],
+    "joinedOnNameAlone": [],
+    "runs": 1,
+    "spans": 4
+  }
+}

@@ -224,10 +224,16 @@ like.
 A model is chosen where a run is configured rather than where an agent is written. The pinned deep research
 application names its models in `Field(default="openai:gpt-4.1")` on a configuration class; the pinned
 customer service demonstration names none at all and takes the SDK's default; the pinned memory agent
-defaults to a literal inside the function that reads its configuration. None of those is a position any
-adapter here reads a model reference from, so on all three the static side declares no model for the run to
-match, and the run's model arrives as exercised and never declared. The two entries that do declare models
-drive an offline model, so nothing overlaps there either.
+defaults to a literal inside the function that reads its configuration; the pinned one agent example names
+none either. None of those is a position any adapter here reads a model reference from, so on all of them
+the static side declares no model for the run to match, and the run's model arrives as exercised and never
+declared. The two entries that do declare models drive an offline model, so nothing overlaps there either.
+
+**What a run against a real provider does now show is that one model call is read as one.** `orchescope
+trace` patches `fetch`, and a target with its own instrumentation has two producers watching the same
+request. `openai-agents-js-provider-exercised` is the entry that measures it: the graph without a run holds
+nine models, that entry records ten, and read as two calls it would record eleven, because
+`gen_ai.request.model` is what was sent and `llm.model_name` is what came back and both are real names.
 
 Reading a model named in a configuration default is what would have to change. It would not close the gap
 on its own: that deep research default is `openai:gpt-4.1` and the run measured here asked for
