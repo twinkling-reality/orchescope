@@ -179,9 +179,19 @@ construction on the negatives, so it is asserted there, over the adapter set der
 `DEFAULT_ADAPTERS`. Its proposed mechanism, `dependencyEvidence` at manifest read time, is measurably
 insufficient and is deleted rather than wired.
 
-**The anti circularity check is not built and its prerequisite has not moved.** `packages/traces` still
-carries no per attribute provenance, and `byCodeLocation` is still 0 on all eight exercised entries. It
-stays third.
+**The anti circularity check is built in the half its prerequisite allows, and the general form is not.**
+`packages/traces` still carries no per attribute provenance and `byCodeLocation` is still 0 on all eight
+exercised entries, so no check can ask of an arbitrary observed relation whether a declaration rederives
+it. What can be asked is of the attributes already known to be declarations, and that is now data:
+`REDERIVABLE_ATTRIBUTES` names `graph.node.parent_id`, who writes it and what it rederives, and
+`rederivable-attributes.test.ts` asserts it appears in none of the six vocabularies this build reads and
+that a span carrying it draws no relation, with a companion asserting a real span nesting does draw one so
+the refusal is not a reader that never draws anything.
+
+The population that check would have to work over is worth recording beside it. Across all eight exercised
+entries the runs join **21 components, 20 of them on a name alone, and 6 relations**. That is what the
+observed half of this join amounts to today, and it is why the general form is a prerequisite question
+rather than a coverage question.
 
 **And the premise this record opened on was wrong.** `--record` overwrites every leaf including
 `agentSystemDetected`. What it cannot do is silence the claim, which is checked against `corpus.yaml` in two

@@ -45,6 +45,35 @@ export const OPEN_INFERENCE = {
 } as const;
 
 /**
+ * Attributes an instrumentor writes that carry a declaration rather than an observation.
+ *
+ * A run's job in this build is to say what happened. An attribute whose value is exactly rederivable from
+ * something the declared half already reads is a declaration that has been sent out through the process
+ * being audited and reported back, and joining on one makes the two halves of the join agree by
+ * construction. That is the one thing this join must never do, and it is the shape of the fourth recorded
+ * confident wrong answer.
+ *
+ * Held as data rather than as a sentence so that the refusal is checked. Nothing here may appear in any of
+ * the vocabularies below, and a span carrying one of these may not produce a relation, both of which
+ * `rederivable-attributes.test.ts` asserts. The general property, that no observed relation is exactly
+ * rederivable from a declaration, is not checkable here: it needs per attribute provenance on the trace
+ * side, which this package does not carry. What is checkable is the list of attributes already known to be
+ * declarations, and that list is what a reader reaching for one of them runs into.
+ */
+export const REDERIVABLE_ATTRIBUTES: readonly {
+  readonly name: string;
+  readonly writtenBy: string;
+  readonly rederives: string;
+}[] = [
+  {
+    name: 'graph.node.parent_id',
+    writtenBy: 'openinference-instrumentation-crewai',
+    rederives:
+      "the entry before this agent in the crew's declared agents list, which `_find_parent_agent` walks at span time",
+  },
+];
+
+/**
  * `graph.node.parent_id` is written by the CrewAI instrumentor and is not read here.
  *
  * It looks like the relation a CrewAI run never reports: every agent span after the first carries it, and on
@@ -60,8 +89,8 @@ export const OPEN_INFERENCE = {
  * observation's clothes, and it would make the exercised half of the join agree with the declared half by
  * construction, which is the one thing this join must never do.
  *
- * The name is recorded here rather than in the table above so that the next reader finds the measurement
- * instead of the attribute.
+ * The name is recorded in the table above rather than in a vocabulary so that the next reader finds the
+ * measurement instead of the attribute.
  */
 
 export const CODE = {

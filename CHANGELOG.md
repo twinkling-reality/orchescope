@@ -10,6 +10,29 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### The attribute that would have made the join agree with itself, refused in data
+
+`graph.node.parent_id` is written by the CrewAI instrumentor on every agent span after the first, and on
+the pinned marketing crew its values draw exactly the sequence the crew declares. They are not a sequence
+any run took: the instrumentor finds the agent whose task is running in `crew.agents` and returns the role
+of the entry before it, so the value is a position in a declared list evaluated at span time. Reading it
+would have moved `exercisedEdges` off zero and filled `runtime.joined`, which is the shape of a fix, and
+every edge it added would have been a declaration this build already reads from source, sent out through
+the process being audited and reported back.
+
+That was recorded as a comment. It is now a table. `REDERIVABLE_ATTRIBUTES` names the attribute, who writes
+it and what it rederives, and a test asserts two things: that it appears in none of the six attribute
+vocabularies this build reads, and that a span carrying it draws no relation between the two agents it
+names. A companion asserts that the same two spans in a real parent and child nesting **do** draw one,
+because a refusal and a reader that never draws anything are the same result read from outside.
+
+**What is not built is the general form**, and the measurement says why. *An observed relation exactly
+rederivable from a declaration is a circular join* cannot be asked of an arbitrary relation without per
+attribute provenance on the trace side, which `packages/traces` does not carry. The population it would
+work over is small enough to state: across all eight exercised entries the runs join **21 components, 20
+of them on a name alone, and 6 relations**. Naming the attributes already known to be declarations is the
+part that is checkable today, and it is the part that has actually gone wrong.
+
 ### Three evidence kinds nothing writes, and two builders that were waiting for a caller
 
 `Evidence` carries ten kinds. Seven are written. `dependency` and `scenario_outcome` each had a builder in
