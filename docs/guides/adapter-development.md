@@ -23,6 +23,7 @@ components:
     name: issue_refund
     runtimeName: issue_refund
     definedIn: src/tools/refund.rb
+    definedAtLine: 8
     sideEffect: financial
     permissions:
       - kind: network
@@ -42,6 +43,13 @@ edges:
 
 An edge endpoint is a component `name`: one declared here, or one another adapter discovered from source, which is what lets
 a manifest annotate code Orchescope already reads.
+
+Every citation is checked against the repository rather than taken. `definedIn` has to name a file the scan walked, in any
+language; a line has to be one the file is long enough to have; a `runtimeName` carrying a placeholder is a name no run
+reports and is refused; and an edge endpoint has to name something this document declares or another adapter found. A file
+with no `definedAtLine` is refused too, because a source location has a line and there is no way to write "somewhere in
+here": Orchescope used to record line 1, which is a claim you did not make and a link a reader follows to your imports. A
+manifest that fails any of these is reported as a failed adapter run naming each claim, and what it got right is still read.
 
 This is the whole path for a language Orchescope cannot parse. Runtime evidence still works, because the receiver reads spans
 regardless of what wrote them, and `runtimeName` is what joins a span to the declaration.

@@ -72,6 +72,7 @@ export const manifestTemplate = (): string =>
     '#   - kind: tool',
     '#     name: issue_refund',
     '#     definedIn: internal/tools/refund.go',
+    '#     definedAtLine: 24',
     '#     sideEffect: financial',
     '',
     'edges: []',

@@ -355,6 +355,13 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
     manifests,
     modules: analysis.facts,
     configs: configs.documents,
+    files: (() => {
+      const sized = new Map(fileSet.files.map((file) => [file.path, file.byteLength]));
+      return fileSet.walked.map((path) => {
+        const byteLength = sized.get(path);
+        return byteLength === undefined ? { path } : { path, byteLength };
+      });
+    })(),
     symbols,
     bindings,
     implementations,

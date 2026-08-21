@@ -10,6 +10,47 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### A manifest that can be wrong, and is told so
+
+The manifest is a first class input and the documented first step for a system no adapter reads, and it is
+the one input nothing checked against the repository it describes. `definedIn: src/does-not-exist.rb,
+definedAtLine: 4242` was accepted, and the component appeared in the graph with a location a reader could
+click. Passing the schema says a document is well formed. It says nothing about whether any of it is true.
+
+**Four claims are now refuted from what the traversal already walked.** A `definedIn` that names no file the
+scan found. A line beyond what the file is long enough to hold. A `runtimeName` carrying a placeholder,
+which is a name no run reports and which the CrewAI reader already refuses in a declared role. And an edge
+endpoint naming nothing this manifest declares and nothing any other adapter found, which used to be
+skipped in silence, so a typo in a relation vanished without a word. A manifest that fails any of them is
+reported as a failed adapter run naming each claim, and what it got right is still read: one bad citation
+among eighteen does not lose the seventeen.
+
+**The traversal had to start recording what it walked.** `collectFiles` drops every language no parser
+reads, which is the right set for parsing and the wrong one for asking whether a path is there, and the one
+input that exists precisely for the languages this build cannot parse is the manifest. It now carries the
+paths as well, so `definedIn: src/orchestrator.rb` is answerable. The line is refuted only where the
+traversal sized the file, which is every language this build reads and none of the ones a manifest is for:
+that is where a refutation stops without opening the file, and an adapter never opens one.
+
+**And a location this build was inventing is gone.** A component with `definedIn` and no `definedAtLine`
+recorded line 1, which is a claim the manifest never made and a link that lands on the imports. There is no
+way to write "somewhere in this file" in a source location, so that citation is refused rather than
+completed, and nothing fabricated reaches the graph.
+
+**This repository's own reference manifest failed the standard it documents.** 16 of its 18 components cited
+line 1, and for 4 of them the cited file does not contain the component's name anywhere: `account-worker`
+and `inventory-worker` are declared in `src/agents/definitions.ts` and cited `src/agents/workers.ts`, and
+`demo-small` and `demo-large` are named in `src/main.ts` and cited `src/model.ts`. Every one of the 18 now
+cites a line that contains the name it declares. Four of those errors are ones the engine still cannot
+catch, because checking the text of a cited line means opening the file.
+
+**And the measurement that bounds the manifest as a path to breadth reproduces exactly.** A maximally
+honest one component manifest for `open-agent-platform`, declaring only the `mcp_server` that `use-mcp.tsx`
+genuinely constructs and passing every check above, still flips `agentSystemDetected` from **false to
+true**, at 26 components becoming 27. `ManifestComponent` has no `details` field, so a manifest cannot say
+"consumed" the way an adapter can and `partOfAuditedSystem` has nothing to read. Fixing that is a manifest
+document version and owes its own decision record.
+
 ### A location that says which revision of the file it was read from
 
 `SourceLocation` and `ConfigLocation` have carried an optional `fileHash` since they were written, described

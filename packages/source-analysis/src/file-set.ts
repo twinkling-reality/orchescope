@@ -29,6 +29,17 @@ export type DeclinedDirectory = { readonly path: string; readonly rule: string }
 export type FileSet = {
   readonly root: string;
   readonly files: readonly SourceFile[];
+  /**
+   * Every file the traversal walked, by path, whatever language it is in.
+   *
+   * `files` holds what an analyser can be pointed at, so it drops every language this build does not read.
+   * That is the right set for parsing and the wrong one for asking whether a path is there, and the one
+   * input that exists precisely for the languages this build cannot parse is the manifest: a component
+   * declared `definedIn: src/orchestrator.rb` cites a file that is in the repository and in none of the
+   * lists this traversal used to produce. Paths only, because nothing is read and a size costs a stat on
+   * files no reader will open.
+   */
+  readonly walked: readonly string[];
   readonly skipped: readonly SkippedFile[];
   /**
    * Declined directories the repository tracks files inside, which is the case a reader has to act on.
@@ -175,6 +186,7 @@ type Walker = {
   readonly skipped: SkippedFile[];
   readonly excludedTracked: DeclinedDirectory[];
   readonly extensionCounts: Map<string, number>;
+  readonly walked: string[];
   truncated: boolean;
 };
 
@@ -229,6 +241,7 @@ const considerFile = (
     const extension = name.slice(dot).toLowerCase();
     walker.extensionCounts.set(extension, (walker.extensionCounts.get(extension) ?? 0) + 1);
   }
+  walker.walked.push(relativePath);
 
   const language = languageOf(name);
   if (language === 'other') return;
@@ -400,6 +413,7 @@ export const collectFiles = (root: string, options: TraversalOptions): FileSet =
     skipped: [],
     excludedTracked: [],
     extensionCounts: new Map(),
+    walked: [],
     truncated: false,
   };
   walk(root, root, options, walker, noIgnoreRules());
@@ -410,6 +424,7 @@ export const collectFiles = (root: string, options: TraversalOptions): FileSet =
     excludedTracked: walker.excludedTracked,
     truncated: walker.truncated,
     extensionCounts: Object.fromEntries(walker.extensionCounts),
+    walked: walker.walked,
   };
 };
 

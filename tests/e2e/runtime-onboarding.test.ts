@@ -55,7 +55,15 @@ const silentProject = (): string => {
     join(root, 'package.json'),
     `${JSON.stringify({ name: 'silent', private: true, type: 'module' })}\n`,
   );
-  writeFileSync(join(root, 'main.js'), "console.log('worked, exported nothing');\n");
+  /*
+   * Two lines, because the manifest below cites one for each component it declares and a citation is now
+   * checked against the file rather than taken. One line would make the second citation a claim about a
+   * line that is not there, which is the check working rather than the fixture being awkward.
+   */
+  writeFileSync(
+    join(root, 'main.js'),
+    "console.log('orchestrator: worked, exported nothing');\nconsole.log('issue_refund: nothing to refund');\n",
+  );
   return root;
 };
 
@@ -74,9 +82,11 @@ const declaredSilentProject = (): string => {
       '  - kind: agent',
       '    name: orchestrator',
       '    definedIn: main.js',
+      '    definedAtLine: 1',
       '  - kind: tool',
       '    name: issue_refund',
       '    definedIn: main.js',
+      '    definedAtLine: 2',
       '    sideEffect: financial',
       'edges:',
       '  - kind: calls_tool',

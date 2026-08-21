@@ -17,24 +17,24 @@ components:
     kind: agent
     displayName: orchestrator
     description: Plans the response, calls tools, hands off to workers and writes the final answer.
-    definedIn: src/agents/orchestrator.ts
-    definedAtLine: 1
+    definedIn: src/agents/definitions.ts
+    definedAtLine: 146
     runtimeName: orchestrator
     tags: [demo, orchestrator]
 
   - name: account-worker
     kind: agent
     description: Answers account questions from the account tool result.
-    definedIn: src/agents/workers.ts
-    definedAtLine: 1
+    definedIn: src/agents/definitions.ts
+    definedAtLine: 47
     runtimeName: account-worker
     tags: [demo, worker]
 
   - name: inventory-worker
     kind: agent
     description: Answers stock questions from the inventory tool result.
-    definedIn: src/agents/workers.ts
-    definedAtLine: 1
+    definedIn: src/agents/definitions.ts
+    definedAtLine: 53
     runtimeName: inventory-worker
     tags: [demo, worker]
 
@@ -57,16 +57,16 @@ components:
   - name: demo-small
     kind: model
     description: Scripted local model. Deterministic given the seed, no credentials, no network.
-    definedIn: src/model.ts
-    definedAtLine: 1
+    definedIn: src/main.ts
+    definedAtLine: 20
     runtimeName: demo-small
     tags: [demo, model]
 
   - name: demo-large
     kind: model
     description: Fallback model. Configured for the case where the small model fails, and not exercised on the default path.
-    definedIn: src/model.ts
-    definedAtLine: 1
+    definedIn: src/main.ts
+    definedAtLine: 21
     runtimeName: demo-large
     tags: [demo, model, fallback]
 
@@ -74,7 +74,7 @@ components:
     kind: tool
     description: Reads the account record for a customer.
     definedIn: src/tools/account.ts
-    definedAtLine: 1
+    definedAtLine: 12
     sideEffect: read_only
     runtimeName: lookup_account
     tags: [demo, tool]
@@ -83,7 +83,7 @@ components:
     kind: tool
     description: Reads stock levels for a stock keeping unit.
     definedIn: src/tools/inventory.ts
-    definedAtLine: 1
+    definedAtLine: 12
     sideEffect: read_only
     runtimeName: check_inventory
     tags: [demo, tool]
@@ -92,7 +92,7 @@ components:
     kind: tool
     description: Issues a refund against a payment. Retried on failure and does not pass an idempotency key.
     definedIn: src/tools/refund.ts
-    definedAtLine: 1
+    definedAtLine: 22
     sideEffect: financial
     permissions:
       - kind: network
@@ -105,7 +105,7 @@ components:
     kind: tool
     description: Sends a customer notification. Passes an idempotency key on every attempt.
     definedIn: src/tools/notification.ts
-    definedAtLine: 1
+    definedAtLine: 18
     sideEffect: idempotent_write
     permissions:
       - kind: network
@@ -118,7 +118,7 @@ components:
     kind: tool
     description: Reads the policy documents. The content is treated as untrusted input.
     definedIn: src/tools/policies.ts
-    definedAtLine: 1
+    definedAtLine: 19
     sideEffect: read_only
     runtimeName: search_policies
     tags: [demo, tool]
@@ -127,7 +127,7 @@ components:
     kind: tool
     description: Hands the request to a person. Registered and unreachable on the default path.
     definedIn: src/tools/escalation.ts
-    definedAtLine: 1
+    definedAtLine: 18
     sideEffect: external_notification
     runtimeName: escalate_to_human
     tags: [demo, tool, never-exercised]
@@ -136,7 +136,7 @@ components:
     kind: retrieval
     description: Small in repository document set searched for refund policy text.
     definedIn: src/tools/policies.ts
-    definedAtLine: 1
+    definedAtLine: 20
     runtimeName: policy-store
     tags: [demo, retrieval]
 
@@ -144,7 +144,7 @@ components:
     kind: memory
     description: Per conversation state read and written by the orchestrator.
     definedIn: src/memory.ts
-    definedAtLine: 1
+    definedAtLine: 14
     runtimeName: conversation-memory
     tags: [demo, memory]
 
@@ -152,7 +152,7 @@ components:
     kind: queue
     description: Pending refund requests, drained by a worker pool sized by the worker count.
     definedIn: src/queue.ts
-    definedAtLine: 1
+    definedAtLine: 18
     runtimeName: refunds
     tags: [demo, queue]
 
@@ -160,7 +160,7 @@ components:
     kind: side_effect
     description: Append only audit record written from a helper that the agent definitions do not reference.
     definedIn: src/audit.ts
-    definedAtLine: 1
+    definedAtLine: 15
     sideEffect: non_idempotent_write
     runtimeName: audit-log
     tags: [demo, side-effect]
@@ -169,7 +169,7 @@ components:
     kind: approval_boundary
     description: Explicit approval checked before a refund executes.
     definedIn: src/tools/refund.ts
-    definedAtLine: 1
+    definedAtLine: 60
     runtimeName: issue_refund
     tags: [demo, approval]
 

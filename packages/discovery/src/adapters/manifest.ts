@@ -24,6 +24,13 @@ import { createDrafts } from '../drafts.ts';
  * `discovered` with the manifest as their evidence, never `observed`, and they are merged with automatic
  * discovery rather than replacing it. An invalid manifest is reported as an adapter problem together with
  * the validation issues, because silently ignoring a file the user wrote on purpose is worse than failing.
+ *
+ * A manifest is the only input to this build that nothing checks against the repository it describes, and
+ * that is what `refutations` below is for. Passing the schema says the document is well formed. It says
+ * nothing about whether `definedIn` names a file that is there, whether a line that far into it exists,
+ * whether an edge names anything, or whether a `runtimeName` is a name a run could report. Every one of
+ * those is answerable deterministically from what the scan already walked, and this repository's own
+ * reference manifest failed three of them until it was corrected.
  */
 
 const ADAPTER_ID = 'adapter:manifest';
@@ -32,6 +39,69 @@ const MANIFEST_PATHS = ['.orchescope/manifest.yaml', '.orchescope/manifest.yml']
 
 const manifestIdentity = (kind: ComponentKind, name: string): ComponentIdentity =>
   buildIdentity(kind, MANIFEST_NAMESPACE, name);
+
+/**
+ * What a citation claims, and what the scan can say back about it.
+ *
+ * The engine accepted `definedIn: src/does-not-exist.rb, definedAtLine: 4242` and reported the component as
+ * a real one with a location a reader could click. Two of these are exact: a path either is a file the
+ * traversal walked or it is not, and an edge endpoint either names something or it does not. The line check
+ * is a refutation rather than a confirmation, because confirming it would mean opening the file and an
+ * adapter never does: a file of two hundred bytes cannot have a line four thousand deep, and that is as far
+ * as the byte count reaches.
+ *
+ * A `runtimeName` is the fourth, and it is the same rule the CrewAI reader applies to an interpolated role.
+ * A name with a placeholder in it is a name no run will ever report, and putting one in the reconciler's
+ * strongest lookup after a code location does not merely fail to match: it waits to match something else.
+ */
+const refutations = (
+  manifest: Manifest,
+  context: DiscoveryContext,
+  configFile: string,
+): readonly string[] => {
+  const walked = new Map(context.files.map((file) => [file.path, file.byteLength]));
+  const found: string[] = [];
+
+  for (const declared of manifest.components) {
+    if (declared.definedIn !== undefined) {
+      const byteLength = walked.get(declared.definedIn);
+      if (!walked.has(declared.definedIn)) {
+        found.push(
+          `${declared.name} is defined in ${declared.definedIn}, which this scan did not find`,
+        );
+      } else if (declared.definedAtLine === undefined) {
+        /*
+         * A file with no line is a citation this build cannot record without inventing one, because a
+         * source location has a line and there is no way to write "somewhere in here". It used to record
+         * line 1, which is a claim the manifest never made and a link a reader follows to the imports.
+         */
+        found.push(
+          `${declared.name} is defined in ${declared.definedIn} at no stated line, so there is no location to record`,
+        );
+      } else if (byteLength !== undefined && declared.definedAtLine > byteLength) {
+        found.push(
+          `${declared.name} is defined at line ${declared.definedAtLine} of ${declared.definedIn}, which is ${byteLength} bytes long`,
+        );
+      }
+    }
+    if (declared.runtimeName?.includes('{') === true) {
+      found.push(
+        `${declared.name} declares the runtime name ${declared.runtimeName}, which carries a placeholder and is a name no run reports`,
+      );
+    }
+  }
+
+  for (const declared of manifest.edges) {
+    for (const endpoint of [declared.from, declared.to]) {
+      if (resolveEndpoint(manifest, context, configFile, endpoint) !== undefined) continue;
+      found.push(
+        `the ${declared.kind} relation names ${endpoint}, which this manifest does not declare and nothing else discovered`,
+      );
+    }
+  }
+
+  return found;
+};
 
 /**
  * Resolves a manifest edge endpoint. A name declared in the manifest wins, and otherwise the name is
@@ -66,10 +136,10 @@ const addDeclaredComponent = (
     confidence: CONFIDENCE_BANDS.strongStructural,
     discoveredBy: ADAPTER_ID,
     presence: { static: true, runtime: false, manifest: true },
-    ...(declared.definedIn === undefined
+    ...(declared.definedIn === undefined || declared.definedAtLine === undefined
       ? {}
       : {
-          sourceLocations: [{ file: declared.definedIn, startLine: declared.definedAtLine ?? 1 }],
+          sourceLocations: [{ file: declared.definedIn, startLine: declared.definedAtLine }],
         }),
     configLocations: [{ file: configFile, pointer }],
     evidence: [
@@ -149,10 +219,23 @@ export const manifestAdapter: AgentSystemAdapter = {
     for (const [index, declared] of manifest.components.entries()) {
       addDeclaredComponent(context, builder, document.path, declared, index);
     }
+    const edgesFound = addDeclaredEdges(manifest, context, builder, document.path);
+    /*
+     * Refuted after the components are added, because an edge endpoint is answered against what every
+     * adapter found and a manifest that annotates real code names components it does not declare. What was
+     * read stays read: a manifest with one citation the scan refutes still declares seventeen the scan does
+     * not, and dropping those would trade a wrong answer for a missing one.
+     */
+    const refuted = refutations(manifest, context, document.path);
     return {
       componentsFound: manifest.components.length,
-      edgesFound: addDeclaredEdges(manifest, context, builder, document.path),
+      edgesFound,
       filesInspected: [document.path],
+      ...(refuted.length === 0
+        ? {}
+        : {
+            problem: `${document.path} makes ${refuted.length} claim(s) this scan refutes: ${refuted.join('; ')}`,
+          }),
     };
   },
 };

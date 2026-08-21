@@ -25,6 +25,20 @@ export type DiscoveryContext = {
   readonly manifests: ManifestSet;
   readonly modules: readonly ModuleFacts[];
   readonly configs: readonly ConfigDocument[];
+  /**
+   * Every file the traversal walked, by path, with the size where the traversal took one.
+   *
+   * `modules` answers only for the languages this build parses, and the one input that exists precisely for
+   * the languages it does not is the manifest: a component declared `definedIn: src/orchestrator.rb` is the
+   * case the manifest is documented for. Without this the engine accepts a citation to a file that is not
+   * there, and it does, which is what makes a manifest unfalsifiable.
+   *
+   * This is the traversal's own product rather than a licence to read anything: an adapter still never opens
+   * a file. The size is absent for a language no parser reads, because taking one would be a stat per file
+   * on files nothing will open. Where it is present, a line number beyond the byte count is one that file
+   * cannot have, which is as far as a citation can be refuted without reading it.
+   */
+  readonly files: readonly { readonly path: string; readonly byteLength?: number }[];
   readonly symbols: SymbolIndex;
   /** Shared mapping from a local variable to the component it produced. */
   readonly bindings: BindingRegistry;

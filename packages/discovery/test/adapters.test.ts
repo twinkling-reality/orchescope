@@ -2417,6 +2417,91 @@ describe('the manifest', () => {
     assert.equal(result.agentSystemDetected, true);
   });
 
+  /**
+   * The manifest is the one input nothing checked against the repository it describes.
+   *
+   * `definedIn: src/does-not-exist.rb, definedAtLine: 4242` was accepted and reported as a component with a
+   * location a reader could click, and this repository's own reference manifest would have failed three of
+   * these until it was corrected. What a schema says is that the document is well formed. Each of these is
+   * answerable from what the traversal already walked.
+   *
+   * A line is refuted only where the traversal sized the file, which is every language this build reads and
+   * none of the languages a manifest exists for. That is where a refutation stops without opening the file,
+   * and it is stated here rather than left to be discovered: `src/orchestrator.rb` below is checked for
+   * being there and is not checked for being long enough.
+   */
+  for (const [what, component, sentence] of [
+    [
+      'a file this scan did not find',
+      '  - kind: agent\n    name: ghost\n    definedIn: src/does-not-exist.rb\n    definedAtLine: 12',
+      /ghost is defined in src\/does-not-exist\.rb, which this scan did not find/,
+    ],
+    [
+      'a line the file is too short to have, where the traversal sized the file',
+      '  - kind: agent\n    name: deep\n    definedIn: src/orchestrator.ts\n    definedAtLine: 4242',
+      /deep is defined at line 4242 of src\/orchestrator\.ts, which is \d+ bytes long/,
+    ],
+    [
+      'a file with no line, which is a location this build would have to invent',
+      '  - kind: agent\n    name: somewhere\n    definedIn: src/orchestrator.rb',
+      /somewhere is defined in src\/orchestrator\.rb at no stated line/,
+    ],
+    [
+      'a runtime name no run reports',
+      '  - kind: agent\n    name: templated\n    runtimeName: "{topic} Researcher"',
+      /templated declares the runtime name \{topic\} Researcher, which carries a placeholder/,
+    ],
+  ] as const) {
+    it(`is refuted when it cites ${what}`, async () => {
+      const { adapters } = await scan((workspace) => {
+        workspace.write(
+          '.orchescope/manifest.yaml',
+          `schemaVersion: 1\ncomponents:\n${component}\nedges: []\n`,
+        );
+        workspace.write('src/orchestrator.rb', "puts 'a language this build does not parse'\n");
+        workspace.write('src/orchestrator.ts', 'export const orchestrator = 1;\n');
+      });
+      const run = adapters.find((entry) => entry.adapterId === 'adapter:manifest');
+      assert.equal(run?.status, 'failed', `the claim was accepted: ${run?.detail ?? 'no detail'}`);
+      assert.match(run?.detail ?? '', sentence);
+    });
+  }
+
+  it('is refuted when a relation names an endpoint nothing declares', async () => {
+    const { adapters, ids } = await scan((workspace) => {
+      workspace.write(
+        '.orchescope/manifest.yaml',
+        `schemaVersion: 1
+components:
+  - kind: agent
+    name: orchestrator
+    definedIn: src/orchestrator.rb
+    definedAtLine: 1
+edges:
+  - kind: calls_tool
+    from: orchestrator
+    to: issue_refnud
+`,
+      );
+      workspace.write('src/orchestrator.rb', "puts 'a language this build does not parse'\n");
+    });
+    const run = adapters.find((entry) => entry.adapterId === 'adapter:manifest');
+    assert.equal(run?.status, 'failed', 'a relation to a typo was accepted in silence');
+    assert.match(run?.detail ?? '', /names issue_refnud, which this manifest does not declare/);
+    assert.ok(
+      ids.includes('agent:orchestrator'),
+      `what the manifest got right is still read, saw ${ids.join(', ')}`,
+    );
+  });
+
+  it('stays quiet on a manifest whose every citation holds', async () => {
+    const { adapters, ids } = await scan(build);
+    const run = adapters.find((entry) => entry.adapterId === 'adapter:manifest');
+    assert.equal(run?.status, 'completed', `a sound manifest was refuted: ${run?.detail ?? ''}`);
+    assert.equal(run?.detail, undefined);
+    assert.ok(ids.includes('agent:orchestrator'));
+  });
+
   it('cites the manifest entry as the evidence and never claims observation', async () => {
     const { result } = await scan(build);
     const agent = result.graph.components.find(

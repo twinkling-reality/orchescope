@@ -51,9 +51,32 @@ const unparsedProject = (): string => {
   return root;
 };
 
+/**
+ * Writes the manifest, and the files it cites.
+ *
+ * A citation is checked against the repository now, so an example dropped into an empty project is refuted
+ * for naming files that are not there. That refusal is the point of the check and it is not what these
+ * cases are about: what is being asked here is whether the reader accepts the shape a reader would copy. So
+ * the fixture gives each example the repository its own citations describe, in whatever language they name,
+ * with enough lines for the line each one cites.
+ */
 const writeManifest = (root: string, body: string): void => {
   mkdirSync(join(root, '.orchescope'), { recursive: true });
   writeFileSync(join(root, '.orchescope/manifest.yaml'), body);
+
+  const cited = new Map<string, number>();
+  const lines = body.split('\n');
+  for (const [index, line] of lines.entries()) {
+    const file = /^\s*definedIn:\s*(\S+)\s*$/.exec(line)?.[1];
+    if (file === undefined) continue;
+    const at = /^\s*definedAtLine:\s*(\d+)\s*$/.exec(lines[index + 1] ?? '')?.[1];
+    cited.set(file, Math.max(cited.get(file) ?? 1, Number(at ?? 1)));
+  }
+  for (const [file, deepest] of cited) {
+    const target = join(root, file);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, `${'// a line the manifest may cite\n'.repeat(deepest)}`);
+  }
 };
 
 type AuditData = {
