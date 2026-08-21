@@ -37,6 +37,7 @@ import { createBindingRegistry } from './bindings.ts';
 import { createCallSiteEffects } from './call-site-effect.ts';
 import { type ConfigProblem, namedConfigPaths, readConfigDocuments } from './config-files.ts';
 import { createImplementationSpanRegistry } from './implementation-span.ts';
+import { localModules, namesLocalModule } from './local-modules.ts';
 import { DEFAULT_ADAPTERS } from './registry.ts';
 import { buildSymbolIndex } from './symbol-index.ts';
 
@@ -142,16 +143,23 @@ const distributionOf = (specifier: string): string => {
  * A type only import does not count. `import type { ToolUIPart } from "ai"` is erased before the program runs and
  * can construct no agent, model or tool, so an adapter reading nothing from it is correct rather than behind.
  * Counting those was how two repositories came to carry a gap naming a framework they render types from.
+ *
+ * Neither does a name that reaches this repository's own file. `from agents import ...` beside an `agents.py` is
+ * not the OpenAI Agents SDK, and counting it here is how a pinned entry came to report a framework gap that does
+ * not exist against a repository declaring no such distribution anywhere. This asks the same question
+ * `projectUses` asks before an adapter runs at all, so the claim and the decision to run now agree.
  */
 const adaptersThatFoundNothing = (
   adapters: readonly AgentSystemAdapter[],
   runs: readonly AdapterRun[],
   modules: readonly ModuleFacts[],
 ): readonly UnsupportedArea[] => {
+  const local = localModules(modules);
   const imported = new Set<string>();
   for (const module of modules) {
     for (const entry of module.imports) {
       if (entry.isType) continue;
+      if (namesLocalModule(local, module, entry.module)) continue;
       imported.add(distributionOf(entry.module));
     }
   }

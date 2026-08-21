@@ -507,3 +507,85 @@ describe('build output that no exclusion list knows the name of', () => {
     }
   });
 });
+
+/**
+ * A name that reaches this repository's own file rather than a distribution.
+ *
+ * `crewai-examples` writes `from agents import MarketingAnalysisAgents` in three applications, and each of
+ * them keeps an `agents.py` beside the script that imports it. No checkout of that repository declares a
+ * distribution called `agents`, and the OpenAI Agents SDK adapter was recorded `completed` over three files of
+ * a repository using none of it, with the coverage report naming a framework gap that does not exist.
+ *
+ * The discriminator is the interpreter's own: a script runs with its own directory first on the module path,
+ * so a module beside it wins, while a file inside a package reaches its directory through the package and
+ * never puts it on the path. `openai-cs-agents-demo` is the case that makes the distinction load bearing,
+ * because it also keeps an `agents.py` beside a file importing `agents`, and that file is a package member
+ * whose import really is the SDK.
+ */
+describe('an import naming a module this repository writes', () => {
+  it('leaves the distribution unclaimed, and reports no gap for an adapter that never ran', async () => {
+    const workspace = createTempWorkspace('orchescope-local-module-');
+    workspaces.push(workspace);
+    writePythonProject(workspace, { name: 'crews', dependencies: ['crewai'] });
+    workspace.write(
+      'crews/instagram_post/agents.py',
+      'class MarketingAnalysisAgents:\n    def build(self):\n        return None\n',
+    );
+    workspace.write(
+      'crews/instagram_post/main.py',
+      'from agents import MarketingAnalysisAgents\n\nMarketingAnalysisAgents().build()\n',
+    );
+
+    const result = await scanWorkspace(workspace);
+
+    const openAiAgents = result.graph.coverage.adapters.find(
+      (run) => run.adapterId === 'adapter:openai-agents',
+    );
+    assert.ok(openAiAgents !== undefined, 'every adapter records a run');
+    assert.equal(
+      openAiAgents.status,
+      'not_applicable',
+      'a sibling module is not the OpenAI Agents SDK, so its adapter has nothing to apply to',
+    );
+    assert.equal(openAiAgents.filesInspected, 0);
+    assert.deepEqual(
+      result.graph.coverage.unsupported.filter((area) => area.kind === 'adapter_found_nothing'),
+      [],
+      'a gap naming a distribution the repository never depends on is a claim about nothing',
+    );
+  });
+
+  it('still reads the distribution where the importing file is a package member', async () => {
+    const workspace = createTempWorkspace('orchescope-package-member-');
+    workspaces.push(workspace);
+    writePythonProject(workspace, { name: 'airline', dependencies: ['openai-agents'] });
+    workspace.write('backend/airline/__init__.py', '');
+    workspace.write(
+      'backend/airline/agents.py',
+      `from agents import Agent
+
+seat_booking = Agent(
+    name="seat_booking_agent",
+    instructions="Book seats.",
+)
+`,
+    );
+
+    const result = await scanWorkspace(workspace);
+
+    const openAiAgents = result.graph.coverage.adapters.find(
+      (run) => run.adapterId === 'adapter:openai-agents',
+    );
+    assert.ok(openAiAgents !== undefined, 'every adapter records a run');
+    assert.equal(openAiAgents.status, 'completed');
+    assert.ok(
+      result.graph.components.some(
+        (component) =>
+          component.kind === 'agent' &&
+          component.metadata['declaredName'] === 'seat_booking_agent' &&
+          component.sourceLocations.some((where) => where.file === 'backend/airline/agents.py'),
+      ),
+      'a package member importing the SDK declares an agent, whatever its own file is called',
+    );
+  });
+});

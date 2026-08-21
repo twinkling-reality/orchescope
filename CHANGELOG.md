@@ -10,6 +10,45 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### A framework gap naming a distribution the repository does not have
+
+`crewai-examples` reported `agents is imported here and its adapter found nothing`, and there is no such
+gap. Three `main.py` files write `from agents import ...` and each keeps an `agents.py` beside it; no
+checkout of that repository declares a distribution called `agents`. `adapter:openai-agents` was recorded
+`completed` over three files of a repository that uses none of it, which is the coverage report naming this
+build's own ceiling in a place where the ceiling is somewhere else entirely.
+
+**The cause is three layers deep and the two obvious ones are not the load bearing one.**
+`adaptersThatFoundNothing` builds its import set with no locality filter at all, where `projectUses` applies
+one. The filter it would have applied is `localPythonRoots`, which collects a package at the repository root
+or under `src/` and therefore collects **nothing at all** on a repository of per directory applications: the
+measured set for `crewai-examples` is empty. And repairing both of those would still not have moved this
+entry, because `moduleMatches` consulted its local roots only for a dotted specifier, so the bare `agents`
+matched the distribution by exact equality before locality was ever consulted.
+
+**What replaces it is the interpreter's own rule, and it is filesystem exact.** A script runs with its own
+directory first on the module path, so a module beside it shadows any distribution of that name. A file
+inside a package does not: its directory is reached through the package and never sits on the path, which
+makes `__init__.py` the discriminator rather than the depth of the path. `crews/instagram_post/` holds no
+`__init__.py`, so its `agents.py` wins. `openai-cs-agents-demo` is the entry that makes the distinction load
+bearing rather than decorative: it also keeps an `agents.py` beside a file importing `agents`, that file is a
+package member, and its import really is the SDK.
+
+**A root is deliberately left ambiguous, and one corpus entry is the reason.** Locality by root still answers
+only for a submodule reference such as `agents.agent`. `openai-agents-python` defines `src/agents/` and its
+own files import `from agents import ...`, where the name is at once this repository's package and the
+framework whose declarations the adapter exists to read. The syntax does not say which, so nothing is
+suppressed there and the framework stays readable. Widening that would have cost the entry every component it
+has.
+
+Measured across all twenty seven pinned repositories: one entry pair moves and twenty four are byte identical.
+`crewai-examples` and `crewai-examples-exercised` record `adapter:openai-agents` as `not_applicable` over zero
+files and an empty `foundNothing`. `crewai` still reports `mcp`, which is a correct refusal. Component and
+relation counts do not move on any entry, and `crewai-examples-exercised` still records zero exercised
+components against three ambiguous names. `orchescope-discovery` counts one file more, because the locality
+rule is a file of its own and that entry is this repository's own `packages/discovery` copied from the index;
+its ceiling of zero components is unmoved, which is the number that entry is pinned to hold.
+
 ### One model call, two producers, and the first corpus entry that can see it
 
 0.8.0 taught the reader to keep the better placed of two spans watching one model call, and to stop naming a

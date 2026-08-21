@@ -45,8 +45,8 @@
     "adapter:openai-agents": {
       "componentsFound": 0,
       "edgesFound": 0,
-      "filesInspected": 3,
-      "status": "completed"
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:prompts": {
       "componentsFound": 24,
@@ -119,9 +119,7 @@
     "strengths": 0,
     "total": 4
   },
-  "foundNothing": [
-    "agents is imported here and its adapter found nothing"
-  ],
+  "foundNothing": [],
   "kind": "agent_system",
   "languagesNotAnalysed": [],
   "name": "crewai-examples-exercised",
