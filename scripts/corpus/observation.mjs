@@ -54,6 +54,17 @@ const runtimeOf = (exercise, bundle) => {
   };
 };
 
+/**
+ * How many components a finding names, which is not always how many it lists.
+ *
+ * Grouping caps the list at twenty five and records what it withheld as a metric whose `sampleSize` is the
+ * whole affected population. Reading the list alone reports the cap.
+ */
+const componentsNamedBy = (finding) => {
+  const withheld = (finding.metrics ?? []).find((metric) => metric.name === 'componentsWithheld');
+  return withheld?.sampleSize ?? finding.components.length;
+};
+
 export const observationOf = (entry, audit, bundle, exercise) => {
   const coverage = bundle.graph.coverage;
   const findings = bundle.findings;
@@ -135,6 +146,14 @@ export const observationOf = (entry, audit, bundle, exercise) => {
        * nineteen and back to seventeen across three changes to the traversal underneath it, and every
        * number in this file stayed still for all three. A rule whose answer can swing by eighteen
        * components with no diff is the silence this file exists to break.
+       *
+       * Counted from `componentsWithheld` where a grouped finding carries one, because the list on the
+       * finding stops at twenty five. `declared-not-exercised` on the CrewAI run names a hundred and
+       * thirty components and listed twenty five of them, so this metric read twenty five and would
+       * have gone on reading twenty five whatever that rule did next. The finding says both numbers:
+       * the metric's `sampleSize` is the population and its `value` is how much of it was withheld.
+       * A rule that cites a sample rather than enumerating a population carries no such metric, and
+       * for those the list is the whole answer.
        */
       componentsByRule: Object.fromEntries(
         [...new Set(findings.map((finding) => finding.ruleId))]
@@ -143,7 +162,7 @@ export const observationOf = (entry, audit, bundle, exercise) => {
             ruleId,
             findings
               .filter((finding) => finding.ruleId === ruleId)
-              .reduce((total, finding) => total + finding.components.length, 0),
+              .reduce((total, finding) => total + componentsNamedBy(finding), 0),
           ]),
       ),
     },

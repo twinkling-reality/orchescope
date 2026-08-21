@@ -111,7 +111,7 @@
       "medium": 2
     },
     "componentsByRule": {
-      "declared-not-exercised": 25,
+      "declared-not-exercised": 130,
       "exercised-not-declared": 3,
       "observability-coverage": 10,
       "topology-shape": 3

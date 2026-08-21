@@ -119,14 +119,14 @@
       "medium": 6
     },
     "componentsByRule": {
-      "configured-tool-has-no-caller": 25,
-      "declared-not-exercised": 50,
+      "configured-tool-has-no-caller": 34,
+      "declared-not-exercised": 417,
       "exercised-not-declared": 1,
-      "model-call-without-timeout": 25,
+      "model-call-without-timeout": 50,
       "observability-coverage": 10,
       "prompt-injection-boundary": 22,
       "retry-around-non-idempotent-operation": 2,
-      "topology-shape": 28
+      "topology-shape": 53
     },
     "strengths": 0,
     "total": 10

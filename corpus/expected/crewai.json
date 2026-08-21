@@ -116,7 +116,7 @@
       "medium": 3
     },
     "componentsByRule": {
-      "model-call-without-timeout": 25,
+      "model-call-without-timeout": 31,
       "observability-coverage": 5,
       "retry-around-non-idempotent-operation": 2,
       "topology-shape": 5,

@@ -8,6 +8,27 @@ Three changes to how a reader and an agent find the loop, the first CrewAI run a
 correction to what that run's join was made by, and then the reading that turns that join into a refusal.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### A corpus metric that reported its own ceiling
+
+`componentsByRule` exists because `byRule` cannot see a grouped rule move: one finding is reported whatever
+it found, so the count holds at one while the subject swings. It was summed from the components each finding
+lists, and grouping lists at most twenty five of them.
+
+So the metric was the cap. `declared-not-exercised` on the CrewAI run names a hundred and thirty components
+and this file recorded twenty five, and would have gone on recording twenty five whatever that rule did next,
+which is the silence the metric was added to break. The finding says both numbers already: grouping records
+what it withheld as a metric whose `value` is the number withheld and whose `sampleSize` is the whole
+affected population.
+
+Seven entries move and every move is the same move. `openai-agents-js-exercised` reads 417 declared and never
+exercised components where it read 50, `crewai-examples-exercised` 130 where it read 25, `topology-shape` 53
+where it read 28, and `model-call-without-timeout` 50 where it read 25 on the same entry. Nothing about any
+of those repositories changed.
+
+A rule that cites a sample rather than enumerating a population carries no such metric, and for those the
+list is still the whole answer: `observability-coverage` names ten unexercised components to support a rate
+whose own sample size is the declared population, and ten is what it means.
+
 ### A configuration path opened on every scan and read by nobody
 
 `config/tasks.yaml` was in the list of paths every scan opens, and the string appeared exactly once in this
