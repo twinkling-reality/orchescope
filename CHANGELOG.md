@@ -8,6 +8,22 @@ Three changes to how a reader and an agent find the loop, the first CrewAI run a
 correction to what that run's join was made by, and then the reading that turns that join into a refusal.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### A configuration path opened on every scan and read by nobody
+
+`config/tasks.yaml` was in the list of paths every scan opens, and the string appeared exactly once in this
+repository: in that list. No adapter read it, so every scan of every repository paid a file open for a
+document that was parsed and dropped.
+
+Reading it is not the cheap half it looks like. A CrewAI task is a unit of work with a description, an
+expected output and the agent it is assigned to, and `COMPONENT_KINDS` has no kind for one. Giving it a kind
+is a schema decision, and calling its description a prompt instead is a judgement about the vocabulary rather
+than a parser to write. Either is worth doing on its own evidence; neither is worth carrying an open file for
+in the meantime.
+
+Nothing in this corpus loses anything: the twenty `tasks.yaml` in the pinned CrewAI examples repository all
+sit beside their `agents.yaml` inside a package, none at the root, so the fixed path never reached one of
+them, and no corpus number moves.
+
 ### The relation a CrewAI run looks like it reports and does not
 
 `graph.node.parent_id` was in the trace attribute vocabulary and read nowhere, and a CrewAI run reports zero

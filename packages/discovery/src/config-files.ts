@@ -27,7 +27,14 @@ export type ConfigDocument = {
 
 export type ConfigProblem = { readonly file: string; readonly detail: string };
 
-/** Configuration paths read on every scan, relative to the repository root. */
+/**
+ * Configuration paths read on every scan, relative to the repository root.
+ *
+ * Every name here is one some adapter opens. `config/tasks.yaml` was on this list and no adapter read it,
+ * which is a file opened on every scan of every repository and thrown away. Reading a CrewAI task needs a
+ * component kind for a task and `COMPONENT_KINDS` has none, so what it costs to add is a schema decision and
+ * not a parser.
+ */
 export const KNOWN_CONFIG_PATHS: readonly string[] = [
   '.mcp.json',
   '.vscode/mcp.json',
@@ -39,7 +46,6 @@ export const KNOWN_CONFIG_PATHS: readonly string[] = [
   'crew.jsonc',
   'agents.yaml',
   'config/agents.yaml',
-  'config/tasks.yaml',
 ];
 
 /**
