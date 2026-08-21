@@ -250,10 +250,10 @@ crew under `integrations/`, and once as a literal in the application that never 
 more than one candidate and joins none. `joins.ambiguous` names the three. On a repository holding one
 application the same reading would join.
 
-The three then appear under `exercisedNotDeclared`, where the rule that reports them says static discovery
-found no matching declaration. It found three. That rule has a branch for an observation whose name cannot
-identify anything and none for an observation whose name identifies too much, and the same sentence is
-printed for `supervisor` on the pinned deep research run. `joins.ambiguous` is the field that is correct.
+The three are reported as what they are. `exercised-not-declared` used to say static discovery had found no
+matching declaration over them, and it had found three; `observed-name-matches-many-declarations` now reports
+an observation whose name more than one declaration carries, and the same correction reaches `supervisor` on
+the pinned deep research run.
 
 The crew does not join either, for a different reason. Its span carries the OpenInference `CHAIN` kind and no
 name attribute, so it is declined and counted as `no_name`, which also means nothing nests inside it: that

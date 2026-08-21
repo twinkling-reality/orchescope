@@ -154,14 +154,40 @@ read out of a document has no source location and that flag is derived from sour
 the same shape of refusal `open-deep-research-exercised` already records for `supervisor`, and a refusal that
 names what it refused is worth more than a confident join to a file the run never opened.
 
-**What is still wrong, and this change made it visible on a second entry.** The three refused names appear
-under `exercisedNotDeclared`, where `exercised-not-declared` prints "static discovery found no matching
-declaration". They have three declarations each. That rule has a branch for an observation whose name cannot
-identify anything and none for an observation whose name identifies too much, and the sentence has shipped
-for `open-deep-research-exercised` since it was pinned. Diverting the population is not enough on its own:
-`fired` with nothing left becomes `clear`, and `clear` on that rule claims every observed component matched a
-declaration, which is a worse falsehood than the one it replaces. It needs its own rule, and a rule needs the
-three tests, so it is not in this change. `joins.ambiguous` carries the true statement until then.
+**And the rule that reads the refused names called them undeclared.** `exercised-not-declared` printed
+"static discovery found no matching declaration" over three names the repository declares three times each.
+That rule already had a branch for an observation whose name cannot identify anything and none for one whose
+name identifies too much, and the sentence had shipped for `supervisor` on the pinned deep research run since
+that entry was pinned, so this change made a false sentence visible on a second entry rather than inventing
+it. `observed-name-matches-many-declarations` now reports them, `exercised-not-declared` diverts them and
+names the count it handed over, and a run whose every observation was refused no longer reads as a run that
+joined perfectly, which is what a filter alone would have produced: `fired` with nothing left becomes
+`clear`, and `clear` there claims every observed component matched a declaration.
+
+No goal is cut from the new rule. Clearing it means one of the declarations giving up a name, and which one
+is a decision about the repository: on the pinned examples two of the three are a crew and a copy of that
+crew, so renaming either is wrong, and a CrewAI role is part of an agent's prompt rather than a label. A code
+location on the span settles it without touching any of them, which is a change to the instrumentation. The
+finding says both, and says which declarations share the name.
+
+**Three of the four entries that carry an ambiguous name were printing that sentence, and two of them are
+nothing to do with CrewAI.** `openai-agents-js-exercised` reported `Triage Agent` as a component nobody had
+declared; the SDK's own examples declare it **seven times**, and the run exercised one of them. That entry
+and `crewai-examples-exercised` both move as recorded: `exercised-not-declared` leaves their `byRule` and
+`observed-name-matches-many-declarations` takes its place, over the same components.
+
+`pydantic-ai-exercised` does not move, and the reason is the precedence between the two rules. Its observed
+name is `agent`, which is ambiguous because a name that is only the word for a kind matches every declaration
+of that kind. `observed-name-carries-no-identity` keeps it, because that rule owns the half a reader can act
+on: naming the agent at its definition is one bounded edit and it settles the ambiguity as a side effect.
+One observation gets one finding.
+`open-deep-research-exercised` reaches a provider, and it was re-recorded against a live run of it. It moves
+by four keys and no more: `componentsByRule.exercised-not-declared` from 4 to 2,
+`observed-name-matches-many-declarations` arriving at 1 finding over 2 components, and `findings.total` from
+8 to 9. `byRule.exercised-not-declared` stays at 2, because the model and the tool it still names differ in
+severity and group separately. Nothing outside the findings block moves: the delta is untouched and only the
+rules that read it changed, and the run reproduced its 31 spans and its whole runtime block unchanged, which
+is the part of that entry a provider was least likely to hold still.
 
 **A role is not unique inside a document and a key is.** Naming by the role alone let two entries of one
 document collapse: the builder merges on identity, and the survivor of two agents declaring `Market Analyst`

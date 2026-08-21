@@ -235,11 +235,13 @@ repositories:
       `role: >` block. A repository that declares one role in three places gets a refusal, and a refusal naming what
       it refused is worth more than a confident join to the wrong file.
 
-      **The three then appear under exercisedNotDeclared, and that list is telling a reader something false about
-      them.** They are not undeclared; they are declared three times each. The `exercised-not-declared` rule has no
-      branch for an ambiguous name and prints "no matching declaration", which is the same sentence
-      open-deep-research-exercised has carried for `supervisor` since it was pinned. `joins.ambiguous` is where the
-      true statement is until that rule has one.
+      **The three still appear under exercisedNotDeclared, and the rule that reads that list no longer calls them
+      undeclared.** They are declared three times each. `exercised-not-declared` used to print "no matching
+      declaration" over them, which is the opposite fact and is the same sentence open-deep-research-exercised had
+      carried for `supervisor` since it was pinned. Both are now diverted to
+      `observed-name-matches-many-declarations`, which says what happened and cuts no goal from it: which of three
+      declarations gives up a name is a decision about the repository, and on this one two of the three are a crew
+      and a copy of that crew under integrations/.
 
       The crew joins nothing either, for a different reason. Its span is a CHAIN carrying no gen_ai.workflow.name, so
       isStructuralSpan declines it as no_name, and the name it declines is `MarketingPostsCrew.kickoff` where the

@@ -107,9 +107,9 @@
     "byRule": {
       "configured-tool-has-no-caller": 1,
       "declared-not-exercised": 2,
-      "exercised-not-declared": 1,
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
+      "observed-name-matches-many-declarations": 1,
       "prompt-injection-boundary": 1,
       "retry-around-non-idempotent-operation": 1,
       "topology-shape": 2
@@ -121,9 +121,9 @@
     "componentsByRule": {
       "configured-tool-has-no-caller": 34,
       "declared-not-exercised": 417,
-      "exercised-not-declared": 1,
       "model-call-without-timeout": 50,
       "observability-coverage": 10,
+      "observed-name-matches-many-declarations": 1,
       "prompt-injection-boundary": 22,
       "retry-around-non-idempotent-operation": 2,
       "topology-shape": 53

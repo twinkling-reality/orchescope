@@ -6,6 +6,7 @@ import type { Contradiction, ReconciliationDelta, RunRecord } from '@orchescope/
 import { buildGraph, componentDraft } from '@orchescope/testkit';
 import type { RuleContext } from '../src/rule.ts';
 import {
+  ambiguousObservationRule,
   contradictedDeclarationRule,
   declaredNotExercisedRule,
   exercisedNotDeclaredRule,
@@ -51,6 +52,18 @@ const contextFor = (observed: readonly string[]): RuleContext => ({
   scenarios: [],
   evidenceById: new Map(),
 });
+
+/** The same run, with the reconciler having matched some of those names to more than one declaration. */
+const contested = (observed: readonly string[], ambiguous: readonly string[]): RuleContext => {
+  const context = contextFor(observed);
+  return {
+    ...context,
+    delta: {
+      ...deltaWith(observed),
+      joins: { ...deltaWith(observed).joins, ambiguous: [...ambiguous] },
+    },
+  };
+};
 
 describe('observed-name-carries-no-identity', () => {
   it('fires when the instrumentation reported a component under the word for its kind', () => {
@@ -141,6 +154,95 @@ describe('exercised-not-declared', () => {
     assert.equal(outcome.status, 'fired');
     assert.equal(outcome.drafts.length, 1);
     assert.match(outcome.drafts[0]?.title ?? '', /^planner runs without being declared/);
+  });
+
+  /**
+   * Nor was it undeclared when several declarations carried its name. The reconciler found more than one and
+   * refused, and saying static discovery found none is the opposite fact about the same repository.
+   */
+  it('does not call a component undeclared when more than one declaration carries its name', () => {
+    const outcome = exercisedNotDeclaredRule.evaluate(contested(['agent:planner'], ['planner']));
+    assert.deepEqual(outcome.drafts, []);
+    assert.match(outcome.detail ?? '', /observed-name-matches-many-declarations/);
+  });
+
+  it('names both diverted populations when a run produced one of each', () => {
+    const outcome = exercisedNotDeclaredRule.evaluate(
+      contested(['agent:agent', 'agent:planner'], ['planner']),
+    );
+    assert.deepEqual(outcome.drafts, []);
+    assert.match(outcome.detail ?? '', /observed-name-carries-no-identity/);
+    assert.match(outcome.detail ?? '', /observed-name-matches-many-declarations/);
+  });
+});
+
+/**
+ * The join is by name, and a name that means several things stops it as surely as a name that means nothing.
+ *
+ * `exercised-not-declared` said static discovery had found no matching declaration for a name the repository
+ * declares three times. It found three and declined to pick, which is a refusal worth reading and not an
+ * absence. The sentence had shipped for `supervisor` on the pinned deep research run since that entry was
+ * pinned, and reading the packaged CrewAI agents document made it a second entry.
+ */
+describe('observed-name-matches-many-declarations', () => {
+  it('fires for an observation the reconciler matched to more than one declaration', () => {
+    const outcome = ambiguousObservationRule.evaluate(contested(['agent:planner'], ['planner']));
+    assert.equal(outcome.status, 'fired');
+    assert.equal(outcome.drafts.length, 1);
+    const draft = outcome.drafts[0];
+    assert.equal(draft?.category, 'observability');
+    assert.equal(draft?.basis, 'observed');
+    assert.match(draft?.title ?? '', /declared in more than one place/);
+    assert.equal(
+      draft?.goalEligible,
+      false,
+      'which declaration gives up the name is a decision this build has no evidence for',
+    );
+  });
+
+  /*
+   * The reconciler writes the observed name as the run reported it, and a CrewAI role arrives with the
+   * newline that ended its folded block still on it. The component minted for it is named by the slug, so a
+   * comparison that is not normalised matches neither.
+   */
+  it('fires on a name the run reported with the whitespace its instrumentation left on it', () => {
+    const outcome = ambiguousObservationRule.evaluate(contested(['agent:planner'], ['Planner\n']));
+    assert.equal(outcome.status, 'fired');
+    assert.equal(outcome.drafts.length, 1);
+  });
+
+  it('stays quiet when the reconciler refused nothing', () => {
+    const outcome = ambiguousObservationRule.evaluate(contextFor(['agent:planner']));
+    assert.equal(outcome.status, 'clear');
+    assert.deepEqual(outcome.drafts, []);
+  });
+
+  it('stays quiet for an observation that was refused for a different reason', () => {
+    const outcome = ambiguousObservationRule.evaluate(contested(['agent:agent'], ['planner']));
+    assert.equal(outcome.status, 'clear');
+    assert.deepEqual(outcome.drafts, []);
+  });
+
+  /*
+   * A name that is only the word for a kind matches every declaration of that kind, so it is ambiguous as
+   * well as anonymous. It belongs to the rule that owns the bounded edit, and one observation gets one
+   * finding: this is the shape the pinned Pydantic AI run reports, where the observed name is `agent`.
+   */
+  it('leaves a name that is only its kind to the rule that can offer a fix for it', () => {
+    const outcome = ambiguousObservationRule.evaluate(contested(['agent:agent'], ['agent']));
+    assert.equal(outcome.status, 'clear');
+    assert.deepEqual(outcome.drafts, []);
+    const owner = unnamedObservationRule.evaluate(contested(['agent:agent'], ['agent']));
+    assert.equal(owner.status, 'fired');
+    assert.equal(owner.drafts.length, 1);
+  });
+
+  it('reports nothing at all before a run has been reconciled', () => {
+    const outcome = ambiguousObservationRule.evaluate({
+      ...contextFor([]),
+      delta: undefined,
+    });
+    assert.equal(outcome.status, 'insufficient_evidence');
   });
 });
 

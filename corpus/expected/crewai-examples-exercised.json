@@ -102,8 +102,8 @@
   "findings": {
     "byRule": {
       "declared-not-exercised": 1,
-      "exercised-not-declared": 1,
       "observability-coverage": 1,
+      "observed-name-matches-many-declarations": 1,
       "topology-shape": 1
     },
     "bySeverity": {
@@ -112,8 +112,8 @@
     },
     "componentsByRule": {
       "declared-not-exercised": 130,
-      "exercised-not-declared": 3,
       "observability-coverage": 10,
+      "observed-name-matches-many-declarations": 3,
       "topology-shape": 3
     },
     "strengths": 0,

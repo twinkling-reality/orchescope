@@ -288,6 +288,8 @@ const NOT_MOVED_BY_A_DECLARATION: Readonly<Record<string, string>> = {
   'exercised-not-declared':
     'its population is components a run named and nothing declared, which carry no source location and so can never be marked',
   'observed-name-carries-no-identity': 'keyed on observed names that matched no declaration',
+  'observed-name-matches-many-declarations':
+    'keyed on observed names the reconciler matched to several declarations, which no fixture reaches because no run reaches a fixture',
   'declaration-contradicted-by-observation': 'keyed on contradictions a run produced',
   'duplicate-side-effect': 'keyed on the side effect records of a run',
   'independent-calls-run-sequentially': 'keyed on the order a run performed operations in',

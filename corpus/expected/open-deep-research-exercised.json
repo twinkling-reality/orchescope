@@ -110,20 +110,22 @@
       "latency-concentrated-in-one-component": 1,
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
+      "observed-name-matches-many-declarations": 1,
       "tokens-concentrated-in-one-component": 1,
       "topology-shape": 1
     },
     "componentsByRule": {
       "declared-not-exercised": 19,
-      "exercised-not-declared": 4,
+      "exercised-not-declared": 2,
       "latency-concentrated-in-one-component": 1,
       "model-call-without-timeout": 8,
       "observability-coverage": 10,
+      "observed-name-matches-many-declarations": 2,
       "tokens-concentrated-in-one-component": 1,
       "topology-shape": 8
     },
     "strengths": 0,
-    "total": 8
+    "total": 9
   },
   "foundNothing": [
     "mcp is imported here and its adapter found nothing"

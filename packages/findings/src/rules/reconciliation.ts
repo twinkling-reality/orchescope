@@ -3,8 +3,9 @@ import {
   CONFIDENCE_BANDS,
   derivedEvidence,
   formatCount,
+  normalizeLocalName,
 } from '@orchescope/domain';
-import type { ComponentId, EvidenceId } from '@orchescope/schema';
+import type { ComponentId, EvidenceId, ReconciliationDelta } from '@orchescope/schema';
 import { clear, type FindingDraft, fired, insufficient, type Rule } from '../rule.ts';
 
 /**
@@ -17,6 +18,18 @@ import { clear, type FindingDraft, fired, insufficient, type Rule } from '../rul
 const PRODUCER = 'rule:reconciliation';
 
 const componentLabel = (id: ComponentId): string => id;
+
+/**
+ * Observed names the reconciler matched to more than one declaration and joined to none.
+ *
+ * `joins.ambiguous` holds them as the run reported them, so the comparison is on the normalised form: the
+ * CrewAI instrumentor writes a folded `role: >` block into the span verbatim and the name arrives with the
+ * newline still on it, while the component minted for it is named by the slug.
+ */
+const ambiguouslyNamed = (delta: ReconciliationDelta, displayName: string): boolean =>
+  delta.joins.ambiguous.some(
+    (observed) => normalizeLocalName(observed) === normalizeLocalName(displayName),
+  );
 
 /**
  * A name that is only the word for what the thing is.
@@ -90,6 +103,28 @@ export const declaredNotExercisedRule: Rule = {
   },
 };
 
+/**
+ * What this rule handed to another one, so the reader can see both numbers rather than a shorter list.
+ *
+ * `fired` with nothing left becomes `clear`, and `clear` here claims every observed component matched a
+ * declaration. That is why the two diverted populations have rules of their own rather than only a filter:
+ * a run whose every observation was refused would otherwise be reported as a run that joined perfectly.
+ */
+const divertedDetail = (withoutIdentity: number, ambiguous: number): string | undefined => {
+  const parts: string[] = [];
+  if (withoutIdentity > 0) {
+    parts.push(
+      `${formatCount(withoutIdentity, 'observed component')} arrived under a name that is only their kind, which observed-name-carries-no-identity reports instead`,
+    );
+  }
+  if (ambiguous > 0) {
+    parts.push(
+      `${formatCount(ambiguous, 'observed component')} matched more than one declaration, which observed-name-matches-many-declarations reports instead`,
+    );
+  }
+  return parts.length === 0 ? undefined : parts.join('; ');
+};
+
 export const exercisedNotDeclaredRule: Rule = {
   id: 'exercised-not-declared',
   category: 'architecture',
@@ -101,6 +136,7 @@ export const exercisedNotDeclaredRule: Rule = {
 
     const drafts: FindingDraft[] = [];
     let withoutIdentity = 0;
+    let ambiguous = 0;
     for (const componentId of undeclared) {
       const component = context.graph.component(componentId);
       if (component === undefined) continue;
@@ -111,6 +147,16 @@ export const exercisedNotDeclaredRule: Rule = {
        */
       if (carriesNoIdentity(component.displayName, component.kind)) {
         withoutIdentity += 1;
+        continue;
+      }
+      /*
+       * Nor was a component whose name matched more than one declaration. The reconciler found several and
+       * refused to choose, which is the opposite of finding none, and this rule told a reader that static
+       * discovery had found no matching declaration for a name declared three times over.
+       * `observed-name-matches-many-declarations` reports it instead.
+       */
+      if (ambiguouslyNamed(context.delta, component.displayName)) {
+        ambiguous += 1;
         continue;
       }
       drafts.push({
@@ -146,12 +192,7 @@ export const exercisedNotDeclaredRule: Rule = {
         tags: ['reconciliation', 'exercised-not-declared'],
       });
     }
-    return fired(
-      drafts,
-      withoutIdentity === 0
-        ? undefined
-        : `${formatCount(withoutIdentity, 'observed component')} arrived under a name that is only their kind, which observed-name-carries-no-identity reports instead`,
-    );
+    return fired(drafts, divertedDetail(withoutIdentity, ambiguous));
   },
 };
 
@@ -356,10 +397,91 @@ export const unnamedObservationRule: Rule = {
   },
 };
 
+/**
+ * The join is by name, so a name that means several things is where the join stops.
+ *
+ * `exercised-not-declared` told a reader that static discovery had found no matching declaration for a name
+ * the repository declares three times. It found three and refused to choose, which is the opposite fact, and
+ * the sentence had shipped for `supervisor` on the pinned deep research run since that entry was pinned.
+ * Reading the packaged CrewAI agents document made it a second entry: a role written once in the crew that
+ * ran, once in a copy of that crew, and once as a literal in an application that did not.
+ *
+ * A refusal is the right answer there, and it is worth more than the confident join it replaced. What it is
+ * not is an absence, and the two read identically until one of them says which it is.
+ *
+ * **No goal is cut from this one.** Clearing it means one of the declarations giving up the name, and this
+ * build cannot say which: on the pinned repository two of the three are a crew and a copy of that crew, so
+ * renaming either is wrong, and the role of a CrewAI agent is part of its prompt rather than a label. A
+ * code location on the span settles it without touching any of them, which is a change to the
+ * instrumentation and not to the repository under audit.
+ */
+export const ambiguousObservationRule: Rule = {
+  id: 'observed-name-matches-many-declarations',
+  category: 'observability',
+  summary:
+    'A component observed under a name more than one declaration carries, so none could be joined.',
+  evaluate: (context) => {
+    if (context.delta === undefined) return insufficient('no reconciliation has been performed');
+    const delta = context.delta;
+    const contested = delta.exercisedNotDeclared.components
+      .map((componentId) => context.graph.component(componentId))
+      .filter((component) => component !== undefined)
+      /*
+       * A name that is only the word for a kind matches every declaration of that kind, so it arrives here as
+       * well. It belongs to `observed-name-carries-no-identity`, which owns the actionable half of it: a run
+       * that did not say which agent it was is one bounded edit away from saying so, and naming it at the
+       * definition settles the ambiguity too. Reporting both would tell a reader two things about one
+       * observation and offer the weaker of them second.
+       */
+      .filter((component) => !carriesNoIdentity(component.displayName, component.kind))
+      .filter((component) => ambiguouslyNamed(delta, component.displayName));
+    if (contested.length === 0) {
+      return clear('every observed name matched at most one declaration');
+    }
+
+    const drafts: FindingDraft[] = contested.map((component) => ({
+      ruleId: 'observed-name-matches-many-declarations',
+      occurrence: {
+        key: 'ambiguous',
+        groupedTitle:
+          '{count} components were observed under names more than one declaration carries',
+      },
+      category: 'observability' as const,
+      polarity: 'risk' as const,
+      severity: 'medium' as const,
+      confidence: CONFIDENCE_BANDS.deterministic,
+      basis: 'observed' as const,
+      title: `The observed ${component.kind} "${component.displayName.trim()}" is declared in more than one place`,
+      explanation: `The run reported this ${component.kind} as ${component.displayName.trim()}, and more than one declaration in this repository carries that name. Reconciliation joined it to none of them rather than picking one, so this is a refusal and not a component nobody declared. Which declaration the run exercised is a fact this repository has and this build does not.`,
+      impact:
+        'Every declaration sharing that name stays unexercised in the delta and the run adds a component beside them, so the coverage number is wrong in both directions and no runtime claim can be attached to the declaration it belongs to.',
+      components: [component.id],
+      evidence: component.evidence.slice(0, 3) as EvidenceId[],
+      recommendation: {
+        summary: `Decide which declaration of ${component.displayName.trim()} the run exercised, or have the instrumentation emit a code location so the join is made by where it ran.`,
+        steps: [
+          'Read joins.ambiguous in the reconciliation delta for the names, and the declarations sharing each one.',
+          'Where the duplicates are two copies of one application, the answer is that they are copies, and only one of them belongs to the system this run measured.',
+          'Where they are genuinely different components, give one of them a name of its own, or emit code.file.path on the span so the join no longer depends on the name.',
+        ],
+        effort: 'medium' as const,
+        risk: 'medium' as const,
+      },
+      goalEligible: false,
+      goalReason:
+        'Clearing it means one of the declarations giving up a name, and which one is a decision about the repository that this build has no evidence for.',
+      requiresRuntimeEvidence: true,
+      tags: ['reconciliation', 'observability'],
+    }));
+    return fired(drafts);
+  },
+};
+
 export const RECONCILIATION_RULES: readonly Rule[] = [
   declaredNotExercisedRule,
   exercisedNotDeclaredRule,
   unnamedObservationRule,
+  ambiguousObservationRule,
   contradictedDeclarationRule,
   duplicateSideEffectRule,
 ];
