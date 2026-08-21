@@ -16,6 +16,11 @@ export {
   testProvenance,
 } from './builders.ts';
 export {
+  type LookalikeConfiguration,
+  LOOKALIKE_CONFIGURATIONS,
+  type LookalikeOutcome,
+} from './lookalike-configuration.ts';
+export {
   createTempWorkspace,
   type TempWorkspace,
   writeNodeProject,

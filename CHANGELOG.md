@@ -10,6 +10,37 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### The dependency property, and what it turned out to be
+
+[ADR 0005](docs/architecture/adr/0005-corpus-invariants.md) proposes a property that holds with no
+expectation behind it: *a component attributed to an adapter whose declared packages the repository does
+not use must carry `details.role: 'developer_tooling'` and must not count toward `agentSystemDetected`.*
+Both recorded precision failures were exactly that shape, an adapter reaching a repository through a
+configuration door rather than through a dependency, so the property is a check on the two doors that have
+ever leaked.
+
+**Checked over the pinned corpus it has nothing to check.** At most one component across all twenty seven
+entries satisfies its antecedent, and none at all under the predicate this build uses to decide whether an
+adapter runs. Where it has a population is a repository that declares one ordinary web framework and holds
+one of the shapes that have fooled this build, which is what the lookalike table is, so that is where the
+property is now asserted: every component attributed to any adapter that claims a package has to say whose
+it is, and the repository has to stay not an agent system.
+
+**The adapter set is derived rather than written down.** It is `DEFAULT_ADAPTERS` filtered by whether the
+adapter claims a package, which is what covers a fourteenth reader on the day it declares its `packages`
+rather than on the day somebody remembers. It is eight today, and the check says so out loud so that a
+build where it silently became fewer fails rather than passes quietly.
+
+The table moved to `packages/testkit` so the corpus harness and these tests read the same rows. What runs
+in the gate a change has to pass is the half that needs no checkout and no network; the corpus writes the
+same rows into five real repositories.
+
+**A name a framework owns outright is deliberately not in the table.** `crew.jsonc` is CrewAI's own, its
+generator writes one and its `pyproject.toml` names it, and a repository holding one is declaring a crew
+whatever else it depends on. Injected into a repository depending on express it declares two agents and
+reports an agent system, which is the property being violated by an answer that is correct. That is the
+line the table is drawn along: these are the names that belong to nobody.
+
 ### Five shapes the fixed list let through, found by the corpus on its first run
 
 The generated negatives were built to catch a precision failure before a field report does. On the first
