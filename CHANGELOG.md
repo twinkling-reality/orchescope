@@ -10,6 +10,35 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### Where breadth comes from as agent systems proliferate, asked and answered with measurements
+
+Thirteen hand written per framework readers produce the declared half of this build's join, 5,493 lines
+against 42,077 that know no framework name, and the question of what happens as the field grows had never
+been written down. [docs/architecture/mapping-architecture.md](docs/architecture/mapping-architecture.md)
+asks it, measures six directions against this repository, and stages the answer. Three decisions follow from
+it, recorded separately so each can be refused on its own evidence:
+[ADR 0003](docs/architecture/adr/0003-fact-model-breadth.md) on the fact model as the breadth lever,
+[ADR 0004](docs/architecture/adr/0004-provenance-not-confidence.md) on widening by provenance rather than by
+a confidence band, and [ADR 0005](docs/architecture/adr/0005-corpus-invariants.md) on a corpus gate that
+holds invariants.
+
+**Four things this repository recorded about itself were close to true and not true.** The corpus reported
+seven adapter gaps and one is an adapter gap: two are false, four are correct refusals. The containment
+boundary for framework knowledge is `packages/discovery`, not `packages/discovery/src/adapters`, and the
+fifteen lines that leaked out are patterns no convention expresses. Confidence is read for severity and is
+read nowhere that decides identity. And the corpus is 49.8% of the cost of a framework while an expectation
+has no polarity: `crewai-examples-exercised` records `exercisedComponents: 0`, zero is the fix, and the only
+place that sentence existed was this file.
+
+**The most attractive direction was tested rather than argued, and it failed.** A convention driven reader
+was implemented against this repository's own `analyzeFileSet` and run over the pinned negatives. On
+`open-agent-platform`, pinned `not_agent_system` at a ceiling of 26 components, the import recognizer fires
+40 times and the known keys recognizer twice, and either one flips `agentSystemDetected` and takes the
+entry with it. A band cannot stop it, because nothing that decides identity reads one.
+
+Every number in the document was derived against the pinned corpus with the command that produces it beside
+it, so a reader who distrusts a figure can run it instead of taking it.
+
 ### A list of six inside the test that guards the corpus, where the set is eight
 
 `tests/e2e/corpus.test.ts` checked that every framework adapter this repository claims is exercised by at
