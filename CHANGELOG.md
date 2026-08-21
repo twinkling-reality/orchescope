@@ -10,6 +10,36 @@ attribute that carries a declaration rather than an observation, a configuration
 corpus metric that had been reporting its own ceiling.
 No published document changes: the documents under `schemas/` are byte identical.
 
+### A location that says which revision of the file it was read from
+
+`SourceLocation` and `ConfigLocation` have carried an optional `fileHash` since they were written, described
+as the digest that makes staleness detectable, and it was produced **0 times**. So every location this build
+has ever emitted named a path and a line and said nothing about which revision of that file it was true of.
+A stored graph, an exported bundle and a hand written manifest were all unfalsifiable the moment the working
+tree moved.
+
+The CrewAI join made that sharper rather than softer. 39 agents in the pinned examples repository now carry
+the document entry that declares them **and** the call that builds them, two files with two lifetimes, and a
+component whose declaration moved in one of them looked exactly like one that did not.
+
+**It is written now, in one place.** The graph builder is where every draft from thirteen adapters and the
+manifest reader meets, so it is where the digest is stamped; a stamp applied per producer is one a
+fourteenth would have to remember. Discovery hands it the digest of every file it parsed, which the analyser
+already computes, and of every configuration document it opened, which now records the digest of the bytes
+it was parsed from beside their length.
+
+**Evidence carries the same location, and stamping it re-mints the identifier.** That is the identifier
+becoming correct rather than changing: an evidence record's identifier is the digest of its content, and its
+content now includes which revision the span was read from. Two scans of one revision still produce one
+record. Two scans across an edit produce two, which is the entire reason for writing the digest.
+
+Measured over the nineteen pinned repositories the required corpus measures: **29,965 of 29,965 locations
+carry the digest of the file they point into**, against 0 before. No expectation moves, because an
+expectation records counts and kinds rather than locations. The bundles grow by about 15%, which is
+pydantic-ai's 4,077 KB becoming 4,690 KB: 6,933 locations over 284 distinct files, so each digest is
+repeated about twenty four times. Recording each file once is a change to a published document and is worth
+deciding on its own evidence rather than assuming here.
+
 ### The attribute that would have made the join agree with itself, refused in data
 
 `graph.node.parent_id` is written by the CrewAI instrumentor on every agent span after the first, and on

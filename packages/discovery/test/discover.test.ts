@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { createDeadline, fixedClock } from '@orchescope/domain';
 import { DEFAULT_EXCLUDED_DIRECTORIES } from '@orchescope/source-analysis';
@@ -586,6 +589,94 @@ seat_booking = Agent(
           component.sourceLocations.some((where) => where.file === 'backend/airline/agents.py'),
       ),
       'a package member importing the SDK declares an agent, whatever its own file is called',
+    );
+  });
+});
+
+/**
+ * A location says which revision of a file it was read from, or it says nothing about any other.
+ *
+ * `fileHash` has been in `SourceLocation` and `ConfigLocation` since they were written and was produced
+ * zero times, so a stored graph, an exported bundle and a hand written manifest all cited a path and a line
+ * that no later reader could check. The CrewAI join made that sharper rather than softer: one agent now
+ * carries the document entry that declares it and the call that builds it, two files with two lifetimes,
+ * and a component whose declaration moved in one of them looks exactly like one that did not.
+ */
+describe('the digest a location carries', () => {
+  const digestOf = (workspace: ReturnType<typeof createTempWorkspace>, file: string): string =>
+    createHash('sha256')
+      .update(readFileSync(join(workspace.root, file)))
+      .digest('hex');
+
+  it('is the digest of the file the location points into, on source and on configuration alike', async () => {
+    const workspace = buildWorkspace();
+    const result = await scanWorkspace(workspace);
+
+    const located = result.graph.components.filter(
+      (component) => component.sourceLocations.length + component.configLocations.length > 0,
+    );
+    assert.ok(located.length > 0, 'nothing in this fixture carries a location');
+
+    for (const component of located) {
+      for (const where of component.sourceLocations) {
+        assert.equal(
+          where.fileHash,
+          digestOf(workspace, where.file),
+          `${component.id} cites ${where.file} with a digest that is not that file`,
+        );
+      }
+      for (const where of component.configLocations) {
+        assert.equal(
+          where.fileHash,
+          digestOf(workspace, where.file),
+          `${component.id} cites ${where.file} with a digest that is not that file`,
+        );
+      }
+    }
+  });
+
+  it('travels with the evidence, whose identifier is its content and now says which revision', async () => {
+    const workspace = buildWorkspace();
+    const result = await scanWorkspace(workspace);
+    const located = result.evidence.filter(
+      (record) => record.kind === 'source_span' || record.kind === 'config_entry',
+    );
+    assert.ok(located.length > 0, 'no evidence in this fixture carries a location');
+    for (const record of located) {
+      assert.equal(
+        record.location.fileHash,
+        digestOf(workspace, record.location.file),
+        `${record.id} cites ${record.location.file} with a digest that is not that file`,
+      );
+    }
+  });
+
+  it('moves when the file moves, which is the whole reason for writing it', async () => {
+    const workspace = buildWorkspace();
+    const before = await scanWorkspace(workspace);
+    workspace.write(
+      'src/agents/triage.ts',
+      `${readFileSync(join(workspace.root, 'src/agents/triage.ts'), 'utf8')}\n// one more line\n`,
+    );
+    const after = await scanWorkspace(workspace);
+
+    const digestsFor = (result: Awaited<ReturnType<typeof scanWorkspace>>) =>
+      result.graph.components
+        .flatMap((component) => component.sourceLocations)
+        .filter((where) => where.file === 'src/agents/triage.ts')
+        .map((where) => where.fileHash);
+
+    const first = digestsFor(before);
+    assert.ok(first.length > 0, 'the fixture declares nothing in src/agents/triage.ts');
+    assert.deepEqual(
+      [...new Set(first)].length,
+      1,
+      'one file at one revision has one digest, whatever cites it',
+    );
+    assert.notEqual(
+      [...new Set(digestsFor(after))][0],
+      first[0],
+      'the file changed and every location still claims the revision before it',
     );
   });
 });

@@ -362,7 +362,20 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
     deadline: request.deadline,
   };
 
-  const builder = new SystemGraphBuilder();
+  /*
+   * Every file this scan read, by the digest it read. A location that names a path and a line is true of one
+   * revision and says nothing about any other, and a component's declaration is now genuinely spread across
+   * files: the CrewAI join gives one agent a document entry and the call that builds it, in two files with
+   * two lifetimes. The digest is what makes staleness detectable per file rather than per scan.
+   *
+   * Built from what was parsed and what was opened, which is every file a location can name. A path neither
+   * layer read answers nothing, and the location keeps what its producer wrote.
+   */
+  const digests = new Map<string, Sha256Hex>();
+  for (const module of analysis.facts) digests.set(module.file, module.contentHash as Sha256Hex);
+  for (const document of configs.documents) digests.set(document.path, document.contentHash);
+
+  const builder = new SystemGraphBuilder((path) => digests.get(path));
   const adapters = request.adapters ?? DEFAULT_ADAPTERS;
   const adapterRuns: AdapterRun[] = [];
   for (const adapter of adapters) {

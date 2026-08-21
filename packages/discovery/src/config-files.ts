@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { sha256Hex } from '@orchescope/domain';
+import type { Sha256Hex } from '@orchescope/schema';
 import { parse as parseToml } from 'smol-toml';
 import { parse as parseYaml } from 'yaml';
 
@@ -40,6 +42,8 @@ export type ConfigDocument = {
   readonly format: ConfigFormat;
   readonly data: unknown;
   readonly byteLength: number;
+  /** Digest of the bytes this document was parsed from, so a location in it can be checked. */
+  readonly contentHash: Sha256Hex;
 };
 
 export type NamedConfigPath = { readonly path: string; readonly origin: ConfigOrigin };
@@ -280,6 +284,7 @@ export const readConfigDocuments = (
         format,
         data,
         byteLength: Buffer.byteLength(text, 'utf8'),
+        contentHash: sha256Hex(text) as Sha256Hex,
       });
     } catch (error) {
       problems.push({

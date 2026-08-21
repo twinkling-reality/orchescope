@@ -24,6 +24,19 @@ const traversal = {
 
 const workspaces: { dispose: () => void }[] = [];
 
+const HEX_DIGEST = /^[0-9a-f]{64}$/;
+
+/**
+ * A location carries the digest of the file it points into, and these assertions are about the pointer.
+ *
+ * The digest is asserted once, where it is the subject, rather than restated in every fixture: a literal
+ * digest in a test is a value that has to be regenerated whenever the fixture's text changes by a
+ * character, which teaches a reader to paste whatever the failure printed.
+ */
+const withoutDigest = (
+  locations: readonly { readonly file: string; readonly pointer: string }[] | undefined,
+) => locations?.map(({ file, pointer }) => ({ file, pointer }));
+
 after(() => {
   for (const workspace of workspaces) workspace.dispose();
 });
@@ -268,9 +281,10 @@ reviewer:
     const planner = result.graph.components.find(
       (component) => component.id === 'agent:planning-expert',
     );
-    assert.deepEqual(planner?.configLocations, [
+    assert.deepEqual(withoutDigest(planner?.configLocations), [
       { file: 'config/agents.yaml', pointer: '/planner' },
     ]);
+    assert.match(planner?.configLocations[0]?.fileHash ?? '', HEX_DIGEST);
   });
 
   /*
@@ -420,7 +434,7 @@ class MarketingPostsCrew():
     const analyst = result.graph.components.find(
       (component) => component.id === 'agent:lead-market-analyst',
     );
-    assert.deepEqual(analyst?.configLocations, [
+    assert.deepEqual(withoutDigest(analyst?.configLocations), [
       { file: 'src/marketing_posts/config/agents.yaml', pointer: '/lead_market_analyst' },
     ]);
     assert.equal(analyst?.metadata['runtimeName'], 'Lead Market Analyst');
@@ -442,7 +456,7 @@ class MarketingPostsCrew():
     const analyst = result.graph.components.find(
       (component) => component.id === 'agent:lead-market-analyst',
     );
-    assert.deepEqual(analyst?.configLocations, [
+    assert.deepEqual(withoutDigest(analyst?.configLocations), [
       { file: 'src/marketing_posts/config/agents.yaml', pointer: '/lead_market_analyst' },
     ]);
     assert.equal(
@@ -2411,7 +2425,7 @@ describe('the manifest', () => {
     assert.ok(agent !== undefined);
     assert.equal(agent.basis, 'discovered');
     assert.deepEqual(agent.presence, { static: true, runtime: false, manifest: true });
-    assert.deepEqual(agent.configLocations, [
+    assert.deepEqual(withoutDigest(agent.configLocations), [
       { file: '.orchescope/manifest.yaml', pointer: '/components/0' },
     ]);
     assert.equal(agent.metadata['runtimeName'], 'orchestrator');
@@ -2866,7 +2880,7 @@ export const overview = async (env: Env): Promise<unknown> => {
       (component) => component.id === 'database:app-events',
     );
     assert.ok(database !== undefined);
-    assert.deepEqual(database.configLocations, [
+    assert.deepEqual(withoutDigest(database.configLocations), [
       { file: 'packages/worker/wrangler.toml', pointer: '/d1_databases/0' },
     ]);
     assert.equal(database.metadata?.['binding'], 'EVENTS_DB');
