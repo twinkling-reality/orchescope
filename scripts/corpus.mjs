@@ -9,6 +9,7 @@
  *
  *   node scripts/corpus.mjs --check              every entry, cloning what the cache is missing
  *   node scripts/corpus.mjs --check --offline    only the entries that need no network
+ *   node scripts/corpus.mjs --check --required   local entries plus bounded digest-pinned archives
  *   node scripts/corpus.mjs --check --exercise   also run the entries that can produce spans, and join the delta
  *   node scripts/corpus.mjs --record <name>...   rewrite expectations, to be read before committing
  */
@@ -19,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { auditRepository, clearStoredState } from './corpus/audit.mjs';
 import { cacheDirectory, checkout } from './corpus/checkout.mjs';
 import { claimDifference, differences } from './corpus/comparison.mjs';
-import { isOffline, readCorpusDocument } from './corpus/definition.mjs';
+import { isOffline, isRequired, readCorpusDocument } from './corpus/definition.mjs';
 import { injectionVerdicts } from './corpus/negatives.mjs';
 import { exerciseRepository, missingInterpreter, prepareEnvironment } from './corpus/exercise.mjs';
 import { describeFederation, exerciseFederatedSystem } from './corpus/federation.mjs';
@@ -32,11 +33,16 @@ const { stableJson } = await import(join(root, 'packages/domain/src/index.ts'));
 const argv = process.argv.slice(2);
 const record = argv.includes('--record');
 const offline = argv.includes('--offline');
+const required = argv.includes('--required');
 const exercise = argv.includes('--exercise');
 const selected = argv.filter((argument) => !argument.startsWith('--'));
 
 if (record && argv.includes('--check')) {
   console.error('--check and --record ask for opposite things. Pass one.');
+  process.exit(2);
+}
+if (offline && required) {
+  console.error('--offline and --required select different acquisition boundaries. Pass one.');
   process.exit(2);
 }
 
@@ -101,13 +107,16 @@ const corpus = readCorpusDocument(root);
 const allEntries = corpus.repositories;
 const entries = allEntries.filter(
   (entry) =>
-    (!offline || isOffline(entry)) && (selected.length === 0 || selected.includes(entry.name)),
+    (!offline || isOffline(entry)) &&
+    (!required || isRequired(entry)) &&
+    (selected.length === 0 || selected.includes(entry.name)),
 );
-const systems = offline
-  ? []
-  : corpus.multiRepositorySystems.filter(
-      (system) => selected.length === 0 || selected.includes(system.name),
-    );
+const systems =
+  offline || required
+    ? []
+    : corpus.multiRepositorySystems.filter(
+        (system) => selected.length === 0 || selected.includes(system.name),
+      );
 if (entries.length === 0 && systems.length === 0) {
   console.error('no corpus entry matched');
   process.exit(2);
@@ -156,7 +165,8 @@ for (const entry of entries) {
     continue;
   }
   try {
-    const directory = checkout(root, entry, !offline);
+    const acquisition = offline ? 'offline' : required ? 'required_archive' : 'git';
+    const directory = await checkout(root, entry, acquisition);
     clearStoredState(directory);
     const exercised =
       entry.exercise === undefined
@@ -215,12 +225,13 @@ for (const system of systems) {
     continue;
   }
   try {
-    const repositoryDirectories = system.repositories.map((coordinate) => {
+    const repositoryDirectories = [];
+    for (const coordinate of system.repositories) {
       const entry = entryByName.get(coordinate.name);
       if (entry === undefined)
         throw new Error(`repository ${coordinate.name} is not a corpus entry`);
-      return checkout(root, entry, true);
-    });
+      repositoryDirectories.push(await checkout(root, entry, 'git'));
+    }
     const runtimeIndex = system.repositories.findIndex(
       (coordinate) => coordinate.name === system.exercise.runtimeRepository,
     );

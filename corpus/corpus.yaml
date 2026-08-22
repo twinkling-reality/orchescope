@@ -5,9 +5,10 @@
 # what a scan produces is measured rather than assumed, and so that a framework moving in the field shows up as a
 # diff rather than as silence.
 #
-# Third party source is never vendored here. Each entry names a commit, and `scripts/corpus.mjs` clones that commit
-# into `corpus/.cache`, which is ignored by git. Licence compliance is the reason: this repository is Apache-2.0 and
-# the corpus is not, so the corpus stays outside it.
+# Third party source is never vendored here. Each entry names a commit. The full corpus clones that commit into
+# `corpus/.cache`; selected required entries use a bounded archive whose normalized source tree and licence file are
+# pinned below. Both destinations are ignored by git. Licence compliance is the reason: this repository is
+# Apache-2.0 and the corpus is not, so source obtained for measurement stays outside it.
 #
 # An entry needs:
 #   name    the file name under corpus/expected, and the directory name in the cache
@@ -24,11 +25,14 @@
 # checkout and revision still belong to the repository root. `multiRepositorySystems` repeats the exact URL and
 # commit of every participating entry, then states the runtime crossing evidence and its refusal condition. That
 # list locates source and never counts as evidence that two processes communicated.
+# A static git entry may carry `requiredArchive`. Its URL repeats the exact commit through GitHub's archive API. The
+# tree digest covers every normalized path, executable bit and file byte; the separate licence digest proves the
+# expected notice survived acquisition. Gzip bytes, generated root names and archive metadata are not the pin.
 #
 # Both polarities count. A repository that is not an agent system is a precision test: the number it holds is a
 # ceiling, and the guard against a reader being loosened until it matches ordinary English.
 
-schemaVersion: 1
+schemaVersion: 2
 
 repositories:
   - name: demonstration-system
@@ -387,6 +391,11 @@ repositories:
     source: git
     url: https://github.com/vercel/ai-chatbot.git
     commit: c2f8235e1f3ea903ad8b7f61447c4f74164b5c58
+    requiredArchive:
+      url: https://api.github.com/repos/vercel/ai-chatbot/tarball/c2f8235e1f3ea903ad8b7f61447c4f74164b5c58
+      treeSha256: b890c5a849e7807d364ec1ff8252791377742bfbe917d04eeb28ccf3ce5dc80d
+      licensePath: LICENSE
+      licenseSha256: 5809eb2eab284b24fc53b21484398fd264c6f929d3b32ecdc7108a89f037e943
     kind: agent_system
     why: >-
       The Vercel AI SDK read from an application that uses it rather than from the library that defines it. A
@@ -628,6 +637,11 @@ repositories:
     source: git
     url: https://github.com/openai/openai-cs-agents-demo.git
     commit: bd7bfca0f5abf50529370814c3e7c88542011925
+    requiredArchive:
+      url: https://api.github.com/repos/openai/openai-cs-agents-demo/tarball/bd7bfca0f5abf50529370814c3e7c88542011925
+      treeSha256: 2142a5a7c05192da3ce70e88c6b8aae560d4533a448d53f6fe441670f20bc4b7
+      licensePath: LICENSE
+      licenseSha256: fdd680f28af4ae4e155cc35b3d37da81d57ffa94359fceb53fcb4c11d5ce2c0d
     kind: agent_system
     why: >-
       Two findings on this repository were checked against the source by hand and are true: baggage_tool is defined
@@ -723,6 +737,11 @@ repositories:
     source: git
     url: https://github.com/langchain-ai/open-agent-platform.git
     commit: 6a2ea0a3d019c20550b8d88ca0ed4d57df774ac8
+    requiredArchive:
+      url: https://api.github.com/repos/langchain-ai/open-agent-platform/tarball/6a2ea0a3d019c20550b8d88ca0ed4d57df774ac8
+      treeSha256: c4d4fa6fd3e06036ca0d1418dcd8ba0bdc580bf088c8e39b2cc1ec5347f95caf
+      licensePath: LICENSE
+      licenseSha256: 61e5e8faf0b76db76793ecd8aa0edca36a82bd8dba279d2a31972f026c132423
     kind: not_agent_system
     why: >-
       A client of agent systems rather than one of them, which is the negative case every other entry of this kind

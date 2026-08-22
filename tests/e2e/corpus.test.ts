@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +10,9 @@ import { DEFAULT_ADAPTERS } from '../../packages/discovery/src/index.ts';
 import { claimDifference, differences } from '../../scripts/corpus/comparison.mjs';
 import {
   isOffline,
+  isRequired,
   readCorpus,
+  readCorpusDocument,
   readMultiRepositorySystems,
 } from '../../scripts/corpus/definition.mjs';
 
@@ -59,6 +62,13 @@ const entries = readCorpus(repositoryRoot) as readonly {
   source: string;
   url?: string;
   commit?: string;
+  exercise?: unknown;
+  requiredArchive?: {
+    url: string;
+    treeSha256: string;
+    licensePath: string;
+    licenseSha256: string;
+  };
 }[];
 
 const multiRepositorySystems = readMultiRepositorySystems(repositoryRoot) as readonly {
@@ -106,7 +116,7 @@ describe('the corpus', () => {
     assert.deepEqual(missing, [], `no corpus entry exercises ${missing.join(', ')}`);
   });
 
-  it('pins repositories in both polarities, and an offline subset', () => {
+  it('pins repositories in both polarities, an offline subset and bounded required archives', () => {
     const precision = entries.filter((entry) => entry.kind === 'not_agent_system');
     assert.ok(
       precision.length >= 3,
@@ -115,8 +125,24 @@ describe('the corpus', () => {
     assert.ok(entries.length >= 8, `the corpus holds ${entries.length} repositories`);
     assert.ok(
       entries.some((entry) => isOffline(entry)),
-      'the required gate needs an offline subset',
+      'contributors need a network-free subset',
     );
+    const requiredArchives = entries.filter((entry) => isRequired(entry) && !isOffline(entry));
+    assert.equal(requiredArchives.length, 3);
+    assert.ok(requiredArchives.some((entry) => entry.kind === 'agent_system'));
+    assert.ok(requiredArchives.some((entry) => entry.kind === 'not_agent_system'));
+    for (const entry of requiredArchives) {
+      assert.equal(entry.exercise, undefined, `${entry.name} is not a static required entry`);
+      assert.equal(
+        entry.requiredArchive?.url,
+        entry.url?.replace(
+          /^https:\/\/github\.com\/(.+)\/(.+)\.git$/,
+          `https://api.github.com/repos/$1/$2/tarball/${entry.commit}`,
+        ),
+      );
+      assert.match(entry.requiredArchive?.treeSha256 ?? '', /^[0-9a-f]{64}$/);
+      assert.match(entry.requiredArchive?.licenseSha256 ?? '', /^[0-9a-f]{64}$/);
+    }
   });
 
   it('pins every repository in a real multi-repository system by URL and revision', () => {
@@ -236,5 +262,89 @@ describe('the corpus check', () => {
     assert.match(stdout, /parse rate/);
     assert.match(stdout, /adapters /);
     assert.match(stdout, /found nothing/);
+  });
+});
+
+describe('required archive definitions', () => {
+  const validEntry = {
+    name: 'measured-repository',
+    source: 'git',
+    url: 'https://github.com/example/measured-repository.git',
+    commit: '1'.repeat(40),
+    kind: 'agent_system',
+    why: 'It is a bounded real repository.',
+    requiredArchive: {
+      url: `https://api.github.com/repos/example/measured-repository/tarball/${'1'.repeat(40)}`,
+      treeSha256: '2'.repeat(64),
+      licensePath: 'LICENSE',
+      licenseSha256: '3'.repeat(64),
+    },
+  };
+
+  const readTemporary = (entry: object) => {
+    const prefix = join(tmpdir(), 'orchescope-corpus-definition-');
+    const root = mkdtempSync(prefix);
+    if (!root.startsWith(prefix)) throw new Error('unexpected temporary corpus root');
+    try {
+      mkdirSync(join(root, 'corpus'));
+      writeFileSync(
+        join(root, 'corpus/corpus.yaml'),
+        JSON.stringify({ schemaVersion: 2, repositories: [entry] }),
+      );
+      return readCorpusDocument(root);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+
+  it('accepts a static Git entry whose archive repeats all exact pins', () => {
+    assert.equal(readTemporary(validEntry).repositories[0]?.name, 'measured-repository');
+  });
+
+  it('rejects archive coordinates, digests, paths and exercise scope that are not exact', () => {
+    const invalid = [
+      {
+        entry: {
+          ...validEntry,
+          requiredArchive: { ...validEntry.requiredArchive, url: 'https://example.com/source.tgz' },
+        },
+        message: /archive API URL for the exact clone and commit/,
+      },
+      {
+        entry: {
+          ...validEntry,
+          requiredArchive: { ...validEntry.requiredArchive, treeSha256: 'short' },
+        },
+        message: /treeSha256 has to be a lowercase SHA-256/,
+      },
+      {
+        entry: {
+          ...validEntry,
+          requiredArchive: { ...validEntry.requiredArchive, licensePath: '../LICENSE' },
+        },
+        message: /licensePath has to name a normalized repository-relative file/,
+      },
+      {
+        entry: {
+          ...validEntry,
+          requiredArchive: { ...validEntry.requiredArchive, licenseSha256: 'short' },
+        },
+        message: /licenseSha256 has to be a lowercase SHA-256/,
+      },
+      {
+        entry: {
+          ...validEntry,
+          exercise: {
+            script: 'corpus/runs/example.mjs',
+            nodePackages: ['example'],
+            why: 'It runs an example.',
+          },
+        },
+        message: /requiredArchive belongs to a static entry/,
+      },
+    ];
+    for (const test of invalid) {
+      assert.throws(() => readTemporary(test.entry), test.message);
+    }
   });
 });

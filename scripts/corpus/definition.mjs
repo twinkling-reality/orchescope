@@ -10,9 +10,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 
-const SUPPORTED_SCHEMA_VERSION = 1;
+const SUPPORTED_SCHEMA_VERSION = 2;
 const NAME = /^[a-z][a-z0-9-]*$/;
 const COMMIT = /^[0-9a-f]{40}$/;
+const SHA256 = /^[0-9a-f]{64}$/;
 const KINDS = ['agent_system', 'not_agent_system'];
 
 const isRecord = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -54,14 +55,61 @@ const checkGitSource = (entry, problem) => {
   }
 };
 
+const checkRequiredArchive = (entry, problem) => {
+  const archive = entry.requiredArchive;
+  if (archive === undefined) return;
+  if (!isRecord(archive)) {
+    problem('requiredArchive has to be a mapping');
+    return;
+  }
+  if (entry.exercise !== undefined) {
+    problem('requiredArchive belongs to a static entry');
+  }
+  const clone =
+    typeof entry.url === 'string'
+      ? entry.url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\.git$/)
+      : undefined;
+  const expectedUrl =
+    clone === null || clone === undefined || typeof entry.commit !== 'string'
+      ? undefined
+      : `https://api.github.com/repos/${clone[1]}/${clone[2]}/tarball/${entry.commit}`;
+  if (archive.url !== expectedUrl) {
+    problem(
+      'requiredArchive.url has to be the GitHub archive API URL for the exact clone and commit',
+    );
+  }
+  if (typeof archive.treeSha256 !== 'string' || !SHA256.test(archive.treeSha256)) {
+    problem('requiredArchive.treeSha256 has to be a lowercase SHA-256');
+  }
+  if (
+    typeof archive.licensePath !== 'string' ||
+    archive.licensePath.length === 0 ||
+    archive.licensePath.startsWith('/') ||
+    archive.licensePath.endsWith('/') ||
+    archive.licensePath.includes('\\') ||
+    archive.licensePath
+      .split('/')
+      .some((segment) => segment.length === 0 || segment === '.' || segment === '..')
+  ) {
+    problem('requiredArchive.licensePath has to name a normalized repository-relative file');
+  }
+  if (typeof archive.licenseSha256 !== 'string' || !SHA256.test(archive.licenseSha256)) {
+    problem('requiredArchive.licenseSha256 has to be a lowercase SHA-256');
+  }
+};
+
 const checkLocalSource = (entry, problem) => {
   if (typeof entry.path !== 'string' || entry.path.length === 0) {
     problem('path has to name a directory of this repository');
   } else if (entry.path.startsWith('/') || entry.path.split('/').includes('..')) {
     problem('path has to be relative and inside this repository');
   }
-  if (entry.url !== undefined || entry.commit !== undefined) {
-    problem('url and commit belong to a git entry');
+  if (
+    entry.url !== undefined ||
+    entry.commit !== undefined ||
+    entry.requiredArchive !== undefined
+  ) {
+    problem('url, commit and requiredArchive belong to a git entry');
   }
   if (entry.subpath !== undefined) problem('subpath belongs to a git entry');
 };
@@ -218,8 +266,10 @@ const checkEntry = (entry, index, names, problems) => {
   }
   checkIdentity(entry, names, problem);
   checkExercise(entry.exercise, problem);
-  if (entry.source === 'git') checkGitSource(entry, problem);
-  else if (entry.source === 'local') checkLocalSource(entry, problem);
+  if (entry.source === 'git') {
+    checkGitSource(entry, problem);
+    checkRequiredArchive(entry, problem);
+  } else if (entry.source === 'local') checkLocalSource(entry, problem);
   else problem('source has to be git or local');
 };
 
@@ -267,5 +317,8 @@ export const readCorpus = (root) => readCorpusDocument(root).repositories;
 
 export const readMultiRepositorySystems = (root) => readCorpusDocument(root).multiRepositorySystems;
 
-/** The subset that needs no network, which is what the required gate runs. */
+/** The subset that needs no network. */
 export const isOffline = (entry) => entry.source === 'local';
+
+/** Local entries plus the bounded archive-backed third-party entries selected for required CI. */
+export const isRequired = (entry) => isOffline(entry) || entry.requiredArchive !== undefined;
