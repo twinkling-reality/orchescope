@@ -1,5 +1,6 @@
 import {
   differenceIsMeaningful,
+  findingsShareIdentity,
   formatCount,
   comparisonId as makeComparisonId,
   mean,
@@ -340,18 +341,22 @@ export const compare = (input: CompareInput): Comparison => {
           resolved: input.baselineFindings
             .filter(
               (finding) =>
-                !input.candidateFindings?.some((candidate) => candidate.ruleId === finding.ruleId),
+                !input.candidateFindings?.some((candidate) =>
+                  findingsShareIdentity(finding, candidate),
+                ),
             )
             .map((finding) => finding.id),
           introduced: input.candidateFindings
             .filter(
               (finding) =>
-                !input.baselineFindings?.some((baseline) => baseline.ruleId === finding.ruleId),
+                !input.baselineFindings?.some((baseline) =>
+                  findingsShareIdentity(baseline, finding),
+                ),
             )
             .map((finding) => finding.id),
           unchanged: input.candidateFindings
             .filter((finding) =>
-              input.baselineFindings?.some((baseline) => baseline.ruleId === finding.ruleId),
+              input.baselineFindings?.some((baseline) => findingsShareIdentity(baseline, finding)),
             )
             .map((finding) => finding.id),
         }

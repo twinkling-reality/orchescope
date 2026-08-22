@@ -177,6 +177,7 @@ export const unsafeRetryRule: Rule = {
       });
       drafts.push({
         ruleId: 'retry-around-non-idempotent-operation',
+        situation: effect === 'unknown' ? 'retry-with-unknown-repeat-safety' : 'unsafe-retry',
         occurrence: {
           key: 'unsafe-retry',
           groupedTitle: '{count} operations are retried and nothing makes them safe to repeat',
@@ -299,6 +300,7 @@ export const unboundedRetryRule: Rule = {
       const source = context.graph.component(edge.from);
       drafts.push({
         ruleId: 'unbounded-retry',
+        situation: 'retry-without-attempt-ceiling',
         occurrence: {
           key: 'unbounded-retry',
           groupedTitle: '{count} retries have no attempt ceiling',
@@ -453,6 +455,8 @@ export const missingTimeoutRule: Rule = {
       return fired([
         {
           ruleId: 'model-call-without-timeout',
+          situation: 'all-model-calls-declare-timeout',
+          wholeSystemSubject: 'all-model-invocations',
           category: 'reliability',
           polarity: 'strength',
           severity: 'info',
@@ -485,6 +489,7 @@ export const missingTimeoutRule: Rule = {
       const callers = [...new Set(edges.map((edge) => edge.from))];
       return {
         ruleId: 'model-call-without-timeout',
+        situation: 'model-call-without-timeout',
         occurrence: {
           key: 'no-timeout',
           groupedTitle: '{count} models are called with no timeout declared',
@@ -624,6 +629,7 @@ export const approvalBoundaryRule: Rule = {
       if (guarded || requiresApproval || guardedByPolicy || behindApprovedCallers) {
         drafts.push({
           ruleId: 'side-effect-approval-boundary',
+          situation: 'consequential-operation-with-approval',
           category: 'security',
           polarity: 'strength',
           occurrence: {
@@ -654,6 +660,7 @@ export const approvalBoundaryRule: Rule = {
       });
       drafts.push({
         ruleId: 'side-effect-approval-boundary',
+        situation: 'consequential-operation-without-approval',
         category: 'security',
         polarity: 'risk',
         occurrence: {
@@ -764,6 +771,7 @@ export const promptInjectionBoundaryRule: Rule = {
 
     const drafts: FindingDraft[] = prompts.map((prompt) => ({
       ruleId: 'prompt-injection-boundary',
+      situation: 'runtime-content-interpolated-into-prompt',
       occurrence: {
         key: 'interpolated-prompt',
         groupedTitle: '{count} prompts interpolate run time content',
@@ -829,6 +837,7 @@ const unreachableDrafts = (graph: IndexedGraph): readonly FindingDraft[] => {
   const unreachable = unreachableComponents(graph).filter(participatesInTopology);
   return unreachable.map((component) => ({
     ruleId: 'topology-shape',
+    situation: 'component-unreachable-from-entrypoint',
     category: 'architecture',
     polarity: 'risk',
     severity: 'low',
@@ -872,6 +881,7 @@ export const architectureShapeRule: Rule = {
       if (component === undefined || component.kind !== 'agent') continue;
       drafts.push({
         ruleId: 'topology-shape',
+        situation: 'agent-wide-control-flow-fanout',
         category: 'agent_complexity',
         occurrence: {
           key: 'wide-fan-out',
@@ -898,6 +908,7 @@ export const architectureShapeRule: Rule = {
     for (const cycle of cycles.slice(0, 5)) {
       drafts.push({
         ruleId: 'topology-shape',
+        situation: 'declared-control-flow-cycle',
         category: 'architecture',
         polarity: 'risk',
         severity: 'low',
@@ -936,6 +947,8 @@ export const architectureShapeRule: Rule = {
       return fired([
         {
           ruleId: 'topology-shape',
+          situation: 'declared-topology-reachable-acyclic-narrow',
+          wholeSystemSubject: 'declared-control-flow-topology',
           category: 'architecture',
           polarity: 'strength',
           severity: 'info',
@@ -997,6 +1010,7 @@ export const broadPermissionRule: Rule = {
       });
       drafts.push({
         ruleId: 'permissions-broader-than-observed-use',
+        situation: 'write-permission-unused-in-observed-runs',
         occurrence: {
           key: 'unused-write',
           groupedTitle: '{count} components hold write access they were not observed using',
@@ -1077,6 +1091,7 @@ export const unusedConfiguredToolRule: Rule = {
 
     const drafts: FindingDraft[] = orphans.map((tool) => ({
       ruleId: 'configured-tool-has-no-caller',
+      situation: 'configured-tool-without-caller',
       occurrence: {
         key: 'no-caller',
         groupedTitle: '{count} tools are defined and nothing in this repository calls them',
@@ -1133,6 +1148,7 @@ export const safeRetryRule: Rule = {
         const retry = edge.policy?.retry;
         return {
           ruleId: 'bounded-retry-with-declared-idempotency',
+          situation: 'bounded-retry-with-idempotency-key',
           occurrence: {
             key: 'safe-retry',
             groupedTitle: '{count} retries are bounded and safe to repeat',

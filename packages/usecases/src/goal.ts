@@ -1,6 +1,7 @@
 import { OrchescopeError } from '@orchescope/domain';
 import {
   createGoal,
+  goalMatchesFinding,
   type GoalValidation,
   openGoalForFinding,
   validateGoal,
@@ -75,7 +76,7 @@ export const createGoalFromFinding = (request: CreateGoalRequest): CreateGoalRes
   }
   if (request.createAnother !== true) {
     const existing = openGoalForFinding(
-      workspace.store.goalsForFinding(workspace.projectId, finding.id),
+      workspace.store.listGoals(workspace.projectId).toReversed(),
       finding,
     );
     if (existing !== undefined) return { goal: existing, created: false };
@@ -161,18 +162,9 @@ const comparisonForGoal = (workspace: Workspace, goal: Goal): Comparison | undef
  * which prints it, and the audit, which carries it into the report so the Goals screen can state what
  * was decided instead of claiming nothing was.
  *
- * Presence of the finding is resolved on the goal's rule rather than on the identifier the criterion
- * carries, because that identifier is a per category sequence number over one scan's findings and is
- * renumbered whenever the set changes. The answer is expressed back in terms of the identifiers the
- * criteria hold, so the pure judge in `@orchescope/goals` stays a function of its inputs.
- *
- * The risk is what is looked for, not the rule. A rule that reports both polarities says the opposite
- * thing with the same identifier when its population comes out clean: `model-call-without-timeout`
- * answers a repository where every call declares a deadline with a strength, and a goal reading its own
- * rule back out of the finding set saw the rule present and reported that nothing had changed. An agent
- * that had done exactly what the goal asked was told it had not. A goal is only ever cut from a risk,
- * since a strength is never goal eligible, so a strength carrying the same rule is the evidence that the
- * goal succeeded rather than that it failed.
+ * Presence is resolved on the same semantic claim, not every risk emitted by the same rule. Semantic
+ * goals carry the full key and subject digests. A version-1 goal uses the explicit compatibility match
+ * on its stored rule and canonical affected components. A strength never keeps a risk goal open.
  */
 export const judgeGoal = (input: {
   readonly workspace: Workspace;
@@ -184,9 +176,7 @@ export const judgeGoal = (input: {
   const { workspace, goal } = input;
   const stillPresent = new Set(
     input.findings
-      .filter(
-        (finding) => finding.ruleId === goal.metadata['ruleId'] && finding.polarity === 'risk',
-      )
+      .filter((finding) => finding.polarity === 'risk' && goalMatchesFinding(goal, finding))
       .map((finding) => finding.id),
   );
   if (stillPresent.size > 0) stillPresent.add(goal.findingId);

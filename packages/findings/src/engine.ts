@@ -1,11 +1,16 @@
 import {
+  assertNoFindingIdentityCollisions,
   assertNoViolations,
   basisIsSupportable,
   capSeverity,
   compareSeverity,
   dedupeEvidence,
   findingViolations,
-  findingId as makeFindingId,
+  findingIdentity,
+  type FindingIdentity,
+  type FindingIdentityAssignment,
+  type FindingSemanticSubject,
+  SEMANTIC_FINDING_IDENTITY,
 } from '@orchescope/domain';
 import type { IndexedGraph } from '@orchescope/graph';
 import { sourceLocationKey } from '@orchescope/graph';
@@ -32,16 +37,8 @@ import { STATIC_RULES } from './rules/static-policy.ts';
  * evidence does not support, record which rules were evaluated including the ones that found nothing, and
  * refuse to emit a finding that violates a domain invariant.
  *
- * Identifier assignment is deterministic. Drafts are ordered by rule identifier and then by the components
- * they name, so the same evidence produces the same finding identifiers on every machine.
- *
- * Deterministic is not the same as stable, and the difference matters to anything that stores an
- * identifier and reads it back later. The sequence is a counter over one scan's drafts within a
- * category, so a rule that sorts earlier and fires for the first time renumbers every finding after it:
- * ingesting a run turns OSC-REL-0003 into OSC-REL-0005 on the demonstration system. A finding's stable
- * name is its rule and the components it names, which is what `validateGoalOutcome` resolves a goal's
- * finding on and what a goal document quotes. Nothing should treat this number as a name that survives
- * a rescan.
+ * Identifier assignment and display order are separate. A rule-defined semantic key assigns identity;
+ * severity, goal readiness and blast radius decide where the finding is displayed.
  */
 
 export const DEFAULT_RULES: readonly Rule[] = [
@@ -138,13 +135,13 @@ const collectDrafts = (
 const toFinding = (
   draft: FindingDraft,
   input: EvaluateInput,
-  sequence: number,
+  identity: FindingIdentity,
   componentIds: ReadonlySet<string>,
   evidenceIds: readonly EvidenceId[],
 ): Finding => {
   const capped = capSeverity(draft.severity, draft.basis, draft.confidence);
   return {
-    id: makeFindingId(draft.category, sequence),
+    id: identity.id,
     ruleId: draft.ruleId,
     category: draft.category,
     polarity: draft.polarity,
@@ -178,6 +175,9 @@ const toFinding = (
     tags: [...(draft.tags ?? []), ...(capped.capReason === undefined ? [] : ['severity-capped'])],
     createdAt: input.generatedAt,
     metadata: {
+      findingIdentity: SEMANTIC_FINDING_IDENTITY,
+      findingSemanticKey: identity.semanticKeyDigest,
+      findingSemanticSubject: identity.semanticSubjectDigest,
       ...(capped.capReason === undefined ? {} : { severityCapReason: capped.capReason }),
       ...(draft.remediationVariant === undefined
         ? {}
@@ -185,6 +185,32 @@ const toFinding = (
     },
   };
 };
+
+const semanticSubjectFor = (draft: FindingDraft): FindingSemanticSubject => {
+  if (draft.occurrence !== undefined) {
+    return { kind: 'occurrence', key: draft.occurrence.key };
+  }
+  if (draft.wholeSystemSubject !== undefined) {
+    return { kind: 'system', key: draft.wholeSystemSubject };
+  }
+  return {
+    kind: 'entities',
+    components: draft.components,
+    edges: draft.edges ?? [],
+  };
+};
+
+const identityFor = (draft: FindingDraft): FindingIdentity =>
+  findingIdentity({
+    ruleId: draft.ruleId,
+    polarity: draft.polarity,
+    situation: draft.situation,
+    ...(draft.remediationVariant === undefined ? {} : { remediation: draft.remediationVariant }),
+    subject: semanticSubjectFor(draft),
+    ...(draft.identityDiscriminator === undefined
+      ? {}
+      : { discriminator: draft.identityDiscriminator }),
+  });
 
 /** How many components a finding touches, which is the closest thing to blast radius the graph carries. */
 const blastRadius = (finding: Finding): number => {
@@ -217,9 +243,9 @@ export const evaluateRules = (input: EvaluateInput): EngineResult => {
   const evaluated = collected.evaluated;
   const drafts = groupDrafts([...collected.drafts].sort(draftOrder));
 
-  const sequences = new Map<FindingCategory, number>();
   const componentIds = new Set(input.graph.graph.components.map((component) => component.id));
   const findings: Finding[] = [];
+  const identityAssignments: FindingIdentityAssignment[] = [];
 
   for (const draft of drafts) {
     const evidenceIds = [
@@ -257,10 +283,12 @@ export const evaluateRules = (input: EvaluateInput): EngineResult => {
       continue;
     }
 
-    const sequence = (sequences.get(draft.category) ?? 0) + 1;
-    sequences.set(draft.category, sequence);
-    findings.push(toFinding(draft, input, sequence, componentIds, evidenceIds));
+    const identity = identityFor(draft);
+    identityAssignments.push(identity);
+    findings.push(toFinding(draft, input, identity, componentIds, evidenceIds));
   }
+
+  assertNoFindingIdentityCollisions(identityAssignments);
 
   findings.sort(byWhatToReadFirst);
 

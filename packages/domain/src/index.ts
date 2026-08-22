@@ -75,6 +75,21 @@ export {
 } from './identity.ts';
 export { INFERRED_ENTRY_POINT_TAG, isInferredEntryPoint } from './inferred-entry-point.ts';
 export {
+  assertNoFindingIdentityCollisions,
+  canonicalFindingSemanticKey,
+  type FindingIdentity,
+  type FindingIdentityAssignment,
+  findingIdentity,
+  type FindingSemanticKey,
+  type FindingSemanticSubject,
+  findingsShareIdentity,
+  legacyFindingSubject,
+  SEMANTIC_FINDING_IDENTITY,
+  semanticFindingKeyDigest,
+  semanticFindingSubjectDigest,
+  usesSemanticFindingIdentity,
+} from './finding-identity.ts';
+export {
   artifactRef,
   benchmarkId,
   chaosReportId,
@@ -82,7 +97,6 @@ export {
   evidenceId,
   faultPlanId,
   findingCategoryAbbreviation,
-  findingId,
   goalId,
   graphId,
   parseGoalSequence,

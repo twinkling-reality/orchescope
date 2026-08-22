@@ -25,8 +25,7 @@ const criterionText = (criterion: Goal['acceptanceCriteria'][number]): string =>
       return `${criterion.statement} (check: ${check.metric} within ${check.tolerance} of baseline)`;
     case 'scenario_passes':
       return `${criterion.statement} (check: scenario ${check.scenarioId} passes)`;
-    // The statement already names the rule, which is what presence is resolved on. Quoting the stored
-    // finding identifier here would name whichever finding had since inherited that sequence number.
+    // The rule explains the claim to a reader; the check retains the exact semantic finding handle.
     case 'finding_resolved':
       return `${criterion.statement} (check: absent after a rescan)`;
     case 'command_succeeds':

@@ -1,4 +1,5 @@
 import {
+  canonicalJson,
   CONFIDENCE_BANDS,
   derivedEvidence,
   faultInjectionEvidence,
@@ -97,6 +98,12 @@ const agentCountDraft = (input: AgentCountComparison): FindingDraft => {
 
   return {
     ruleId: 'agent-count-does-not-pay-for-itself',
+    situation: 'higher-agent-count-costs-latency-without-success-gain',
+    identityDiscriminator: canonicalJson({
+      scenarioId: input.report.scenarioId,
+      baselineVariantId: baseline.variantId,
+      variantId: variant.variantId,
+    }),
     category: 'agent_complexity',
     polarity: 'risk',
     severity: 'medium',
@@ -248,6 +255,12 @@ export const concurrencySaturationRule: Rule = {
 
         drafts.push({
           ruleId: 'throughput-saturates-under-concurrency',
+          situation: 'latency-grows-faster-than-concurrency',
+          identityDiscriminator: canonicalJson({
+            scenarioId: report.scenarioId,
+            baselineVariantId: baseline.variantId,
+            variantId: variant.variantId,
+          }),
           category: 'performance',
           polarity: 'risk',
           severity: 'medium',
@@ -329,10 +342,16 @@ const chaosOutcomeDraft = (
   const duplicated = outcome.duplicateSideEffects > 0;
   const collapsed = !outcome.taskCompleted;
   const amplified = (outcome.costAmplification ?? 1) > 1.5;
+  const occurrence = {
+    key: canonicalJson({ scenarioId, faultKind: outcome.faultKind, target: outcome.target }),
+    groupedTitle: '{count} equivalent injected fault outcomes were recorded',
+  };
 
   if (!collapsed && !duplicated && !amplified) {
     return {
       ruleId: 'resilience-under-injected-fault',
+      situation: 'injected-fault-absorbed',
+      occurrence,
       category: 'resilience',
       polarity: 'strength',
       severity: 'info',
@@ -363,6 +382,12 @@ const chaosOutcomeDraft = (
       : 'the run cost materially more';
   return {
     ruleId: 'resilience-under-injected-fault',
+    situation: duplicated
+      ? 'injected-fault-duplicated-side-effect'
+      : collapsed
+        ? 'injected-fault-ended-task'
+        : 'injected-fault-amplified-cost',
+    occurrence,
     category: 'resilience',
     polarity: 'risk',
     severity: duplicated ? 'high' : collapsed ? 'medium' : 'low',

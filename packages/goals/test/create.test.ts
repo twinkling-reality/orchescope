@@ -9,8 +9,7 @@ import { createGoal } from '../src/create.ts';
  * A goal is the document handed to whoever implements the change, and the two things it must not do are
  * overstate its own evidence and name something the reader cannot find again. Both are tested here
  * because neither is visible from inside the goal: a class of `observed` looks the same as any other
- * until it is read back against the record it summarises, and a finding identifier looks stable until a
- * rescan renumbers it.
+ * until it is read back against the record it summarises.
  */
 
 const evidence = (id: string, kind: Evidence['kind'], basis: Evidence['basis']): Evidence =>
@@ -29,10 +28,12 @@ const finding = (overrides: Partial<Finding> = {}): Finding =>
     explanation: 'orchestrator retries issue_refund and no idempotency key was found.',
     impact: 'Under a transient failure the external effect happens more than once.',
     components: ['tool:issue_refund'],
+    edges: [],
     sourceLocations: [{ file: 'src/tools/refund.ts', startLine: 1 }],
     evidence: ['ev_one', 'ev_two'],
     metrics: [],
     tags: [],
+    metadata: {},
     goalReadiness: { eligible: true, requiresRuntimeEvidence: false, requiresHumanReview: false },
     ...overrides,
   }) as Finding;
@@ -104,14 +105,41 @@ describe('createGoal, the evidence summary', () => {
   });
 });
 
+describe('createGoal, semantic finding continuity', () => {
+  it('copies the full key and subject digests used to match the rerun', () => {
+    const semanticKey = 'a'.repeat(64);
+    const semanticSubject = 'b'.repeat(64);
+    const goal = create({
+      finding: finding({
+        id: 'OSC-ABCDE-1234',
+        metadata: {
+          findingIdentity: 'semantic-sha256-v1',
+          findingSemanticKey: semanticKey,
+          findingSemanticSubject: semanticSubject,
+        },
+      }),
+    });
+    assert.equal(goal.findingId, 'OSC-ABCDE-1234');
+    assert.equal(goal.metadata['findingSemanticKey'], semanticKey);
+    assert.equal(goal.metadata['findingSemanticSubject'], semanticSubject);
+  });
+
+  it('refuses to downgrade incomplete semantic metadata to legacy matching', () => {
+    assert.throws(
+      () =>
+        create({
+          finding: finding({
+            id: 'OSC-ABCDE-1234',
+            metadata: { findingIdentity: 'semantic-sha256-v1' },
+          }),
+        }),
+      /incomplete semantic identity metadata/,
+    );
+  });
+});
+
 describe('createGoal, naming the finding', () => {
-  /**
-   * The identifier is a sequence number over one scan's findings within a category, so ingesting a run
-   * renumbers it. The goal's own validation plan tells the implementer to rerun the scenarios, which is
-   * exactly what produces the new findings that renumber it, so an identifier written into a statement
-   * is stale by the time the statement is read back.
-   */
-  it('states the rule in the criterion, not the identifier that a rescan renumbers', () => {
+  it('states the explanatory rule in the criterion and keeps the handle in the machine check', () => {
     const goal = create({});
     const resolved = goal.acceptanceCriteria.find(
       (criterion) => criterion.check.kind === 'finding_resolved',

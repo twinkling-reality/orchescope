@@ -129,6 +129,7 @@ export const sequentialIndependentCallsRule: Rule = {
 
       drafts.push({
         ruleId: 'independent-calls-run-sequentially',
+        situation: 'independent-calls-observed-sequentially',
         occurrence: {
           key: 'sequential',
           groupedTitle: '{count} components call independent tools one after another',
@@ -221,6 +222,7 @@ export const latencyConcentrationRule: Rule = {
       });
       drafts.push({
         ruleId: 'latency-concentrated-in-one-component',
+        situation: 'component-holds-large-self-time-share',
         occurrence: {
           key: 'latency-share',
           groupedTitle: '{count} components each hold a large share of the observed self time',
@@ -291,6 +293,7 @@ export const tokenConcentrationRule: Rule = {
       if (component === undefined) continue;
       drafts.push({
         ruleId: 'tokens-concentrated-in-one-component',
+        situation: 'component-holds-large-token-share',
         occurrence: {
           key: 'token-share',
           groupedTitle: '{count} components each hold a large share of the observed tokens',
@@ -378,6 +381,7 @@ export const repeatedContextRule: Rule = {
     return fired([
       {
         ruleId: 'workers-receive-comparably-large-context',
+        situation: 'workers-receive-similarly-large-inputs',
         category: 'cost',
         polarity: 'risk',
         severity: 'medium',
@@ -447,6 +451,7 @@ export const unreliableRelationRule: Rule = {
       const source = context.graph.component(edge.from);
       drafts.push({
         ruleId: 'relation-fails-often',
+        situation: 'relation-error-rate-above-threshold',
         occurrence: {
           key: 'failing-relation',
           groupedTitle: '{count} calls failed often enough to be worth reporting',
@@ -534,6 +539,8 @@ const noObservationDraft = (
   const silent = context.silentRuns.length;
   return {
     ruleId: 'observability-coverage',
+    situation: silent === 0 ? 'no-runtime-run-recorded' : 'recorded-run-produced-no-spans',
+    wholeSystemSubject: 'runtime-observation-coverage',
     category: 'observability',
     polarity: 'risk',
     /*
@@ -625,6 +632,8 @@ export const observabilityCoverageRule: Rule = {
       return fired([
         {
           ruleId: 'observability-coverage',
+          situation: 'most-declared-components-exercised',
+          wholeSystemSubject: 'runtime-observation-coverage',
           category: 'observability',
           polarity: 'strength',
           severity: 'info',
@@ -661,6 +670,8 @@ export const observabilityCoverageRule: Rule = {
     return fired([
       {
         ruleId: 'observability-coverage',
+        situation: 'declared-component-exercise-coverage-low',
+        wholeSystemSubject: 'runtime-observation-coverage',
         category: 'observability',
         polarity: 'risk',
         severity: rate < 0.4 ? 'medium' : 'low',

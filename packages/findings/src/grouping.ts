@@ -1,3 +1,4 @@
+import { severityRank } from '@orchescope/domain';
 import type { ComponentId, EdgeId, EvidenceId, FindingMetric } from '@orchescope/schema';
 import type { FindingDraft } from './rule.ts';
 
@@ -21,10 +22,12 @@ const MAX_EVIDENCE = 10;
 const groupKey = (draft: FindingDraft): string =>
   [
     draft.ruleId,
+    draft.situation,
     draft.occurrence?.key ?? '',
+    draft.remediationVariant ?? '',
+    draft.identityDiscriminator ?? '',
     draft.category,
     draft.polarity,
-    draft.severity,
     draft.basis,
   ].join('\u0000');
 
@@ -67,12 +70,19 @@ const merge = (drafts: readonly FindingDraft[]): FindingDraft => {
   const representative = drafts[0] as FindingDraft;
   if (drafts.length === 1) return representative;
 
+  const severity = drafts.reduce(
+    (strongest, draft) =>
+      severityRank(draft.severity) > severityRank(strongest) ? draft.severity : strongest,
+    representative.severity,
+  );
   const components = unionOf(drafts.map((draft) => draft.components)).sort() as ComponentId[];
   const edges = unionOf(drafts.map((draft) => draft.edges ?? [])).sort() as EdgeId[];
   const withheld = Math.max(0, components.length - MAX_COMPONENTS);
 
   return {
     ...representative,
+    severity,
+    confidence: Math.max(...drafts.map((draft) => draft.confidence)),
     title: (representative.occurrence?.groupedTitle ?? representative.title).replace(
       '{count}',
       String(drafts.length),

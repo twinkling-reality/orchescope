@@ -155,10 +155,8 @@ const scenarioPassesOutcome = (
 /**
  * Judges whether the finding the goal was cut from still fires.
  *
- * The detail names neither identifier. A finding identifier is a per category sequence number over one
- * scan's findings and is renumbered whenever the set changes, so by the time this outcome is read the
- * identifier in the check may belong to a different finding. Presence is resolved by the rule before
- * it reaches here, and the sentence says what was actually judged.
+ * The detail names neither identifier. The criterion statement names the rule and is printed beside this
+ * detail by every surface, while the check keeps the exact semantic handle used for the set lookup.
  */
 const findingResolvedOutcome = (
   criterion: AcceptanceCriterion,

@@ -36,6 +36,8 @@ export type RuleStatus = 'fired' | 'clear' | 'insufficient_evidence' | 'not_appl
 
 export type FindingDraft = {
   readonly ruleId: string;
+  /** Stable rule-owned name for the situation being reported. Never derived from displayed prose. */
+  readonly situation: string;
   readonly category: FindingCategory;
   readonly polarity: FindingPolarity;
   /** Proposed severity. The engine lowers it when the basis or confidence does not support it. */
@@ -58,6 +60,13 @@ export type FindingDraft = {
    * because only the rule knows what its instances are: components, relations or cycles.
    */
   readonly occurrence?: { readonly key: string; readonly groupedTitle: string };
+  /** Rule-owned subject for a claim about the system as a whole rather than an entity list. */
+  readonly wholeSystemSubject?: string;
+  /**
+   * Stable distinction between simultaneous claims whose rule, situation and subject are otherwise equal.
+   * Set only from domain evidence such as a scenario and variant, never from an evidence array position.
+   */
+  readonly identityDiscriminator?: string;
   /** Evidence records created by this rule. The engine stores them and rewrites the references. */
   readonly newEvidence?: readonly Evidence[];
   readonly evidence: readonly EvidenceId[];

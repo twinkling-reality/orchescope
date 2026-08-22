@@ -86,13 +86,6 @@ const CATEGORY_ABBREVIATIONS: Readonly<Record<FindingCategory, string>> = {
 export const findingCategoryAbbreviation = (category: FindingCategory): string =>
   CATEGORY_ABBREVIATIONS[category];
 
-/**
- * Finding identifiers are readable and sequential inside a category. Sequence numbers come from a
- * deterministic ordering of the findings, never from insertion order into a hash map.
- */
-export const findingId = (category: FindingCategory, sequence: number): string =>
-  `OSC-${CATEGORY_ABBREVIATIONS[category]}-${String(sequence).padStart(4, '0')}`;
-
 export const goalId = (sequence: number): string => `OSC-GOAL-${String(sequence).padStart(4, '0')}`;
 
 export const parseGoalSequence = (id: string): number | undefined => {

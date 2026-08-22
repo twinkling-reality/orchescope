@@ -1,4 +1,11 @@
-import { goalId as makeGoalId, OrchescopeError } from '@orchescope/domain';
+import {
+  goalId as makeGoalId,
+  OrchescopeError,
+  SEMANTIC_FINDING_IDENTITY,
+  semanticFindingKeyDigest,
+  semanticFindingSubjectDigest,
+  usesSemanticFindingIdentity,
+} from '@orchescope/domain';
 import type {
   AcceptanceCriterion,
   ClaimBasis,
@@ -62,16 +69,9 @@ const writePathsFor = (components: readonly Component[], finding: Finding): read
 };
 
 /**
- * The criteria, written so that a reader can still find what they name after a rescan.
- *
- * A finding identifier is a sequence number inside its category, assigned over a sorted list of that
- * scan's drafts. It is deterministic for a given set of findings and it is not stable across scans: a
- * new rule that sorts earlier renumbers everything after it, and the runs this goal's own validation
- * plan prescribes are exactly what produce new findings. So a criterion that named `OSC-REL-0003`
- * would, by the time anyone read it back, be pointing at whichever finding had since inherited that
- * number. The rule identifier is the finding's stable name and it is already what the check resolves
- * on, so it is what the statement says. The finding identifier stays in the check as the record of
- * which finding this goal was cut from.
+ * The criteria name the rule in prose because it explains what must stop firing. The machine check keeps
+ * the semantic finding identifier, and compatibility reads the stored rule and affected subject from a
+ * version-1 goal that lacks semantic metadata.
  */
 const acceptanceCriteriaFor = (
   finding: Finding,
@@ -285,6 +285,17 @@ export const createGoal = (input: CreateGoalInput): Goal => {
   }
 
   const improvement = RELATIVE_IMPROVEMENT_BY_RULE[input.finding.ruleId];
+  const semanticKey = semanticFindingKeyDigest(input.finding.metadata);
+  const semanticSubject = semanticFindingSubjectDigest(input.finding.metadata);
+  if (
+    usesSemanticFindingIdentity(input.finding.metadata) &&
+    (semanticKey === undefined || semanticSubject === undefined)
+  ) {
+    throw new OrchescopeError(
+      'INVALID_STATE',
+      `Finding ${input.finding.id} carries incomplete semantic identity metadata.`,
+    );
+  }
   return {
     schemaVersion: 1,
     id: makeGoalId(input.sequence),
@@ -320,6 +331,13 @@ export const createGoal = (input: CreateGoalInput): Goal => {
     validationResults: [],
     metadata: {
       ruleId: input.finding.ruleId,
+      ...(semanticKey === undefined || semanticSubject === undefined
+        ? {}
+        : {
+            findingIdentity: SEMANTIC_FINDING_IDENTITY,
+            findingSemanticKey: semanticKey,
+            findingSemanticSubject: semanticSubject,
+          }),
       category: input.finding.category,
       severity: input.finding.severity,
       basis: input.finding.basis,

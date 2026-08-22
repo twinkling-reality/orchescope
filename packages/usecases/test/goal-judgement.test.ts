@@ -6,11 +6,8 @@ import { judgeGoal } from '../src/goal.ts';
 /**
  * Whether the finding a goal was cut from still fires.
  *
- * Presence is resolved on the goal's rule rather than on the finding identifier, because identifiers are
- * renumbered by every rescan. That reading is right and it was incomplete: a rule reports both polarities
- * and `model-call-without-timeout` answers a repository where every call declares a deadline with a
- * strength carrying the same rule. The goal read its own rule back out of the finding set, saw it, and
- * told an agent that had done exactly what was asked that nothing had changed.
+ * Presence is resolved on the goal's rule and canonical subject. A rule may emit several risks at once,
+ * and may answer the same population with a strength after the risk has cleared.
  */
 
 const workspace = {
@@ -24,6 +21,7 @@ const goal = {
   id: 'OSC-GOAL-0001',
   findingId: 'OSC-REL-0001',
   status: 'ready',
+  affectedComponents: ['model:primary'],
   metadata: { ruleId: 'model-call-without-timeout' },
   acceptanceCriteria: [
     {
@@ -36,7 +34,14 @@ const goal = {
 } as unknown as Goal;
 
 const finding = (polarity: 'risk' | 'strength'): Finding =>
-  ({ id: 'OSC-REL-0001', ruleId: 'model-call-without-timeout', polarity }) as Finding;
+  ({
+    id: 'OSC-REL-0001',
+    ruleId: 'model-call-without-timeout',
+    polarity,
+    components: ['model:primary'],
+    edges: [],
+    metadata: {},
+  }) as unknown as Finding;
 
 describe('the finding a goal is judged against', () => {
   it('is unsatisfied while the risk still fires', () => {
@@ -61,6 +66,12 @@ describe('the finding a goal is judged against', () => {
       findings: [finding('strength')],
       rescanned: true,
     });
+    assert.equal(validation.validated, true, validation.outcomes[0]?.detail);
+  });
+
+  it('is satisfied when only another subject from the same rule still fires', () => {
+    const other = { ...finding('risk'), components: ['model:secondary'] };
+    const validation = judgeGoal({ workspace, goal, findings: [other], rescanned: true });
     assert.equal(validation.validated, true, validation.outcomes[0]?.detail);
   });
 });

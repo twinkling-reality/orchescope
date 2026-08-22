@@ -411,7 +411,7 @@ describe('the two retry rules together', () => {
     const findings = result.findingSet.findings;
     assert.equal(findings.length, 1);
     const finding = findings[0];
-    assert.match(finding?.id ?? '', /^OSC-REL-\d{4}$/);
+    assert.match(finding?.id ?? '', /^OSC-[A-Z]{5}-\d{4}$/);
     assert.ok((finding?.evidence.length ?? 0) > 0);
     assert.ok((finding?.components.length ?? 0) > 0);
     // Both rules are reported as evaluated, including the one that found nothing.
@@ -550,6 +550,7 @@ describe('the order findings are reported in', () => {
         drafts: [
           {
             ruleId: id,
+            situation: 'fixture-risk',
             category: 'reliability',
             polarity: 'risk',
             severity: 'medium',

@@ -85,7 +85,7 @@ export type FindingMetric = Static<typeof FindingMetric>;
 
 export const Finding = Type.Object(
   {
-    /** Stable, readable identifier, for example `OSC-PERF-0003`. */
+    /** Stable semantic digest projection, for example `OSC-QWERT-0003`. */
     id: Type.String({ pattern: '^OSC-[A-Z]{3,5}-\\d{4}$' }),
     /** Identifier of the rule or analysis task that produced this finding. */
     ruleId: NonEmptyString(),

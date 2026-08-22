@@ -221,6 +221,7 @@ describe('a draft that claims an observed basis with nothing observed', () => {
       fired([
         {
           ruleId: 'fixture-claims-observation',
+          situation: 'fixture-observation',
           category: 'observability',
           polarity: 'risk',
           severity: 'medium',

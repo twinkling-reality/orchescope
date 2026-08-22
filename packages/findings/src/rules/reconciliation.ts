@@ -75,6 +75,7 @@ export const declaredNotExercisedRule: Rule = {
       const isTool = component.kind === 'tool';
       drafts.push({
         ruleId: 'declared-not-exercised',
+        situation: isTool ? 'declared-tool-not-exercised' : 'declared-component-not-exercised',
         occurrence: {
           key: 'declared-not-exercised',
           groupedTitle: '{count} declared components were never exercised by a recorded run',
@@ -161,6 +162,7 @@ export const exercisedNotDeclaredRule: Rule = {
       }
       drafts.push({
         ruleId: 'exercised-not-declared',
+        situation: 'observed-component-without-exact-declaration',
         occurrence: {
           key: 'exercised-not-declared',
           groupedTitle: '{count} components ran without being declared anywhere in the repository',
@@ -222,6 +224,11 @@ export const contradictedDeclarationRule: Rule = {
       const fromSourceAlone = contradiction.kind === 'destructive_hint';
       return {
         ruleId: 'declaration-contradicted-by-observation',
+        situation: fromSourceAlone
+          ? 'source-annotation-contradiction'
+          : isAnnotation
+            ? 'observed-annotation-contradiction'
+            : 'observed-policy-contradiction',
         occurrence: {
           key: 'contradiction',
           groupedTitle: '{count} declarations are contradicted by what was observed',
@@ -283,6 +290,9 @@ export const duplicateSideEffectRule: Rule = {
       });
       return {
         ruleId: 'duplicate-side-effect',
+        situation: duplicate.idempotencyKeyPresent
+          ? 'duplicate-effect-despite-idempotency-key'
+          : 'duplicate-effect-without-idempotency-key',
         occurrence: {
           key: 'duplicate',
           groupedTitle: '{count} outside effects happened more than once in one run',
@@ -362,6 +372,7 @@ export const unnamedObservationRule: Rule = {
 
     const drafts: FindingDraft[] = anonymous.map((component) => ({
       ruleId: 'observed-name-carries-no-identity',
+      situation: 'observed-name-is-only-component-kind',
       occurrence: {
         key: 'unnamed',
         groupedTitle: '{count} components were observed under names that are only their kind',
@@ -441,6 +452,7 @@ export const ambiguousObservationRule: Rule = {
 
     const drafts: FindingDraft[] = contested.map((component) => ({
       ruleId: 'observed-name-matches-many-declarations',
+      situation: 'observed-name-matches-multiple-declarations',
       occurrence: {
         key: 'ambiguous',
         groupedTitle:

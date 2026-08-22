@@ -341,8 +341,15 @@ describe('compare', () => {
   it('reports which findings a change resolved and which it introduced', () => {
     const baselineRuns = fiveOf();
     const candidateRuns = fiveOf();
-    const finding = (id: string, ruleId: string) =>
-      ({ id, ruleId }) as unknown as Parameters<typeof compare>[0]['baselineFindings'] extends
+    const finding = (id: string, ruleId: string, component: string) =>
+      ({
+        id,
+        ruleId,
+        polarity: 'risk',
+        components: [component],
+        edges: [],
+        metadata: {},
+      }) as unknown as Parameters<typeof compare>[0]['baselineFindings'] extends
         | readonly (infer T)[]
         | undefined
         ? T
@@ -352,16 +359,48 @@ describe('compare', () => {
       candidate: side('candidate', candidateRuns),
       baselineRuns,
       candidateRuns,
-      baselineFindings: [finding('f1', 'duplicate-side-effect'), finding('f2', 'no-timeout')],
+      baselineFindings: [
+        finding('f1', 'duplicate-side-effect', 'tool:refund'),
+        finding('f2', 'no-timeout', 'model:primary'),
+      ],
       candidateFindings: [
-        finding('f3', 'no-timeout'),
-        finding('f4', 'sequential-independent-calls'),
+        finding('f3', 'no-timeout', 'model:primary'),
+        finding('f4', 'sequential-independent-calls', 'agent:planner'),
       ],
       now: NOW,
     });
     assert.deepEqual(result.findingDelta?.resolved, ['f1']);
     assert.deepEqual(result.findingDelta?.introduced, ['f4']);
     assert.deepEqual(result.findingDelta?.unchanged, ['f3']);
+  });
+
+  it('does not conflate simultaneous subjects from one rule', () => {
+    const baselineRuns = fiveOf();
+    const candidateRuns = fiveOf();
+    const finding = (id: string, component: string) =>
+      ({
+        id,
+        ruleId: 'model-call-without-timeout',
+        polarity: 'risk',
+        components: [component],
+        edges: [],
+        metadata: {},
+      }) as never;
+    const result = compare({
+      baseline: side('baseline', baselineRuns),
+      candidate: side('candidate', candidateRuns),
+      baselineRuns,
+      candidateRuns,
+      baselineFindings: [
+        finding('OSC-AAAAA-0001', 'model:primary'),
+        finding('OSC-BBBBB-0002', 'model:secondary'),
+      ],
+      candidateFindings: [finding('OSC-CCCCC-0003', 'model:secondary')],
+      now: NOW,
+    });
+    assert.deepEqual(result.findingDelta?.resolved, ['OSC-AAAAA-0001']);
+    assert.deepEqual(result.findingDelta?.introduced, []);
+    assert.deepEqual(result.findingDelta?.unchanged, ['OSC-CCCCC-0003']);
   });
 
   it('states that no graph delta was computed when one side has no scan', () => {
