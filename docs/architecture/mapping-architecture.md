@@ -147,11 +147,12 @@ which is the one real adapter form among the seven reported gaps.
 The directions were judged against eight measurements over this repository, and the three findings that
 decide them are the ones above. The two supporting numbers worth carrying:
 
-- **Direction 4 has no evidence available.** Across the eight exercised entries the run half reports 38
+- **Direction 4 had no evidence available in this measurement.** Across the eight exercised entries the run half reports 38
   components against the source half's 3,033, and 31 relations against 1,277. `byCodeLocation` is 0 on
   every one of them, and no span in the corpus carries a file path. 26 of the 31 findings a run adds are
   differences that require the declared set. `declared-not-exercised` names 1,114 components against
-  `exercised-not-declared`'s 9.
+  `exercised-not-declared`'s 9. ADR 0007 records the later runtime source evidence that moves this specific
+  bound without changing the evidence on which the direction was rejected as a replacement for discovery.
 - **Direction 3 is already the policy.** `docs/guides/adapter-development.md:3-4` says start with the
   manifest. What was new is the word "verifies", and it was worth building: the engine accepted
   `definedIn: src/does-not-exist.rb`, and `fileHash` was written 0 of 17,115 times. Both are closed in
@@ -453,11 +454,13 @@ Ordered by what can still honestly be claimed:
 | a database row, a UI assembled configuration | nothing as a declaration. An exported dump pinned by hash is a declaration; the live row is not. |
 | an agent generated at run time by another agent | nothing. This is an observation, and the honest output is the observed half with the declared half stated as unpinnable. |
 
-The CrewAI case is the worked example, and its answer is uncomfortable and correct. With the packaged
-`agents.yaml` read, `crewai-examples-exercised` reports **zero** exercised components and three ambiguous
-names, because the repository declares each of those three roles three times. Zero is right. Making that
-join right rather than merely honest needs a code location on the span, which is a change to the
-instrumentation and not to this product. Naming what Orchescope cannot fix is part of the answer.
+The CrewAI case is the worked example, and both of its answers are uncomfortable and correct. With only the
+packaged `agents.yaml` and role names, `crewai-examples-exercised` reports zero exercised components and
+three ambiguous names, because the repository declares each role three times. A bounded instrumentation
+integration now records the actual Python constructor frame, canonical repository URL and full revision on
+the later span for that same `Agent` object. Those independent runtime facts select the three declarations
+in the marketing crew and nothing else: 3 code-location joins, 0 name-only joins, 0 ambiguities and 0
+missing source attributes. The earlier zero remains the right answer to the name-only question.
 
 **A refutable manifest.** The manifest is already a first class input and already the documented first
 step, so what is new here is only the verification. The engine today accepts
@@ -529,21 +532,22 @@ repository coordinate in front of that namespace, and three designs are possible
    observation rather than an assertion, and it is falsifiable by scanning the named revision and checking
    the component is there.
 
-Design 3 is the right one and it cannot be built now. `byCodeLocation` is **0 on all eight exercised
-entries**, no span in the corpus carries a file path, and the single non name join anywhere in the corpus
-is one `byRuntimeName` on `vercel-ai-chatbot-exercised`. Cross repository identity would be built on a
-join mechanism that has never fired once inside a single repository.
+Design 3 remains the candidate. ADR 0007 has now proved its source primitive inside one repository:
+`crewai-examples-exercised` reports 3 code-location joins from runtime-derived Python frames, repository
+coordinate and full revision. The same run reports 0 name-only joins and keeps relation joins at 0. The
+primitive therefore fires without turning a role into a location, but no pinned entry yet says whether it
+can preserve identity across independently versioned repositories.
 
 **The boundary holds, and the condition that moves it is stated:** a pinned corpus entry that is a
 multi repository agent system, and `byCodeLocation` greater than zero on at least one exercised entry. The
-first is a corpus decision anyone can take today. The second is a property of instrumentors, and the useful
-work Orchescope can do toward it is to say precisely which attribute it needs and report its absence,
-which the coverage block is the right place for.
+second condition is now met. The first is the remaining corpus decision, and it must be met by a real
+system rather than a hand-written topology before a federated identity contract moves.
 
-**That condition has not moved.** Per attribute trace provenance now makes the coverage block name
-`code.file.path` and the observed component count missing it, rather than leaving `byCodeLocation: 0` as a
-silent zero. All eight exercised entries still report `byCodeLocation: 0`, and there is still no pinned
-multi repository entry. The boundary therefore holds on both clauses of its stated condition.
+**One clause moved and one did not.** Per-attribute provenance now names repository, revision, file, line
+and function separately on each accepted source identity. Coverage names `code.file.path`,
+`orchescope.code.repository.path`, `vcs.repository.url.full` and `vcs.ref.head.revision` with observed
+sample counts where another instrumentor omits them. There is still no pinned multi-repository entry, so
+the product boundary holds on that clause alone while Stage 3 finds the real system ADR 0008 must judge.
 
 ## The success metric
 
@@ -578,9 +582,11 @@ identifier, are how that number goes to zero.
 2. **What evidence?** The pinned corpus, and specifically the numbers pre-registered in Stage 1.
 3. **How would a reader know the answer is wrong?**
 
-- **`crewai-examples-exercised`.** If `runtime.exercisedComponents` moves above 0, or
-  `runtime.ambiguousNames` empties, a fact resolved something the syntax left open and the join now agrees
-  with itself. That is the primary falsifier and it fails the whole approach, not one stage.
+- **`crewai-examples-exercised`.** A declared-side fact must still leave
+  `runtime.exercisedComponents` at 0 and the three role names ambiguous when the run carries no source
+  identity. ADR 0007 moves the measured entry to 3 exercised components only because the run now carries
+  the actual constructor frames, repository coordinate and revision. Removing any of those observed inputs
+  must restore the refusal rather than preserve the join.
 - **`crewai-examples`.** If `components.byKind.agent` does not fall from 121 toward the ~70 the repository
   declares, the fact model is not the ceiling on the repository chosen to demonstrate it.
 - **`open-agent-platform`.** If `agentSystemDetected` ever reads `true`, or `components.byKind` gains an

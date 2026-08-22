@@ -113,6 +113,23 @@ describe('the corpus check', () => {
     assert.deepEqual(differences(baseline(), baseline()), []);
   });
 
+  it('compares list entries by their values rather than their object identities', () => {
+    const expected = {
+      coverage: [{ attribute: 'code.file.path', observedComponents: 3 }],
+    };
+    const same = {
+      coverage: [{ observedComponents: 3, attribute: 'code.file.path' }],
+    };
+    assert.deepEqual(differences(expected, same), []);
+
+    const moved = {
+      coverage: [{ attribute: 'code.file.path', observedComponents: 2 }],
+    };
+    const found = differences(expected, moved);
+    assert.equal(found.length, 2);
+    assert.ok(found.every((difference) => difference.path === 'coverage'));
+  });
+
   it('names the adapter when one goes quiet', () => {
     const observed = baseline();
     const broken = {

@@ -284,31 +284,17 @@ repositories:
     commit: da94a91e691e1cf5b3151416bb15b5b62729bea8
     kind: agent_system
     why: >-
-      The same commit as the entry above, measured with a run in it, and the first CrewAI span anywhere in this
-      corpus. Every claim this build makes about that dialect had been argued from the adapter alone.
+      The same commit as the entry above, measured with a run in it. This was the first CrewAI span in the corpus and
+      the falsifier for runtime source identity. Name alone finds three declarations for every observed role: the
+      marketing crew, another crew with the same roles and a copied integration. The run therefore used to refuse
+      all three roles as ambiguous.
 
-      What the run says is that a CrewAI agent span is read: six spans, five of them an agent's, each carrying the
-      agent's role under graph.node.id, and this build reads all five.
-
-      **This entry records zero exercised components, and zero is the fix rather than the regression.** It used to
-      record three, and all three were the wrong ones: crews/instagram_post declares three agents with a literal
-      role, its three roles are the same three words the run reports, and the marketing crew's own roles lived in an
-      agents.yaml nothing opened. So a run of one application joined every one of its agents to another application
-      it never entered, by `runtime_name`, which is the strongest rule reconciliation has short of a code location.
-      Reading the packaged document puts the marketing crew's roles in the graph twice over, once under crews/ and
-      once under the copy in integrations/nvidia_models/, so each of the three names now has three declarations,
-      uniqueCandidate returns nothing and the reconciler refuses. `ambiguousNames` holds the three verbatim, trailing
-      newline and all, because that is the string the instrumentor writes into graph.node.id out of a folded
-      `role: >` block. A repository that declares one role in three places gets a refusal, and a refusal naming what
-      it refused is worth more than a confident join to the wrong file.
-
-      **The three still appear under exercisedNotDeclared, and the rule that reads that list no longer calls them
-      undeclared.** They are declared three times each. `exercised-not-declared` used to print "no matching
-      declaration" over them, which is the opposite fact and is the same sentence open-deep-research-exercised had
-      carried for `supervisor` since it was pinned. Both are now diverted to
-      `observed-name-matches-many-declarations`, which says what happened and cuts no goal from it: which of three
-      declarations gives up a name is a decision about the repository, and on this one two of the three are a crew
-      and a copy of that crew under integrations/.
+      The bounded CrewAI integration now observes the immediate Python caller when each real Agent is constructed
+      and attaches that identity only when the same Agent later executes. It supplies an absolute file, line,
+      function, canonical repository URL and full clean-checkout revision. Reconciliation validates every field
+      against the independently scanned checkout. The result is three `code_location` joins, zero `runtime_name`
+      joins, zero runtime-only agents and zero ambiguous names. The static count stays 81 agents. Declared facts do
+      not select a runtime identity, and changing only a name or declaration cannot move this measurement.
 
       The crew joins nothing either, for a different reason. Its span is a CHAIN carrying no gen_ai.workflow.name, so
       isStructuralSpan declines it as no_name, and the name it declines is `MarketingPostsCrew.kickoff` where the
@@ -331,11 +317,11 @@ repositories:
       # In install order. crewai-tools is the checkout's own dependency: the crew constructs SerperDevTool and
       # ScrapeWebsiteTool while it is being built, and neither constructor needs a credential.
       pythonPackages:
-        - crewai
-        - crewai-tools
-        - openinference-instrumentation-crewai
-        - opentelemetry-sdk
-        - opentelemetry-exporter-otlp-proto-http
+        - crewai==1.15.17
+        - crewai-tools==1.15.17
+        - openinference-instrumentation-crewai==1.1.12
+        - opentelemetry-sdk==1.42.1
+        - opentelemetry-exporter-otlp-proto-http==1.42.1
 
   - name: pydantic-ai
     source: git

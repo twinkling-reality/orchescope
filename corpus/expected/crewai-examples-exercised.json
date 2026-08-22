@@ -82,14 +82,14 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 84,
+      "agent": 81,
       "agent_group": 29,
       "entrypoint": 9,
       "external_service": 9,
       "prompt": 24
     },
     "declaredInTest": 0,
-    "total": 155
+    "total": 152
   },
   "discardedRelations": [],
   "files": {
@@ -103,21 +103,19 @@
     "byRule": {
       "declared-not-exercised": 1,
       "observability-coverage": 1,
-      "observed-name-matches-many-declarations": 1,
       "topology-shape": 1
     },
     "bySeverity": {
       "low": 2,
-      "medium": 2
+      "medium": 1
     },
     "componentsByRule": {
-      "declared-not-exercised": 90,
+      "declared-not-exercised": 87,
       "observability-coverage": 10,
-      "observed-name-matches-many-declarations": 3,
       "topology-shape": 3
     },
     "strengths": 0,
-    "total": 4
+    "total": 3
   },
   "foundNothing": [],
   "kind": "agent_system",
@@ -133,24 +131,26 @@
     "total": 24
   },
   "runtime": {
-    "ambiguousNames": [
-      "Chief Marketing Strategist\n",
-      "Creative Content Creator\n",
-      "Lead Market Analyst\n"
-    ],
+    "ambiguousNames": [],
     "contradictions": 0,
     "declaredComponents": 90,
     "declaredEdges": 16,
     "duplicateSideEffects": 0,
-    "exercisedComponents": 0,
+    "exercisedComponents": 3,
     "exercisedEdges": 0,
-    "exercisedNotDeclared": [
-      "agent:chief-marketing-strategist",
-      "agent:creative-content-creator",
-      "agent:lead-market-analyst"
+    "exercisedNotDeclared": [],
+    "joined": [
+      "agent:chief-marketing-strategist~d36c5f",
+      "agent:creative-content-creator~d36c5f",
+      "agent:lead-market-analyst~d36c5f"
     ],
-    "joined": [],
     "joinedOnNameAlone": [],
+    "joins": {
+      "byCodeLocation": 3,
+      "byKindAndName": 0,
+      "byRuntimeName": 0
+    },
+    "missingSpanAttributes": [],
     "runs": 1,
     "spans": 6
   }

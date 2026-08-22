@@ -1,13 +1,13 @@
-"""Exercise the pinned marketing crew so a CrewAI run can be joined to the declared crew.
+"""Exercise the pinned marketing crew with bounded runtime source identity.
 
-CrewAI is the one framework in the README's support table whose "Joined on a run" column reads `not yet`,
-and nothing anywhere in this corpus had ever produced a CrewAI span. Everything this build claims about the
-dialect was argued from the adapter alone. `openinference-instrumentation-crewai` is what says whether any
-of it holds, and it is a third program writing OpenInference, after the OpenAI Agents SDK's two instrumentors
-and LangChain's two.
+`openinference-instrumentation-crewai` emits roles but no source coordinates. Roles alone are ambiguous in
+this repository because three applications declare the same three. The integration installed below observes
+the Python caller that constructs each real Agent, then attaches that identity only when the same object is
+executed. It does not read declarations, names, corpus metadata or the working directory as identity.
 
 The crew is the repository's own, and so are the agents, the tasks and the roles they carry. What the driver
-supplies is the model, and the rest of this file is the consequences of that.
+supplies is the model and the integration boundary. The source evidence still comes from Python frames and
+the clean checkout that owns those frames.
 
 **No provider is reached and no credential is used.** `BaseLLM` is CrewAI's own extension point for a model
 that does not go through litellm, so a subclass of it answers from this process. The two tools this crew
@@ -53,6 +53,7 @@ os.environ["CREWAI_DISABLE_TELEMETRY"] = "true"
 os.environ["CREWAI_TRACING_ENABLED"] = "false"
 
 CHECKOUT = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path.cwd()
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 sys.path.insert(0, str(CHECKOUT / "crews/marketing_strategy/src"))
 
 from openinference.instrumentation.crewai import CrewAIInstrumentor
@@ -61,13 +62,17 @@ from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExport
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+from corpus.instrumentation.crewai_source_identity import install_crewai_source_identity
+
 provider = TracerProvider()
 provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
 trace.set_tracer_provider(provider)
 
 # Instrumented before the crew is imported, so `Task._execute_core` and `Crew.kickoff` are patched on the
-# classes the crew module binds when it imports them.
+# classes the crew module binds when it imports them. Source capture wraps that installed callable so its
+# runtime frame is active when OpenInference starts the span.
 CrewAIInstrumentor().instrument(tracer_provider=provider)
+install_crewai_source_identity(provider)
 
 from crewai import BaseLLM  # noqa: E402
 

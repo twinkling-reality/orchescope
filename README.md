@@ -207,7 +207,7 @@ every dialect measured for the first time has changed what this build reports ab
 | --- | --- | --- |
 | OpenAI Agents SDK (JavaScript, TypeScript and Python) | `new Agent({...})` and `Agent(name=...)`, handoffs, tools, `@function_tool` with `name_override` and `needs_approval`, MCP servers including a command nested in `params`, `maxTurns` | Python and JavaScript |
 | LangGraph (JavaScript, TypeScript and Python) | `StateGraph`, `addNode("name", fn)` and `add_node(fn)`, edges, conditional edges, and `create_react_agent(model, tools=[...])` with the model reference it names | Python and JavaScript |
-| CrewAI (Python) | `Agent(...)` and `Crew(...)`, an agent returned from a decorated method of a `@CrewBase` class named after that method, and an `agents.yaml` wherever the package holds it, where an agent is named by its declared role or, where that role is a template a run interpolates, by the key it is filed under, including the model its `llm` field names | agents run and the join is refused, see below |
+| CrewAI (Python) | `Agent(...)` and `Crew(...)`, an agent returned from a decorated method of a `@CrewBase` class named after that method, and an `agents.yaml` wherever the package holds it, where an agent is named by its declared role or, where that role is a template a run interpolates, by the key it is filed under, including the model its `llm` field names | Python, with the three agents selected by runtime source identity |
 | Pydantic AI (Python) | `Agent('provider:model', ...)`, `@agent.tool` and `@agent.tool_plain`, `retries`, `requires_approval`, `output_type` | Python, against an offline model |
 | Vercel AI SDK (JavaScript and TypeScript) | `generateText`, `tool(...)`, `maxSteps` | JavaScript, against an offline model |
 | Model SDKs | OpenAI, Anthropic and compatible clients, including base URL overrides and a request timeout read at the client or the call site | an offline model only, see below |
@@ -241,25 +241,26 @@ on its own: that deep research default is `openai:gpt-4.1` and the run measured 
 declared model and an observed model that differ only by the version the provider answered with, so no rule
 here matches on one.
 
-**A CrewAI run reaches this build and every one of its agents is refused.** Five agent spans of a three
-agent crew are read, each carrying the agent's role, and none of the three joins a declaration. That is the
-answer this build now gives, and it replaces a worse one: those three used to be reported as declared and
-exercised, matched to three agents of a second application in the same repository whose roles are written as
-literals and happen to be the same words.
+**A CrewAI run reaches this build and all three agents join the constructor frames that ran.** Five agent
+spans of a three-agent crew are read. The bounded CrewAI instrumentation integration records the immediate
+Python frame that constructed the actual `Agent` object, derives the canonical Git remote, full revision and
+repository-relative file from that frame, and puts those facts on the later span for the same object. The
+clean pinned run reports `byCodeLocation: 3`, no name-only joins, no ambiguous names and no missing source
+attributes.
 
 CrewAI names an agent by its role at run time. The layout `crewai create crew` generates writes that role in
 `src/<package>/config/agents.yaml` and builds the agent with
 `Agent(config=self.agents_config['lead_market_analyst'])`. That document is now read where the package holds
 it and the role in it names the component, so the run's name for an agent is in the graph. The pinned
-repository declares each of those three roles three times, once in the crew that ran, once in a copy of that
-crew under `integrations/`, and once as a literal in the application that never ran, so the reconciler finds
-more than one candidate and joins none. `joins.ambiguous` names the three. On a repository holding one
-application the same reading would join.
+repository declares each role three times, once in the crew that ran, once in a copied integration and once
+in an application the run never entered. A name still cannot select among them. The runtime coordinate
+points to `crews/marketing_strategy/src/marketing_posts/crew.py` at the pinned commit, and each executing
+line falls inside exactly one of that file's three declared source ranges.
 
-The three are reported as what they are. `exercised-not-declared` used to say static discovery had found no
-matching declaration over them, and it had found three; `observed-name-matches-many-declarations` now reports
-an observation whose name more than one declaration carries, and the same correction reaches `supervisor` on
-the pinned deep research run.
+That movement is narrower than a name heuristic. Before source capture the entry reported 155 components,
+3 runtime-only agents, 3 ambiguous names and 4 findings. It now reports 152 components, no runtime-only
+agent, no ambiguity and 3 findings. The three competing declarations remain separate, and a wrong repository,
+revision, path or line is refused rather than allowed to fall back to the unique-name rule.
 
 The crew does not join either, for a different reason. Its span carries the OpenInference `CHAIN` kind and no
 name attribute, so it is declined and counted as `no_name`, which also means nothing nests inside it: that

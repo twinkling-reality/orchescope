@@ -4,19 +4,42 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
-Where breadth comes from as agent systems proliferate, asked with measurements and answered in four
-accepted decisions: the fact model rather than the adapter count, provenance rather than a confidence band,
-and a corpus gate that holds invariants a recording cannot rewrite, plus a manifest role that separates a
-consumed system from the repository implementing it. The first CrewAI run anywhere in this
-corpus and the reading that turns its join into a refusal. Five live precision failures found by the corpus
-on the first run of the invariants written to catch them, all of them one defect. Every location now says
-which revision of which file it was read from, and every manifest citation is checked against the repository
-rather than taken. Four interfaces with no producer, three deleted and one given the process it was written
-for. Four measurements that ended in a decline remain recorded where the next reader will find them, and
-the manifest bound that moved has its own falsifier.
-Published document changes: manifest advances from version 1 to version 2 with component details, and
-report v1 adds the optional `coverage.missingSpanAttributes` field. The other documents under `schemas/`
-are byte identical.
+Where breadth comes from as agent systems proliferate, asked with measurements and answered in accepted
+decisions: the fact model rather than the adapter count, provenance rather than a confidence band, a corpus
+gate that holds invariants a recording cannot rewrite, and a manifest role that separates a consumed system
+from the repository implementing it. The first CrewAI run anywhere in this corpus first exposed an ambiguous
+name join and now proves three source-qualified joins against the exact pinned checkout. Five live precision
+failures found by the corpus on the first run of the invariants written to catch them, all of them one defect.
+Every location now says which revision of which file it was read from, and every manifest citation is checked
+against the repository rather than taken. Four interfaces with no producer, three deleted and one given the
+process it was written for. Four measurements that ended in a decline remain recorded where the next reader
+will find them, and every published bound that moved has its own falsifier.
+Published document changes: manifest advances from version 1 to version 2 with component details; system
+graph and report v1 add optional observed source identity and repository URL fields; trace bundle v1 preserves
+optional per-span resource attributes; report v1 extends missing-attribute coverage with source-identity
+purposes and refusal reasons. The additions remain readable by existing version 1 readers.
+
+### Three CrewAI roles select their declarations by observed source, not by their shared names
+
+The marketing example executes three agents whose role strings each occur in three declarations across the
+pinned repository. Before source identity, the run produced three runtime-only agents, three ambiguous names,
+zero of 90 exercised components and a coverage sample missing `code.file.path` three times. Its four findings
+included the ambiguity. A role cannot select among those declarations honestly.
+
+A bounded integration at the CrewAI instrumentation boundary observes the immediate Python caller when each
+real Agent is constructed and attaches that identity only when the same object executes. The span carries an
+absolute code path, line, function, canonical repository URL and full clean-checkout revision. Each field keeps
+the exact span or resource attribute that supplied it. Reconciliation accepts the path only inside the scanned
+root, verifies the repository and revision independently, and requires the line to fall in the declared range.
+Conflicts, generated output without a unique source mapping, incomplete coordinates and stale revisions become
+named coverage refusals rather than weaker joins.
+
+On the exact pinned CrewAI, CrewAI Tools, OpenInference and OpenTelemetry package versions, the same six-span
+run now records three of 90 exercised components, all three by `code_location`, with zero name-only joins,
+zero runtime-only agents, zero ambiguous names and no missing source attributes. Agent declarations remain 81,
+relation joins remain zero of 16 and the remaining three findings describe the unchanged topology and coverage
+gaps. Resource attributes stay attached to the span that carried them, so one process cannot donate a revision
+to another span. Declaration-shaped endpoint attributes remain unable to prove their own runtime relation.
 
 ### Three source files git read as binary, one of them where every component identity is minted
 

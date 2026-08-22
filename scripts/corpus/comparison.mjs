@@ -10,14 +10,27 @@ const isRecord = (value) => typeof value === 'object' && value !== null && !Arra
 
 const show = (value) => (value === undefined ? 'absent' : JSON.stringify(value));
 
+const canonicalValue = (value) => {
+  if (Array.isArray(value)) return `[${value.map(canonicalValue).sort().join(',')}]`;
+  if (isRecord(value)) {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalValue(value[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+};
+
 const compareLists = (path, expected, observed, differences) => {
+  const expectedValues = expected.map(canonicalValue);
+  const observedValues = observed.map(canonicalValue);
   for (const entry of expected) {
-    if (!observed.includes(entry)) {
+    if (!observedValues.includes(canonicalValue(entry))) {
       differences.push({ path, expected: JSON.stringify(entry), observed: 'absent' });
     }
   }
   for (const entry of observed) {
-    if (!expected.includes(entry)) {
+    if (!expectedValues.includes(canonicalValue(entry))) {
       differences.push({ path, expected: 'absent', observed: JSON.stringify(entry) });
     }
   }

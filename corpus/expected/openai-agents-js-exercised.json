@@ -169,6 +169,37 @@
       "agent:seat-booking-agent",
       "tool:update_seat"
     ],
+    "joins": {
+      "byCodeLocation": 0,
+      "byKindAndName": 2,
+      "byRuntimeName": 0
+    },
+    "missingSpanAttributes": [
+      {
+        "attribute": "code.file.path",
+        "observedComponents": 3,
+        "purpose": "code_location",
+        "reason": "missing"
+      },
+      {
+        "attribute": "orchescope.code.repository.path",
+        "observedComponents": 3,
+        "purpose": "source_identity",
+        "reason": "missing"
+      },
+      {
+        "attribute": "vcs.ref.head.revision",
+        "observedComponents": 3,
+        "purpose": "source_identity",
+        "reason": "missing"
+      },
+      {
+        "attribute": "vcs.repository.url.full",
+        "observedComponents": 3,
+        "purpose": "source_identity",
+        "reason": "missing"
+      }
+    ],
     "runs": 1,
     "spans": 5
   }

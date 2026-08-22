@@ -1,6 +1,6 @@
 # ADR 0007: Runtime source identity must name the executed revision and file
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-22
 - Deciders: repository maintainers
 
@@ -160,8 +160,42 @@ multi-repository system.
 
 ## What the measurement said
 
-Implementation and the after measurement are intentionally absent while this record is proposed. This
-section will be completed from the reviewed CrewAI corpus diff before the status changes to accepted.
+The pinned CrewAI exercise satisfied all six parts of the pre-implementation falsifier. The integration
+captured the immediate constructor frames at lines 39, 48 and 57 of
+`crews/marketing_strategy/src/marketing_posts/crew.py`. Each span carries the checkout's canonical remote
+`https://github.com/crewAIInc/crewAI-examples`, full revision
+`da94a91e691e1cf5b3151416bb15b5b62729bea8`, absolute compiled path, repository-relative path, line and
+qualified Python function. The exported graph retains the relative path and every field's attribute
+provenance and contains no absolute home-directory path.
+
+The clean one-run before and after is:
+
+| measurement | before | after |
+| --- | ---: | ---: |
+| graph components | 155 | 152 |
+| graph relations | 24 | 24 |
+| observed components | 3 | 3 |
+| runtime-only components | 3 | 0 |
+| exercised declared components | 0 of 90 | 3 of 90 |
+| code-location joins | 0 | 3 |
+| runtime-name joins | 0 | 0 |
+| kind-and-name joins | 0 | 0 |
+| name-only join identities | 0 | 0 |
+| exercised declared relations | 0 of 16 | 0 of 16 |
+| ambiguous names | 3 | 0 |
+| observed components missing `code.file.path` | 3 | 0 |
+| findings | 4 | 3 |
+
+The finding removed is `observed-name-matches-many-declarations`. `declared-not-exercised` moves from 90
+components to 87. `observability-coverage` remains and now reports a measured exercise rate of 3 out of 90.
+`topology-shape` remains over the same three observed agents because the run still reports no relation. No
+component moves onto `joinedOnNameAlone`.
+
+The corpus now records the join rule counts and each missing source attribute rather than only the joined
+identities. The other three offline exercised third-party entries still report 0 code-location joins and
+name all four missing inputs with a sample of 3 observed components each. The 55 generated negatives hold,
+and the anti-circularity tests continue to refuse endpoint attributes while retaining real parent-span
+nesting.
 
 ## What would reverse this
 

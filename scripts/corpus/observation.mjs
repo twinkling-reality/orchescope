@@ -44,10 +44,22 @@ const runtimeOf = (exercise, bundle) => {
      */
     declaredEdges: delta.coverage.declaredEdges,
     exercisedEdges: delta.coverage.exercisedEdges,
+    joins: {
+      byCodeLocation: delta.joins.byCodeLocation,
+      byRuntimeName: delta.joins.byRuntimeName,
+      byKindAndName: delta.joins.byKindAndName,
+    },
     joined,
     // How each join was made. A join on kind and name alone is the one that can match the wrong module.
     joinedOnNameAlone: [...delta.joins.onNameAlone].sort(),
     ambiguousNames: [...delta.joins.ambiguous].sort(),
+    missingSpanAttributes: [...(delta.coverage.missingSpanAttributes ?? [])]
+      .map((entry) => ({ ...entry }))
+      .sort((left, right) => {
+        const leftKey = `${left.purpose}|${left.attribute}|${left.reason ?? ''}`;
+        const rightKey = `${right.purpose}|${right.attribute}|${right.reason ?? ''}`;
+        return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+      }),
     exercisedNotDeclared: [...delta.exercisedNotDeclared.components].sort(),
     contradictions: delta.contradictions.length,
     duplicateSideEffects: delta.duplicateSideEffects.length,
