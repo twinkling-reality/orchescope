@@ -100,6 +100,47 @@ const contextFor = (graph: SystemGraph): RuleContext => ({
   evidenceById: new Map(),
 });
 
+const withCompleteTopology = (graph: SystemGraph): SystemGraph => {
+  const inspectedInputs = Math.max(1, graph.components.length + graph.edges.length);
+  return {
+    ...graph,
+    coverage: {
+      ...graph.coverage,
+      topology: {
+        status: 'complete',
+        producers: [
+          {
+            adapterId: 'fixture:topology',
+            status: 'complete',
+            inspectedInputs,
+            relationsFound: graph.edges.length,
+          },
+        ],
+        inspectedInputs,
+        explicitRelations: graph.edges.length,
+        conditionalConstructs: 0,
+        conditionalDestinations: 0,
+        entryBoundaries: 1,
+        entryTargets: graph.components
+          .filter(
+            (component) =>
+              component.kind === 'entrypoint' ||
+              component.kind === 'agent_group' ||
+              component.kind === 'agent',
+          )
+          .slice(0, 1)
+          .map((component) => component.identity),
+        terminalBoundaries: 0,
+        boundaryFacts: [{ kind: 'entry', location: { file: 'src/main.ts', startLine: 1 } }],
+        configurationBounds: 0,
+        configurationBoundFacts: [],
+        unresolvedCount: 0,
+        unresolved: [],
+      },
+    },
+  };
+};
+
 describe('topology-shape', () => {
   const model = componentDraft({ kind: 'model', name: 'gpt-4.1-mini', file: 'src/main.ts' });
   const database = componentDraft({ kind: 'database', name: 'sqlite', file: 'src/store.ts' });
@@ -113,7 +154,9 @@ describe('topology-shape', () => {
 
   it('reports a good shape when there is an agent and a relation to judge', () => {
     const found = strengths(
-      buildGraph([orchestrator, model], [edgeDraft('invokes_model', orchestrator, model)]),
+      withCompleteTopology(
+        buildGraph([orchestrator, model], [edgeDraft('invokes_model', orchestrator, model)]),
+      ),
     );
     assert.equal(found.length, 1);
     assert.match(found[0]?.title ?? '', /reachable, acyclic and narrow/);
@@ -683,7 +726,7 @@ describe('topology-shape reachability', () => {
   const model = componentDraft({ kind: 'model', name: 'gpt-4.1-mini', file: 'src/main.ts' });
 
   const unreachable = (graph: SystemGraph) => {
-    const outcome = architectureShapeRule.evaluate(contextFor(graph));
+    const outcome = architectureShapeRule.evaluate(contextFor(withCompleteTopology(graph)));
     return outcome.status === 'fired'
       ? outcome.drafts.filter((draft) => draft.occurrence?.key === 'unreachable')
       : [];
@@ -1053,10 +1096,10 @@ describe('what a rule says when it had nothing to look at', () => {
     assert.equal(outcome.status, 'not_applicable');
   });
 
-  it('topology-shape says how much it looked at rather than nothing at all', () => {
+  it('topology-shape refuses an old graph with no evidence population', () => {
     const outcome = architectureShapeRule.evaluate(contextFor(buildGraph([orchestrator], [])));
-    assert.notEqual(outcome.status, 'fired');
-    assert.match(outcome.detail ?? '', /1 declared component examined/);
+    assert.equal(outcome.status, 'insufficient_evidence');
+    assert.match(outcome.detail ?? '', /topology completeness is unknown/);
   });
 
   it('topology-shape declines on a graph with nothing declared in it', () => {

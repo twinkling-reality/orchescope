@@ -1374,6 +1374,388 @@
           },
           "type": "array"
         },
+        "topology": {
+          "additionalProperties": false,
+          "properties": {
+            "boundaryFacts": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "anyOf": [
+                      {
+                        "const": "entry",
+                        "type": "string"
+                      },
+                      {
+                        "const": "terminal",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "location": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "endColumn": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "endLine": {
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "file": {
+                        "description": "Repository relative POSIX path.",
+                        "minLength": 1,
+                        "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                        "type": "string"
+                      },
+                      "fileHash": {
+                        "description": "Lowercase hexadecimal SHA-256 digest.",
+                        "pattern": "^[0-9a-f]{64}$",
+                        "type": "string"
+                      },
+                      "startColumn": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "startLine": {
+                        "minimum": 1,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "file",
+                      "startLine"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "location"
+                ],
+                "type": "object"
+              },
+              "maxItems": 10,
+              "type": "array"
+            },
+            "conditionalConstructs": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "conditionalDestinations": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "configurationBoundFacts": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "declaration": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "endColumn": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "endLine": {
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "file": {
+                        "description": "Repository relative POSIX path.",
+                        "minLength": 1,
+                        "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                        "type": "string"
+                      },
+                      "fileHash": {
+                        "description": "Lowercase hexadecimal SHA-256 digest.",
+                        "pattern": "^[0-9a-f]{64}$",
+                        "type": "string"
+                      },
+                      "startColumn": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "startLine": {
+                        "minimum": 1,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "file",
+                      "startLine"
+                    ],
+                    "type": "object"
+                  },
+                  "defaultValue": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "reference": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "endColumn": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "endLine": {
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "file": {
+                        "description": "Repository relative POSIX path.",
+                        "minLength": 1,
+                        "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                        "type": "string"
+                      },
+                      "fileHash": {
+                        "description": "Lowercase hexadecimal SHA-256 digest.",
+                        "pattern": "^[0-9a-f]{64}$",
+                        "type": "string"
+                      },
+                      "startColumn": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "startLine": {
+                        "minimum": 1,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "file",
+                      "startLine"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "name",
+                  "defaultValue",
+                  "reference",
+                  "declaration"
+                ],
+                "type": "object"
+              },
+              "maxItems": 10,
+              "type": "array"
+            },
+            "configurationBounds": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "entryBoundaries": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "entryTargets": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "description": "ComponentKind of the identified component.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "localName": {
+                    "description": "Semantic name of the component inside its namespace.",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "namespace": {
+                    "description": "Stable container: module path, configuration path, \"runtime\" or \"manifest\".",
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "namespace",
+                  "localName"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "explicitRelations": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "inspectedInputs": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "producers": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "adapterId": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "inspectedInputs": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "relationsFound": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "status": {
+                    "anyOf": [
+                      {
+                        "const": "complete",
+                        "type": "string"
+                      },
+                      {
+                        "const": "incomplete",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "adapterId",
+                  "status",
+                  "inspectedInputs",
+                  "relationsFound"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "status": {
+              "anyOf": [
+                {
+                  "const": "complete",
+                  "type": "string"
+                },
+                {
+                  "const": "incomplete",
+                  "type": "string"
+                }
+              ]
+            },
+            "terminalBoundaries": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "unresolved": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "anyOf": [
+                      {
+                        "const": "node_registration",
+                        "type": "string"
+                      },
+                      {
+                        "const": "explicit_relation",
+                        "type": "string"
+                      },
+                      {
+                        "const": "conditional_destination",
+                        "type": "string"
+                      },
+                      {
+                        "const": "entry_boundary",
+                        "type": "string"
+                      },
+                      {
+                        "const": "terminal_boundary",
+                        "type": "string"
+                      },
+                      {
+                        "const": "config_backed_bound",
+                        "type": "string"
+                      },
+                      {
+                        "const": "adapter_input",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "location": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "endColumn": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "endLine": {
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "file": {
+                        "description": "Repository relative POSIX path.",
+                        "minLength": 1,
+                        "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                        "type": "string"
+                      },
+                      "fileHash": {
+                        "description": "Lowercase hexadecimal SHA-256 digest.",
+                        "pattern": "^[0-9a-f]{64}$",
+                        "type": "string"
+                      },
+                      "startColumn": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "startLine": {
+                        "minimum": 1,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "file",
+                      "startLine"
+                    ],
+                    "type": "object"
+                  },
+                  "reason": {
+                    "maxLength": 500,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "reason"
+                ],
+                "type": "object"
+              },
+              "maxItems": 10,
+              "type": "array"
+            },
+            "unresolvedCount": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "status",
+            "producers",
+            "inspectedInputs",
+            "explicitRelations",
+            "conditionalConstructs",
+            "conditionalDestinations",
+            "entryBoundaries",
+            "entryTargets",
+            "terminalBoundaries",
+            "boundaryFacts",
+            "configurationBounds",
+            "configurationBoundFacts",
+            "unresolvedCount",
+            "unresolved"
+          ],
+          "type": "object"
+        },
         "truncated": {
           "type": "boolean"
         },

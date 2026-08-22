@@ -1,6 +1,7 @@
 import type { Deadline } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type { CitationSnapshot, ManifestSet, ModuleFacts } from '@orchescope/source-analysis';
+import type { ComponentIdentity, SourceLocation } from '@orchescope/schema';
 import type { BindingRegistry } from './bindings.ts';
 import type { CallSiteEffects } from './call-site-effect.ts';
 import type { ConfigDocument } from './config-files.ts';
@@ -85,6 +86,43 @@ export type AdapterFindings = {
    * and on the terminal instead of leaving the reader with an empty graph and no explanation.
    */
   readonly problem?: string;
+  /** Structured topology evidence, separate from whether the adapter itself completed. */
+  readonly topology?: TopologyDiscovery;
+};
+
+export type TopologyDiscovery = {
+  readonly status: 'complete' | 'incomplete';
+  readonly inspectedInputs: number;
+  readonly explicitRelations: number;
+  readonly conditionalConstructs: number;
+  readonly conditionalDestinations: number;
+  readonly entryBoundaries: number;
+  readonly entryTargets: readonly ComponentIdentity[];
+  readonly terminalBoundaries: number;
+  readonly boundaryFacts: readonly {
+    readonly kind: 'entry' | 'terminal';
+    readonly location: SourceLocation;
+  }[];
+  readonly configurationBounds: number;
+  readonly configurationBoundFacts: readonly {
+    readonly name: string;
+    readonly defaultValue: number;
+    readonly reference: SourceLocation;
+    readonly declaration: SourceLocation;
+  }[];
+  readonly unresolvedCount: number;
+  readonly unresolved: readonly {
+    readonly kind:
+      | 'node_registration'
+      | 'explicit_relation'
+      | 'conditional_destination'
+      | 'entry_boundary'
+      | 'terminal_boundary'
+      | 'config_backed_bound'
+      | 'adapter_input';
+    readonly reason: string;
+    readonly location?: SourceLocation;
+  }[];
 };
 
 export type AgentSystemAdapter = {

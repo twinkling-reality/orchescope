@@ -1,13 +1,14 @@
 import type { SourceLocation } from '@orchescope/schema';
-import type { CalleeOrigin, ModuleFacts } from '@orchescope/source-analysis';
+import type { ArgumentFact, CalleeOrigin, ModuleFacts } from '@orchescope/source-analysis';
 import { calleeName, findEntry, objectArgument, stringValue } from '@orchescope/source-analysis';
+import { moduleMatches } from './matching.ts';
 
 /**
  * The node a LangGraph node routes to from inside its own implementation.
  *
- * A graph used to be wired entirely from outside its nodes, and this build reads that: `add_edge` states a
- * relation between two names and `add_conditional_edges` states the set a router may pick from. The modern
- * idiom states it from inside instead. A node returns `Command(goto="write_research_brief")`, and the
+ * `add_edge` states a relation between two names and `add_conditional_edges` states the set a router may
+ * pick from. A node can state it from inside instead by returning
+ * `Command(goto="write_research_brief")`, and the
  * destination is a string literal naming another node of the same graph, which is the same kind of
  * declaration `add_edge` makes and in the same words.
  *
@@ -17,17 +18,13 @@ import { calleeName, findEntry, objectArgument, stringValue } from '@orchescope/
  * set of nodes with almost nothing between them, and every question that reads the declared shape answered
  * against that: reachability, entry points, cycles and the coordination fan out.
  *
- * **The route is read from the call rather than from the return annotation.** LangGraph documents both, and
- * a node that returns a command is usually annotated `-> Command[Literal["a", "b"]]` so that the library
- * can draw the graph. The annotation is the fuller statement, and it is the one this fact model does not
- * carry: a return type is not a call, an argument or a definition, so reading it would mean teaching two
- * language parsers a new fact before an adapter could ask for it. The call sites say where the node
- * actually sends control, and where the two disagree the call is the one a reader can check by running it.
+ * `Command(goto=...)` is independent evidence from a router return annotation. This reader handles the
+ * command destination; the LangGraph adapter separately joins named-router annotations and returns, keeps
+ * both locations, and marks disagreement incomplete rather than deciding which source statement wins.
  *
- * **A destination is read only where the same module declared a node of that name.** `Command` also carries
- * `goto=END`, a `Send` for a fan out, and a name computed at run time. None of those is a literal naming a
- * declared node, so none of them becomes a relation, and the sentinel needs no special case: `__end__` is
- * never a declared node because `add_node` rejects the name.
+ * **A destination is read only where the same module declared a node of that name.** `goto=END` contributes
+ * terminal boundary evidence without minting an application relation. A computed name or unsupported fan
+ * out becomes a source-located refusal rather than a guessed relation.
  *
  * **A node whose implementation is written inline is not read, and that is a stated limit rather than a
  * silent one.** `addNode("plan", async () => new Command({ goto: "research" }))` declares the node and its
@@ -39,6 +36,7 @@ import { calleeName, findEntry, objectArgument, stringValue } from '@orchescope/
 
 const COMMAND = 'Command';
 const DESTINATION = 'goto';
+const COMMAND_PACKAGES = ['langgraph', '@langchain/langgraph'] as const;
 
 /** A route one node's implementation declares to another, ready to become a relation. */
 export type DeclaredRoute = {
@@ -46,6 +44,22 @@ export type DeclaredRoute = {
   readonly to: string;
   readonly location: SourceLocation;
   readonly symbol: string;
+};
+
+export type UnresolvedDeclaredRoute = {
+  readonly reason: string;
+  readonly location: SourceLocation;
+};
+
+export type DeclaredRouteBoundary = {
+  readonly kind: 'terminal';
+  readonly location: SourceLocation;
+};
+
+export type DeclaredRoutes = {
+  readonly routes: readonly DeclaredRoute[];
+  readonly boundaries: readonly DeclaredRouteBoundary[];
+  readonly unresolved: readonly UnresolvedDeclaredRoute[];
 };
 
 /**
@@ -64,6 +78,30 @@ const isLangGraphCommand = (origin: CalleeOrigin | undefined): boolean => {
   );
 };
 
+const terminalSentinel = (
+  module: ModuleFacts,
+  value: ArgumentFact | undefined,
+): '__end__' | undefined => {
+  if (value?.kind === 'string') return value.value === '__end__' ? '__end__' : undefined;
+  const path = value?.kind === 'member' ? value.path : undefined;
+  const root = value?.kind === 'identifier' ? value.name : path?.[0];
+  if (root === undefined) return undefined;
+  if (
+    module.definitions.some(
+      (definition) => definition.enclosing === undefined && definition.name === root,
+    )
+  ) {
+    return undefined;
+  }
+  const binding = module.imports.find(
+    (entry) =>
+      !entry.isType && entry.local === root && moduleMatches(entry.module, COMMAND_PACKAGES),
+  );
+  if (value?.kind === 'identifier') return binding?.imported === 'END' ? '__end__' : undefined;
+  const last = path?.[path.length - 1];
+  return last === 'END' && binding?.imported === '*' ? '__end__' : undefined;
+};
+
 /**
  * Every route the module's node implementations declare.
  *
@@ -76,15 +114,41 @@ export const routesDeclaredInNodes = (
   module: ModuleFacts,
   implementations: ReadonlyMap<string, string>,
   declaredNodes: ReadonlySet<string>,
-): readonly DeclaredRoute[] => {
+): DeclaredRoutes => {
   const routes: DeclaredRoute[] = [];
+  const boundaries: DeclaredRouteBoundary[] = [];
+  const unresolved: UnresolvedDeclaredRoute[] = [];
   for (const call of module.calls) {
     if (calleeName(call) !== COMMAND || !isLangGraphCommand(call.origin)) continue;
     const from = call.enclosing === undefined ? undefined : implementations.get(call.enclosing);
-    if (from === undefined || !declaredNodes.has(from)) continue;
+    if (from === undefined || !declaredNodes.has(from)) {
+      unresolved.push({
+        reason: 'A LangGraph Command was not inside a named local node implementation.',
+        location: call.location,
+      });
+      continue;
+    }
     const destination = findEntry(objectArgument(call), DESTINATION);
-    const to = stringValue(destination?.value);
-    if (destination === undefined || to === undefined || !declaredNodes.has(to)) continue;
+    const value = destination?.value;
+    const to = stringValue(value) ?? terminalSentinel(module, value);
+    if (destination === undefined || to === undefined) {
+      unresolved.push({
+        reason: 'A LangGraph Command destination was computed rather than written as a literal.',
+        location: destination?.location ?? call.location,
+      });
+      continue;
+    }
+    if (to === '__end__') {
+      boundaries.push({ kind: 'terminal', location: destination.location });
+      continue;
+    }
+    if (!declaredNodes.has(to)) {
+      unresolved.push({
+        reason: `A LangGraph Command names destination ${to}, which is not a declared node in this module.`,
+        location: destination.location,
+      });
+      continue;
+    }
     routes.push({
       from,
       to,
@@ -92,5 +156,5 @@ export const routesDeclaredInNodes = (
       symbol: `${COMMAND}(${DESTINATION}="${to}")`,
     });
   }
-  return routes;
+  return { routes, boundaries, unresolved };
 };

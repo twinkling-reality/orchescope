@@ -1,4 +1,4 @@
-import { isInferredEntryPoint, partOfDeclaredTopology } from '@orchescope/domain';
+import { identityKey, isInferredEntryPoint, partOfDeclaredTopology } from '@orchescope/domain';
 import type { Component, ComponentId, Edge, EdgeKind } from '@orchescope/schema';
 import type { IndexedGraph } from './indexed-graph.ts';
 
@@ -223,8 +223,11 @@ export const declaredCallersOf = (
  * Components that no declared entry point can reach. A configured tool nobody can call is a real
  * finding, so this returns the components rather than a count.
  */
-export const unreachableComponents = (index: IndexedGraph): readonly Component[] => {
-  const roots = entryPoints(index).map((component) => component.id);
+export const unreachableComponents = (
+  index: IndexedGraph,
+  accountedEntryTargets?: readonly ComponentId[],
+): readonly Component[] => {
+  const roots = accountedEntryTargets ?? entryPoints(index).map((component) => component.id);
   if (roots.length === 0) return [];
   const reachable = reachableFrom(index, roots, partOfDeclaredTopology);
   return index.graph.components.filter((component) => !reachable.has(component.id));
@@ -255,6 +258,85 @@ export const controlFlowCycles = (index: IndexedGraph): readonly (readonly Compo
 
   for (const component of index.graph.components) visit(component.id);
   return cycles;
+};
+
+/** The concrete declared relations whose adjacency establishes one reported cycle. */
+export const controlFlowCycleEdges = (
+  index: IndexedGraph,
+  cycle: readonly ComponentId[],
+): readonly Edge[] => {
+  const edges: Edge[] = [];
+  for (let position = 0; position + 1 < cycle.length; position += 1) {
+    const from = cycle[position];
+    const to = cycle[position + 1];
+    if (from === undefined || to === undefined) continue;
+    const edge = index
+      .outgoing(from)
+      .find((candidate) => candidate.to === to && isDeclaredControlFlow(candidate));
+    if (edge !== undefined) edges.push(edge);
+  }
+  return edges;
+};
+
+export type TopologyRequirements = {
+  readonly status: 'complete' | 'incomplete' | 'unknown';
+  readonly inspectedInputs: number;
+  readonly acyclicityComplete: boolean;
+  readonly reachabilityComplete: boolean;
+  readonly narrownessComplete: boolean;
+  readonly entryComponentIds: readonly ComponentId[];
+};
+
+/**
+ * Whether the evidence population can support closed-world topology properties.
+ *
+ * Imported graphs are untrusted documents, so the derived answer checks the counts and every producer
+ * rather than trusting a lone `status: complete` scalar. A missing optional field is the version 1
+ * compatibility case and means unknown.
+ */
+export const topologyRequirements = (index: IndexedGraph): TopologyRequirements => {
+  const topology = index.graph.coverage.topology;
+  if (topology === undefined) {
+    return {
+      status: 'unknown',
+      inspectedInputs: 0,
+      acyclicityComplete: false,
+      reachabilityComplete: false,
+      narrownessComplete: false,
+      entryComponentIds: [],
+    };
+  }
+  const scanPopulationComplete =
+    !index.graph.coverage.truncated &&
+    (index.graph.coverage.filesSkipped ?? index.graph.coverage.skipped.length) === 0 &&
+    (index.graph.coverage.filesInSupportedLanguages === undefined ||
+      index.graph.coverage.filesParsed >= index.graph.coverage.filesInSupportedLanguages) &&
+    index.graph.coverage.unsupported.length === 0;
+  const complete =
+    scanPopulationComplete &&
+    topology.status === 'complete' &&
+    topology.inspectedInputs > 0 &&
+    topology.unresolvedCount === 0 &&
+    topology.producers.length > 0 &&
+    topology.producers.every(
+      (producer) => producer.status === 'complete' && producer.inspectedInputs > 0,
+    );
+  const targets = new Set(topology.entryTargets.map(identityKey));
+  const entryComponentIds = index.graph.components
+    .filter((component) => targets.has(identityKey(component.identity)))
+    .map((component) => component.id);
+  const entryTargetsComplete =
+    topology.entryBoundaries > 0 &&
+    topology.entryTargets.length > 0 &&
+    entryComponentIds.length === topology.entryTargets.length;
+  return {
+    status: complete ? 'complete' : 'incomplete',
+    inspectedInputs: topology.inspectedInputs,
+    acyclicityComplete: complete,
+    reachabilityComplete: complete && entryTargetsComplete,
+    narrownessComplete: complete,
+    entryComponentIds,
+  };
 };
 
 /** Components declared but never observed, restricted to kinds that can appear in a trace. */

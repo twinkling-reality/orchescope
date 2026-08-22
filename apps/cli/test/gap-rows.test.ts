@@ -86,6 +86,20 @@ describe('an area no adapter models', () => {
     );
   });
 
+  it('shows a bounded source-located topology refusal through the generic gap path', () => {
+    assert.deepEqual(
+      render({
+        unsupported: [
+          {
+            area: 'topology: 1 unresolved at src/graph.py:14',
+            reason: 'The conditional router computes its destination dynamically.',
+          },
+        ] as never,
+      }),
+      ['gap             . unread     topology: 1 unresolved at src/graph.py:14'],
+    );
+  });
+
   /*
    * `adapter_blind_spot` is the name this build stopped writing, and a report stored by an earlier one
    * still carries it. Accepted for reading and never emitted, so it has to render rather than fall

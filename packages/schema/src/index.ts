@@ -130,6 +130,7 @@ export {
   ScanCoverage,
   SkippedFile,
   SystemGraph,
+  TopologyCoverage,
   UnsupportedArea,
 } from './graph.ts';
 export {

@@ -4,6 +4,7 @@ import {
   type ArgumentFact,
   type AssignmentFact,
   approximateTokens,
+  type BranchPredicateFact,
   type CalleeOrigin,
   type CallFact,
   type ControlFlowFact,
@@ -14,6 +15,8 @@ import {
   isLiteralFact,
   type ModuleFacts,
   type ObjectEntryFact,
+  type ReturnAnnotationFact,
+  type ReturnFact,
   TEXT_FACT_MIN_LENGTH,
   type TextFact,
 } from '../facts.ts';
@@ -182,27 +185,51 @@ const subscriptPath = (node: Node): ArgumentFact => {
   return path.length === 0 ? unknown : { kind: 'member', path: [...path, ...keys] };
 };
 
+const stringArgumentFact = (node: Node): ArgumentFact => {
+  const value = stringLiteralValue(node);
+  if (value === undefined) return { kind: 'unknown', nodeType: node.type };
+  return hasInterpolation(node)
+    ? {
+        kind: 'template',
+        value,
+        hasSubstitutions: true,
+        substitutedNames: substitutedNamesIn(node),
+      }
+    : { kind: 'string', value };
+};
+
+const numberArgumentFact = (node: Node): ArgumentFact => {
+  const value = Number(node.text);
+  return Number.isFinite(value)
+    ? { kind: 'number', value }
+    : { kind: 'unknown', nodeType: node.type };
+};
+
+const signedNumberArgumentFact = (node: Node): ArgumentFact => {
+  const operand = childField(node, 'argument') ?? namedChildren(node)[0];
+  const sign = node.text.trimStart()[0];
+  if (
+    operand === undefined ||
+    (operand.type !== 'integer' && operand.type !== 'float') ||
+    (sign !== '-' && sign !== '+')
+  ) {
+    return { kind: 'unknown', nodeType: node.type };
+  }
+  const reduced = numberArgumentFact(operand);
+  return reduced.kind === 'number'
+    ? { kind: 'number', value: sign === '-' ? -reduced.value : reduced.value }
+    : { kind: 'unknown', nodeType: node.type };
+};
+
 const argumentFact = (node: Node, context: Context): ArgumentFact => {
   switch (node.type) {
-    case 'string': {
-      const value = stringLiteralValue(node);
-      if (value === undefined) return { kind: 'unknown', nodeType: node.type };
-      return hasInterpolation(node)
-        ? {
-            kind: 'template',
-            value,
-            hasSubstitutions: true,
-            substitutedNames: substitutedNamesIn(node),
-          }
-        : { kind: 'string', value };
-    }
+    case 'string':
+      return stringArgumentFact(node);
     case 'integer':
-    case 'float': {
-      const value = Number(node.text);
-      return Number.isFinite(value)
-        ? { kind: 'number', value }
-        : { kind: 'unknown', nodeType: node.type };
-    }
+    case 'float':
+      return numberArgumentFact(node);
+    case 'unary_operator':
+      return signedNumberArgumentFact(node);
     case 'true':
       return { kind: 'boolean', value: true };
     case 'false':
@@ -813,6 +840,162 @@ const recordDecoratedDefinition = (
   traverse(definition, context, frame, collecting);
 };
 
+const TYPING_MODULES = new Set(['typing', 'typing_extensions']);
+
+/** Whether the annotation head resolves to the standard bounded `Literal` type. */
+const isLiteralAnnotationHead = (head: Node | undefined, context: Context): boolean => {
+  if (head === undefined) return false;
+  const path = attributePath(head);
+  const root = path[0];
+  const leaf = path[path.length - 1];
+  if (root === undefined || leaf === undefined) return false;
+  const binding = context.bindings.get(root);
+  if (path.length === 1) {
+    if (
+      binding !== undefined &&
+      binding.imported === 'Literal' &&
+      TYPING_MODULES.has(binding.module)
+    ) {
+      return true;
+    }
+    return context.imports.some(
+      (entry) =>
+        entry.local === '*' &&
+        entry.imported === '*' &&
+        TYPING_MODULES.has(entry.module) &&
+        root === 'Literal',
+    );
+  }
+  return leaf === 'Literal' && binding?.imported === '*' && TYPING_MODULES.has(binding.module);
+};
+
+/** Literal destinations named by a Python `Literal[...]` return annotation. */
+const returnAnnotationOf = (node: Node, context: Context): ReturnAnnotationFact | undefined => {
+  const annotation = childField(node, 'return_type');
+  if (annotation === undefined) return undefined;
+  const generic = annotation.namedChildren.find((child) => child.type === 'generic_type');
+  const head = generic?.namedChildren[0];
+  const parameters = generic?.namedChildren.slice(1) ?? [];
+  const literalHead = isLiteralAnnotationHead(head, context);
+  const strings: Node[] = [];
+  let unsupported = !literalHead || parameters.length === 0;
+
+  const collect = (candidate: Node): void => {
+    if (candidate.type === 'string') {
+      strings.push(candidate);
+      return;
+    }
+    if (candidate.type !== 'type' && candidate.type !== 'type_parameter') {
+      unsupported = true;
+      return;
+    }
+    if (candidate.namedChildren.length === 0) unsupported = true;
+    for (const child of candidate.namedChildren) collect(child);
+  };
+  if (literalHead) {
+    for (const parameter of parameters) collect(parameter);
+  }
+
+  return {
+    destinations: strings.flatMap((string) => {
+      const value = stringLiteralValue(string);
+      return value === undefined ? [] : [{ value, location: location(context.file, string) }];
+    }),
+    location: location(context.file, annotation),
+    complete: !unsupported && strings.length > 0,
+  };
+};
+
+/** Member and identifier paths read by one predicate, without duplicating member suffixes. */
+const predicateReferences = (node: Node): readonly (readonly string[])[] => {
+  const references = new Map<string, readonly string[]>();
+  const collect = (candidate: Node): void => {
+    if (candidate.type === 'attribute' || candidate.type === 'identifier') {
+      const path = attributePath(candidate);
+      if (path.length > 0) references.set(path.join('.'), path);
+      return;
+    }
+    for (const child of candidate.namedChildren) collect(child);
+  };
+  collect(node);
+  return [...references.values()];
+};
+
+const branchPredicate = (
+  condition: Node | undefined,
+  branch: BranchPredicateFact['branch'],
+  context: Context,
+): BranchPredicateFact | undefined => {
+  if (condition === undefined) return undefined;
+  const operator = condition.children.find((child) => !child.isNamed)?.type;
+  return {
+    operator: operator ?? condition.type,
+    references: predicateReferences(condition),
+    location: location(context.file, condition),
+    branch,
+  };
+};
+
+const returnFact = (
+  statement: Node,
+  context: Context,
+  predicate: BranchPredicateFact | undefined,
+): ReturnFact => {
+  const value = namedChildren(statement)[0];
+  return {
+    value:
+      value === undefined
+        ? { kind: 'unknown', nodeType: 'bare_return' }
+        : argumentFact(value, context),
+    location: location(context.file, statement),
+    ...(predicate === undefined ? {} : { predicate }),
+  };
+};
+
+/**
+ * Direct returns of one function, preserving the nearest branch that selects each one.
+ *
+ * Nested functions and classes are separate definitions. Descending into either would attribute their
+ * returns to the outer router and turn a local helper into a possible graph destination.
+ */
+const returnsOf = (node: Node, context: Context): readonly ReturnFact[] => {
+  const returns: ReturnFact[] = [];
+  const body = childField(node, 'body');
+  if (body === undefined) return returns;
+  const nestedScopes = new Set(['function_definition', 'class_definition', 'lambda']);
+
+  const walk = (candidate: Node, predicate?: BranchPredicateFact): void => {
+    if (candidate !== body && nestedScopes.has(candidate.type)) {
+      return;
+    }
+    if (candidate.type === 'return_statement') {
+      returns.push(returnFact(candidate, context, predicate));
+      return;
+    }
+    if (candidate.type === 'if_statement' || candidate.type === 'elif_clause') {
+      const condition = childField(candidate, 'condition');
+      const consequence = childField(candidate, 'consequence');
+      if (consequence !== undefined) {
+        walk(consequence, branchPredicate(condition, 'consequence', context));
+      }
+      const alternative = childField(candidate, 'alternative');
+      if (alternative !== undefined) {
+        if (alternative.type === 'elif_clause') walk(alternative, predicate);
+        else {
+          const alternativeBody = childField(alternative, 'body') ?? alternative.namedChildren[0];
+          if (alternativeBody !== undefined) {
+            walk(alternativeBody, branchPredicate(condition, 'alternative', context));
+          }
+        }
+      }
+      return;
+    }
+    for (const child of namedChildren(candidate)) walk(child, predicate);
+  };
+  walk(body);
+  return returns;
+};
+
 const recordFunction = (
   node: Node,
   context: Context,
@@ -823,6 +1006,8 @@ const recordFunction = (
   const nameNode = childField(node, 'name');
   const name = nameNode?.text ?? '(anonymous)';
   const isAsync = node.children.some((child) => child !== null && child.type === 'async');
+  const returnAnnotation = returnAnnotationOf(node, context);
+  const returns = returnsOf(node, context);
   context.definitions.push({
     kind: frame.name === undefined ? 'function' : 'method',
     name: frame.name === undefined ? name : `${frame.name}.${name}`,
@@ -831,6 +1016,8 @@ const recordFunction = (
     decorators,
     location: location(context.file, node),
     initializer: undefined,
+    ...(returnAnnotation === undefined ? {} : { returnAnnotation }),
+    ...(returns.length === 0 ? {} : { returns }),
     enclosing: frame.name,
   });
   const body = childField(node, 'body');

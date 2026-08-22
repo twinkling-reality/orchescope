@@ -3,13 +3,14 @@ import {
   type Clock,
   type Deadline,
   establishesAgentSystem,
+  identityKey,
   isCancellation,
   projectId as makeProjectId,
   scanId as makeScanId,
   sha256Hex,
   sha256OfJson,
 } from '@orchescope/domain';
-import { type DiscardedEdge, SystemGraphBuilder } from '@orchescope/graph';
+import { type BuiltGraph, type DiscardedEdge, SystemGraphBuilder } from '@orchescope/graph';
 import { MAX_MANIFEST_COMPONENTS } from '@orchescope/schema';
 import type {
   AdapterRun,
@@ -20,6 +21,7 @@ import type {
   SystemGraph,
   GraphProvenance,
   UnsupportedArea,
+  TopologyCoverage,
 } from '@orchescope/schema';
 import {
   analyzeFileSet,
@@ -36,7 +38,12 @@ import {
   readCitationSnapshots,
   type TraversalOptions,
 } from '@orchescope/source-analysis';
-import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from './adapter.ts';
+import type {
+  AdapterFindings,
+  AgentSystemAdapter,
+  DiscoveryContext,
+  TopologyDiscovery,
+} from './adapter.ts';
 import { createBindingRegistry } from './bindings.ts';
 import { createCallSiteEffects } from './call-site-effect.ts';
 import {
@@ -49,6 +56,7 @@ import { createImplementationSpanRegistry } from './implementation-span.ts';
 import { localModules, namesLocalModule } from './local-modules.ts';
 import { manifestCitationRequests } from './manifest-citations.ts';
 import { DEFAULT_ADAPTERS } from './registry.ts';
+import { moduleMatches } from './matching.ts';
 import { buildSymbolIndex } from './symbol-index.ts';
 
 /**
@@ -250,12 +258,17 @@ const discardedRelations = (discarded: readonly DiscardedEdge[]): readonly Unsup
 const languagesOf = (files: readonly string[]): string[] =>
   [...new Set(files.map((file) => languageOf(file)))].sort();
 
+type AdapterExecution = {
+  readonly run: AdapterRun;
+  readonly topology?: TopologyDiscovery;
+};
+
 const runAdapter = (
   adapter: AgentSystemAdapter,
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   monotonicMs: () => number,
-): AdapterRun => {
+): AdapterExecution => {
   const startedAt = monotonicMs();
   const base = {
     adapterId: adapter.id,
@@ -263,13 +276,15 @@ const runAdapter = (
   };
   if (!adapter.appliesTo(context)) {
     return {
-      ...base,
-      componentsFound: 0,
-      edgesFound: 0,
-      filesInspected: 0,
-      languages: [],
-      durationMs: monotonicMs() - startedAt,
-      status: 'not_applicable',
+      run: {
+        ...base,
+        componentsFound: 0,
+        edgesFound: 0,
+        filesInspected: 0,
+        languages: [],
+        durationMs: monotonicMs() - startedAt,
+        status: 'not_applicable',
+      },
     };
   }
   let findings: AdapterFindings;
@@ -279,14 +294,16 @@ const runAdapter = (
     if (isCancellation(error)) throw error;
     const failure = asOrchescopeError(error, 'PARSE_FAILED', 'the adapter failed');
     return {
-      ...base,
-      componentsFound: 0,
-      edgesFound: 0,
-      filesInspected: 0,
-      languages: [],
-      durationMs: monotonicMs() - startedAt,
-      status: 'failed',
-      detail: failure.message.slice(0, 500),
+      run: {
+        ...base,
+        componentsFound: 0,
+        edgesFound: 0,
+        filesInspected: 0,
+        languages: [],
+        durationMs: monotonicMs() - startedAt,
+        status: 'failed',
+        detail: failure.message.slice(0, 500),
+      },
     };
   }
   const read = {
@@ -295,25 +312,246 @@ const runAdapter = (
   };
   if (findings.problem !== undefined) {
     return {
+      run: {
+        ...base,
+        ...read,
+        componentsFound: findings.componentsFound,
+        edgesFound: findings.edgesFound,
+        durationMs: monotonicMs() - startedAt,
+        status: 'failed',
+        detail: findings.problem.slice(0, 500),
+      },
+      ...(findings.topology === undefined ? {} : { topology: findings.topology }),
+    };
+  }
+  return {
+    run: {
       ...base,
       ...read,
       componentsFound: findings.componentsFound,
       edgesFound: findings.edgesFound,
       durationMs: monotonicMs() - startedAt,
-      status: 'failed',
-      detail: findings.problem.slice(0, 500),
-    };
-  }
-  return {
-    ...base,
-    ...read,
-    componentsFound: findings.componentsFound,
-    edgesFound: findings.edgesFound,
-    durationMs: monotonicMs() - startedAt,
-    status: 'completed',
-    ...(findings.note === undefined ? {} : { detail: findings.note }),
+      status: 'completed',
+      ...(findings.note === undefined ? {} : { detail: findings.note }),
+    },
+    ...(findings.topology === undefined ? {} : { topology: findings.topology }),
   };
 };
+
+const MAX_TOPOLOGY_SAMPLES = 10;
+
+const firstAdapterInput = (
+  adapter: AgentSystemAdapter,
+  modules: readonly ModuleFacts[],
+): ModuleFacts['imports'][number]['location'] | undefined => {
+  const local = localModules(modules);
+  const matches = modules.flatMap((module) =>
+    module.imports.filter(
+      (entry) =>
+        !entry.isType &&
+        moduleMatches(entry.module, adapter.packages) &&
+        !namesLocalModule(local, module, entry.module),
+    ),
+  );
+  return matches.sort((left, right) => {
+    if (left.location.file !== right.location.file) {
+      return left.location.file < right.location.file ? -1 : 1;
+    }
+    return left.location.startLine - right.location.startLine;
+  })[0]?.location;
+};
+
+const topologySampleKey = (sample: {
+  readonly kind: string;
+  readonly reason?: string;
+  readonly location?: { readonly file: string; readonly startLine: number };
+}): string =>
+  `${sample.location?.file ?? ''}:${sample.location?.startLine ?? 0}:${sample.kind}:${sample.reason ?? ''}`;
+
+/**
+ * One closed-world answer requires every applicable relation producer to state its population.
+ *
+ * A producer that adds a relation but supplies no topology population is not silently treated as complete.
+ * The same applies to a framework adapter that completed with zero output: its import establishes an
+ * applicable input, not that the repository contains no declaration.
+ */
+const aggregateTopology = (
+  adapters: readonly AgentSystemAdapter[],
+  executions: readonly AdapterExecution[],
+  modules: readonly ModuleFacts[],
+  digests: ReadonlyMap<string, Sha256Hex>,
+): TopologyCoverage | undefined => {
+  const producers: TopologyCoverage['producers'][number][] = [];
+  const boundaryFacts: TopologyCoverage['boundaryFacts'][number][] = [];
+  const entryTargets = new Map<string, TopologyCoverage['entryTargets'][number]>();
+  const configurationBoundFacts: TopologyCoverage['configurationBoundFacts'][number][] = [];
+  const unresolved: TopologyCoverage['unresolved'][number][] = [];
+  let inspectedInputs = 0;
+  let explicitRelations = 0;
+  let conditionalConstructs = 0;
+  let conditionalDestinations = 0;
+  let entryBoundaries = 0;
+  let terminalBoundaries = 0;
+  let configurationBounds = 0;
+  let unresolvedCount = 0;
+
+  const stamp = <T extends { readonly file: string }>(location: T): T => {
+    const fileHash = digests.get(location.file);
+    return fileHash === undefined || 'fileHash' in location
+      ? location
+      : ({ ...location, fileHash } as T);
+  };
+
+  for (let index = 0; index < executions.length; index += 1) {
+    const execution = executions[index];
+    const adapter = adapters[index];
+    if (
+      execution === undefined ||
+      adapter === undefined ||
+      execution.run.status === 'not_applicable'
+    ) {
+      continue;
+    }
+    const topology = execution.topology;
+    if (topology !== undefined) {
+      producers.push({
+        adapterId: adapter.id,
+        status: topology.status,
+        inspectedInputs: topology.inspectedInputs,
+        relationsFound: execution.run.edgesFound,
+      });
+      inspectedInputs += topology.inspectedInputs;
+      explicitRelations += topology.explicitRelations;
+      conditionalConstructs += topology.conditionalConstructs;
+      conditionalDestinations += topology.conditionalDestinations;
+      entryBoundaries += topology.entryBoundaries;
+      for (const target of topology.entryTargets) entryTargets.set(identityKey(target), target);
+      terminalBoundaries += topology.terminalBoundaries;
+      configurationBounds += topology.configurationBounds;
+      unresolvedCount += topology.unresolvedCount;
+      boundaryFacts.push(
+        ...topology.boundaryFacts.map((fact) => ({ ...fact, location: stamp(fact.location) })),
+      );
+      configurationBoundFacts.push(
+        ...topology.configurationBoundFacts.map((fact) => ({
+          ...fact,
+          reference: stamp(fact.reference),
+          declaration: stamp(fact.declaration),
+        })),
+      );
+      unresolved.push(
+        ...topology.unresolved.map((entry) => ({
+          ...entry,
+          ...(entry.location === undefined ? {} : { location: stamp(entry.location) }),
+        })),
+      );
+      continue;
+    }
+
+    const needsPopulation = adapter.packages.length > 0 || execution.run.edgesFound > 0;
+    if (!needsPopulation) continue;
+    producers.push({
+      adapterId: adapter.id,
+      status: 'incomplete',
+      inspectedInputs: 0,
+      relationsFound: execution.run.edgesFound,
+    });
+    unresolvedCount += 1;
+    const location = firstAdapterInput(adapter, modules);
+    unresolved.push({
+      kind: 'adapter_input',
+      reason:
+        execution.run.status === 'failed'
+          ? `${adapter.id} failed before it stated an inspected topology population.`
+          : `${adapter.id} did not state an inspected topology population for this applicable input.`,
+      ...(location === undefined ? {} : { location: stamp(location) }),
+    });
+  }
+
+  if (producers.length === 0) return undefined;
+  const sampleOrder = <T extends Parameters<typeof topologySampleKey>[0]>(left: T, right: T) =>
+    topologySampleKey(left).localeCompare(topologySampleKey(right));
+  boundaryFacts.sort(sampleOrder);
+  unresolved.sort(sampleOrder);
+  configurationBoundFacts.sort((left, right) =>
+    `${left.reference.file}:${left.reference.startLine}:${left.name}`.localeCompare(
+      `${right.reference.file}:${right.reference.startLine}:${right.name}`,
+    ),
+  );
+  const complete =
+    inspectedInputs > 0 &&
+    unresolvedCount === 0 &&
+    producers.every((producer) => producer.status === 'complete');
+  return {
+    status: complete ? 'complete' : 'incomplete',
+    producers,
+    inspectedInputs,
+    explicitRelations,
+    conditionalConstructs,
+    conditionalDestinations,
+    entryBoundaries,
+    entryTargets: [...entryTargets.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([, target]) => target),
+    terminalBoundaries,
+    boundaryFacts: boundaryFacts.slice(0, MAX_TOPOLOGY_SAMPLES),
+    configurationBounds,
+    configurationBoundFacts: configurationBoundFacts.slice(0, MAX_TOPOLOGY_SAMPLES),
+    unresolvedCount,
+    unresolved: unresolved.slice(0, MAX_TOPOLOGY_SAMPLES),
+  };
+};
+
+const incompleteTopologyArea = (topology: TopologyCoverage | undefined): UnsupportedArea[] => {
+  if (topology === undefined || topology.status === 'complete') return [];
+  const first = topology.unresolved[0];
+  const location = first?.location;
+  const where = location === undefined ? '' : ` at ${location.file}:${location.startLine}`;
+  const reasons = topology.unresolved
+    .slice(0, 3)
+    .map((entry) => entry.reason)
+    .join(' ');
+  return [
+    {
+      area: `topology: ${topology.unresolvedCount} unresolved${where}`,
+      reason:
+        reasons.length === 0
+          ? 'A relation producer did not state the inspected population needed for a closed-world topology claim.'
+          : reasons.slice(0, 500),
+      remediation:
+        'Review the bounded topology refusals in JSON and declare dynamic wiring in .orchescope/manifest.yaml where a source adapter cannot resolve it.',
+    },
+  ];
+};
+
+const runAdapters = (
+  adapters: readonly AgentSystemAdapter[],
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+  deadline: Deadline,
+  monotonicMs: () => number,
+): readonly AdapterExecution[] =>
+  adapters.map((adapter) => {
+    deadline.check('static discovery');
+    return runAdapter(adapter, context, builder, monotonicMs);
+  });
+
+const provenanceFor = (
+  request: ScanRequest,
+  scanId: string,
+  projectId: string,
+  projectName: string,
+  generatedAt: ReturnType<Clock['now']>,
+  projectPathHash: Sha256Hex,
+): Omit<GraphProvenance, 'runIds'> => ({
+  orchescopeVersion: request.orchescopeVersion,
+  scanId: scanId as GraphProvenance['scanId'],
+  projectId: projectId as GraphProvenance['projectId'],
+  projectName,
+  generatedAt,
+  projectPathHash,
+  ...(request.git === undefined ? {} : { git: request.git }),
+});
 
 /**
  * Configuration documents the scan opened and could not use.
@@ -363,6 +601,22 @@ const contextFiles = (fileSet: ReturnType<typeof collectFiles>): DiscoveryContex
   return fileSet.walked.map((path) => {
     const byteLength = sized.get(path);
     return byteLength === undefined ? { path } : { path, byteLength };
+  });
+};
+
+const buildWithDiscardDisclosure = (
+  builder: SystemGraphBuilder,
+  provenance: Omit<GraphProvenance, 'runIds'> & { readonly runIds?: readonly string[] },
+  coverage: ScanCoverage,
+): BuiltGraph => {
+  const firstPass = builder.build({ provenance, coverage });
+  if (firstPass.discardedEdges.length === 0) return firstPass;
+  return builder.build({
+    provenance,
+    coverage: {
+      ...coverage,
+      unsupported: [...coverage.unsupported, ...discardedRelations(firstPass.discardedEdges)],
+    },
   });
 };
 
@@ -434,11 +688,15 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
 
   const builder = new SystemGraphBuilder((path) => digests.get(path));
   const adapters = request.adapters ?? DEFAULT_ADAPTERS;
-  const adapterRuns: AdapterRun[] = [];
-  for (const adapter of adapters) {
-    request.deadline.check('static discovery');
-    adapterRuns.push(runAdapter(adapter, context, builder, request.clock.monotonicMs));
-  }
+  const adapterExecutions = runAdapters(
+    adapters,
+    context,
+    builder,
+    request.deadline,
+    request.clock.monotonicMs,
+  );
+  const adapterRuns = adapterExecutions.map((execution) => execution.run);
+  const topology = aggregateTopology(adapters, adapterExecutions, analysis.facts, digests);
 
   const pathHash = sha256Hex(request.root) as Sha256Hex;
   const projectIdentifier = makeProjectId(pathHash);
@@ -477,10 +735,12 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
     skipped: [...boundSkipped(analysis.skipped), ...unreadConfigs(configs.problems)],
     languages: [...analysis.languages],
     adapters: adapterRuns,
+    ...(topology === undefined ? {} : { topology }),
     unsupported: [
       ...unsupportedAreas(fileSet.extensionCounts),
       ...excludedTrackedSource(fileSet.excludedTracked),
       ...adaptersThatFoundNothing(adapters, adapterRuns, analysis.facts),
+      ...incompleteTopologyArea(topology),
     ],
     durationMs: request.clock.monotonicMs() - startedAtMs,
     /*
@@ -491,34 +751,16 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
     truncated: fileSet.truncated || named.declined > 0,
   };
 
-  const provenance = {
-    orchescopeVersion: request.orchescopeVersion,
-    scanId: scan,
-    projectId: projectIdentifier,
+  const provenance = provenanceFor(
+    request,
+    scan,
+    projectIdentifier,
     projectName,
-    generatedAt: startedAt,
-    projectPathHash: pathHash,
-    ...(request.git === undefined ? {} : { git: request.git }),
-  };
+    startedAt,
+    pathHash,
+  );
 
-  /**
-   * Built twice when a relation had to be discarded, and only then.
-   *
-   * A discarded relation is a defect in the adapter that reported it, and the reader has to be told. Coverage is
-   * an input to the build, so recording it means building again with the fuller coverage. That costs one pass over
-   * drafts already in memory, on the rare path where something was wrong.
-   */
-  const firstPass = builder.build({ provenance, coverage });
-  const built =
-    firstPass.discardedEdges.length === 0
-      ? firstPass
-      : builder.build({
-          provenance,
-          coverage: {
-            ...coverage,
-            unsupported: [...coverage.unsupported, ...discardedRelations(firstPass.discardedEdges)],
-          },
-        });
+  const built = buildWithDiscardDisclosure(builder, provenance, coverage);
 
   const detectedEcosystems = analysis.languages.map((entry) => entry.language as Language);
   const agentSystemDetected = built.graph.components.some(establishesAgentSystem);

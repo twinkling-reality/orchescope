@@ -1,6 +1,8 @@
 import { type Static, Type } from '@sinclair/typebox';
 import { Component } from './component.ts';
 import { Edge } from './edge.ts';
+import { SourceLocation } from './evidence.ts';
+import { ComponentIdentity } from './identity.ts';
 import {
   Document,
   literals,
@@ -113,6 +115,81 @@ export const UnsupportedArea = Type.Object(
 );
 export type UnsupportedArea = Static<typeof UnsupportedArea>;
 
+const TopologyProducerCoverage = Type.Object(
+  {
+    adapterId: NonEmptyString(),
+    status: literals(['complete', 'incomplete'] as const),
+    inspectedInputs: NonNegativeInt,
+    relationsFound: NonNegativeInt,
+  },
+  { additionalProperties: false },
+);
+
+const TopologyBoundaryFact = Type.Object(
+  {
+    kind: literals(['entry', 'terminal'] as const),
+    location: SourceLocation,
+  },
+  { additionalProperties: false },
+);
+
+const TopologyConfigurationBound = Type.Object(
+  {
+    name: NonEmptyString(),
+    /** Static literal default. It is not an observed value or proof that validation rejects negatives. */
+    defaultValue: Type.Integer(),
+    reference: SourceLocation,
+    declaration: SourceLocation,
+  },
+  { additionalProperties: false },
+);
+
+const TopologyUnresolved = Type.Object(
+  {
+    kind: literals([
+      'node_registration',
+      'explicit_relation',
+      'conditional_destination',
+      'entry_boundary',
+      'terminal_boundary',
+      'config_backed_bound',
+      'adapter_input',
+    ] as const),
+    reason: NonEmptyString({ maxLength: 500 }),
+    location: Type.Optional(SourceLocation),
+  },
+  { additionalProperties: false },
+);
+
+/**
+ * Evidence population over which topology properties may be claimed.
+ *
+ * Optional for version 1 compatibility. Absence means unknown, not complete. Counts name the whole
+ * inspected population; the bounded arrays are samples that retain enough source context to investigate
+ * a handled boundary, configuration ceiling, or refusal without making graph size unbounded.
+ */
+export const TopologyCoverage = Type.Object(
+  {
+    status: literals(['complete', 'incomplete'] as const),
+    producers: Type.Array(TopologyProducerCoverage),
+    inspectedInputs: NonNegativeInt,
+    explicitRelations: NonNegativeInt,
+    conditionalConstructs: NonNegativeInt,
+    conditionalDestinations: NonNegativeInt,
+    entryBoundaries: NonNegativeInt,
+    /** Full deterministic identities reached by handled entry boundaries; never derived from the bounded sample. */
+    entryTargets: Type.Array(ComponentIdentity),
+    terminalBoundaries: NonNegativeInt,
+    boundaryFacts: Type.Array(TopologyBoundaryFact, { maxItems: 10 }),
+    configurationBounds: NonNegativeInt,
+    configurationBoundFacts: Type.Array(TopologyConfigurationBound, { maxItems: 10 }),
+    unresolvedCount: NonNegativeInt,
+    unresolved: Type.Array(TopologyUnresolved, { maxItems: 10 }),
+  },
+  { additionalProperties: false },
+);
+export type TopologyCoverage = Static<typeof TopologyCoverage>;
+
 export const ScanCoverage = Type.Object(
   {
     /**
@@ -168,6 +245,8 @@ export const ScanCoverage = Type.Object(
       ),
     ),
     adapters: Type.Array(AdapterRun),
+    /** Missing on old graphs and scans whose producers did not state an inspected topology population. */
+    topology: Type.Optional(TopologyCoverage),
     /**
      * How many discovered components every source location of which is a test file.
      *

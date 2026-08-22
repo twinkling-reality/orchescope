@@ -141,7 +141,45 @@ export type DefinitionFact = {
    * taken, so choosing would be a guess where listing is a fact.
    */
   readonly literals?: readonly ArgumentFact[];
+  /**
+   * Bounded control-flow facts declared by a function.
+   *
+   * These stay on the definition because a return belongs to the function whose contract it helps
+   * describe. Literal annotations and literal return statements are recorded independently: agreement is
+   * evidence that a bounded router was resolved, while disagreement is evidence that it was not. Dynamic
+   * returns are retained as non-literal values instead of disappearing.
+   */
+  readonly returnAnnotation?: ReturnAnnotationFact;
+  readonly returns?: readonly ReturnFact[];
   readonly enclosing: string | undefined;
+};
+
+export type LiteralDestinationFact = {
+  readonly value: string;
+  readonly location: SourceLocation;
+};
+
+export type ReturnAnnotationFact = {
+  /** Every literal string inside a `Literal[...]` return annotation. */
+  readonly destinations: readonly LiteralDestinationFact[];
+  /** Exact annotation range, retained even when the annotation is not a supported literal form. */
+  readonly location: SourceLocation;
+  /** False when the annotation contains any form other than bounded literal strings. */
+  readonly complete: boolean;
+};
+
+export type BranchPredicateFact = {
+  readonly operator: string;
+  readonly references: readonly (readonly string[])[];
+  readonly location: SourceLocation;
+  readonly branch: 'consequence' | 'alternative';
+};
+
+export type ReturnFact = {
+  readonly value: ArgumentFact;
+  readonly location: SourceLocation;
+  /** Nearest branch deciding whether this return runs, when the syntax states one. */
+  readonly predicate?: BranchPredicateFact;
 };
 
 export type EnvironmentFact = {

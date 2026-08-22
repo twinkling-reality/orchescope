@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { createDeadline, fixedClock } from '@orchescope/domain';
-import { analyzeFileSet, inMemoryFactCache } from '../src/analyzer.ts';
+import { ANALYZER_VERSION, analyzeFileSet, cacheKey, inMemoryFactCache } from '../src/analyzer.ts';
 import { collectFiles, DEFAULT_EXCLUDED_DIRECTORIES } from '../src/file-set.ts';
 
 /**
@@ -64,6 +64,22 @@ const projectOf = (count: number): string => {
 };
 
 describe('the fact cache', () => {
+  it('invalidates facts produced before router returns were retained', () => {
+    assert.equal(ANALYZER_VERSION, '2');
+    assert.match(
+      cacheKey(
+        {
+          path: 'src/graph.py',
+          absolutePath: '/fixture/src/graph.py',
+          language: 'python',
+          byteLength: 1,
+        },
+        'a'.repeat(64),
+      ),
+      /^2:python:src\/graph\.py:/,
+    );
+  });
+
   it('serves the second scan of a repository nothing has changed', async () => {
     const root = projectOf(4);
     const cache = inMemoryFactCache(traversal.maxFiles);

@@ -7,6 +7,7 @@ import {
   partOfAuditedSystem,
 } from '@orchescope/domain';
 import {
+  controlFlowCycleEdges,
   controlFlowCycles,
   declaredCallersOf,
   degrees,
@@ -14,9 +15,10 @@ import {
   isControlFlowKind,
   operationsPerformedBy,
   reachableFrom,
+  topologyRequirements,
   unreachableComponents,
 } from '@orchescope/graph';
-import type { Component, Edge, EvidenceId, SideEffectClass } from '@orchescope/schema';
+import type { Component, ComponentId, Edge, EvidenceId, SideEffectClass } from '@orchescope/schema';
 import {
   auditedComponents,
   auditedComponentsOfKind,
@@ -30,6 +32,7 @@ import {
   examined,
   type FindingDraft,
   fired,
+  insufficient,
   notApplicable,
   nothingObserved,
   type Rule,
@@ -832,41 +835,106 @@ const participatesInTopology = (component: Component): boolean =>
   REACHABILITY_KINDS.has(component.kind) &&
   partOfAuditedSystem(component);
 
-const unreachableDrafts = (graph: IndexedGraph): readonly FindingDraft[] => {
+const unreachableDrafts = (
+  graph: IndexedGraph,
+  inspectedTopologyInputs: number,
+  entryComponentIds: readonly ComponentId[],
+): readonly FindingDraft[] => {
   const candidates = graph.graph.components.filter(participatesInTopology);
-  const unreachable = unreachableComponents(graph).filter(participatesInTopology);
-  return unreachable.map((component) => ({
-    ruleId: 'topology-shape',
-    situation: 'component-unreachable-from-entrypoint',
-    category: 'architecture',
-    polarity: 'risk',
-    severity: 'low',
-    confidence: CONFIDENCE_BANDS.structural,
-    occurrence: {
-      key: 'unreachable',
-      groupedTitle: '{count} components cannot be reached from any declared entry point',
-    },
-    basis: 'discovered',
-    title: `${component.displayName} cannot be reached from any entry point`,
-    explanation: `No entry point this scan discovered reaches ${component.id} through control flow. That has four causes and this rule cannot tell them apart: the wiring is missing, the component is left over, the entry point is outside this repository, which is what a library looks like, or the entry point is one no adapter here recognised. ${unreachable.length} of the ${candidates.length} components that participate in control flow are in this state.`,
-    impact:
-      'A component the declared graph cannot reach is one a reader cannot follow, and it is where dead configuration hides.',
-    components: [component.id],
-    metrics: [
-      {
-        name: 'unreachableComponents',
-        value: unreachable.length,
-        unit: 'component',
-        sampleSize: candidates.length,
-        basis: 'discovered' as const,
+  const unreachable = unreachableComponents(graph, entryComponentIds).filter(
+    participatesInTopology,
+  );
+  return unreachable.map((component) => {
+    const population = absenceEvidence({
+      producer: PRODUCER,
+      searched: `a declared control-flow path from an accounted entry boundary to ${component.id}`,
+      scope: 'the complete declared topology evidence population',
+      inspectedCount: inspectedTopologyInputs,
+    });
+    return {
+      ruleId: 'topology-shape',
+      situation: 'component-unreachable-from-entrypoint',
+      category: 'architecture',
+      polarity: 'risk',
+      severity: 'low',
+      confidence: CONFIDENCE_BANDS.structural,
+      occurrence: {
+        key: 'unreachable',
+        groupedTitle:
+          '{count} components cannot be reached from an accounted declared entry boundary',
       },
-    ],
-    evidence: component.evidence.slice(0, 2) as EvidenceId[],
-    goalEligible: false,
-    goalReason: 'Deleting or wiring a component is a decision for the owner.',
-    tags: ['unreachable'],
-  }));
+      basis: 'discovered',
+      title: `${component.displayName} cannot be reached from an accounted declared entry boundary`,
+      explanation: `No accounted entry boundary reaches ${component.id} through the complete declared control-flow population. That has three repository causes and this rule cannot tell them apart: the wiring is missing, the component is left over, or the entry point is outside this repository, which is what a library looks like. ${unreachable.length} of the ${candidates.length} components that participate in control flow are in this state, over ${inspectedTopologyInputs} inspected topology inputs.`,
+      impact:
+        'A component the declared graph cannot reach is one a reader cannot follow, and it is where dead configuration hides.',
+      components: [component.id],
+      metrics: [
+        {
+          name: 'unreachableComponents',
+          value: unreachable.length,
+          unit: 'component',
+          sampleSize: candidates.length,
+          basis: 'discovered' as const,
+        },
+      ],
+      newEvidence: [population],
+      evidence: component.evidence.slice(0, 2) as EvidenceId[],
+      goalEligible: false,
+      goalReason: 'Deleting or wiring a component is a decision for the owner.',
+      tags: ['unreachable'],
+    };
+  });
 };
+
+const cycleDrafts = (graph: IndexedGraph): readonly FindingDraft[] =>
+  controlFlowCycles(graph)
+    .slice(0, 5)
+    .map((cycle) => {
+      const cycleEdges = controlFlowCycleEdges(graph, cycle);
+      const bound = cycleEdges
+        .map((edge) => {
+          const name = edge.metadata['conditionalBoundName'];
+          const defaultValue = edge.metadata['conditionalBoundDefault'];
+          const operator = edge.metadata['conditionalBoundOperator'];
+          return typeof name === 'string' && typeof defaultValue === 'number'
+            ? {
+                name,
+                defaultValue,
+                operator: typeof operator === 'string' ? operator : undefined,
+              }
+            : undefined;
+        })
+        .find((entry) => entry !== undefined);
+      return {
+        ruleId: 'topology-shape',
+        situation: 'declared-control-flow-cycle',
+        category: 'architecture',
+        polarity: 'risk',
+        severity: 'low',
+        confidence: CONFIDENCE_BANDS.deterministic,
+        occurrence: {
+          key: 'cycle',
+          groupedTitle: '{count} cycles were found in the declared control flow',
+        },
+        basis: 'discovered',
+        title: `Control flow cycle: ${cycle.join(' to ')}`,
+        explanation:
+          bound === undefined
+            ? 'These components form a cycle in the declared control flow. A cycle is a legitimate pattern for a plan and act loop. This scan attached no deterministic source-declared ceiling to the cycle.'
+            : `These components form a cycle in the declared control flow. One conditional relation compares against ${bound.name}${bound.operator === undefined ? '' : ` with ${bound.operator}`}, whose source-declared static default is ${bound.defaultValue}. Runtime configuration can override that default, and this static scan did not observe which value a run selected.`,
+        impact:
+          bound === undefined
+            ? 'Without evidence of a ceiling, the scan cannot establish a finite run bound.'
+            : 'The cycle remains cyclic, and its run length depends on the runtime-selected configuration rather than on the static default alone.',
+        components: [...new Set(cycle)],
+        edges: cycleEdges.map((edge) => edge.id),
+        evidence: [...new Set(cycleEdges.flatMap((edge) => edge.evidence))] as EvidenceId[],
+        goalEligible: false,
+        goalReason: 'Whether the cycle is intended is a question for the owner.',
+        tags: ['cycle'],
+      };
+    });
 
 export const architectureShapeRule: Rule = {
   id: 'topology-shape',
@@ -874,6 +942,7 @@ export const architectureShapeRule: Rule = {
   summary: 'Fan out, reachability and cycles in the declared control flow.',
   evaluate: (context) => {
     const drafts: FindingDraft[] = [];
+    const requirements = topologyRequirements(context.graph);
     const stats = degrees(context.graph);
     const highFanOut = stats.filter((entry) => entry.controlFlowOutDegree >= 8);
     for (const entry of highFanOut) {
@@ -902,34 +971,17 @@ export const architectureShapeRule: Rule = {
       });
     }
 
-    drafts.push(...unreachableDrafts(context.graph));
-
-    const cycles = controlFlowCycles(context.graph);
-    for (const cycle of cycles.slice(0, 5)) {
-      drafts.push({
-        ruleId: 'topology-shape',
-        situation: 'declared-control-flow-cycle',
-        category: 'architecture',
-        polarity: 'risk',
-        severity: 'low',
-        confidence: CONFIDENCE_BANDS.deterministic,
-        occurrence: {
-          key: 'cycle',
-          groupedTitle: '{count} cycles were found in the declared control flow',
-        },
-        basis: 'discovered',
-        title: `Control flow cycle: ${cycle.join(' to ')}`,
-        explanation:
-          'These components form a cycle in the declared control flow. A cycle is a legitimate pattern for a plan and act loop, and it is also where an unbounded loop lives, so it is worth an explicit iteration ceiling.',
-        impact: 'Without a ceiling, a cycle can consume the whole budget of a run.',
-        components: [...new Set(cycle)],
-        evidence: (context.graph.component(cycle[0] ?? '')?.evidence.slice(0, 1) ??
-          []) as EvidenceId[],
-        goalEligible: false,
-        goalReason: 'Whether the cycle is intended is a question for the owner.',
-        tags: ['cycle'],
-      });
+    if (requirements.reachabilityComplete) {
+      drafts.push(
+        ...unreachableDrafts(
+          context.graph,
+          requirements.inspectedInputs,
+          requirements.entryComponentIds,
+        ),
+      );
     }
+
+    drafts.push(...cycleDrafts(context.graph));
 
     /**
      * A strength has to be about something.
@@ -943,7 +995,22 @@ export const architectureShapeRule: Rule = {
     const hasAgent = audited.some(
       (component) => component.kind === 'agent' || component.kind === 'agent_group',
     );
-    if (drafts.length === 0 && hasAgent && auditedEdges(context.graph).length > 0) {
+    if (
+      drafts.length === 0 &&
+      hasAgent &&
+      auditedEdges(context.graph).length > 0 &&
+      requirements.acyclicityComplete &&
+      requirements.reachabilityComplete &&
+      requirements.narrownessComplete
+    ) {
+      const population = absenceEvidence({
+        producer: PRODUCER,
+        searched:
+          'an unreachable control-flow participant, declared control-flow cycle, or wide agent fan-out',
+        scope:
+          'all applicable relation producers, conditional destinations and accounted entry boundaries',
+        inspectedCount: requirements.inspectedInputs,
+      });
       return fired([
         {
           ruleId: 'topology-shape',
@@ -955,17 +1022,40 @@ export const architectureShapeRule: Rule = {
           confidence: CONFIDENCE_BANDS.deterministic,
           basis: 'discovered',
           title: 'The declared topology is reachable, acyclic and narrow',
-          explanation: `Every declared component is reachable from an entry point, the control flow contains no cycle, and no agent coordinates more than eight downstream operations.`,
+          explanation: `Every declared control-flow participant is reachable from an accounted entry boundary, the complete control-flow population contains no cycle, and no agent coordinates more than eight downstream operations. The claim covers ${requirements.inspectedInputs} inspected topology inputs.`,
           impact: 'The system can be reasoned about one path at a time.',
           components: audited.slice(0, 5).map((component) => component.id),
+          newEvidence: [population],
           evidence: audited
             .slice(0, 3)
             .flatMap((component) => component.evidence.slice(0, 1)) as EvidenceId[],
           goalEligible: false,
           goalReason: 'Nothing to change.',
+          metrics: [
+            {
+              name: 'topologyInputsInspected',
+              value: requirements.inspectedInputs,
+              unit: 'topology_input',
+              sampleSize: requirements.inspectedInputs,
+              basis: 'discovered',
+            },
+          ],
           tags: ['positive', 'topology'],
         },
       ]);
+    }
+    if (
+      drafts.length === 0 &&
+      hasAgent &&
+      (!requirements.acyclicityComplete ||
+        !requirements.reachabilityComplete ||
+        !requirements.narrownessComplete)
+    ) {
+      return insufficient(
+        requirements.status === 'unknown'
+          ? 'topology completeness is unknown because this graph has no evidence population'
+          : `topology completeness is insufficient across ${requirements.inspectedInputs} inspected inputs`,
+      );
     }
     /*
      * The population is the declared components whose arrangement this reads. Reported without one, the

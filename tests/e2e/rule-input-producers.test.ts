@@ -95,6 +95,7 @@ dependencies = [
   "azure-search-documents",
   "tenacity",
   "httpx",
+  "langgraph>=1.1.0",
 ]
 `,
   'package.json': `${JSON.stringify(
@@ -216,6 +217,46 @@ graph.addEdge('researcher', 'writer');
 graph.addEdge('writer', END);
 
 export const app = graph.compile();
+`,
+  'bounds_configuration.py': `from pydantic import BaseModel, Field
+
+
+class BoundsConfiguration(BaseModel):
+    max_loops: int = Field(default=3)
+
+    @classmethod
+    def from_runnable_config(cls, config):
+        return cls()
+`,
+  // A conditional cycle whose static configuration default is joined to the relation that reads it.
+  'bounded_graph.py': `from typing import Literal
+
+from langgraph.graph import StateGraph, START, END
+
+from bounds_configuration import BoundsConfiguration
+
+
+def reflect(state):
+    return state
+
+
+def finish(state):
+    return state
+
+
+def route(state, config) -> Literal["reflect", "finish"]:
+    configurable = BoundsConfiguration.from_runnable_config(config)
+    if state.count <= configurable.max_loops:
+        return "reflect"
+    return "finish"
+
+
+bounded = StateGraph(dict)
+bounded.add_node("reflect", reflect)
+bounded.add_node("finish", finish)
+bounded.add_edge(START, "reflect")
+bounded.add_conditional_edges("reflect", route)
+bounded.add_edge("finish", END)
 `,
   // A retry whose sink deduplicates, which is the evidence that stops a rule asserting the absence of a key.
   'src/outbox.ts': `export const enqueueDelivery = async (): Promise<void> => {

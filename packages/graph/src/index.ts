@@ -6,6 +6,7 @@
 
 export {
   controlFlowCycles,
+  controlFlowCycleEdges,
   type DegreeStats,
   declaredCallersOf,
   degrees,
@@ -14,6 +15,8 @@ export {
   isObservableKind,
   operationsPerformedBy,
   reachableFrom,
+  topologyRequirements,
+  type TopologyRequirements,
   unreachableComponents,
 } from './analysis.ts';
 export {
