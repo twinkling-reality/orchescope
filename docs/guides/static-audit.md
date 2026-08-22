@@ -93,7 +93,7 @@ a `runtimeName` is what lets reconciliation match a component whose telemetry na
 validator accepts, and declares nothing until you fill it in:
 
 ```yaml
-schemaVersion: 1
+schemaVersion: 2
 components:
   - kind: tool
     name: issue_refund
@@ -103,6 +103,11 @@ components:
     sideEffect: financial
   - kind: external_service
     name: payment-gateway
+  - kind: mcp_server
+    name: remote-tool-server
+    details:
+      for: mcp_server
+      role: consumed
 edges:
   - kind: performs_side_effect
     from: issue_refund
@@ -117,6 +122,9 @@ edges:
 
 An edge endpoint is a component `name`, either declared in the same manifest or discovered from your source, so a manifest
 can annotate real code rather than only describing code Orchescope cannot read.
+
+`details` uses the same kind-specific vocabulary as automatic discovery. A consumed MCP server remains visible in the
+graph, but does not by itself make the repository that connects to it an agent system. An implemented server does.
 
 Declaring `idempotency: absent` is what turns "we cannot tell" into a finding with a known basis. Declaring it `declared`
 when it is not would be lying to your own audit, and the reconciliation would catch it the first time a run duplicated an

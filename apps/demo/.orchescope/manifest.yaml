@@ -1,4 +1,4 @@
-schemaVersion: 1
+schemaVersion: 2
 
 # The demonstration system is written by hand: it imports no agent framework and no model SDK, because it has to run
 # offline with no credentials. That is exactly the case this manifest exists for. Orchescope has no adapter that can

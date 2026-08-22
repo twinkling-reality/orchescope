@@ -77,7 +77,7 @@ const declaredSilentProject = (): string => {
   writeFileSync(
     join(root, '.orchescope/manifest.yaml'),
     [
-      'schemaVersion: 1',
+      'schemaVersion: 2',
       'components:',
       '  - kind: agent',
       '    name: orchestrator',

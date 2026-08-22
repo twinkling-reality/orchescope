@@ -482,6 +482,9 @@ adapter never opens one, and there is no field on the manifest for a hash record
 traversal now records every path it walked whatever the language, because `collectFiles` keeps only what a
 parser reads and the manifest exists for exactly the languages it does not.
 
+Manifest version 2 adds one schema-local refutation beside those repository checks: `details.for` must
+agree with the component `kind`. A mismatch is reported and the invalid details do not reach the graph.
+
 The location this build was inventing is also gone: a component with `definedIn` and no `definedAtLine`
 recorded line 1, which is a claim no manifest makes, and that citation is refused rather than completed.
 
@@ -491,13 +494,14 @@ recorded line 1, which is a claim no manifest makes, and that citation is refuse
 and `demo-small` and `demo-large` naming `src/model.ts` where they are named in `src/main.ts`. All 18 now
 cite a line containing the name they declare, which is four errors the engine still cannot catch.
 
-**And the measurement that bounds this direction, re-run against the checks above and unchanged by them.** A
-maximally honest one component manifest for `open-agent-platform`, declaring only the `mcp_server` that
-`use-mcp.tsx` genuinely constructs and passing every refutation, still flips `agentSystemDetected` from
-`false` to `true`, at **26 components becoming 27**, because `ManifestComponent` has no `details` field and
-`mcp_server` is in `AGENT_SYSTEM_KINDS`, so `partOfAuditedSystem` has nothing to read. A manifest cannot
-say "consumed" the way an adapter can. Fixing that is a manifest document version and owes its own ADR at
-the point it is decided.
+**The bound reproduced, and [ADR 0006](adr/0006-manifest-component-details.md) moved it on the field it
+named.** The version 1 one component manifest for `open-agent-platform` still flips
+`agentSystemDetected` from false to true at **26 components becoming 27**. Manifest version 2 adds the same
+kind-specific `details` an adapter writes. Declaring that server with `role: consumed` leaves detection
+false at 27 components while keeping one visible `mcp_server` in the graph. Changing only the role to
+`implemented` makes detection true, and the version 1 document remains readable with its established true
+meaning. A consumed server can therefore participate in a system another component establishes without
+claiming that its consumer repository implements one.
 
 **Cost per new framework versus per repository.** A manifest costs 0 per framework and roughly 571 lines
 of hand written YAML per application repository, at the reference manifest's measured 7.0 lines per

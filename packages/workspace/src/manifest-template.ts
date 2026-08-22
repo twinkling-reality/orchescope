@@ -52,6 +52,7 @@ export const manifestTemplate = (): string =>
     '# discovery rather than replacing it.',
     '#',
     '# `runtimeName` is what lets a run match a declaration whose telemetry name differs from its source name.',
+    '# `details` carries kind-specific facts. An MCP server role is implemented, consumed, or developer_tooling.',
     '# An edge endpoint is the `name` of a component, either declared below or discovered from source.',
     '#',
     ...commentedList('component kinds', COMPONENT_KINDS),

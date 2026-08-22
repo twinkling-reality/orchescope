@@ -128,7 +128,7 @@ export {
   EdgeId,
   IdentityContinuity,
 } from './identity.ts';
-export { Manifest, ManifestComponent, ManifestEdge } from './manifest.ts';
+export { Manifest, ManifestComponent, ManifestEdge, ManifestV1 } from './manifest.ts';
 export {
   Confidence,
   Metadata,

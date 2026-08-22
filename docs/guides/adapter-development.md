@@ -11,7 +11,7 @@ manifest becomes repetitive.
 `orchescope init --manifest` writes a template with the accepted vocabulary in it. Filled in, it looks like this:
 
 ```yaml
-schemaVersion: 1
+schemaVersion: 2
 components:
   - kind: agent
     name: orchestrator
@@ -43,6 +43,10 @@ edges:
 
 An edge endpoint is a component `name`: one declared here, or one another adapter discovered from source, which is what lets
 a manifest annotate code Orchescope already reads.
+
+`details` carries the same kind-specific facts an adapter would produce. For an MCP server,
+`details: { for: mcp_server, role: consumed }` says this repository connects to the server, while `role: implemented` says
+the repository constructs it. A consumed server remains in the graph without making its consumer an agent system by itself.
 
 Every citation is checked against the repository rather than taken. `definedIn` has to name a file the scan walked, in any
 language; a line has to be one the file is long enough to have; a `runtimeName` carrying a placeholder is a name no run

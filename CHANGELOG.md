@@ -4,17 +4,19 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## Unreleased
 
-Where breadth comes from as agent systems proliferate, asked with measurements and answered in three
+Where breadth comes from as agent systems proliferate, asked with measurements and answered in four
 accepted decisions: the fact model rather than the adapter count, provenance rather than a confidence band,
-and a corpus gate that holds invariants a recording cannot rewrite. The first CrewAI run anywhere in this
+and a corpus gate that holds invariants a recording cannot rewrite, plus a manifest role that separates a
+consumed system from the repository implementing it. The first CrewAI run anywhere in this
 corpus and the reading that turns its join into a refusal. Five live precision failures found by the corpus
 on the first run of the invariants written to catch them, all of them one defect. Every location now says
 which revision of which file it was read from, and every manifest citation is checked against the repository
 rather than taken. Four interfaces with no producer, three deleted and one given the process it was written
-for. And four measurements that ended in a decline, each recorded where the next reader will find it rather
-than rediscover it.
-Published document change: report v1 adds the optional `coverage.missingSpanAttributes` field; the other
-documents under `schemas/` are byte identical.
+for. Four measurements that ended in a decline remain recorded where the next reader will find them, and
+the manifest bound that moved has its own falsifier.
+Published document changes: manifest advances from version 1 to version 2 with component details, and
+report v1 adds the optional `coverage.missingSpanAttributes` field. The other documents under `schemas/`
+are byte identical.
 
 ### Three source files git read as binary, one of them where every component identity is minted
 
@@ -112,12 +114,13 @@ not, and `dependencyEvidence` cannot answer the property it was going to be wire
 Thirteen hand written per framework readers produce the declared half of this build's join, 5,493 lines
 against 42,077 that know no framework name, and the question of what happens as the field grows had never
 been written down. [docs/architecture/mapping-architecture.md](docs/architecture/mapping-architecture.md)
-asks it, measures six directions against this repository, and stages the answer. Three decisions follow from
+asks it, measures six directions against this repository, and stages the answer. Four decisions follow from
 it, recorded separately so each can be refused on its own evidence:
 [ADR 0003](docs/architecture/adr/0003-fact-model-breadth.md) on the fact model as the breadth lever,
 [ADR 0004](docs/architecture/adr/0004-provenance-not-confidence.md) on widening by provenance rather than by
 a confidence band, and [ADR 0005](docs/architecture/adr/0005-corpus-invariants.md) on a corpus gate that
-holds invariants.
+holds invariants, and [ADR 0006](docs/architecture/adr/0006-manifest-component-details.md) on manifest
+ownership semantics.
 
 **Four things this repository recorded about itself were close to true and not true.** The corpus reported
 seven adapter gaps and one is an adapter gap: two are false, four are correct refusals. The containment
@@ -187,13 +190,14 @@ the one input nothing checked against the repository it describes. `definedIn: s
 definedAtLine: 4242` was accepted, and the component appeared in the graph with a location a reader could
 click. Passing the schema says a document is well formed. It says nothing about whether any of it is true.
 
-**Four claims are now refuted from what the traversal already walked.** A `definedIn` that names no file the
-scan found. A line beyond what the file is long enough to hold. A `runtimeName` carrying a placeholder,
+**Five claims are now refuted.** A `definedIn` that names no file the scan found. A line beyond what the
+file is long enough to hold. A `runtimeName` carrying a placeholder,
 which is a name no run reports and which the CrewAI reader already refuses in a declared role. And an edge
 endpoint naming nothing this manifest declares and nothing any other adapter found, which used to be
 skipped in silence, so a typo in a relation vanished without a word. A manifest that fails any of them is
 reported as a failed adapter run naming each claim, and what it got right is still read: one bad citation
-among eighteen does not lose the seventeen.
+among eighteen does not lose the seventeen. Manifest version 2 adds the fifth: `details.for` must agree
+with the component `kind`, and invalid details do not enter the graph.
 
 **The traversal had to start recording what it walked.** `collectFiles` drops every language no parser
 reads, which is the right set for parsing and the wrong one for asking whether a path is there, and the one
@@ -214,12 +218,14 @@ and `inventory-worker` are declared in `src/agents/definitions.ts` and cited `sr
 cites a line that contains the name it declares. Four of those errors are ones the engine still cannot
 catch, because checking the text of a cited line means opening the file.
 
-**And the measurement that bounds the manifest as a path to breadth reproduces exactly.** A maximally
-honest one component manifest for `open-agent-platform`, declaring only the `mcp_server` that `use-mcp.tsx`
-genuinely constructs and passing every check above, still flips `agentSystemDetected` from **false to
-true**, at 26 components becoming 27. `ManifestComponent` has no `details` field, so a manifest cannot say
-"consumed" the way an adapter can and `partOfAuditedSystem` has nothing to read. Fixing that is a manifest
-document version and owes its own decision record.
+**The bound reproduced, and manifest version 2 moves exactly the answer it names.** The honest one
+component version 1 manifest for `open-agent-platform` still flips `agentSystemDetected` from false to true
+at 26 components becoming 27. [ADR 0006](docs/architecture/adr/0006-manifest-component-details.md) gives
+`ManifestComponent` the same kind-specific `details` an adapter writes. With `role: consumed`, the same
+repository reads false at 27 components and the exported graph still contains one `mcp_server`, its details
+and its source citation. Changing only the role to `implemented` reads true, and version 1 remains readable
+with its established true meaning. Detection stops confusing a repository that consumes a system with one
+that implements it, without hiding the consumed component from a real agent topology.
 
 ### A location that says which revision of the file it was read from
 

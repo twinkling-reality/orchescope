@@ -2397,7 +2397,7 @@ describe('the manifest', () => {
     workspace.write('src/orchestrator.rb', "puts 'a language this build does not parse'\n");
   };
 
-  it('declares components and relations for a language no adapter parses', async () => {
+  it('reads a version 1 manifest and preserves its detection meaning', async () => {
     const { result, ids, edges, adapters } = await scan(build);
     assert.ok(
       adapters.some(
@@ -2415,6 +2415,96 @@ describe('the manifest', () => {
       `expected the declared relation in ${edges.join(', ')}`,
     );
     assert.equal(result.agentSystemDetected, true);
+  });
+
+  it('keeps a consumed server visible without reporting its consumer as an agent system', async () => {
+    const { result } = await scan((workspace) => {
+      workspace.write(
+        '.orchescope/manifest.yaml',
+        `schemaVersion: 2
+components:
+  - kind: mcp_server
+    name: remote-mcp-server
+    details:
+      for: mcp_server
+      role: consumed
+edges: []
+`,
+      );
+    });
+    const server = result.graph.components.find(
+      (component) =>
+        component.kind === 'mcp_server' && component.displayName === 'remote-mcp-server',
+    );
+    assert.ok(server !== undefined, 'the consumed server disappeared from the graph');
+    assert.deepEqual(server.details, { for: 'mcp_server', role: 'consumed' });
+    assert.equal(result.agentSystemDetected, false);
+  });
+
+  it('lets an implemented server establish that its repository is an agent system', async () => {
+    const { result } = await scan((workspace) => {
+      workspace.write(
+        '.orchescope/manifest.yaml',
+        `schemaVersion: 2
+components:
+  - kind: mcp_server
+    name: local-mcp-server
+    details:
+      for: mcp_server
+      role: implemented
+edges: []
+`,
+      );
+    });
+    assert.equal(result.agentSystemDetected, true);
+  });
+
+  it('does not accept version 2 details under a version 1 number', async () => {
+    const { adapters } = await scan((workspace) => {
+      workspace.write(
+        '.orchescope/manifest.yaml',
+        `schemaVersion: 1
+components:
+  - kind: mcp_server
+    name: remote-mcp-server
+    details:
+      for: mcp_server
+      role: consumed
+edges: []
+`,
+      );
+    });
+    const run = adapters.find((entry) => entry.adapterId === 'adapter:manifest');
+    assert.equal(run?.status, 'failed');
+    assert.match(run?.detail ?? '', /details/);
+  });
+
+  it('refuses details whose discriminator disagrees with the component kind', async () => {
+    const { result, adapters } = await scan((workspace) => {
+      workspace.write(
+        '.orchescope/manifest.yaml',
+        `schemaVersion: 2
+components:
+  - kind: tool
+    name: mismatched
+    details:
+      for: mcp_server
+      role: consumed
+edges: []
+`,
+      );
+    });
+    const run = adapters.find((entry) => entry.adapterId === 'adapter:manifest');
+    assert.equal(run?.status, 'failed');
+    assert.match(run?.detail ?? '', /has kind tool but details for mcp_server/);
+    const component = result.graph.components.find(
+      (candidate) => candidate.displayName === 'mismatched',
+    );
+    assert.ok(
+      component !== undefined,
+      'the valid identity and kind were lost with the invalid details',
+    );
+    assert.equal(component.details, undefined);
   });
 
   /**

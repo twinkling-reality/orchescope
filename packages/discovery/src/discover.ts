@@ -1,12 +1,11 @@
 import {
-  AGENT_SYSTEM_KINDS,
   asOrchescopeError,
   type Clock,
   type Deadline,
+  establishesAgentSystem,
   isCancellation,
   projectId as makeProjectId,
   scanId as makeScanId,
-  partOfAuditedSystem,
   sha256Hex,
   sha256OfJson,
 } from '@orchescope/domain';
@@ -467,12 +466,7 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
         });
 
   const detectedEcosystems = analysis.languages.map((entry) => entry.language as Language);
-  const agentSystemDetected = built.graph.components.some(
-    (component) =>
-      AGENT_SYSTEM_KINDS.has(component.kind) &&
-      // A component that belongs to a developer's own tooling is not this repository declaring anything.
-      partOfAuditedSystem(component),
-  );
+  const agentSystemDetected = built.graph.components.some(establishesAgentSystem);
 
   return {
     graph: built.graph,

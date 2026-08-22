@@ -13,7 +13,7 @@ definitions are the source of truth and CI fails when these files drift from the
 - `goal.v1.json`: goal, version 1, readable from version 1
 - `report.v1.json`: report, version 1, readable from version 1
 - `trace-bundle.v1.json`: traceBundle, version 1, readable from version 1
-- `manifest.v1.json`: manifest, version 1, readable from version 1
+- `manifest.v2.json`: manifest, version 2, readable from version 1
 - `config.v3.json`: config, version 3, readable from version 1
 
 Every document carries a `schemaVersion`. A reader must refuse a version it does not understand rather than

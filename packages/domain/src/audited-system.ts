@@ -43,3 +43,15 @@ export const AGENT_SYSTEM_KINDS: ReadonlySet<string> = new Set([
 export const partOfAuditedSystem = (component: Component): boolean =>
   component.declaredInTest !== true &&
   !(component.details?.for === 'mcp_server' && component.details.role === 'developer_tooling');
+
+/**
+ * Whether this component is enough to say its repository implements an agent system.
+ *
+ * A consumed MCP server is part of the topology when an agent in the same repository reaches it, but the
+ * server alone says only that this repository is a client. An unqualified server keeps the version 1
+ * manifest meaning, and an implemented server establishes detection.
+ */
+export const establishesAgentSystem = (component: Component): boolean =>
+  AGENT_SYSTEM_KINDS.has(component.kind) &&
+  partOfAuditedSystem(component) &&
+  !(component.details?.for === 'mcp_server' && component.details.role === 'consumed');

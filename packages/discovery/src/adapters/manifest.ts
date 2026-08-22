@@ -9,6 +9,7 @@ import type { ComponentIdentity, ComponentKind, Manifest } from '@orchescope/sch
 import {
   formatIssues,
   Manifest as ManifestSchema,
+  ManifestV1,
   MIN_READABLE_VERSIONS,
   SCHEMA_VERSIONS,
   validateDocument,
@@ -28,14 +29,29 @@ import { createDrafts } from '../drafts.ts';
  * A manifest is the only input to this build that nothing checks against the repository it describes, and
  * that is what `refutations` below is for. Passing the schema says the document is well formed. It says
  * nothing about whether `definedIn` names a file that is there, whether a line that far into it exists,
- * whether an edge names anything, or whether a `runtimeName` is a name a run could report. Every one of
- * those is answerable deterministically from what the scan already walked, and this repository's own
- * reference manifest failed three of them until it was corrected.
+ * whether an edge names anything, whether a `runtimeName` is a name a run could report, or whether details
+ * describe the component kind beside them. Every one of those is answerable deterministically, and this
+ * repository's own reference manifest failed three of them until it was corrected.
  */
 
 const ADAPTER_ID = 'adapter:manifest';
 const drafts = createDrafts(ADAPTER_ID);
 const MANIFEST_PATHS = ['.orchescope/manifest.yaml', '.orchescope/manifest.yml'];
+
+const validateManifest = (data: unknown) => {
+  const version =
+    typeof data === 'object' && data !== null && !Array.isArray(data)
+      ? (data as { readonly schemaVersion?: unknown }).schemaVersion
+      : undefined;
+  return version === 1
+    ? validateDocument(ManifestV1, SCHEMA_VERSIONS.manifest, MIN_READABLE_VERSIONS.manifest, data)
+    : validateDocument(
+        ManifestSchema,
+        SCHEMA_VERSIONS.manifest,
+        MIN_READABLE_VERSIONS.manifest,
+        data,
+      );
+};
 
 const manifestIdentity = (kind: ComponentKind, name: string): ComponentIdentity =>
   buildIdentity(kind, MANIFEST_NAMESPACE, name);
@@ -63,6 +79,11 @@ const refutations = (
   const found: string[] = [];
 
   for (const declared of manifest.components) {
+    if (declared.details !== undefined && declared.details.for !== declared.kind) {
+      found.push(
+        `${declared.name} has kind ${declared.kind} but details for ${declared.details.for}`,
+      );
+    }
     if (declared.definedIn !== undefined) {
       const byteLength = walked.get(declared.definedIn);
       if (!walked.has(declared.definedIn)) {
@@ -151,6 +172,9 @@ const addDeclaredComponent = (
     ],
     ...(declared.sideEffect === undefined ? {} : { sideEffect: declared.sideEffect }),
     ...(declared.permissions === undefined ? {} : { permissions: declared.permissions }),
+    ...(declared.details === undefined || declared.details.for !== declared.kind
+      ? {}
+      : { details: declared.details }),
     tags: [...(declared.tags ?? []), 'manifest'],
     metadata: {
       ...(declared.metadata ?? {}),
@@ -201,12 +225,7 @@ export const manifestAdapter: AgentSystemAdapter = {
     if (document === undefined) {
       return { componentsFound: 0, edgesFound: 0, filesInspected: [] };
     }
-    const validated = validateDocument(
-      ManifestSchema,
-      SCHEMA_VERSIONS.manifest,
-      MIN_READABLE_VERSIONS.manifest,
-      document.data,
-    );
+    const validated = validateManifest(document.data);
     if (!validated.ok) {
       return {
         componentsFound: 0,
