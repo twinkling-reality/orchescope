@@ -240,6 +240,7 @@ const OPERATION_BY_NAME_PREFIX: readonly (readonly [string, AgentOperation])[] =
   ['queue_wait', 'queue_wait'],
   ['side_effect', 'side_effect'],
   ['evaluation', 'evaluation'],
+  ['mcp_request', 'mcp_request'],
   ['outbound_request', 'outbound_request'],
 ];
 
@@ -298,6 +299,7 @@ const KIND_BY_OPERATION: Readonly<Record<AgentOperation, ComponentKind | undefin
   side_effect: 'side_effect',
   approval: 'approval_boundary',
   evaluation: 'evaluator',
+  mcp_request: 'mcp_server',
   outbound_request: 'external_service',
   unclassified: undefined,
 };

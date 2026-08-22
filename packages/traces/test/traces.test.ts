@@ -237,6 +237,7 @@ describe('attributes', () => {
 
   it('falls back to the span name when no attribute says what happened', () => {
     assert.equal(classifyOperation('execute_tool issue_refund', {}), 'execute_tool');
+    assert.equal(classifyOperation('mcp_request Filesystem Server', {}), 'mcp_request');
     assert.equal(classifyOperation('something unfamiliar', {}), 'unclassified');
   });
 
@@ -244,6 +245,7 @@ describe('attributes', () => {
     assert.equal(componentKindFor('chat'), 'model');
     assert.equal(componentKindFor('execute_tool'), 'tool');
     assert.equal(componentKindFor('invoke_agent'), 'agent');
+    assert.equal(componentKindFor('mcp_request'), 'mcp_server');
     assert.equal(componentKindFor('unclassified'), undefined);
   });
 });

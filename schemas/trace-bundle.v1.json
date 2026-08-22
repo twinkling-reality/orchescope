@@ -388,6 +388,10 @@
                 "type": "string"
               },
               {
+                "const": "mcp_request",
+                "type": "string"
+              },
+              {
                 "const": "outbound_request",
                 "type": "string"
               },

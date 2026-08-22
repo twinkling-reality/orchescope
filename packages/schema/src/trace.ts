@@ -52,6 +52,8 @@ export const AgentOperation = literals([
   'side_effect',
   'approval',
   'evaluation',
+  /** A client request to an MCP server. The server implementation is the observed component. */
+  'mcp_request',
   /**
    * A request the system made to something outside itself.
    *
