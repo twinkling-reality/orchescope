@@ -89,6 +89,7 @@ the tool and the arguments for the step the repository is standing at. The same 
 | --- | --- |
 | `orchescope audit` | Discover the system, reconcile it against stored runs, report findings |
 | `orchescope trace -- <command>` | Run a command, collect its OpenTelemetry spans, store them as a run |
+| `orchescope federate --repository <path>...` | Join separately scanned repositories using source-qualified runtime evidence |
 | `orchescope receive --for 10m` | Listen for spans from a system that is already running, store them as a run |
 | `orchescope test --scenario <id>` | Run a scenario and evaluate it |
 | `orchescope benchmark --scenario <id> --agents 1,2,4` | Vary one dimension and compare the variants |

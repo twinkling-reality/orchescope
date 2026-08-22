@@ -14,6 +14,7 @@ pnpm corpus:offline    # the entries that need no network, which is what CI requ
 pnpm corpus            # every entry, cloning what the cache is missing
 pnpm corpus:exercise    # the same, and also runs the entries that can produce spans
 node scripts/corpus.mjs --check langgraph flask     # named entries only
+node scripts/corpus.mjs --check --exercise openai-agents-js-filesystem-mcp
 ```
 
 The first full run clones the pinned repositories into `corpus/.cache`, which git ignores. Later runs reuse the clone and
@@ -96,8 +97,9 @@ change to an adapter shows up immediately.
 
 ## An entry that runs
 
-Most entries are read and never executed. Two are executed, one per language, because instrumentation is the half of
-the join that differs most between them and a decoder that reads one dialect says nothing about the other:
+Most entries are read and never executed. Exercises cover both languages, provider and hermetic paths, and the one
+federated system whose protocol crossing is part of the acceptance evidence. Each execution is explicit because it
+installs packages and runs third-party code.
 
 | Entry | Environment | What it drives |
 | --- | --- | --- |
@@ -122,6 +124,13 @@ install and execute third party code, which is why neither happens unless it is 
 The expectation records the join by identity: which components joined, which arrived without a counterpart, and which
 joins rest on a name alone. That last one is the weak rule, and it is the difference between a join that is
 established and a join that is a name meaning one thing in one repository.
+
+A `multiRepositorySystems` exercise is recorded separately as
+`corpus/expected/<system>.federation.json`. Its repository list repeats the exact pins and locates the checkouts. The
+expectation records only what the run qualifies: eligible coordinates, code-location component joins, accepted
+cross-repository relations, services, source coverage and refusals. The OpenAI Agents filesystem MCP system scans the
+client and server separately, carries W3C parent context through a real stdio `tools/call`, and refuses the additional
+client instrumentation span that has no source identity.
 
 ## Both polarities
 

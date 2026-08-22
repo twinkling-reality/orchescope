@@ -15,9 +15,11 @@ against the repository rather than taken. Four interfaces with no producer, thre
 process it was written for. Four measurements that ended in a decline remain recorded where the next reader
 will find them, and every published bound that moved has its own falsifier.
 Published document changes: manifest advances from version 1 to version 2 with component details; system
-graph and report v1 add optional observed source identity and repository URL fields; trace bundle v1 preserves
-optional per-span resource attributes; report v1 extends missing-attribute coverage with source-identity
-purposes and refusal reasons. The additions remain readable by existing version 1 readers.
+graph v1 adds optional observed source identity, repository URL and Git-derived repository subroot fields;
+trace bundle v1 preserves optional per-span resource attributes and recognises MCP client requests; report v1
+extends missing-attribute coverage with source-identity purposes and refusal reasons; federation v1 qualifies
+local component references by canonical repository URL and full revision. The additions remain readable by
+existing version 1 readers.
 
 ### Three CrewAI roles select their declarations by observed source, not by their shared names
 
@@ -55,6 +57,32 @@ The corpus definition repeats both canonical URLs and full revisions, states why
 pre-registers the runtime falsifier. A cross-repository join needs a successful `tools/call` whose W3C trace
 context crosses the real stdio boundary and whose two endpoints each carry source identity for their own
 checkout. The corpus list only locates source; it cannot prove that the request crossed.
+
+### One real stdio request joins declarations in two repositories
+
+The pinned OpenAI Agents filesystem example now runs with a deterministic model against the actual compiled
+filesystem server checkout. One successful `read_text_file` request carries W3C context through MCP `_meta`.
+The client request maps to `examples/mcp/filesystem-example.ts:8` at the client revision, and the server child
+maps through its source map to `src/filesystem/index.ts:206` at the server revision. Neither coordinate comes
+from the corpus list, package resolution, working directory or component name.
+
+Federation scans the repositories separately, retaining 668 client components and 15 server components under
+their own graph identities. The six-span run produces three code-location component joins and one observed
+`calls_tool` relation from the client repository's MCP server declaration to the server repository's
+`read_text_file` declaration. A second client instrumentation span has no source identity and is refused; it
+cannot contribute a weaker name join.
+
+The new `FederationReport` version 1 embeds each graph once and qualifies every accepted component reference
+with canonical repository URL and full revision. The command line and MCP surfaces bound roots, runs, joins and
+refusal samples. Wrong revisions, dirty graphs, one-sided traces, missing parent context and identical local
+identities in different repositories are explicit negative cases. Operator roots locate work and never become
+observed evidence.
+
+On the pinned acceptance run the complete report is 1,967,101 JSON bytes and 201,901 bytes compressed; the
+bounded command line projection is 4,108 bytes. No persistence table or stored artifact is added. Measured from
+the last pre-federation commit, the command line bundle grows 33,221 bytes, the tarball grows 6,589 bytes and the
+26,096 byte injected shim does not move. The exercised corpus case takes 7.65 seconds with a rebuilt shared Node
+environment and 4.83 seconds warm. The tarball still installs and audits TypeScript and Python successfully.
 
 ### Three source files git read as binary, one of them where every component identity is minted
 

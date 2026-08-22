@@ -1,6 +1,6 @@
 # ADR 0008: Federation requires runtime-qualified repository endpoints
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-22
 - Deciders: repository maintainers
 
@@ -198,8 +198,52 @@ permission to omit graph provenance.
 
 ## What the measurement said
 
-No implementation measurement is recorded under a proposed decision. This section is completed only after the
-positive pinned run, every negative falsifier and the full repository gates have run.
+The pinned run satisfied the positive falsifier. The unchanged upstream OpenAI Agents example launched the
+compiled filesystem package from the separately pinned MCP Servers checkout and completed one real
+`read_text_file` call over stdio. Six spans arrived from three services. The client request span mapped to
+`examples/mcp/filesystem-example.ts:8` at
+`52b2702fc034fb47f79ec50fad173f0e9b068ca6`. Its server child mapped through the generated JavaScript source
+map to `src/filesystem/index.ts:206` at
+`3e805376da81c063c2798410906b5fd134334a43`. Both carried their own canonical repository URL and full
+revision, and the server span retained the client request span identifier as its W3C parent.
+
+The two closed scans remained separate: 668 components and 265 relations in the client graph, and 15
+components and 14 relations in the server package graph. Federation observed four components and two
+relations. Three components joined by code location: `MCP Assistant`, `Filesystem Server, via local package`
+and `read_text_file`. The accepted `calls_tool` relation runs from the client repository's MCP server
+declaration to the server repository's tool declaration. One additional MCP client instrumentation span
+carried no source identity and was refused with `observedSource: missing`; it contributed no component join
+or relation.
+
+The negative falsifiers also held. Dedicated graph tests refuse a wrong full revision, a one-sided trace, an
+endpoint without parent context, a dirty scanned graph and a repository subroot that does not map exactly.
+They keep identical local module, kind and name triples distinct under different repository coordinates. The
+same tests show that valid endpoint source without independent `parentSpanId` provenance can join components
+and cannot create a cross-repository edge. Existing single-repository source matching uses the same matcher,
+and the Stage 2 CrewAI measurement remains three code-location joins.
+
+The full exported `FederationReport` for the acceptance run is 1,967,101 JSON bytes, or 201,901 bytes with
+gzip level 9. It embeds 683 components, 279 declared relations and 1,064 evidence records once, plus three
+runtime joins and one cross-repository relation. The bounded CLI JSON projection is 4,108 bytes, or 904 bytes
+compressed. Both are below the existing output ceilings, so graph references are not justified by this
+measurement.
+
+Persistent storage does not move: federation adds zero SQLite tables, columns or stored artifact kinds, and
+the report is computed and exported on demand. The optional Git-derived `repositoryPath` adds 34 compact JSON
+bytes to the one package-root graph in this acceptance case. A stored version 1 graph without it retains its
+repository-root meaning.
+
+Measured against `fceb918`, the last commit before federation, the command line bundle grows from 2,239,951
+to 2,273,172 bytes, a 33,221 byte or 1.48 percent increase. The packed tarball grows from 482,663 to 489,252
+bytes, a 6,589 byte or 1.37 percent increase. The injected instrumentation shim remains 26,096 bytes. Both
+baseline and candidate tarballs installed and audited a TypeScript and Python project successfully.
+
+The corpus adds no repository checkout and no static scan. Selecting the federated system without
+`--exercise` takes 0.18 seconds and reports the explicit skip. The exercised acceptance takes 7.65 seconds
+after another Node exercise has replaced the shared environment, and 4.83 seconds with the exact environment
+already prepared. That environment occupies 131,036 KiB across 11,743 files and replaces, rather than adds
+to, the one shared Node environment. The measured cost is bounded and the positive crossing is now a recorded
+exercised corpus expectation.
 
 ## What would reverse this
 

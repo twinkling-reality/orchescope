@@ -514,8 +514,9 @@ as an escape hatch and makes it refutable.
 
 ### Multi repository: the boundary holds, and here is what moves it
 
-`docs/product/non-goals.md` calls this the boundary most likely to move and asks for a design for cross
-repository identity first. The design is available and it is not fundable yet, for a measured reason.
+`docs/product/non-goals.md` called this the boundary most likely to move and required a design for cross
+repository identity first. The boundary has moved for source-qualified runtime federation, on the condition
+that document named rather than from a workspace assertion.
 
 A `ComponentIdentity` is `(kind, namespace, localName)`, where the namespace is a module path relative to
 one root, a configuration path, or the literal `runtime` or `manifest`. Cross repository identity needs a
@@ -532,7 +533,7 @@ repository coordinate in front of that namespace, and three designs are possible
    observation rather than an assertion, and it is falsifiable by scanning the named revision and checking
    the component is there.
 
-Design 3 remains the candidate. ADR 0007 has now proved its source primitive inside one repository:
+Design 3 is accepted by ADR 0008. ADR 0007 proved its source primitive inside one repository:
 `crewai-examples-exercised` reports 3 code-location joins from runtime-derived Python frames, repository
 coordinate and full revision. The same run reports 0 name-only joins and keeps relation joins at 0. The
 primitive therefore fires without turning a role into a location.
@@ -545,18 +546,24 @@ package reports 1 implemented server, 14 tools and 14 `provides_tool` relations 
 The combined system is not inferred from compatibility: the client repository contains the program that
 starts this server package and calls its tools.
 
-**The boundary holds, and the condition that moves it is stated:** a pinned corpus entry that is a
-multi repository agent system, and `byCodeLocation` greater than zero on at least one exercised entry. The
-source condition is met by CrewAI and the real multi-repository system is now pinned. What remains is the
-runtime falsifier: a successful MCP `tools/call` must carry one W3C trace across the real stdio boundary,
-with each endpoint carrying the source identity of its own exact checkout. A workspace list, two compatible
-package names or one trace carrying only one repository must still produce no cross-repository join.
+**The condition fired.** The pinned exercise completes one real `read_text_file` call through the upstream
+stdio program and records six spans from three services. The client request maps to
+`examples/mcp/filesystem-example.ts:8` in the client revision. Its W3C child maps through the executed server
+build's source map to `src/filesystem/index.ts:206` in the server revision. Separate scans retain 668 and 15
+components. Three runtime components join by code location, and one observed `calls_tool` relation crosses
+from the client repository's MCP server declaration to the server repository's tool declaration.
 
-**One clause moved and one did not.** Per-attribute provenance now names repository, revision, file, line
+The operator list still only locates work. Federation qualifies an existing `ComponentId` with canonical
+repository URL and full revision, and accepts a cross-repository relation only after both endpoints select
+exactly one declaration and independent parent context establishes causality. A duplicate MCP client span
+without source identity is refused and contributes nothing. Wrong revisions, dirty graphs, one-sided traces,
+missing parent context and identical local identities in different repositories are held as negative tests.
+
+**Both clauses moved without being collapsed.** Per-attribute provenance names repository, revision, file, line
 and function separately on each accepted source identity. Coverage names `code.file.path`,
 `orchescope.code.repository.path`, `vcs.repository.url.full` and `vcs.ref.head.revision` with observed
-sample counts where another instrumentor omits them. ADR 0008 must now judge federation against the pinned
-MCP crossing and refuse it if that trace evidence cannot qualify both sides independently.
+sample counts where another instrumentor omits them. Parent-span provenance separately names the causal input
+for the relation. Neither evidence class can substitute for the other.
 
 ## The success metric
 
@@ -601,6 +608,9 @@ identifier, are how that number goes to zero.
 - **`open-agent-platform`.** If `agentSystemDetected` ever reads `true`, or `components.byKind` gains an
   `agent`, `model`, `tool` or `mcp_server` key, recognition was widened without provenance and the entry
   did what its own prose predicted. This one falsifies ADR 0004 directly.
+- **`openai-agents-js-filesystem-mcp`.** The recorded exercise must retain three source-qualified component
+  joins and one cross-repository `calls_tool` relation. Removing either repository coordinate, changing either
+  revision or removing the W3C parent must produce a named refusal rather than preserve that relation.
 - **`orchescope-discovery`.** Ceiling zero components, in the one package where every framework name this
   build knows appears as a string literal. If a richer fact model lights it up, the facts stopped being
   facts about a program and became facts about text.

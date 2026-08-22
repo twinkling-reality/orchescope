@@ -85,11 +85,13 @@ reported as not inspected.
 Why: a partial parse produces a partial graph that looks complete, which is worse than an honest gap. Anything not
 recognised can be declared in `.orchescope/manifest.yaml`, which is a first class input.
 
-## Not multi repository
+## Not a multi repository workspace
 
-One command works on one repository at a time. A system split across several repositories is analysed per repository,
-with the manifest naming what crosses the boundary.
+`orchescope federate` can scan two to eight repository roots separately and join a bounded set of stored runtime
+evidence across them. It does not create a combined workspace, flatten local component identities, retain a federation
+database or treat the supplied root list as evidence that the repositories communicated.
 
-Why: identity and revision pinning are what make a reconciliation trustworthy, and both are defined relative to one
-working tree. This is the boundary most likely to move, and moving it would need a design for cross repository identity
-first.
+Why: local identity and revision pinning remain defined relative to one working tree. A federated reference adds the
+canonical repository URL and full revision, and a cross-repository relation needs source-qualified endpoints plus
+independently propagated runtime parent context. The design, falsifier and measured upstream MCP proof are in
+[ADR 0008](../architecture/adr/0008-runtime-qualified-repository-federation.md).

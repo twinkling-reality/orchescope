@@ -10,6 +10,7 @@ with the quickstart; read the architecture when you want to change something.
 | [Quickstart](guides/quickstart.md) | You have a repository and five minutes |
 | [Static audit](guides/static-audit.md) | You want to know what the audit can and cannot see without running anything |
 | [Runtime tracing](guides/runtime-tracing.md) | You want the declared against exercised delta |
+| [Repository federation](guides/federation.md) | One traced system crosses independently versioned repositories |
 | [Scenario testing](guides/scenario-testing.md) | You want a repeatable run you can compare against |
 | [Chaos testing](guides/chaos-testing.md) | You want to know what one failure does to the whole task |
 | [Coding agent integration](guides/coding-agent-integration.md) | You work with Claude Code, Codex or another agent |

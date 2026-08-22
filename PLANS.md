@@ -941,7 +941,9 @@ extend it without reading every file.
 - **Effects in test files are not mapped.** A component only a test constructs cannot appear in a run, so carrying it
   into the graph would report an unexercised declaration for every double. Test files are recognised by naming
   convention, so a test written somewhere no convention names is still read as source.
-- **One repository at a time.** Cross repository identity is not designed.
+- **No combined multi repository workspace.** `federate` scans each supplied root separately and joins only
+  source-qualified runtime endpoints at exact revisions. It does not flatten their local identities or persist a
+  workspace graph.
 - **No answer quality measurement.** Behaviour, cost, reliability and structure only.
 - **Cost is derived from observed token counts and the price table in `pricing`, which is empty until it is filled in.**
   No price table ships, because a price this repository guessed would be wrong the week a provider changed it. Until one
@@ -962,5 +964,6 @@ Nothing here is committed work, and none of it is required for the product to be
 shape of the boundaries.
 
 - More adapters, each gated on a fixture that makes the claim true.
-- A design for cross repository identity, which is the prerequisite for auditing a system split across services.
+- More protocol crossings measured against pinned multi repository systems, without weakening the source and parent
+  context requirements accepted in ADR 0008.
 - Import from a collector rather than only from a file, for teams whose runs happen elsewhere.
