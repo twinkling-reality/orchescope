@@ -56,7 +56,9 @@ checkouts produces at least one cross-repository relation whose two endpoints jo
 declarations, with all of these conditions true:
 
 1. The client and server are scanned as two closed `SystemGraph` documents at their own exact canonical
-   repository URL and full clean revision. No combined scan supplies either endpoint.
+   repository URL and full clean revision. The server graph is rooted at its independently published
+   `src/filesystem` package, with that Git-derived repository subpath retained. No combined scan supplies
+   either endpoint.
 2. The client endpoint joins only from source identity derived from its executing client frame. The server
    endpoint joins only from source identity derived from its executing handler or registration frame, with any
    generated JavaScript mapped uniquely to tracked source in the same revision.
@@ -103,11 +105,19 @@ A federated component reference is:
 (canonical repository URL, full revision, existing ComponentId)
 ```
 
-The existing `ComponentIdentity`, `ComponentId`, `SystemGraph` and single-repository reconciliation contracts
-do not change. The repository coordinate qualifies them rather than being folded into their namespace or
-fingerprint. Equal `(kind, namespace, localName)` values in two repositories therefore stay equal as local
-identities and distinct as federated identities. A graph's coordinate must agree with its own provenance and
-cannot be supplied by a workspace entry.
+The existing `ComponentIdentity`, `ComponentId` and single-repository reconciliation meanings do not change.
+The repository coordinate qualifies them rather than being folded into their namespace or fingerprint. Equal
+`(kind, namespace, localName)` values in two repositories therefore stay equal as local identities and distinct
+as federated identities. A graph's coordinate must agree with its own provenance and cannot be supplied by a
+workspace entry.
+
+`SystemGraph` version 1 gains one optional provenance fact: `git.repositoryPath`, a normalized path from the
+Git top level to the scanned root. It is absent when the scan root is the Git top level. Git derives it from the
+separately resolved top level and scan root; a command argument does not. This is required by the pinned server:
+its closed graph is rooted at `src/filesystem` and stores `index.ts`, while a runtime frame correctly reports the
+repository-relative `src/filesystem/index.ts`. Source matching strips the graph's exact Git-derived prefix and
+then applies the same file, kind, name and line rule. A stored graph without the field is read as a repository
+root graph and cannot infer a missing prefix from a workspace path.
 
 **Federation is a new version 1 document, not a wider meaning for `SystemGraph` or `ReportBundle`.** A
 `FederationReport` contains:
@@ -174,10 +184,11 @@ spans without propagated context produces two component joins and no cross-repos
 with incomplete source produces an observed crossing that Orchescope cannot join to declarations and therefore
 reports as refused.
 
-**Compatibility costs one new document contract.** No `SystemGraph`, `ReportBundle`, trace bundle or persistence
-version moves. Schema generation, import validation, CLI JSON and MCP output gain the closed
-`FederationReport` version 1 shape. Readers that do not know that new document continue to read every prior
-document as before.
+**Compatibility costs one new document contract and one optional graph provenance field.** No existing document
+version or persistence version moves. The version policy defines an optional property as compatible, and stored
+version 1 graphs without `git.repositoryPath` remain readable with repository-root semantics. Schema generation,
+import validation, CLI JSON and MCP output gain the closed `FederationReport` version 1 shape. Readers that do
+not know that new document continue to read every prior document as before.
 
 **Cost must be measured rather than assumed.** Acceptance records the report bytes for the two pinned graphs,
 the packaged tarball byte change, any persistent storage change, and the added static and exercised corpus time.
