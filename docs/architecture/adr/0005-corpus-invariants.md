@@ -156,7 +156,8 @@ digest would close that, and it is a packaging decision rather than a verificati
 
 ## What the measurement said
 
-Two of the three families are built and the third is not, for the reason this record already gave.
+Every adopted check is built. The dependency property was measured and folded into the generated
+negative family rather than kept as a separate family, for the reason this record already gave.
 
 **The generated negatives found five live precision failures on their first run.** Eleven shapes crossed
 with the five pinned repositories that are not agent systems is 55 injections, and 5 of the 11 broke the

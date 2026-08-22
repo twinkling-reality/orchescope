@@ -104,10 +104,11 @@ guide has landed.
 
 **0005's falsifier is 0.** Its dependency property would have been demoted with more than one exception on
 the corpus once the fact model work landed, and the count of components attributed to a framework adapter
-whose packages the repository does not use and that do not carry `developer_tooling` is zero. Two of its
-three families are built, the third is built in the half its prerequisite allows, and what changed about it
-is recorded rather than quietly dropped: `--record` does overwrite the boolean that record said it could
-not, and `dependencyEvidence` cannot answer the property it was going to be wired for.
+whose packages the repository does not use and that do not carry `developer_tooling` is zero. Every adopted
+check is built. The dependency property was measured and folded into the generated negative family rather
+than kept as a separate family, and what changed about it is recorded rather than quietly dropped:
+`--record` does overwrite the boolean that record said it could not, and `dependencyEvidence` cannot answer
+the property it was going to be wired for.
 
 ### Where breadth comes from as agent systems proliferate, asked and answered with measurements
 
