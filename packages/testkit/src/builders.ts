@@ -133,6 +133,11 @@ export const observedComponent = (
   performedSideEffect: false,
   evidence: [],
   attributes: {},
+  provenance: {
+    kind: { attributes: [], spanFields: ['operation'] },
+    name: { attributes: [], spanFields: ['name'] },
+    codeLocation: { attributes: [], spanFields: [] },
+  },
   ...overrides,
 });
 
@@ -149,6 +154,11 @@ export const observedEdge = (
   inputTokens: 0,
   outputTokens: 0,
   evidence: [],
+  provenance: {
+    relation: { attributes: [], spanFields: ['parentSpanId'] },
+    from: { attributes: [], spanFields: ['name'] },
+    to: { attributes: [], spanFields: ['name'] },
+  },
   ...overrides,
 });
 
@@ -157,6 +167,7 @@ export const runtimeTopology = (overrides: Partial<RuntimeTopology> = {}): Runti
   components: [],
   edges: [],
   sideEffects: [],
+  coverage: { missingSpanAttributes: [] },
   unattributed: [],
   ...overrides,
 });

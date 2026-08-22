@@ -168,9 +168,11 @@ export {
   RunStatus,
 } from './run.ts';
 export {
+  MissingSpanAttribute,
   ObservedCodeLocation,
   ObservedComponent,
   ObservedEdge,
+  ObservedValueProvenance,
   RuntimeTopology,
 } from './runtime-topology.ts';
 export {

@@ -27,6 +27,13 @@ const fractionRows = (delta: Reconciliation): readonly Row[] => {
   if (meter !== undefined) {
     rows.push({ kind: 'keyed', key: 'system', text: meter });
   }
+  for (const missing of delta.coverage.missingSpanAttributes ?? []) {
+    rows.push({
+      kind: 'keyed',
+      key: 'system',
+      text: `${formatCount(missing.observedComponents, 'observed part')} lacked ${missing.attribute}; ${missing.purpose === 'code_location' ? 'code joins unavailable' : 'join unavailable'}`,
+    });
+  }
   return rows;
 };
 

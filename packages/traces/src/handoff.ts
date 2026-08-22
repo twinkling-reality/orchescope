@@ -1,11 +1,13 @@
-import type { NormalizedSpan } from '@orchescope/schema';
+import type { NormalizedSpan, ObservedValueProvenance } from '@orchescope/schema';
 import {
+  attributeProvenance,
   componentKindFor,
   GEN_AI,
   MCP,
   OPEN_INFERENCE,
   observedNameFor,
-  readString,
+  operationWithProvenance,
+  readStringAttribute,
 } from './attributes.ts';
 
 /**
@@ -74,6 +76,11 @@ export type ObservedHandoff = {
   readonly fromAgent: string;
   /** The agent that took it. */
   readonly toAgent: string;
+  readonly provenance: {
+    readonly relation: ObservedValueProvenance;
+    readonly from: ObservedValueProvenance;
+    readonly to: ObservedValueProvenance;
+  };
 };
 
 /**
@@ -99,18 +106,35 @@ const agentNamesReported = (spans: readonly NormalizedSpan[]): ReadonlySet<strin
  * bare form is read only where the span named no tool, which is the reading argued from the Python
  * instrumentor's spans and the one a repository's own tool could otherwise be mistaken for.
  */
-const endsOf = (
-  span: NormalizedSpan,
-): { readonly fromAgent: string; readonly toAgent: string } | undefined => {
-  const input = readString(span.attributes, INPUT_VALUE);
-  const output = readString(span.attributes, OUTPUT_VALUE);
+const endsOf = (span: NormalizedSpan): ObservedHandoff | undefined => {
+  const input = readStringAttribute(span.attributes, INPUT_VALUE);
+  const output = readStringAttribute(span.attributes, OUTPUT_VALUE);
   if (input === undefined || output === undefined) return undefined;
-  const documented = { fromAgent: namedIn(input, FROM_AGENT), toAgent: namedIn(output, TO_AGENT) };
+  const documented = {
+    fromAgent: namedIn(input.value, FROM_AGENT),
+    toAgent: namedIn(output.value, TO_AGENT),
+  };
+  const operation = operationWithProvenance(span.name, span.attributes).provenance;
+  const provenance: ObservedHandoff['provenance'] = {
+    relation: {
+      attributes: [...new Set([...operation.attributes, input.attribute, output.attribute])],
+      spanFields: ['operation'],
+    },
+    from: attributeProvenance(input.attribute),
+    to: attributeProvenance(output.attribute),
+  };
   if (documented.fromAgent !== undefined && documented.toAgent !== undefined) {
-    return { fromAgent: documented.fromAgent, toAgent: documented.toAgent };
+    return { fromAgent: documented.fromAgent, toAgent: documented.toAgent, provenance };
   }
-  const named = readString(span.attributes, GEN_AI.toolName, OPEN_INFERENCE.toolName, MCP.toolName);
-  return named === undefined ? { fromAgent: input, toAgent: output } : undefined;
+  const named = readStringAttribute(
+    span.attributes,
+    GEN_AI.toolName,
+    OPEN_INFERENCE.toolName,
+    MCP.toolName,
+  );
+  return named === undefined
+    ? { fromAgent: input.value, toAgent: output.value, provenance }
+    : undefined;
 };
 
 export const recognizeHandoffs = (

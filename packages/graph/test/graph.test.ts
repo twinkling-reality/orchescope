@@ -1060,4 +1060,87 @@ describe('how a join was made', () => {
       ambiguous: [],
     });
   });
+
+  it('carries the exact missing span attribute into coverage', () => {
+    const graph = buildGraph([agent]);
+    const reconciled = reconcile(graph, [
+      runtimeTopology({
+        coverage: {
+          missingSpanAttributes: [
+            {
+              attribute: 'code.file.path',
+              purpose: 'code_location',
+              observedComponents: 1,
+            },
+          ],
+        },
+      }),
+    ]);
+    const result = computeDelta({
+      graph: reconciled.graph,
+      runs: [],
+      spanToComponent: new Map(),
+      missingSpanAttributes: reconciled.missingSpanAttributes,
+    });
+    assert.deepEqual(result.delta.coverage.missingSpanAttributes, [
+      {
+        attribute: 'code.file.path',
+        purpose: 'code_location',
+        observedComponents: 1,
+      },
+    ]);
+  });
+});
+
+describe('an observed relation that a declaration can exactly rederive', () => {
+  const worker = componentDraft({ kind: 'agent', name: 'worker', file: 'src/worker.ts' });
+  const declared = buildGraph(
+    [orchestrator, worker],
+    [edgeDraft('hands_off_to', orchestrator, worker)],
+  );
+  const components = [
+    observedComponent({ kind: 'agent', observedName: 'orchestrator' }),
+    observedComponent({ kind: 'agent', observedName: 'worker' }),
+  ];
+
+  it('does not count an endpoint attribute as runtime evidence for the declared relation', () => {
+    const reconciled = reconcile(declared, [
+      runtimeTopology({
+        components,
+        edges: [
+          observedEdge({
+            kind: 'hands_off_to',
+            fromKind: 'agent',
+            fromObservedName: 'orchestrator',
+            toKind: 'agent',
+            toObservedName: 'worker',
+            provenance: {
+              relation: { attributes: ['graph.node.parent_id'], spanFields: [] },
+              from: { attributes: ['graph.node.parent_id'], spanFields: [] },
+              to: { attributes: ['graph.node.id'], spanFields: [] },
+            },
+          }),
+        ],
+      }),
+    ]);
+    assert.equal(reconciled.graph.edges[0]?.observation, undefined);
+  });
+
+  it('keeps the same declared relation when span nesting is what reported it', () => {
+    const reconciled = reconcile(declared, [
+      runtimeTopology({
+        components,
+        edges: [
+          observedEdge({
+            kind: 'hands_off_to',
+            fromKind: 'agent',
+            fromObservedName: 'orchestrator',
+            toKind: 'agent',
+            toObservedName: 'worker',
+          }),
+        ],
+      }),
+    ]);
+    assert.equal(reconciled.graph.edges[0]?.observation?.executionCount, 1);
+  });
 });

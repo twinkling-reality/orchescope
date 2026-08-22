@@ -18,6 +18,7 @@ import type {
   EdgeObservation,
   Evidence,
   EvidenceId,
+  MissingSpanAttribute,
   ObservedComponent,
   ObservedEdge,
   RuntimeTopology,
@@ -63,6 +64,7 @@ export type ReconcileResult = {
   readonly matches: readonly ComponentMatch[];
   readonly ambiguous: readonly AmbiguousMatch[];
   readonly runtimeOnlyComponentIds: readonly ComponentId[];
+  readonly missingSpanAttributes: readonly MissingSpanAttribute[];
 };
 
 const PRODUCER = 'reconciler';
@@ -383,6 +385,17 @@ const reconcileEdges = (state: Mutable, topology: RuntimeTopology): void => {
     const observation = observationFrom(observed, topology.runIds);
 
     if (existing !== undefined) {
+      const endpointAttributes = new Set([
+        ...observed.provenance.from.attributes,
+        ...observed.provenance.to.attributes,
+      ]);
+      const exactlyRederived =
+        observed.provenance.relation.spanFields.length === 0 &&
+        observed.provenance.relation.attributes.length > 0 &&
+        observed.provenance.relation.attributes.every((attribute) =>
+          endpointAttributes.has(attribute),
+        );
+      if (exactlyRederived) continue;
       state.edges.set(id, {
         ...existing,
         basis: strongerBasis(existing.basis, 'observed'),
@@ -417,6 +430,23 @@ const reconcileEdges = (state: Mutable, topology: RuntimeTopology): void => {
       metadata: {},
     });
   }
+};
+
+const aggregateMissingAttributes = (
+  topologies: readonly RuntimeTopology[],
+): readonly MissingSpanAttribute[] => {
+  const counts = new Map<string, MissingSpanAttribute>();
+  for (const missing of topologies.flatMap((topology) => topology.coverage.missingSpanAttributes)) {
+    const key = `${missing.purpose}|${missing.attribute}`;
+    const previous = counts.get(key);
+    counts.set(key, {
+      ...missing,
+      observedComponents: (previous?.observedComponents ?? 0) + missing.observedComponents,
+    });
+  }
+  return [...counts.values()].sort((left, right) =>
+    left.attribute < right.attribute ? -1 : left.attribute > right.attribute ? 1 : 0,
+  );
 };
 
 export const reconcile = (
@@ -461,5 +491,6 @@ export const reconcile = (
     matches: state.matches,
     ambiguous: state.ambiguous,
     runtimeOnlyComponentIds: state.runtimeOnly,
+    missingSpanAttributes: aggregateMissingAttributes(topologies),
   };
 };

@@ -183,6 +183,7 @@ const reconcileStoredRuns = (input: {
     spanToComponent,
     matches: reconciled.matches,
     ambiguous: reconciled.ambiguous,
+    missingSpanAttributes: reconciled.missingSpanAttributes,
   });
   evidence.push(...delta.evidence);
   ingestPhase.finish(

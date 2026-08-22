@@ -13,7 +13,8 @@ which revision of which file it was read from, and every manifest citation is ch
 rather than taken. Four interfaces with no producer, three deleted and one given the process it was written
 for. And four measurements that ended in a decline, each recorded where the next reader will find it rather
 than rediscover it.
-No published document changes: the documents under `schemas/` are byte identical.
+Published document change: report v1 adds the optional `coverage.missingSpanAttributes` field; the other
+documents under `schemas/` are byte identical.
 
 ### Three source files git read as binary, one of them where every component identity is minted
 
@@ -250,7 +251,7 @@ pydantic-ai's 4,077 KB becoming 4,690 KB: 6,933 locations over 284 distinct file
 repeated about twenty four times. Recording each file once is a change to a published document and is worth
 deciding on its own evidence rather than assuming here.
 
-### The attribute that would have made the join agree with itself, refused in data
+### Per attribute provenance on every observed component and relation
 
 `graph.node.parent_id` is written by the CrewAI instrumentor on every agent span after the first, and on
 the pinned marketing crew its values draw exactly the sequence the crew declares. They are not a sequence
@@ -260,18 +261,23 @@ would have moved `exercisedEdges` off zero and filled `runtime.joined`, which is
 every edge it added would have been a declaration this build already reads from source, sent out through
 the process being audited and reported back.
 
-That was recorded as a comment. It is now a table. `REDERIVABLE_ATTRIBUTES` names the attribute, who writes
-it and what it rederives, and a test asserts two things: that it appears in none of the six attribute
-vocabularies this build reads, and that a span carrying it draws no relation between the two agents it
-names. A companion asserts that the same two spans in a real parent and child nesting **do** draw one,
-because a refusal and a reader that never draws anything are the same result read from outside.
+The trace topology now records the exact inputs behind every identity and relation. A component keeps the
+attributes that produced its kind, name and code location, with an explicit span-name fallback where no
+attribute did. A relation keeps its trigger apart from the attributes naming its two endpoints. Provenance
+survives aggregation when more than one span reports the same component or relation.
 
-**What is not built is the general form**, and the measurement says why. *An observed relation exactly
-rederivable from a declaration is a circular join* cannot be asked of an arbitrary relation without per
-attribute provenance on the trace side, which `packages/traces` does not carry. The population it would
-work over is small enough to state: across all eight exercised entries the runs join **21 components, 20
-of them on a name alone, and 6 relations**. Naming the attributes already known to be declarations is the
-part that is checkable today, and it is the part that has actually gone wrong.
+**The anti circularity check is the property rather than a named list.** When a declared edge's supposed
+runtime trigger is wholly one of its endpoint attributes, and no span field says the relation happened,
+reconciliation does not mark the edge exercised. The same declared edge from real parent-span nesting is
+retained. `graph.node.parent_id` is the reproducer, not an entry in `REDERIVABLE_ATTRIBUTES`, and the table
+is deleted.
+
+**A silent zero now names what is missing.** Reconciliation coverage reports `code.file.path` and the
+observed component count that lacked it. The CrewAI run says three observed components lacked the attribute,
+beside zero code location joins, zero exercised components and the same three ambiguous names. Across all
+eight exercised entries the runs still join **21 components, 20 of them on a name alone, and 6 relations**.
+The multi repository boundary therefore has not moved: `byCodeLocation` remains zero on all eight, and no
+pinned entry crosses repository roots.
 
 ### Three evidence kinds nothing writes, and two builders that were waiting for a caller
 

@@ -116,12 +116,12 @@ a word and `servers` is a word and a `.mcp.json` belongs to whoever is reading t
 name a framework owns is not a lookalike, and a property that cannot tell the two apart is a check on the
 doors rather than a law about them.
 
-**3. An anti circularity check between the two halves.** *An observed relation or identity that is exactly
-rederivable from a declaration is a circular join, not a join.* This is the fourth recorded failure stated
-as a property, and it would have fired the moment `graph.node.parent_id` was read, because `crew.agents[i-1]`
-rederives exactly. It also catches a `runtime_name` join made against a name an adapter invented, which is
-the third failure from the other side. It requires per attribute provenance on the trace side, which
-`packages/traces` does not carry, and that prerequisite is the reason it is third rather than first.
+**3. An anti circularity check between the two halves.** *An observed relation exactly rederivable from a
+declaration is a circular join, not a join.* This is the fourth recorded failure stated as a property. An
+observed relation records the span input that says the relation happened separately from the inputs that
+name its endpoints. When a declared relation's supposed trigger is only an endpoint attribute, and no span
+field contributed to it, reconciliation refuses to mark the declaration exercised. A real parent span and
+a handoff event remain observations because each carries an independent runtime trigger.
 
 **And every list the build can derive, it derives.** `FRAMEWORK_ADAPTERS` comes from `DEFAULT_ADAPTERS`,
 and so does the adapter set the dependency property is asked over, which is what covers a fourteenth reader
@@ -179,14 +179,18 @@ construction on the negatives, so it is asserted there, over the adapter set der
 `DEFAULT_ADAPTERS`. Its proposed mechanism, `dependencyEvidence` at manifest read time, is measurably
 insufficient and is deleted rather than wired.
 
-**The anti circularity check is built in the half its prerequisite allows, and the general form is not.**
-`packages/traces` still carries no per attribute provenance and `byCodeLocation` is still 0 on all eight
-exercised entries, so no check can ask of an arbitrary observed relation whether a declaration rederives
-it. What can be asked is of the attributes already known to be declarations, and that is now data:
-`REDERIVABLE_ATTRIBUTES` names `graph.node.parent_id`, who writes it and what it rederives, and
-`rederivable-attributes.test.ts` asserts it appears in none of the six vocabularies this build reads and
-that a span carrying it draws no relation, with a companion asserting a real span nesting does draw one so
-the refusal is not a reader that never draws anything.
+**The anti circularity check is built in its general form.** `packages/traces` records per field provenance
+for every observed component and relation: the attributes that supplied kind, name and code location, the
+attributes that named both relation endpoints, and the independent span input that says the relation
+happened. Reconciliation asks the property rather than an attribute list. A declared edge whose relation
+trigger is wholly rederived from its endpoint attributes is not marked exercised; the identical edge from
+real parent span nesting is. `graph.node.parent_id` remains the recorded witness and now exercises the
+property rather than occupying a named refusal table.
+
+The same provenance makes the missing half of code location coverage explicit. A reconciliation reports
+`code.file.path` with the number of observed components that lacked it. `byCodeLocation` remains 0 on all
+eight exercised entries, but it no longer leaves a reader to infer whether zero means the attribute was
+absent or present and unmatched.
 
 The population that check would have to work over is worth recording beside it. Across all eight exercised
 entries the runs join **21 components, 20 of them on a name alone, and 6 relations**. That is what the

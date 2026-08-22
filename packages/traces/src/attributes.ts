@@ -1,4 +1,9 @@
-import type { AgentOperation, ComponentKind, MetadataValue } from '@orchescope/schema';
+import type {
+  AgentOperation,
+  ComponentKind,
+  MetadataValue,
+  ObservedValueProvenance,
+} from '@orchescope/schema';
 
 /**
  * Attribute vocabulary.
@@ -43,55 +48,6 @@ export const OPEN_INFERENCE = {
   graphNodeId: 'graph.node.id',
   metadata: 'metadata',
 } as const;
-
-/**
- * Attributes an instrumentor writes that carry a declaration rather than an observation.
- *
- * A run's job in this build is to say what happened. An attribute whose value is exactly rederivable from
- * something the declared half already reads is a declaration that has been sent out through the process
- * being audited and reported back, and joining on one makes the two halves of the join agree by
- * construction. That is the one thing this join must never do, and it is the shape of the fourth recorded
- * confident wrong answer.
- *
- * Held as data rather than as a sentence so that the refusal is checked. Nothing here may appear in any of
- * the vocabularies below, and a span carrying one of these may not produce a relation, both of which
- * `rederivable-attributes.test.ts` asserts. The general property, that no observed relation is exactly
- * rederivable from a declaration, is not checkable here: it needs per attribute provenance on the trace
- * side, which this package does not carry. What is checkable is the list of attributes already known to be
- * declarations, and that list is what a reader reaching for one of them runs into.
- */
-export const REDERIVABLE_ATTRIBUTES: readonly {
-  readonly name: string;
-  readonly writtenBy: string;
-  readonly rederives: string;
-}[] = [
-  {
-    name: 'graph.node.parent_id',
-    writtenBy: 'openinference-instrumentation-crewai',
-    rederives:
-      "the entry before this agent in the crew's declared agents list, which `_find_parent_agent` walks at span time",
-  },
-];
-
-/**
- * `graph.node.parent_id` is written by the CrewAI instrumentor and is not read here.
- *
- * It looks like the relation a CrewAI run never reports: every agent span after the first carries it, and on
- * the pinned marketing crew the values draw exactly the sequence the crew declares. They are not a sequence
- * the run took. `_find_parent_agent` in `openinference-instrumentation-crewai` walks `crew.agents`, finds the
- * index of the agent whose task is being executed, and returns the role of the agent at the index before it.
- * The value is a position in a declared list, evaluated at span time and identical on every execution: the
- * two tasks the marketing strategist ran both name the market analyst as their parent because the analyst is
- * the entry before the strategist in `agents=[...]`, not because either task followed the analyst's.
- *
- * So reading it would take a declaration this build already reads from source, send it out through the
- * process being audited, and report it back as a relation a run exercised. That is a declaration wearing an
- * observation's clothes, and it would make the exercised half of the join agree with the declared half by
- * construction, which is the one thing this join must never do.
- *
- * The name is recorded in the table above rather than in a vocabulary so that the next reader finds the
- * measurement instead of the attribute.
- */
 
 export const CODE = {
   filePath: 'code.file.path',
@@ -138,13 +94,46 @@ export const ORCHESCOPE = {
 
 export type Attributes = Readonly<Record<string, MetadataValue>>;
 
+export type AttributeReading<T> = {
+  readonly value: T;
+  readonly attribute: string;
+};
+
+export const noAttributeProvenance = (
+  spanField: ObservedValueProvenance['spanFields'][number],
+): ObservedValueProvenance => ({ attributes: [], spanFields: [spanField] });
+
+export const attributeProvenance = (...attributes: readonly string[]): ObservedValueProvenance => ({
+  attributes: [...new Set(attributes)],
+  spanFields: [],
+});
+
+export const readStringAttribute = (
+  attributes: Attributes,
+  ...keys: readonly string[]
+): AttributeReading<string> | undefined => {
+  for (const key of keys) {
+    const value = attributes[key];
+    if (typeof value === 'string' && value.length > 0) return { value, attribute: key };
+  }
+  return undefined;
+};
+
 export const readString = (
   attributes: Attributes,
   ...keys: readonly string[]
-): string | undefined => {
+): string | undefined => readStringAttribute(attributes, ...keys)?.value;
+
+export const readNumberAttribute = (
+  attributes: Attributes,
+  ...keys: readonly string[]
+): AttributeReading<number> | undefined => {
   for (const key of keys) {
     const value = attributes[key];
-    if (typeof value === 'string' && value.length > 0) return value;
+    if (typeof value === 'number' && Number.isFinite(value)) return { value, attribute: key };
+    if (typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value)) {
+      return { value: Number(value), attribute: key };
+    }
   }
   return undefined;
 };
@@ -152,14 +141,7 @@ export const readString = (
 export const readNumber = (
   attributes: Attributes,
   ...keys: readonly string[]
-): number | undefined => {
-  for (const key of keys) {
-    const value = attributes[key];
-    if (typeof value === 'number' && Number.isFinite(value)) return value;
-    if (typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value)) return Number(value);
-  }
-  return undefined;
-};
+): number | undefined => readNumberAttribute(attributes, ...keys)?.value;
 
 export const readBoolean = (
   attributes: Attributes,
@@ -185,7 +167,10 @@ export const readBoolean = (
  * two providers were one component.
  */
 export const providerNamed = (attributes: Attributes): string | undefined =>
-  readString(
+  providerReading(attributes)?.value;
+
+const providerReading = (attributes: Attributes): AttributeReading<string> | undefined =>
+  readStringAttribute(
     attributes,
     GEN_AI.providerName,
     GEN_AI.legacySystem,
@@ -195,7 +180,15 @@ export const providerNamed = (attributes: Attributes): string | undefined =>
 
 /** The model a span names. Spelled once here because three call sites spelled it three ways. */
 export const modelNamed = (attributes: Attributes): string | undefined =>
-  readString(attributes, GEN_AI.requestModel, GEN_AI.responseModel, OPEN_INFERENCE.modelName);
+  modelReading(attributes)?.value;
+
+const modelReading = (attributes: Attributes): AttributeReading<string> | undefined =>
+  readStringAttribute(
+    attributes,
+    GEN_AI.requestModel,
+    GEN_AI.responseModel,
+    OPEN_INFERENCE.modelName,
+  );
 
 const OPERATION_BY_GEN_AI: Readonly<Record<string, AgentOperation>> = {
   chat: 'chat',
@@ -247,29 +240,43 @@ const OPERATION_BY_NAME_PREFIX: readonly (readonly [string, AgentOperation])[] =
   ['outbound_request', 'outbound_request'],
 ];
 
-export const classifyOperation = (name: string, attributes: Attributes): AgentOperation => {
-  const declared = readString(attributes, GEN_AI.operationName);
+export const operationWithProvenance = (
+  name: string,
+  attributes: Attributes,
+): { readonly operation: AgentOperation; readonly provenance: ObservedValueProvenance } => {
+  const declared = readStringAttribute(attributes, GEN_AI.operationName);
   if (declared !== undefined) {
-    const mapped = OPERATION_BY_GEN_AI[declared];
-    if (mapped !== undefined) return mapped;
+    const mapped = OPERATION_BY_GEN_AI[declared.value];
+    if (mapped !== undefined) {
+      return { operation: mapped, provenance: attributeProvenance(declared.attribute) };
+    }
   }
-  const openInference = readString(attributes, OPEN_INFERENCE.spanKind);
+  const openInference = readStringAttribute(attributes, OPEN_INFERENCE.spanKind);
   if (openInference !== undefined) {
-    const mapped = OPERATION_BY_OPEN_INFERENCE[openInference.toUpperCase()];
-    if (mapped !== undefined) return mapped;
+    const mapped = OPERATION_BY_OPEN_INFERENCE[openInference.value.toUpperCase()];
+    if (mapped !== undefined) {
+      return { operation: mapped, provenance: attributeProvenance(openInference.attribute) };
+    }
   }
   const lowered = name.toLowerCase();
   for (const [prefix, operation] of OPERATION_BY_NAME_PREFIX) {
-    if (lowered.startsWith(prefix)) return operation;
+    if (lowered.startsWith(prefix)) {
+      return { operation, provenance: noAttributeProvenance('name') };
+    }
   }
-  if (readString(attributes, GEN_AI.toolName, OPEN_INFERENCE.toolName) !== undefined) {
-    return 'execute_tool';
+  const tool = readStringAttribute(attributes, GEN_AI.toolName, OPEN_INFERENCE.toolName);
+  if (tool !== undefined) {
+    return { operation: 'execute_tool', provenance: attributeProvenance(tool.attribute) };
   }
-  if (readString(attributes, GEN_AI.requestModel, OPEN_INFERENCE.modelName) !== undefined) {
-    return 'chat';
+  const model = readStringAttribute(attributes, GEN_AI.requestModel, OPEN_INFERENCE.modelName);
+  if (model !== undefined) {
+    return { operation: 'chat', provenance: attributeProvenance(model.attribute) };
   }
-  return 'unclassified';
+  return { operation: 'unclassified', provenance: noAttributeProvenance('name') };
 };
+
+export const classifyOperation = (name: string, attributes: Attributes): AgentOperation =>
+  operationWithProvenance(name, attributes).operation;
 
 const KIND_BY_OPERATION: Readonly<Record<AgentOperation, ComponentKind | undefined>> = {
   invoke_agent: 'agent',
@@ -300,48 +307,73 @@ export const componentKindFor = (operation: AgentOperation): ComponentKind | und
  * `orchescope.component` attribute wins, then the convention attributes, then the span name with its
  * operation prefix removed.
  */
-export const observedNameFor = (
+export const observedNameWithProvenance = (
   operation: AgentOperation,
   name: string,
   attributes: Attributes,
-): string => {
-  const explicit = readString(attributes, ORCHESCOPE.component);
-  if (explicit !== undefined) return explicit;
+): { readonly name: string; readonly provenance: ObservedValueProvenance } => {
+  const explicit = readStringAttribute(attributes, ORCHESCOPE.component);
+  if (explicit !== undefined) {
+    return { name: explicit.value, provenance: attributeProvenance(explicit.attribute) };
+  }
+  const named = (...keys: readonly string[]) => readStringAttribute(attributes, ...keys);
+  const fromAttribute = (reading: AttributeReading<string>) => ({
+    name: reading.value,
+    provenance: attributeProvenance(reading.attribute),
+  });
+  const fromSpanName = () => ({
+    name: stripPrefix(name),
+    provenance: noAttributeProvenance('name'),
+  });
   switch (operation) {
     case 'invoke_agent':
     case 'create_agent':
     case 'plan':
-    case 'handoff':
-      return (
-        readString(
-          attributes,
-          GEN_AI.agentName,
-          GEN_AI.agentId,
-          OPEN_INFERENCE.agentName,
-          OPEN_INFERENCE.graphNodeId,
-        ) ?? stripPrefix(name)
+    case 'handoff': {
+      const reading = named(
+        GEN_AI.agentName,
+        GEN_AI.agentId,
+        OPEN_INFERENCE.agentName,
+        OPEN_INFERENCE.graphNodeId,
       );
-    case 'invoke_workflow':
-      return readString(attributes, GEN_AI.workflowName) ?? stripPrefix(name);
+      return reading === undefined ? fromSpanName() : fromAttribute(reading);
+    }
+    case 'invoke_workflow': {
+      const reading = named(GEN_AI.workflowName);
+      return reading === undefined ? fromSpanName() : fromAttribute(reading);
+    }
     case 'chat':
     case 'text_completion':
     case 'embeddings': {
-      const model = modelNamed(attributes);
-      const provider = providerNamed(attributes);
-      if (model === undefined) return stripPrefix(name);
-      return provider === undefined ? model : `${provider}/${model}`;
+      const model = modelReading(attributes);
+      const provider = providerReading(attributes);
+      if (model === undefined) return fromSpanName();
+      return {
+        name: provider === undefined ? model.value : `${provider.value}/${model.value}`,
+        provenance: attributeProvenance(
+          model.attribute,
+          ...(provider === undefined ? [] : [provider.attribute]),
+        ),
+      };
     }
-    case 'execute_tool':
-      return (
-        readString(attributes, GEN_AI.toolName, OPEN_INFERENCE.toolName, MCP.toolName) ??
-        stripPrefix(name)
-      );
-    case 'retrieval':
-      return readString(attributes, GEN_AI.dataSourceId) ?? stripPrefix(name);
+    case 'execute_tool': {
+      const reading = named(GEN_AI.toolName, OPEN_INFERENCE.toolName, MCP.toolName);
+      return reading === undefined ? fromSpanName() : fromAttribute(reading);
+    }
+    case 'retrieval': {
+      const reading = named(GEN_AI.dataSourceId);
+      return reading === undefined ? fromSpanName() : fromAttribute(reading);
+    }
     default:
-      return stripPrefix(name);
+      return fromSpanName();
   }
 };
+
+export const observedNameFor = (
+  operation: AgentOperation,
+  name: string,
+  attributes: Attributes,
+): string => observedNameWithProvenance(operation, name, attributes).name;
 
 const stripPrefix = (name: string): string => {
   const space = name.indexOf(' ');

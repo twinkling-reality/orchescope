@@ -37,6 +37,24 @@ describe('verbose', () => {
     );
   });
 
+  it('names the span attribute that kept code location joins unavailable', () => {
+    const lines = render(
+      reconciliation({
+        missingSpanAttributes: [
+          {
+            attribute: 'code.file.path',
+            purpose: 'code_location',
+            observedComponents: 21,
+          },
+        ],
+      }),
+    );
+    assert.equal(
+      lines[2],
+      'system          21 observed parts lacked code.file.path; code joins unavailable',
+    );
+  });
+
   it('holds every row inside the width whatever the counts grow to', () => {
     const layout = layoutFor(80);
     const huge = joinRegion(

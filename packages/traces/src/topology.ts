@@ -8,25 +8,30 @@ import type {
   NormalizedSpan,
   ObservedComponent,
   ObservedEdge,
+  ObservedValueProvenance,
   RunMetrics,
   RuntimeTopology,
   SideEffectRecord,
   TraceBundle,
 } from '@orchescope/schema';
 import {
+  attributeProvenance,
   CODE,
   componentKindFor,
   GEN_AI,
   MCP,
   modelNamed,
   ORCHESCOPE,
-  observedNameFor,
+  observedNameWithProvenance,
+  operationWithProvenance,
   providerNamed,
   readBoolean,
   readNumber,
+  readNumberAttribute,
   readString,
+  readStringAttribute,
 } from './attributes.ts';
-import { graphNodeSpanName } from './graph-node-span.ts';
+import { graphNodeSpan } from './graph-node-span.ts';
 import { type ObservedHandoff, recognizeHandoffs } from './handoff.ts';
 import { isStructuralSpan } from './structural-span.ts';
 import { supersededSpans } from './superseded-span.ts';
@@ -144,6 +149,11 @@ type ComponentAccumulator = {
   performedSideEffect: boolean;
   evidence: Set<string>;
   attributes: Record<string, string | number | boolean>;
+  provenance: {
+    readonly kind: MutableValueProvenance;
+    readonly name: MutableValueProvenance;
+    readonly codeLocation: MutableValueProvenance;
+  };
 };
 
 type EdgeAccumulator = {
@@ -161,7 +171,37 @@ type EdgeAccumulator = {
   inputTokens: number;
   outputTokens: number;
   evidence: Set<string>;
+  provenance: {
+    readonly relation: MutableValueProvenance;
+    readonly from: MutableValueProvenance;
+    readonly to: MutableValueProvenance;
+  };
 };
+
+type MutableValueProvenance = {
+  readonly attributes: Set<string>;
+  readonly spanFields: Set<ObservedValueProvenance['spanFields'][number]>;
+};
+
+const mutableProvenance = (
+  source: ObservedValueProvenance = { attributes: [], spanFields: [] },
+): MutableValueProvenance => ({
+  attributes: new Set(source.attributes),
+  spanFields: new Set(source.spanFields),
+});
+
+const mergeProvenance = (
+  target: MutableValueProvenance,
+  source: ObservedValueProvenance | MutableValueProvenance,
+): void => {
+  for (const attribute of source.attributes) target.attributes.add(attribute);
+  for (const field of source.spanFields) target.spanFields.add(field);
+};
+
+const projectProvenance = (source: MutableValueProvenance): ObservedValueProvenance => ({
+  attributes: [...source.attributes].sort(),
+  spanFields: [...source.spanFields].sort(),
+});
 
 /**
  * What one span nested inside another says about the two components, read from the child's kind.
@@ -207,19 +247,46 @@ const edgeKindFor = (fromKind: string, toKind: string, operation: string): strin
   return EDGE_KIND_BY_TARGET[toKind] ?? 'observed_after';
 };
 
-const codeLocationOf = (span: NormalizedSpan): ComponentAccumulator['codeLocation'] => {
-  const file = readString(span.attributes, CODE.filePath, CODE.legacyFilePath);
-  if (file === undefined) return undefined;
-  const line = readNumber(span.attributes, CODE.lineNumber, CODE.legacyLineNumber);
-  const functionName = readString(span.attributes, CODE.functionName, CODE.legacyFunction);
+const codeLocationOf = (
+  span: NormalizedSpan,
+): {
+  readonly location: ComponentAccumulator['codeLocation'];
+  readonly provenance: ObservedValueProvenance;
+} => {
+  const file = readStringAttribute(span.attributes, CODE.filePath, CODE.legacyFilePath);
+  if (file === undefined) return { location: undefined, provenance: attributeProvenance() };
+  const line = readNumberAttribute(span.attributes, CODE.lineNumber, CODE.legacyLineNumber);
+  const functionName = readStringAttribute(span.attributes, CODE.functionName, CODE.legacyFunction);
   return {
-    file: file.replace(/^\.\//, ''),
-    ...(line === undefined ? {} : { line }),
-    ...(functionName === undefined ? {} : { function: functionName }),
+    location: {
+      file: file.value.replace(/^\.\//, ''),
+      ...(line === undefined ? {} : { line: line.value }),
+      ...(functionName === undefined ? {} : { function: functionName.value }),
+    },
+    provenance: attributeProvenance(
+      file.attribute,
+      ...(line === undefined ? [] : [line.attribute]),
+      ...(functionName === undefined ? [] : [functionName.attribute]),
+    ),
   };
 };
 
 const componentKey = (kind: string, name: string): string => `${kind}|${name.toLowerCase()}`;
+
+const evidenceAttribute = (
+  span: NormalizedSpan,
+  provenance: ObservedValueProvenance,
+): { readonly attribute?: string; readonly attributeValue?: string } => {
+  const attribute = provenance.attributes[0];
+  if (attribute === undefined) return {};
+  const value = span.attributes[attribute];
+  return {
+    attribute,
+    ...(typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+      ? { attributeValue: String(value) }
+      : {}),
+  };
+};
 
 export type TopologyResult = {
   readonly topology: RuntimeTopology;
@@ -289,6 +356,10 @@ const emptyAccumulator = (
   kind: ComponentKind,
   observedName: string,
   operation: AgentOperation,
+  provenance: {
+    readonly kind: ObservedValueProvenance;
+    readonly name: ObservedValueProvenance;
+  },
 ): ComponentAccumulator => ({
   kind,
   observedName,
@@ -308,6 +379,11 @@ const emptyAccumulator = (
   performedSideEffect: false,
   evidence: new Set<string>(),
   attributes: {},
+  provenance: {
+    kind: mutableProvenance(provenance.kind),
+    name: mutableProvenance(provenance.name),
+    codeLocation: mutableProvenance(),
+  },
 });
 
 type SpanTokens = { readonly inputTokens: number; readonly outputTokens: number };
@@ -340,6 +416,10 @@ const accumulateComponent = (
     readonly tokens: SpanTokens;
     readonly retried: boolean;
     readonly evidenceId: string;
+    readonly provenance: {
+      readonly kind: ObservedValueProvenance;
+      readonly name: ObservedValueProvenance;
+    };
   },
 ): ComponentAccumulator => {
   const span = node.span;
@@ -351,9 +431,13 @@ const accumulateComponent = (
   accumulator.durationsMs.push(span.durationMs);
   accumulator.inputTokens += facts.tokens.inputTokens;
   accumulator.outputTokens += facts.tokens.outputTokens;
+  mergeProvenance(accumulator.provenance.kind, facts.provenance.kind);
+  mergeProvenance(accumulator.provenance.name, facts.provenance.name);
   accumulator.provider = accumulator.provider ?? providerNamed(span.attributes);
   accumulator.model = accumulator.model ?? modelNamed(span.attributes);
-  accumulator.codeLocation = accumulator.codeLocation ?? codeLocationOf(span);
+  const codeLocation = codeLocationOf(span);
+  accumulator.codeLocation = accumulator.codeLocation ?? codeLocation.location;
+  mergeProvenance(accumulator.provenance.codeLocation, codeLocation.provenance);
   accumulator.mcpServer =
     accumulator.mcpServer ?? readString(span.attributes, MCP.serverName, MCP.methodName);
   accumulator.performedSideEffect =
@@ -374,6 +458,11 @@ type EdgeEnds = {
   readonly toKind: string;
   readonly toObservedName: string;
   readonly toKey: string;
+  readonly provenance: {
+    readonly relation: ObservedValueProvenance;
+    readonly from: ObservedValueProvenance | MutableValueProvenance;
+    readonly to: ObservedValueProvenance | MutableValueProvenance;
+  };
 };
 
 const accumulateEdge = (
@@ -404,6 +493,11 @@ const accumulateEdge = (
     inputTokens: 0,
     outputTokens: 0,
     evidence: new Set<string>(),
+    provenance: {
+      relation: mutableProvenance(),
+      from: mutableProvenance(),
+      to: mutableProvenance(),
+    },
   };
   edge.executionCount += 1;
   edge.errorCount += span.status === 'error' ? 1 : 0;
@@ -414,6 +508,9 @@ const accumulateEdge = (
   edge.inputTokens += facts.tokens.inputTokens;
   edge.outputTokens += facts.tokens.outputTokens;
   edge.evidence.add(facts.evidenceId);
+  mergeProvenance(edge.provenance.relation, ends.provenance.relation);
+  mergeProvenance(edge.provenance.from, ends.provenance.from);
+  mergeProvenance(edge.provenance.to, ends.provenance.to);
   edges.set(edgeKey, edge);
 };
 
@@ -439,6 +536,11 @@ const projectComponents = (
     performedSideEffect: accumulator.performedSideEffect,
     evidence: [...accumulator.evidence] as EvidenceId[],
     attributes: accumulator.attributes,
+    provenance: {
+      kind: projectProvenance(accumulator.provenance.kind),
+      name: projectProvenance(accumulator.provenance.name),
+      codeLocation: projectProvenance(accumulator.provenance.codeLocation),
+    },
   }));
 
 const projectEdges = (edges: ReadonlyMap<string, EdgeAccumulator>): ObservedEdge[] =>
@@ -457,6 +559,11 @@ const projectEdges = (edges: ReadonlyMap<string, EdgeAccumulator>): ObservedEdge
     inputTokens: accumulator.inputTokens,
     outputTokens: accumulator.outputTokens,
     evidence: [...accumulator.evidence] as EvidenceId[],
+    provenance: {
+      relation: projectProvenance(accumulator.provenance.relation),
+      from: projectProvenance(accumulator.provenance.from),
+      to: projectProvenance(accumulator.provenance.to),
+    },
   }));
 
 /**
@@ -545,8 +652,7 @@ const recordHandoff = (
     traceId: span.traceId,
     spanId: span.spanId,
     spanName: span.name,
-    attribute: GEN_AI.operationName,
-    attributeValue: 'handoff',
+    ...evidenceAttribute(span, handoff.provenance.relation),
   });
   state.evidence.push(spanRecord);
 
@@ -562,6 +668,7 @@ const recordHandoff = (
       toKind: 'agent',
       toObservedName: handoff.toAgent,
       toKey: componentKey('agent', handoff.toAgent),
+      provenance: handoff.provenance,
     },
     node,
     { tokens: tokensOf(span), retried, parallel, evidenceId: spanRecord.id },
@@ -609,16 +716,37 @@ const encloseChildren = (
 const componentOf = (
   span: NormalizedSpan,
 ):
-  | { readonly kind: ComponentKind; readonly observedName: string }
+  | {
+      readonly kind: ComponentKind;
+      readonly observedName: string;
+      readonly provenance: {
+        readonly kind: ObservedValueProvenance;
+        readonly name: ObservedValueProvenance;
+      };
+    }
   | { readonly reason: string } => {
-  const graphNode = graphNodeSpanName(span);
-  if (graphNode !== undefined) return { kind: 'agent', observedName: graphNode };
+  const graphNode = graphNodeSpan(span);
+  if (graphNode !== undefined) {
+    return {
+      kind: 'agent',
+      observedName: graphNode.name,
+      provenance: { kind: graphNode.provenance, name: graphNode.provenance },
+    };
+  }
   if (isStructuralSpan(span)) return { reason: 'no_name' };
   const kind = componentKindFor(span.operation);
   if (kind === undefined) {
     return { reason: span.operation === 'unclassified' ? 'no_operation' : 'unsupported_dialect' };
   }
-  return { kind, observedName: observedNameFor(span.operation, span.name, span.attributes) };
+  const named = observedNameWithProvenance(span.operation, span.name, span.attributes);
+  return {
+    kind,
+    observedName: named.name,
+    provenance: {
+      kind: operationWithProvenance(span.name, span.attributes).provenance,
+      name: named.provenance,
+    },
+  };
 };
 
 /** One span folded into the traversal state, then its children. */
@@ -653,7 +781,7 @@ const visitSpan = (
     for (const child of node.children) visitSpan(state, bundle, child, node);
     return;
   }
-  const { kind, observedName } = component;
+  const { kind, observedName, provenance } = component;
   const key = componentKey(kind, observedName);
   spanToComponentKey.set(span.spanId, key);
 
@@ -667,16 +795,18 @@ const visitSpan = (
     traceId: span.traceId,
     spanId: span.spanId,
     spanName: span.name,
-    attribute: GEN_AI.operationName,
-    attributeValue: span.operation,
+    ...evidenceAttribute(
+      span,
+      provenance.name.attributes.length > 0 ? provenance.name : provenance.kind,
+    ),
   });
   evidence.push(spanRecord);
 
-  const facts = { tokens, retried, evidenceId: spanRecord.id };
+  const facts = { tokens, retried, evidenceId: spanRecord.id, provenance };
   components.set(
     key,
     accumulateComponent(
-      components.get(key) ?? emptyAccumulator(kind, observedName, span.operation),
+      components.get(key) ?? emptyAccumulator(kind, observedName, span.operation, provenance),
       node,
       facts,
     ),
@@ -702,6 +832,11 @@ const visitSpan = (
         toKind: kind,
         toObservedName: observedName,
         toKey: key,
+        provenance: {
+          relation: { attributes: [], spanFields: ['parentSpanId'] },
+          from: parentAccumulator.provenance.name,
+          to: provenance.name,
+        },
       },
       node,
       { ...facts, parallel },
@@ -727,6 +862,13 @@ export const deriveTopology = (bundle: TraceBundle): TopologyResult => {
 
   const observedComponents = projectComponents(components);
   const observedEdges = projectEdges(edges);
+  const codeLocationAttributes: ReadonlySet<string> = new Set([CODE.filePath, CODE.legacyFilePath]);
+  const withoutCodeLocation = observedComponents.filter(
+    (component) =>
+      !component.provenance.codeLocation.attributes.some((attribute) =>
+        codeLocationAttributes.has(attribute),
+      ),
+  ).length;
   const duplicateSideEffects = countDuplicateEffects(bundle.sideEffects);
   const effectsThatHappened = bundle.sideEffects.filter((effect) => effect.outcome !== 'failed');
   const vcsRevision = bundle.spans
@@ -784,6 +926,18 @@ export const deriveTopology = (bundle: TraceBundle): TopologyResult => {
       components: observedComponents,
       edges: observedEdges,
       sideEffects: [...bundle.sideEffects],
+      coverage: {
+        missingSpanAttributes:
+          withoutCodeLocation === 0
+            ? []
+            : [
+                {
+                  attribute: CODE.filePath,
+                  purpose: 'code_location',
+                  observedComponents: withoutCodeLocation,
+                },
+              ],
+      },
       ...(vcsRevision === undefined && vcsRepository === undefined
         ? {}
         : {

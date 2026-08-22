@@ -1,35 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-  CODE,
-  GEN_AI,
-  MCP,
-  OPEN_INFERENCE,
-  ORCHESCOPE,
-  REDERIVABLE_ATTRIBUTES,
-  VCS,
-} from '../src/attributes.ts';
+import { CODE } from '../src/attributes.ts';
 import { normalizeTraces } from '../src/normalize.ts';
 import { decodeTraceJson } from '../src/otlp.ts';
 import { deriveTopology } from '../src/topology.ts';
-
-/**
- * A declaration sent out through the process being audited and reported back is not an observation.
- *
- * `graph.node.parent_id` is the recorded case. Every CrewAI agent span after the first carries it, and on
- * the pinned marketing crew the values draw exactly the sequence the crew declares, because the
- * instrumentor finds the agent whose task is running in `crew.agents` and returns the role of the entry
- * before it. Reading it would have moved `exercisedEdges` off zero and filled `runtime.joined`, which is
- * the shape of a fix, and every one of those edges would have been a declaration this build already reads
- * from source. What caught it was a person reading the instrumentor. What holds it now is this file.
- *
- * Two assertions, because there are two ways back in. An attribute added to a vocabulary is read by
- * whatever consults that vocabulary, and an attribute read directly produces a relation. The second is the
- * one that matters and the first is the one that is easy to do by accident.
- *
- * A companion asserts that a relation forms at all from the same fixture, because a refusal and a reader
- * that produces no relations under any circumstances are the same result read from outside.
- */
 
 const TRACE = 'c21e7d4d291292882f315ce37c36d64e';
 
@@ -51,7 +25,7 @@ const topologyOf = (spans: readonly SpanInput[]) => {
   const decoded = decodeTraceJson({
     resourceSpans: [
       {
-        resource: { attributes: attributeList({ 'service.name': 'crewai-examples-exercised' }) },
+        resource: { attributes: attributeList({ 'service.name': 'provenance-fixture' }) },
         scopeSpans: [
           {
             scope: { name: 'openinference.instrumentation.crewai' },
@@ -79,86 +53,75 @@ const topologyOf = (spans: readonly SpanInput[]) => {
       maxSpans: 100,
       maxAttributeBytes: 4096,
     }).bundle,
-  );
+  ).topology;
 };
 
-const analyst = (attributes: Readonly<Record<string, string>>): SpanInput => ({
-  name: 'Lead Market Analyst',
-  spanId: '1111111111111111',
-  start: 0,
-  end: 1000,
-  attributes: {
-    'openinference.span.kind': 'AGENT',
-    'agent.name': 'Lead Market Analyst',
-    ...attributes,
-  },
-});
-
-const strategist = (
-  attributes: Readonly<Record<string, string>>,
+const agent = (
+  name: string,
+  spanId: string,
+  start: number,
+  attributes: Readonly<Record<string, string>> = {},
   parentSpanId?: string,
 ): SpanInput => ({
-  name: 'Chief Marketing Strategist',
-  spanId: '2222222222222222',
+  name,
+  spanId,
   ...(parentSpanId === undefined ? {} : { parentSpanId }),
-  start: 1000,
-  end: 2000,
+  start,
+  end: start + 1000,
   attributes: {
     'openinference.span.kind': 'AGENT',
-    'agent.name': 'Chief Marketing Strategist',
+    'agent.name': name,
     ...attributes,
   },
 });
 
-describe('an attribute carrying a declaration rather than an observation', () => {
-  const vocabularies = Object.entries({ GEN_AI, OPEN_INFERENCE, CODE, VCS, MCP, ORCHESCOPE }).map(
-    ([name, vocabulary]) => ({ name, attributes: new Set<string>(Object.values(vocabulary)) }),
-  );
-
-  it('is named, so that reaching for one runs into the measurement', () => {
-    assert.ok(
-      REDERIVABLE_ATTRIBUTES.length > 0,
-      'the refusal is a sentence again rather than data',
-    );
-    for (const refused of REDERIVABLE_ATTRIBUTES) {
-      assert.ok(refused.writtenBy.length > 0, `${refused.name} does not say who writes it`);
-      assert.ok(refused.rederives.length > 0, `${refused.name} does not say what it rederives`);
-    }
+describe('attribute provenance on observed topology', () => {
+  it('records the exact attributes that produced a component identity', () => {
+    const topology = topologyOf([
+      agent('Lead Market Analyst', '1111111111111111', 0, {
+        [CODE.filePath]: 'src/crew.py',
+        [CODE.lineNumber]: '12',
+      }),
+    ]);
+    assert.deepEqual(topology.components[0]?.provenance, {
+      kind: { attributes: ['openinference.span.kind'], spanFields: [] },
+      name: { attributes: ['agent.name'], spanFields: [] },
+      codeLocation: {
+        attributes: ['code.file.path', 'code.line.number'],
+        spanFields: [],
+      },
+    });
   });
 
-  it('is in none of the vocabularies this build reads', () => {
-    for (const refused of REDERIVABLE_ATTRIBUTES) {
-      for (const vocabulary of vocabularies) {
-        assert.equal(
-          vocabulary.attributes.has(refused.name),
-          false,
-          `${refused.name} is in ${vocabulary.name}, and it rederives ${refused.rederives}`,
-        );
-      }
-    }
+  it('records span nesting separately from the attributes naming both endpoints', () => {
+    const topology = topologyOf([
+      agent('Lead Market Analyst', '1111111111111111', 0),
+      agent('Chief Marketing Strategist', '2222222222222222', 1000, {}, '1111111111111111'),
+    ]);
+    assert.deepEqual(topology.edges[0]?.provenance, {
+      relation: { attributes: [], spanFields: ['parentSpanId'] },
+      from: { attributes: ['agent.name'], spanFields: [] },
+      to: { attributes: ['agent.name'], spanFields: [] },
+    });
   });
 
-  it('draws no relation between the two spans it names', () => {
-    for (const refused of REDERIVABLE_ATTRIBUTES) {
-      const result = topologyOf([
-        analyst({}),
-        strategist({ [refused.name]: 'Lead Market Analyst' }),
-      ]);
-      assert.deepEqual(
-        result.topology.edges.map(
-          (edge) => `${edge.fromObservedName} ${edge.kind} ${edge.toObservedName}`,
-        ),
-        [],
-        `${refused.name} drew a relation, and it rederives ${refused.rederives}`,
-      );
-    }
+  it('does not turn a declared-list endpoint into a relation', () => {
+    const topology = topologyOf([
+      agent('Lead Market Analyst', '1111111111111111', 0),
+      agent('Chief Marketing Strategist', '2222222222222222', 1000, {
+        'graph.node.parent_id': 'Lead Market Analyst',
+      }),
+    ]);
+    assert.deepEqual(topology.edges, []);
   });
 
-  it('leaves a relation the run really did report alone', () => {
-    const result = topologyOf([analyst({}), strategist({}, '1111111111111111')]);
-    assert.ok(
-      result.topology.edges.length > 0,
-      'the same fixture draws no relation from a real nesting either, so the refusal above proves nothing',
-    );
+  it('names code.file.path and the observed population missing it', () => {
+    const topology = topologyOf([
+      agent('Lead Market Analyst', '1111111111111111', 0),
+      agent('Chief Marketing Strategist', '2222222222222222', 1000),
+    ]);
+    assert.deepEqual(topology.coverage.missingSpanAttributes, [
+      { attribute: 'code.file.path', purpose: 'code_location', observedComponents: 2 },
+    ]);
   });
 });

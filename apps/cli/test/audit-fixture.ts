@@ -156,11 +156,17 @@ export const reconciliation = (over: {
   readonly notDeclared?: number;
   readonly contradictions?: number;
   readonly duplicates?: number;
+  readonly missingSpanAttributes?: NonNullable<
+    NonNullable<AuditResult['reconciliation']>['coverage']['missingSpanAttributes']
+  >;
 }): NonNullable<AuditResult['reconciliation']> =>
   ({
     coverage: {
       exercisedComponents: over.exercised ?? 14,
       declaredComponents: over.declared ?? 21,
+      ...(over.missingSpanAttributes === undefined
+        ? {}
+        : { missingSpanAttributes: over.missingSpanAttributes }),
     },
     declaredNotExercised: { components: Array.from({ length: over.notExercised ?? 7 }, () => 'c') },
     exercisedNotDeclared: { components: Array.from({ length: over.notDeclared ?? 1 }, () => 'c') },

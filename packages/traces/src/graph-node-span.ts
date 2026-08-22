@@ -1,5 +1,5 @@
-import type { NormalizedSpan } from '@orchescope/schema';
-import { OPEN_INFERENCE, readString } from './attributes.ts';
+import type { NormalizedSpan, ObservedValueProvenance } from '@orchescope/schema';
+import { attributeProvenance, OPEN_INFERENCE, readStringAttribute } from './attributes.ts';
 
 /**
  * The node of an application's own graph that a span ran as.
@@ -68,12 +68,17 @@ const nodeNamedIn = (metadata: string): string | undefined => {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 };
 
-export const graphNodeSpanName = (span: NormalizedSpan): string | undefined => {
-  const spanKind = readString(span.attributes, OPEN_INFERENCE.spanKind);
-  if (spanKind?.toUpperCase() !== CHAIN) return undefined;
-  const metadata = readString(span.attributes, OPEN_INFERENCE.metadata);
+export const graphNodeSpan = (
+  span: NormalizedSpan,
+): { readonly name: string; readonly provenance: ObservedValueProvenance } | undefined => {
+  const spanKind = readStringAttribute(span.attributes, OPEN_INFERENCE.spanKind);
+  if (spanKind?.value.toUpperCase() !== CHAIN) return undefined;
+  const metadata = readStringAttribute(span.attributes, OPEN_INFERENCE.metadata);
   if (metadata === undefined) return undefined;
-  const node = nodeNamedIn(metadata);
+  const node = nodeNamedIn(metadata.value);
   if (node === undefined || node !== span.name || RESERVED_NODES.has(node)) return undefined;
-  return node;
+  return {
+    name: node,
+    provenance: attributeProvenance(spanKind.attribute, metadata.attribute),
+  };
 };

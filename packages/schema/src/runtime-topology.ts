@@ -32,6 +32,33 @@ export const ObservedCodeLocation = Type.Object(
 );
 export type ObservedCodeLocation = Static<typeof ObservedCodeLocation>;
 
+/**
+ * The exact span inputs that produced one value in the observed topology.
+ *
+ * An empty attribute list is meaningful: it says the value came from a span field rather than leaving
+ * provenance unstated. Keeping endpoint provenance separate from relation provenance is what lets
+ * reconciliation distinguish a nesting the run reported from an endpoint copied out of a declaration.
+ */
+export const ObservedValueProvenance = Type.Object(
+  {
+    attributes: Type.Array(NonEmptyString()),
+    spanFields: Type.Array(literals(['name', 'operation', 'parentSpanId'] as const)),
+  },
+  { additionalProperties: false },
+);
+export type ObservedValueProvenance = Static<typeof ObservedValueProvenance>;
+
+export const MissingSpanAttribute = Type.Object(
+  {
+    attribute: NonEmptyString(),
+    purpose: literals(['code_location'] as const),
+    /** Observed components in this run that did not carry the attribute. */
+    observedComponents: NonNegativeInt,
+  },
+  { additionalProperties: false },
+);
+export type MissingSpanAttribute = Static<typeof MissingSpanAttribute>;
+
 export const ObservedComponent = Type.Object(
   {
     /** Component kind inferred from the operation and attribute shape. */
@@ -56,6 +83,14 @@ export const ObservedComponent = Type.Object(
     performedSideEffect: Type.Boolean(),
     evidence: Type.Array(EvidenceId),
     attributes: Metadata,
+    provenance: Type.Object(
+      {
+        kind: ObservedValueProvenance,
+        name: ObservedValueProvenance,
+        codeLocation: ObservedValueProvenance,
+      },
+      { additionalProperties: false },
+    ),
   },
   { additionalProperties: false },
 );
@@ -78,6 +113,15 @@ export const ObservedEdge = Type.Object(
     inputTokens: NonNegativeInt,
     outputTokens: NonNegativeInt,
     evidence: Type.Array(EvidenceId),
+    provenance: Type.Object(
+      {
+        /** The span input that says this relation happened, apart from the inputs naming its ends. */
+        relation: ObservedValueProvenance,
+        from: ObservedValueProvenance,
+        to: ObservedValueProvenance,
+      },
+      { additionalProperties: false },
+    ),
   },
   { additionalProperties: false },
 );
@@ -89,6 +133,10 @@ export const RuntimeTopology = Type.Object(
     components: Type.Array(ObservedComponent),
     edges: Type.Array(ObservedEdge),
     sideEffects: Type.Array(SideEffectRecord),
+    coverage: Type.Object(
+      { missingSpanAttributes: Type.Array(MissingSpanAttribute) },
+      { additionalProperties: false },
+    ),
     /** Repository revision reported by the target through the OpenTelemetry `vcs.*` attributes. */
     vcs: Type.Optional(
       Type.Object(

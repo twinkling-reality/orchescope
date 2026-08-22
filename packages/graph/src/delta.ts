@@ -14,6 +14,7 @@ import type {
   Evidence,
   EvidenceId,
   JoinSummary,
+  MissingSpanAttribute,
   ReconciliationDelta,
   SideEffectRecord,
   SystemGraph,
@@ -382,6 +383,8 @@ export type DeltaInput = {
   readonly matches?: readonly ComponentMatch[];
   /** Observed names that matched more than one declaration and were joined to none. */
   readonly ambiguous?: readonly { readonly observedName: string }[];
+  /** Span attributes absent from the observed topology, measured before reconciliation. */
+  readonly missingSpanAttributes?: readonly MissingSpanAttribute[];
 };
 
 const summarizeJoins = (input: DeltaInput): JoinSummary => {
@@ -461,6 +464,9 @@ export const computeDelta = (input: DeltaInput): DeltaResult => {
       ...(runIds.length === 0 || declaredEdges === 0
         ? {}
         : { edgeExerciseRate: Math.min(1, exercised / declaredEdges) }),
+      ...(input.missingSpanAttributes === undefined
+        ? {}
+        : { missingSpanAttributes: [...input.missingSpanAttributes] }),
     },
     ...(input.graph.provenance.git === undefined ? {} : { revision: input.graph.provenance.git }),
   };

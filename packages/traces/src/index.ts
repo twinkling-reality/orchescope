@@ -16,7 +16,6 @@ export {
   readBoolean,
   readNumber,
   readString,
-  REDERIVABLE_ATTRIBUTES,
   VCS,
 } from './attributes.ts';
 export {

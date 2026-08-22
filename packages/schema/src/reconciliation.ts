@@ -2,6 +2,7 @@ import { type Static, Type } from '@sinclair/typebox';
 import { EvidenceId } from './evidence.ts';
 import { ComponentId, EdgeId } from './identity.ts';
 import { literals, NonEmptyString, NonNegativeInt } from './primitives.ts';
+import { MissingSpanAttribute } from './runtime-topology.ts';
 
 /**
  * The reconciliation delta between what a repository declares and what a run exercises.
@@ -124,6 +125,8 @@ export const ReconciliationDelta = Type.Object(
         /** `exercisedComponents / declaredComponents`, or undefined with no runs or nothing declared. */
         componentExerciseRate: Type.Optional(Type.Number({ minimum: 0, maximum: 1 })),
         edgeExerciseRate: Type.Optional(Type.Number({ minimum: 0, maximum: 1 })),
+        /** Span attributes absent from observed components, with the observed sample behind each count. */
+        missingSpanAttributes: Type.Optional(Type.Array(MissingSpanAttribute)),
       },
       { additionalProperties: false },
     ),

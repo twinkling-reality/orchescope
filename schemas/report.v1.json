@@ -5944,6 +5944,32 @@
             "exercisedEdges": {
               "minimum": 0,
               "type": "integer"
+            },
+            "missingSpanAttributes": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "attribute": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "observedComponents": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "purpose": {
+                    "const": "code_location",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "attribute",
+                  "purpose",
+                  "observedComponents"
+                ],
+                "type": "object"
+              },
+              "type": "array"
             }
           },
           "required": [

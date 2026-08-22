@@ -403,12 +403,13 @@ an agent system, none of it carrying `developer_tooling`. `crew.jsonc` is a name
 that answer is right. The table of shapes is therefore drawn along a narrower line than the property: the
 names that belong to nobody.
 
-**An anti circularity check between the halves.** *An observed relation or identity that is exactly
-rederivable from a declaration is a circular join, not a join.* This is `graph.node.parent_id` stated as a
-property, and it would have fired the moment that attribute was read, because `crew.agents[i-1]` rederives
-exactly. It also catches a `runtime_name` join made against a name the adapter itself invented, which is
-recorded failure 3 from the other side. Roughly 80 lines for the check, and the expensive prerequisite is
-per attribute provenance on the trace side, which `packages/traces` does not carry.
+**An anti circularity check between the halves.** *An observed relation exactly rederivable from a
+declaration is a circular join, not a join.* This is built from per field trace provenance. Every observed
+component records the attributes behind its kind, name and code location. Every observed relation records
+the runtime trigger separately from the attributes naming its endpoints. Reconciliation refuses a declared
+edge when its whole trigger is one of those endpoint attributes and no span field says the relation happened.
+The same edge from real parent span nesting is retained. The check therefore asks the property rather than
+consulting the named `REDERIVABLE_ATTRIBUTES` refusal table, which is gone.
 
 **And two lists that should be derived rather than written.** `tests/e2e/corpus.test.ts:23` declares
 `FRAMEWORK_ADAPTERS` as a hand written array of six, where `DEFAULT_ADAPTERS.filter(a => a.packages.length > 0)`
@@ -534,6 +535,11 @@ multi repository agent system, and `byCodeLocation` greater than zero on at leas
 first is a corpus decision anyone can take today. The second is a property of instrumentors, and the useful
 work Orchescope can do toward it is to say precisely which attribute it needs and report its absence,
 which the coverage block is the right place for.
+
+**That condition has not moved.** Per attribute trace provenance now makes the coverage block name
+`code.file.path` and the observed component count missing it, rather than leaving `byCodeLocation: 0` as a
+silent zero. All eight exercised entries still report `byCodeLocation: 0`, and there is still no pinned
+multi repository entry. The boundary therefore holds on both clauses of its stated condition.
 
 ## The success metric
 
