@@ -100,6 +100,7 @@ describe('startup and discovery', () => {
       'benchmark',
       'chaos',
       'compare',
+      'federate',
       'goal',
       'export',
       'init',

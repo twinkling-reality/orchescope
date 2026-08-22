@@ -2,7 +2,7 @@
  * What an agent is told when it connects, before it has called anything.
  *
  * The protocol carries one string for this and the server sent none, so an agent arriving here saw
- * seventeen tool names and no statement of which one to call first. Seventeen is the right number of tools
+ * tool names and no statement of which one to call first. The complete set is the right product surface
  * and the wrong number of decisions: the loop is one call and then whatever that call says next, and an
  * agent that cannot see that starts by guessing between `scan_agent_system`, `get_system_map` and
  * `get_findings`, none of which is wrong and none of which is the beginning.

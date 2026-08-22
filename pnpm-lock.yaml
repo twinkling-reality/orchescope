@@ -390,6 +390,9 @@ importers:
       '@orchescope/policy':
         specifier: workspace:*
         version: link:../policy
+      '@orchescope/redaction':
+        specifier: workspace:*
+        version: link:../redaction
       '@orchescope/report':
         specifier: workspace:*
         version: link:../report

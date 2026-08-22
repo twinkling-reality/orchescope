@@ -149,7 +149,7 @@ describe('the agent interface over stdio', () => {
 
   /*
    * The handshake is the only moment an agent is told anything before it has to choose a tool, and the
-   * protocol carries one field for it. A server that advertises seventeen tools and no entry point leaves
+   * protocol carries one field for it. A server that advertises many tools and no entry point leaves
    * that choice to a guess between three read only tools, none of them wrong and none of them the start.
    */
   it('tells a connecting agent where the loop starts, before it has called anything', () => {

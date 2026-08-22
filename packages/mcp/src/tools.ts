@@ -81,6 +81,24 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     executes: false,
   },
   {
+    name: 'federate_agent_system',
+    description:
+      'Scan two to eight repository roots separately, then join only the endpoints identified by recent stored runtime traces. Returns repository coordinates, bounded source-qualified component joins, cross-repository relations and refusal reasons. The supplied paths locate repositories and are never treated as observed identity.',
+    input: Type.Object(
+      {
+        repositoryRoots: Type.Array(Type.String({ minLength: 1, maxLength: 500 }), {
+          minItems: 2,
+          maxItems: 8,
+        }),
+        runLimit: Type.Optional(Type.Integer({ minimum: 0, maximum: 50 })),
+        maxRelations: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
+      },
+      { additionalProperties: false },
+    ),
+    annotations: readOnly('Federate an agent system'),
+    executes: false,
+  },
+  {
     name: 'get_system_map',
     description:
       'Return components and edges from the latest scan, filtered by kind and paginated. Use this to look at a part of the graph rather than all of it.',

@@ -21,6 +21,7 @@ import {
   runBenchmarkUseCase,
   runChaosUseCase,
   runScenarioUseCase,
+  runFederation,
   runTrace,
   validateGoalOutcome,
 } from '@orchescope/usecases';
@@ -291,6 +292,70 @@ const auditAgentSystem = async (
       },
       outcome,
       capabilities: result.bundle.capabilities,
+    },
+  };
+};
+
+const federateAgentSystem = async (
+  context: HandlerContext,
+  args: Record<string, unknown>,
+): Promise<ToolOutcome> => {
+  const result = await runFederation({
+    runtimeWorkspace: context.workspace,
+    repositoryRoots: stringArray(args['repositoryRoots']) ?? [],
+    orchescopeVersion: context.orchescopeVersion,
+    runLimit: number(args['runLimit'], 10),
+  });
+  const report = result.report;
+  const limit = number(args['maxRelations'], 20);
+  const relations = report.relations.slice(0, limit).map((relation) => ({
+    kind: relation.kind,
+    from: {
+      repository: relation.from.repository,
+      componentId: relation.from.componentId,
+    },
+    to: {
+      repository: relation.to.repository,
+      componentId: relation.to.componentId,
+    },
+    executions: relation.observation.executionCount,
+    runIds: relation.observation.runIds,
+  }));
+  const componentJoins = report.componentJoins.slice(0, limit).map((join) => ({
+    repository: join.component.repository,
+    componentId: join.component.componentId,
+    observedKind: join.observedKind,
+    observedName: join.observedName,
+    runIds: join.runIds,
+  }));
+  return {
+    text: `Federation ${report.federationId}: ${formatCount(report.repositories.length, 'eligible repository')}, ${formatCount(report.componentJoins.length, 'source-qualified component join')} and ${formatCount(report.relations.length, 'cross-repository relation')} from ${formatCount(result.runCount, 'observed run')}.`,
+    digest: [
+      ...relations.map(
+        (relation) =>
+          `${relation.from.repository.repositoryUrl}#${relation.from.componentId} ${relation.kind} ${relation.to.repository.repositoryUrl}#${relation.to.componentId}, ${formatCount(relation.executions, 'execution')}.`,
+      ),
+      ...report.coverage.refusals
+        .slice(0, limit)
+        .map(
+          (refusal) =>
+            `Refused ${formatCount(refusal.count, 'input')}: ${refusal.scope} ${refusal.reason}${refusal.attribute === undefined ? '' : ` at ${refusal.attribute}`}.`,
+        ),
+    ],
+    data: {
+      federationId: report.federationId,
+      runCount: result.runCount,
+      repositories: report.repositories.map((repository) => ({
+        ...repository.coordinate,
+        graphId: repository.graph.graphId,
+        components: repository.graph.components.length,
+        relations: repository.graph.edges.length,
+      })),
+      coverage: report.coverage,
+      componentJoins,
+      componentJoinsTruncated: report.componentJoins.length > limit,
+      relations,
+      relationsTruncated: report.relations.length > limit,
     },
   };
 };
@@ -799,6 +864,7 @@ const HANDLERS: Readonly<
 > = {
   scan_agent_system: scanAgentSystem,
   audit_agent_system: auditAgentSystem,
+  federate_agent_system: federateAgentSystem,
   get_system_map: getSystemMap,
   get_reconciliation_delta: getReconciliationDelta,
   get_findings: getFindings,

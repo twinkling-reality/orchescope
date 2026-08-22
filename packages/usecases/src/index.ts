@@ -14,6 +14,11 @@ export { type CompareRequest, compareUseCase } from './compare.ts';
 export { type Check, type CheckStatus, type DoctorResult, runDoctor } from './doctor.ts';
 export { currentEnvironment } from './environment.ts';
 export {
+  type FederationRequest,
+  type FederationResult,
+  runFederation,
+} from './federation.ts';
+export {
   type CreateGoalRequest,
   type CreateGoalResult,
   createGoalFromFinding,

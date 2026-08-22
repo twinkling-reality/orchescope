@@ -2,6 +2,7 @@ import module from 'node:module';
 import { cancelledError, OrchescopeError } from '@orchescope/domain';
 import { Command } from 'commander';
 import { auditCommand } from './commands/audit.ts';
+import { federateCommand } from './commands/federate.ts';
 import {
   goalCreateCommand,
   goalListCommand,
@@ -204,6 +205,29 @@ program
       await withContext('trace', globals(), (context) => traceCommand(context, command, options));
     },
   );
+
+const collectRepository = (value: string, previous: readonly string[]): readonly string[] => [
+  ...previous,
+  value,
+];
+
+program
+  .command('federate')
+  .description('join separately scanned repositories using source-qualified runtime evidence')
+  .requiredOption(
+    '--repository <path>',
+    'repository root to scan, repeat for each repository',
+    collectRepository,
+    [],
+  )
+  .option('--runs <count>', 'how many recent runs from the runtime workspace to consider', '10')
+  .option(
+    '--export-json <path>',
+    'write the complete federation report inside the runtime workspace',
+  )
+  .action(async (options: Parameters<typeof federateCommand>[1]) => {
+    await withContext('federate', globals(), (context) => federateCommand(context, options));
+  });
 
 program
   .command('receive')

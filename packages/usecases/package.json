@@ -19,6 +19,7 @@
     "@orchescope/graph": "workspace:*",
     "@orchescope/persistence": "workspace:*",
     "@orchescope/policy": "workspace:*",
+    "@orchescope/redaction": "workspace:*",
     "@orchescope/report": "workspace:*",
     "@orchescope/runtime": "workspace:*",
     "@orchescope/scenarios": "workspace:*",
