@@ -1,6 +1,6 @@
 import type { Deadline } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
-import type { ManifestSet, ModuleFacts } from '@orchescope/source-analysis';
+import type { CitationSnapshot, ManifestSet, ModuleFacts } from '@orchescope/source-analysis';
 import type { BindingRegistry } from './bindings.ts';
 import type { CallSiteEffects } from './call-site-effect.ts';
 import type { ConfigDocument } from './config-files.ts';
@@ -39,6 +39,8 @@ export type DiscoveryContext = {
    * cannot have, which is as far as a citation can be refuted without reading it.
    */
   readonly files: readonly { readonly path: string; readonly byteLength?: number }[];
+  /** Versioned manifest citation facts read by discovery under traversal and byte ceilings. */
+  readonly citations: readonly CitationSnapshot[];
   readonly symbols: SymbolIndex;
   /** Shared mapping from a local variable to the component it produced. */
   readonly bindings: BindingRegistry;

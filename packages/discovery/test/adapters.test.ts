@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { createDeadline, fixedClock } from '@orchescope/domain';
 import { indexGraph, operationsPerformedBy, reachableFrom } from '@orchescope/graph';
@@ -2368,6 +2371,9 @@ def business_hours() -> str:
 });
 
 describe('the manifest', () => {
+  const digest = (contents: string | Buffer): string =>
+    createHash('sha256').update(contents).digest('hex');
+
   const manifest = [
     'schemaVersion: 1',
     'components:',
@@ -2415,6 +2421,136 @@ describe('the manifest', () => {
       `expected the declared relation in ${edges.join(', ')}`,
     );
     assert.equal(result.agentSystemDetected, true);
+  });
+
+  it('verifies a version 3 citation against its digest and accepted name', async () => {
+    const source = "puts 'triage-runtime'\n";
+    const { result, adapters } = await scan((workspace) => {
+      workspace.write('src/triage.rb', source);
+      workspace.write(
+        '.orchescope/manifest.yaml',
+        `schemaVersion: 3
+components:
+  - kind: agent
+    name: triage
+    runtimeName: triage-runtime
+    definedIn: src/triage.rb
+    definedAtLine: 1
+    definedFileHash: ${digest(source)}
+edges: []
+`,
+      );
+    });
+
+    const run = adapters.find((entry) => entry.adapterId === 'adapter:manifest');
+    assert.equal(run?.status, 'completed', run?.detail);
+    const component = result.graph.components.find((entry) => entry.id === 'agent:triage');
+    assert.deepEqual(component?.sourceLocations, [
+      { file: 'src/triage.rb', fileHash: digest(source), startLine: 1 },
+    ]);
+  });
+
+  it('reports a changed file as stale and omits the refuted source location', async () => {
+    const recorded = "puts 'triage'\n";
+    const changed = "puts 'triage changed'\n";
+    const { result, adapters } = await scan((workspace) => {
+      workspace.write('src/triage.rb', changed);
+      workspace.write(
+        '.orchescope/manifest.yaml',
+        `schemaVersion: 3
+components:
+  - kind: agent
+    name: triage
+    definedIn: src/triage.rb
+    definedAtLine: 1
+    definedFileHash: ${digest(recorded)}
+edges: []
+`,
+      );
+    });
+
+    const run = adapters.find((entry) => entry.adapterId === 'adapter:manifest');
+    assert.equal(run?.status, 'failed');
+    assert.match(run?.detail ?? '', /triage has a stale citation for src\/triage\.rb/);
+    const component = result.graph.components.find((entry) => entry.id === 'agent:triage');
+    assert.ok(
+      component !== undefined,
+      'the valid manifest declaration was discarded with its location',
+    );
+    assert.deepEqual(component.sourceLocations, []);
+  });
+
+  it('refuses a current digest when the cited line contains neither accepted name', async () => {
+    const source = "puts 'unrelated'\nputs 'triage'\n";
+    const { result, adapters } = await scan((workspace) => {
+      workspace.write('src/triage.rb', source);
+      workspace.write(
+        '.orchescope/manifest.yaml',
+        `schemaVersion: 3
+components:
+  - kind: agent
+    name: triage
+    definedIn: src/triage.rb
+    definedAtLine: 1
+    definedFileHash: ${digest(source)}
+edges: []
+`,
+      );
+    });
+
+    const run = adapters.find((entry) => entry.adapterId === 'adapter:manifest');
+    assert.equal(run?.status, 'failed');
+    assert.match(run?.detail ?? '', /contains neither its component name nor its runtime name/);
+    const component = result.graph.components.find((entry) => entry.id === 'agent:triage');
+    assert.deepEqual(component?.sourceLocations, []);
+  });
+
+  it('keeps version 2 citation meaning unchanged', async () => {
+    const { result, adapters } = await scan((workspace) => {
+      workspace.write('src/triage.rb', "puts 'unrelated'\n");
+      workspace.write(
+        '.orchescope/manifest.yaml',
+        `schemaVersion: 2
+components:
+  - kind: agent
+    name: triage
+    definedIn: src/triage.rb
+    definedAtLine: 1
+edges: []
+`,
+      );
+    });
+
+    const run = adapters.find((entry) => entry.adapterId === 'adapter:manifest');
+    assert.equal(run?.status, 'completed', run?.detail);
+    const component = result.graph.components.find((entry) => entry.id === 'agent:triage');
+    assert.equal(component?.sourceLocations[0]?.startLine, 1);
+  });
+
+  it('refuses binary citation input before it can become a graph location', async () => {
+    const source = Buffer.from([0, 1, 2]);
+    const { result, adapters } = await scan((workspace) => {
+      workspace.write('src/triage.rb', 'triage');
+      writeFileSync(join(workspace.root, 'src/triage.rb'), source);
+      workspace.write(
+        '.orchescope/manifest.yaml',
+        `schemaVersion: 3
+components:
+  - kind: agent
+    name: triage
+    definedIn: src/triage.rb
+    definedAtLine: 1
+    definedFileHash: ${digest(source)}
+edges: []
+`,
+      );
+    });
+
+    const run = adapters.find((entry) => entry.adapterId === 'adapter:manifest');
+    assert.equal(run?.status, 'failed');
+    assert.match(run?.detail ?? '', /binary data rather than deterministic source lines/);
+    const component = result.graph.components.find((entry) => entry.id === 'agent:triage');
+    assert.deepEqual(component?.sourceLocations, []);
   });
 
   it('keeps a consumed server visible without reporting its consumer as an agent system', async () => {

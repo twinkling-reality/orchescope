@@ -10,6 +10,7 @@ import {
   sha256OfJson,
 } from '@orchescope/domain';
 import { type DiscardedEdge, SystemGraphBuilder } from '@orchescope/graph';
+import { MAX_MANIFEST_COMPONENTS } from '@orchescope/schema';
 import type {
   AdapterRun,
   Evidence,
@@ -22,6 +23,7 @@ import type {
 } from '@orchescope/schema';
 import {
   analyzeFileSet,
+  type CitationSnapshot,
   collectFiles,
   type DeclinedDirectory,
   type FactCache,
@@ -31,14 +33,21 @@ import {
   languageOf,
   type ModuleFacts,
   readManifests,
+  readCitationSnapshots,
   type TraversalOptions,
 } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from './adapter.ts';
 import { createBindingRegistry } from './bindings.ts';
 import { createCallSiteEffects } from './call-site-effect.ts';
-import { type ConfigProblem, namedConfigPaths, readConfigDocuments } from './config-files.ts';
+import {
+  type ConfigDocument,
+  type ConfigProblem,
+  namedConfigPaths,
+  readConfigDocuments,
+} from './config-files.ts';
 import { createImplementationSpanRegistry } from './implementation-span.ts';
 import { localModules, namesLocalModule } from './local-modules.ts';
+import { manifestCitationRequests } from './manifest-citations.ts';
 import { DEFAULT_ADAPTERS } from './registry.ts';
 import { buildSymbolIndex } from './symbol-index.ts';
 
@@ -321,6 +330,42 @@ const unreadConfigs = (problems: readonly ConfigProblem[]): readonly SkippedFile
     detail: problem.detail.slice(0, 500),
   }));
 
+const citationSnapshotsFor = (
+  fileSet: ReturnType<typeof collectFiles>,
+  documents: readonly ConfigDocument[],
+  facts: readonly ModuleFacts[],
+  traversal: TraversalOptions,
+): readonly CitationSnapshot[] => {
+  const analyzedDigests = new Map(facts.map((module) => [module.file, module.contentHash]));
+  return readCitationSnapshots(fileSet, manifestCitationRequests(documents), {
+    maxFileBytes: traversal.maxFileBytes,
+    maxRequests: MAX_MANIFEST_COMPONENTS,
+  }).map((snapshot) => {
+    const analyzed = analyzedDigests.get(snapshot.path);
+    if (
+      analyzed === undefined ||
+      snapshot.contentHash === undefined ||
+      analyzed === snapshot.contentHash
+    ) {
+      return snapshot;
+    }
+    return {
+      path: snapshot.path,
+      ...(snapshot.byteLength === undefined ? {} : { byteLength: snapshot.byteLength }),
+      lines: [],
+      refusal: 'changed_during_scan',
+    };
+  });
+};
+
+const contextFiles = (fileSet: ReturnType<typeof collectFiles>): DiscoveryContext['files'] => {
+  const sized = new Map(fileSet.files.map((file) => [file.path, file.byteLength]));
+  return fileSet.walked.map((path) => {
+    const byteLength = sized.get(path);
+    return byteLength === undefined ? { path } : { path, byteLength };
+  });
+};
+
 export const discover = async (request: ScanRequest): Promise<ScanResult> => {
   const startedAtMs = request.clock.monotonicMs();
   const startedAt = request.clock.now();
@@ -343,6 +388,13 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
     ...(request.onFileParsed === undefined ? {} : { onFileParsed: request.onFileParsed }),
   });
 
+  const citations = citationSnapshotsFor(
+    fileSet,
+    configs.documents,
+    analysis.facts,
+    request.traversal,
+  );
+
   const symbols = buildSymbolIndex(analysis.facts);
   const bindings = createBindingRegistry(symbols);
   const implementations = createImplementationSpanRegistry();
@@ -355,13 +407,8 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
     manifests,
     modules: analysis.facts,
     configs: configs.documents,
-    files: (() => {
-      const sized = new Map(fileSet.files.map((file) => [file.path, file.byteLength]));
-      return fileSet.walked.map((path) => {
-        const byteLength = sized.get(path);
-        return byteLength === undefined ? { path } : { path, byteLength };
-      });
-    })(),
+    files: contextFiles(fileSet),
+    citations,
     symbols,
     bindings,
     implementations,
@@ -381,6 +428,9 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
   const digests = new Map<string, Sha256Hex>();
   for (const module of analysis.facts) digests.set(module.file, module.contentHash as Sha256Hex);
   for (const document of configs.documents) digests.set(document.path, document.contentHash);
+  for (const citation of citations) {
+    if (citation.contentHash !== undefined) digests.set(citation.path, citation.contentHash);
+  }
 
   const builder = new SystemGraphBuilder((path) => digests.get(path));
   const adapters = request.adapters ?? DEFAULT_ADAPTERS;
@@ -395,6 +445,10 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
   const sourceDigest = sha256OfJson({
     files: analysis.facts.map((module) => [module.file, module.contentHash]),
     configs: configs.documents.map((document) => [document.path, document.byteLength]),
+    citations: citations.map((citation) => [
+      citation.path,
+      citation.contentHash ?? citation.refusal ?? 'unavailable',
+    ]),
     manifests: manifests.dependencies.map((entry) => [entry.name, entry.versionRange ?? '']),
   });
   const scan = makeScanId({ projectId: projectIdentifier, startedAt, sourceDigest });

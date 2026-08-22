@@ -18,6 +18,13 @@ export {
   probeJavaScriptParser,
 } from './analyzer.ts';
 export {
+  type CitationRefusal,
+  type CitationRequest,
+  type CitationSnapshot,
+  type CitationSnapshotOptions,
+  readCitationSnapshots,
+} from './citation-snapshot.ts';
+export {
   type ArgumentFact,
   type AssignmentFact,
   approximateTokens,

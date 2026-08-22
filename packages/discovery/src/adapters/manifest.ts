@@ -22,6 +22,7 @@ import {
   SCHEMA_VERSIONS,
   validateDocument,
 } from '@orchescope/schema';
+import type { CitationRefusal } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { jsonPointer } from '../config-files.ts';
 import { createDrafts } from '../drafts.ts';
@@ -87,49 +88,129 @@ const manifestIdentity = (kind: ComponentKind, name: string): ComponentIdentity 
 /**
  * What a citation claims, and what the scan can say back about it.
  *
- * The engine accepted `definedIn: src/does-not-exist.rb, definedAtLine: 4242` and reported the component as
- * a real one with a location a reader could click. Two of these are exact: a path either is a file the
- * traversal walked or it is not, and an edge endpoint either names something or it does not. The line check
- * is a refutation rather than a confirmation, because confirming it would mean opening the file and an
- * adapter never does: a file of two hundred bytes cannot have a line four thousand deep, and that is as far
- * as the byte count reaches.
+ * Version 1 and version 2 retain the repository checks they shipped with: the traversal answers whether a
+ * path exists and a byte count can refute an impossible line. Version 3 carries a write-time digest and
+ * receives bounded citation snapshots from discovery. The adapter still opens nothing. It compares the
+ * scanned digest and the requested line fact, then records a source location only when both claims hold.
  *
  * A `runtimeName` is the fourth, and it is the same rule the CrewAI reader applies to an interpolated role.
  * A name with a placeholder in it is a name no run will ever report, and putting one in the reconciler's
  * strongest lookup after a code location does not merely fail to match: it waits to match something else.
  */
+type ManifestRefutations = {
+  readonly problems: readonly string[];
+  readonly verifiedLocations: ReadonlySet<number>;
+};
+
+type CitationCheck = { readonly problem?: string; readonly verified: boolean };
+
+const citationRefusal = (component: string, path: string, refusal: CitationRefusal): string => {
+  switch (refusal) {
+    case 'not_walked':
+      return `${component} is defined in ${path}, which this scan did not find`;
+    case 'outside_root':
+      return `${component} is defined in ${path}, whose resolved target is outside the repository root`;
+    case 'not_regular':
+      return `${component} is defined in ${path}, which is not a regular file`;
+    case 'too_large':
+      return `${component} is defined in ${path}, which exceeds the scan's file byte ceiling`;
+    case 'binary':
+      return `${component} is defined in ${path}, which contains binary data rather than deterministic source lines`;
+    case 'invalid_utf8':
+      return `${component} is defined in ${path}, which is not valid UTF-8 and has no deterministic line text`;
+    case 'changed_during_scan':
+      return `${component} is defined in ${path}, which changed while this scan was reading it`;
+    case 'unreadable':
+      return `${component} is defined in ${path}, which this scan could not read`;
+  }
+};
+
+const version3Citation = (
+  declared: ReadableManifestComponent,
+  context: DiscoveryContext,
+): CitationCheck => {
+  if (declared.definedIn === undefined || declared.definedAtLine === undefined) {
+    return { verified: false };
+  }
+  const declaredFileHash = 'definedFileHash' in declared ? declared.definedFileHash : undefined;
+  const snapshot = context.citations.find((entry) => entry.path === declared.definedIn);
+  if (snapshot === undefined) {
+    return {
+      verified: false,
+      problem: `${declared.name} is defined in ${declared.definedIn}, which has no citation snapshot from this scan`,
+    };
+  }
+  if (snapshot.refusal !== undefined) {
+    return {
+      verified: false,
+      problem: citationRefusal(declared.name, declared.definedIn, snapshot.refusal),
+    };
+  }
+  if (snapshot.contentHash !== declaredFileHash) {
+    return {
+      verified: false,
+      problem: `${declared.name} has a stale citation for ${declared.definedIn}: the manifest records ${declaredFileHash ?? 'no digest'}, but this scan read ${snapshot.contentHash ?? 'no digest'}`,
+    };
+  }
+  const line = snapshot.lines.find((entry) => entry.line === declared.definedAtLine);
+  if (line === undefined) {
+    return {
+      verified: false,
+      problem: `${declared.name} is defined at line ${declared.definedAtLine} of ${declared.definedIn}, which has ${snapshot.lineCount ?? 0} line(s)`,
+    };
+  }
+  const acceptedNames = [declared.name, declared.runtimeName].filter(
+    (name): name is string => name !== undefined,
+  );
+  return acceptedNames.some((name) => line.text.includes(name))
+    ? { verified: true }
+    : {
+        verified: false,
+        problem: `${declared.name} cites line ${declared.definedAtLine} of ${declared.definedIn}, which contains neither its component name nor its runtime name`,
+      };
+};
+
+const legacyCitationProblem = (
+  declared: ReadableManifestComponent,
+  walked: ReadonlyMap<string, number | undefined>,
+): string | undefined => {
+  if (declared.definedIn === undefined) return undefined;
+  const byteLength = walked.get(declared.definedIn);
+  if (!walked.has(declared.definedIn)) {
+    return `${declared.name} is defined in ${declared.definedIn}, which this scan did not find`;
+  }
+  if (declared.definedAtLine === undefined) {
+    return `${declared.name} is defined in ${declared.definedIn} at no stated line, so there is no location to record`;
+  }
+  return byteLength !== undefined && declared.definedAtLine > byteLength
+    ? `${declared.name} is defined at line ${declared.definedAtLine} of ${declared.definedIn}, which is ${byteLength} bytes long`
+    : undefined;
+};
+
 const refutations = (
   manifest: ReadableManifest,
   context: DiscoveryContext,
   configFile: string,
-): readonly string[] => {
+): ManifestRefutations => {
   const walked = new Map(context.files.map((file) => [file.path, file.byteLength]));
   const found: string[] = [];
+  const verifiedLocations = new Set<number>();
 
-  for (const declared of manifest.components) {
+  for (const [index, declared] of manifest.components.entries()) {
     const details = detailsOf(declared);
     if (details !== undefined && details.for !== declared.kind) {
       found.push(`${declared.name} has kind ${declared.kind} but details for ${details.for}`);
     }
-    if (declared.definedIn !== undefined) {
-      const byteLength = walked.get(declared.definedIn);
-      if (!walked.has(declared.definedIn)) {
-        found.push(
-          `${declared.name} is defined in ${declared.definedIn}, which this scan did not find`,
-        );
-      } else if (declared.definedAtLine === undefined) {
-        /*
-         * A file with no line is a citation this build cannot record without inventing one, because a
-         * source location has a line and there is no way to write "somewhere in here". It used to record
-         * line 1, which is a claim the manifest never made and a link a reader follows to the imports.
-         */
-        found.push(
-          `${declared.name} is defined in ${declared.definedIn} at no stated line, so there is no location to record`,
-        );
-      } else if (byteLength !== undefined && declared.definedAtLine > byteLength) {
-        found.push(
-          `${declared.name} is defined at line ${declared.definedAtLine} of ${declared.definedIn}, which is ${byteLength} bytes long`,
-        );
+    if (manifest.schemaVersion === 3) {
+      const citation = version3Citation(declared, context);
+      if (citation.problem !== undefined) found.push(citation.problem);
+      if (citation.verified) verifiedLocations.add(index);
+    } else {
+      const problem = legacyCitationProblem(declared, walked);
+      if (problem !== undefined) {
+        found.push(problem);
+      } else if (declared.definedIn !== undefined) {
+        verifiedLocations.add(index);
       }
     }
     if (declared.runtimeName?.includes('{') === true) {
@@ -148,7 +229,7 @@ const refutations = (
     }
   }
 
-  return found;
+  return { problems: found, verifiedLocations };
 };
 
 /**
@@ -172,8 +253,15 @@ const addDeclaredComponent = (
   configFile: string,
   declared: ReadableManifestComponent,
   index: number,
+  includeSourceLocation: boolean,
 ): void => {
   const details = detailsOf(declared);
+  const sourceLocation =
+    includeSourceLocation &&
+    declared.definedIn !== undefined &&
+    declared.definedAtLine !== undefined
+      ? { file: declared.definedIn, startLine: declared.definedAtLine }
+      : undefined;
   const identity = manifestIdentity(declared.kind, declared.name);
   const pointer = jsonPointer(['components', index]);
   builder.addComponent({
@@ -185,11 +273,7 @@ const addDeclaredComponent = (
     confidence: CONFIDENCE_BANDS.strongStructural,
     discoveredBy: ADAPTER_ID,
     presence: { static: true, runtime: false, manifest: true },
-    ...(declared.definedIn === undefined || declared.definedAtLine === undefined
-      ? {}
-      : {
-          sourceLocations: [{ file: declared.definedIn, startLine: declared.definedAtLine }],
-        }),
+    ...(sourceLocation === undefined ? {} : { sourceLocations: [sourceLocation] }),
     configLocations: [{ file: configFile, pointer }],
     evidence: [
       configEntryEvidence({
@@ -241,7 +325,7 @@ const addDeclaredEdges = (
 
 export const manifestAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '1',
+  version: '2',
   // The manifest is a file this repository writes, not a package it depends on.
   packages: [],
   appliesTo: (context) =>
@@ -261,25 +345,31 @@ export const manifestAdapter: AgentSystemAdapter = {
       };
     }
     const manifest = validated.value as ReadableManifest;
+    const refuted = refutations(manifest, context, document.path);
     for (const [index, declared] of manifest.components.entries()) {
-      addDeclaredComponent(context, builder, document.path, declared, index);
+      addDeclaredComponent(
+        context,
+        builder,
+        document.path,
+        declared,
+        index,
+        manifest.schemaVersion !== 3 || refuted.verifiedLocations.has(index),
+      );
     }
     const edgesFound = addDeclaredEdges(manifest, context, builder, document.path);
     /*
-     * Refuted after the components are added, because an edge endpoint is answered against what every
-     * adapter found and a manifest that annotates real code names components it does not declare. What was
-     * read stays read: a manifest with one citation the scan refutes still declares seventeen the scan does
-     * not, and dropping those would trade a wrong answer for a missing one.
+     * What was read stays read: a manifest with one citation the scan refutes still declares seventeen the
+     * scan does not, and dropping those would trade a wrong answer for a missing one. Version 3 leaves a
+     * refuted source location out, so the remaining declaration never presents stale source as current.
      */
-    const refuted = refutations(manifest, context, document.path);
     return {
       componentsFound: manifest.components.length,
       edgesFound,
       filesInspected: [document.path],
-      ...(refuted.length === 0
+      ...(refuted.problems.length === 0
         ? {}
         : {
-            problem: `${document.path} makes ${refuted.length} claim(s) this scan refutes: ${refuted.join('; ')}`,
+            problem: `${document.path} makes ${refuted.problems.length} claim(s) this scan refutes: ${refuted.problems.join('; ')}`,
           }),
     };
   },
