@@ -384,8 +384,9 @@ writeFileSync(
 );
 
 console.log('');
+const subset = offline ? ' (offline subset)' : required ? ' (required subset)' : '';
 console.log(
-  `${results.length} repositor${results.length === 1 ? 'y' : 'ies'}${offline ? ' (offline subset)' : ''}: ` +
+  `${results.length} repositor${results.length === 1 ? 'y' : 'ies'}${subset}: ` +
     `${results.length - differing - failed - skipped} ${record ? 'recorded' : 'matched'}, ${differing} differing, ` +
     `${failed} not measured, ${skipped} skipped`,
 );

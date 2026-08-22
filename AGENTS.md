@@ -25,6 +25,7 @@ pnpm unused                  # knip, unused files, exports and dependencies
 pnpm schemas                 # regenerate schemas/ from packages/schema
 pnpm check                   # everything above, plus a schema drift check
 pnpm corpus:offline          # discovery measured against the corpus entries that need no network
+pnpm corpus:required         # local entries plus the bounded digest-pinned third party selection
 pnpm corpus                  # the same across every pinned repository, cloning what the cache is missing
 pnpm test                    # unit and integration tests
 pnpm test:e2e                # end to end tests against the bundled demonstration

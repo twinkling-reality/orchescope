@@ -30,6 +30,7 @@ That runs `check`, `test` and `test:e2e`, and it is the gate. Run it before you 
 | `pnpm --silent orchescope <args>` | The same, with pnpm's own banner off, which is what `--json` capture needs |
 | `pnpm demo` | Run the demonstration agent system |
 | `pnpm corpus:offline` | Measure discovery against the corpus entries that need no network |
+| `pnpm corpus:required` | Measure the local entries plus bounded digest-pinned third-party archives required by CI |
 | `pnpm corpus` | The same across every pinned repository, cloning what the cache is missing |
 | `pnpm build` | Bundle the publishable artifact |
 | `pnpm package` | Pack a tarball, checksum it, install it and audit a project with it |

@@ -2,9 +2,8 @@ name: optional live checks
 
 # Nothing here is required, and nothing here runs automatically.
 #
-# These checks need something the required set deliberately refuses to depend on: outbound network access, or a longer
-# budget than a pull request should spend. Keeping them separate is what lets a fork run the entire required gate with
-# no secret at all.
+# These checks clone or execute the entire third party corpus, or need a longer budget than a pull request should
+# spend. The required set permits only selected bounded archives and no secret, so a fork can still run it in full.
 #
 # A maintainer starts this by hand. Nothing here calls a model: analysis in this build is deterministic, and the job
 # that used to assert over an empty array of model produced findings was removed with the feature it was asserting on.
@@ -79,8 +78,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       # Third party source is never vendored, so each entry is cloned at its pinned commit into a directory git
-      # ignores. That is the network access the required gate refuses to depend on, and the reason this job is
-      # here rather than in ci.yml.
+      # ignores. Required CI admits three bounded digest-pinned archives; this job measures every pin and executes
+      # the entries with runtime evidence, which is why it remains separate.
       # --exercise installs a virtual environment and runs one repository's own example so the declared against
       # exercised delta is measured on code this repository did not write. No provider is called: the driver uses
       # the library's own offline model and turns model requests off.

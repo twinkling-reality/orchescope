@@ -18,16 +18,17 @@ workspace range survived staging, or if the declared binary is missing.
 
 ```
 pnpm verify                  # check, unit and integration, end to end
-pnpm corpus --exercise       # every pinned repository, including the two that measure a run
+pnpm corpus:required         # archive acquisition and selected real-repository gate
+pnpm corpus --exercise       # every pinned repository, including entries that measure runs
 pnpm package                 # builds the bundle, stages, packs, installs and audits
 ```
 
 `--exercise` is here rather than in `pnpm verify` because it installs an environment and runs third party
 code, which is not something a routine gate should do. Leaving it out of both is how the two entries that
 measure the declared against exercised join, which is the centre of this product, went unrecorded from
-before 0.2.0 until after 0.5.0. `pnpm verify` covers the offline subset and `pnpm corpus` covers every
-entry that needs no run, so those two are the only ones this line adds, and they are the ones nothing
-else looks at.
+before 0.2.0 until after 0.5.0. `pnpm verify` covers the local subset through the corpus end-to-end test,
+`pnpm corpus:required` proves the selected digest-pinned archive path, and `pnpm corpus` covers every entry
+that needs no run. The exercise line adds the runtime populations nothing else looks at.
 
 `pnpm package` writes `release/release-summary.json`. Read it rather than trusting the exit code:
 

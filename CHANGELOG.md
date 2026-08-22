@@ -11,9 +11,10 @@ from the repository implementing it. The first CrewAI run anywhere in this corpu
 name join and now proves three source-qualified joins against the exact pinned checkout. Five live precision
 failures found by the corpus on the first run of the invariants written to catch them, all of them one defect.
 Every location now says which revision of which file it was read from, and every version 3 manifest citation
-is checked against the repository rather than taken. Four interfaces with no producer, three deleted and one given the
-process it was written for. Four measurements that ended in a decline remain recorded where the next reader
-will find them, and every published bound that moved has its own falsifier.
+is checked against the repository rather than taken. Three real repositories now run in the required corpus
+without being vendored. Four interfaces with no producer, three deleted and one given the process it was written
+for. Four measurements that ended in a decline remain recorded where the next reader will find them, and every
+published bound that moved has its own falsifier.
 Published document changes: manifest advances from version 1 through version 2 component details to version
 3 self-pinning source citations; system
 graph v1 adds optional observed source identity, repository URL and Git-derived repository subroot fields;
@@ -305,6 +306,32 @@ repository reads false at 27 components and the exported graph still contains on
 and its source citation. Changing only the role to `implemented` reads true, and version 1 remains readable
 with its established true meaning. Detection stops confusing a repository that consumes a system with one
 that implements it, without hiding the consumed component from a real agent topology.
+
+### Three real repositories enter the required gate without being vendored
+
+Required CI measured only the two local corpus entries. Eighteen static third-party entries stayed in the
+manual live job because committing their source would cross the licence boundary, and the required gate
+therefore caught almost no reader drift against source the reader author did not write.
+
+The new required mode keeps the local entries and adds `open-agent-platform`, `openai-cs-agents-demo` and
+`vercel-ai-chatbot` from their exact full-commit archives. The first is the strongest real client-only
+negative and runs all 11 lookalike injections. The other two are compact applications contributing OpenAI
+Agents, Vercel AI SDK, implementation-reach, effects and prompt facts. Their pristine clone footprints total
+5,605,263 bytes. The archives total 1,445,736 compressed bytes and 3,876,651 source bytes across 453 files,
+with about 7.6 seconds of measured audit work.
+
+The gzip file is deliberately not the pin. GitHub guarantees the extracted contents of a full commit archive
+while allowing compression and generated root names to change, and those outer byte counts changed during this
+work while the source did not. Each corpus entry pins a normalized SHA-256 over every relative path,
+executable bit and file byte, then separately pins its licence file. The reader caps compressed and expanded
+bytes, entry count and individual file bytes; validates tar checksums and the exact commit comment; and refuses
+links, devices, duplicate paths, traversal, extra roots and unsupported metadata before writing a checkout.
+
+The production command reproduces all five selected expectations: 5 matched, 0 differing, 0 not measured and
+0 skipped, with 22 of 22 injected shapes held. Two final runs took 17.09 and 16.05 seconds on the measured
+machine, a mean of 16.57 seconds. It reports 119 third-party components and 91 relations under their existing
+contracts. The offline two-entry command stays network free, the full corpus keeps its shallow Git checkouts,
+no expectation moves and no third-party source enters the package or a CI artifact.
 
 ### A location that says which revision of the file it was read from
 

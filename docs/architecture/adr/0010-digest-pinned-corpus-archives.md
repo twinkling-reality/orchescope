@@ -1,6 +1,6 @@
 # ADR 0010: Required corpus source arrives as bounded commit archives
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-22
 - Deciders: repository maintainers
 
@@ -64,8 +64,8 @@ The archive block contains:
 - the repository-relative licence path; and
 - the licence file SHA-256.
 
-The reader downloads at most 8 MiB, expands at most 16 MiB, accepts at most 2,048 regular files and permits no
-file over 1 MiB. It reads the generated tar container itself, verifies its checksums and one-root structure,
+The reader downloads at most 8 MiB, expands at most 16 MiB, accepts at most 2,048 archive entries and permits
+no file over 1 MiB. It reads the generated tar container itself, verifies its checksums and one-root structure,
 and accepts only directories, regular files and the bounded global commit comment GitHub emits. Links and every
 other entry kind are refusals. No external extractor processes unverified input.
 
@@ -106,8 +106,33 @@ required job for about 7.6 seconds of audit work.
 
 `open-deep-research` was the first alternate. Its 2,404,558 byte archive uniquely protects the search-index
 adapter and adds LangGraph coverage, but costs more compressed input than the selected set. The implemented
-measurement must add the end-to-end required job cost and confirm the exact tree pins through the production
-reader.
+measurement adds the end-to-end required job cost and confirms the exact tree pins through the production
+reader below.
+
+## Measurement after implementation
+
+The production reader pins these normalized source trees:
+
+- `open-agent-platform`: `c4d4fa6fd3e06036ca0d1418dcd8ba0bdc580bf088c8e39b2cc1ec5347f95caf`;
+- `openai-cs-agents-demo`: `2142a5a7c05192da3ce70e88c6b8aae560d4533a448d53f6fe441670f20bc4b7`;
+- `vercel-ai-chatbot`: `b890c5a849e7807d364ec1ff8252791377742bfbe917d04eeb28ccf3ce5dc80d`.
+
+Their licence file pins are `61e5e8faf0b76db76793ecd8aa0edca36a82bd8dba279d2a31972f026c132423`,
+`fdd680f28af4ae4e155cc35b3d37da81d57ffa94359fceb53fcb4c11d5ce2c0d` and
+`5809eb2eab284b24fc53b21484398fd264c6f929d3b32ecdc7108a89f037e943`. Every pin was read from the
+downloaded archive by the production parser, not copied from Git metadata.
+
+The hosting warning was observable even during this decision. Later fetches measured 339,275, 704,849 and
+401,509 compressed bytes, where the comparison samples measured 339,273, 704,883 and 401,580. The normalized
+source and licence digests stayed exact. Pinning the outer files would have made the same source fail.
+
+The focused suite changes gzip compression and generated roots without moving the tree digest, moves each of
+path, executable bit and content independently, and fires every container and definition refusal. The actual
+required command then downloaded and parsed all three archives, reproduced all five selected expectations and
+held 22 of 22 injected shapes across the two negative repositories. It reported 5 matched, 0 differing, 0 not
+measured and 0 skipped. Two final runs took 17.09 and 16.05 seconds on the measured machine, a mean of 16.57
+seconds. The three third-party entries account for 119 components and 91 relations under their existing
+expectation contracts. No expectation file moved.
 
 ## Consequences
 

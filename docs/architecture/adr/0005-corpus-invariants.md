@@ -150,9 +150,11 @@ reviewer's attention, and the ones left are the ones where a person's judgement 
 **Two failure classes get a permanent home.** Precision failures on a repository that is not an agent
 system become a table row. Circular joins become a property. Neither depends on somebody remembering.
 
-**One thing is deliberately not fixed here.** 25 of 27 entries still run outside the required gate,
-because third party source is not vendored for licence reasons. A cached clone job or a pinned tarball
-digest would close that, and it is a packaging decision rather than a verification one.
+**The acquisition boundary was decided separately.** This record left 25 of 27 entries outside the required
+gate because third party source was not vendored for licence reasons. ADR 0010 admits three static third-party
+entries through bounded full-commit archives pinned by normalized source tree and licence digests. Five of the
+28 entries now run in required CI; the other 23 remain in the full clone-backed or exercised corpus because
+their additional coverage does not fit the selected acquisition, environment or time bounds.
 
 ## What the measurement said
 

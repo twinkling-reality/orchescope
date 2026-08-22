@@ -10,7 +10,8 @@ and it turns "does it work" into a gate.
 ## Running it
 
 ```
-pnpm corpus:offline    # the entries that need no network, which is what CI requires
+pnpm corpus:offline    # the two local entries, with no network
+pnpm corpus:required   # the local entries plus the bounded archive selection required by CI
 pnpm corpus            # every entry, cloning what the cache is missing
 pnpm corpus:exercise    # the same, and also runs the entries that can produce spans
 node scripts/corpus.mjs --check langgraph flask     # named entries only
@@ -20,7 +21,13 @@ node scripts/corpus.mjs --check --exercise openai-agents-js-filesystem-mcp
 The first full run clones the pinned repositories into `corpus/.cache`, which git ignores. Later runs reuse the clone and
 check out the pinned commit again, so a formatter pointed at the cache cannot change what is measured.
 
-Nothing is vendored. This repository is Apache-2.0 and the corpus is not, so the corpus stays outside it.
+The required run obtains three selected full-commit source archives. Each entry pins the normalized digest of every path,
+executable bit and file byte plus the digest of its licence notice. The archive reader bounds the download, expanded data,
+entry count and file size and accepts no link or second root. Generated root names, timestamps and gzip bytes are not part
+of the digest because GitHub guarantees the extracted contents of a commit archive while allowing compression to change.
+
+Nothing is vendored. This repository is Apache-2.0 and the corpus is not, so clones and expanded archives stay in the
+ignored cache and outside the package.
 
 ## Reading a run
 
@@ -92,8 +99,13 @@ scan to it, so a repository pinned as `not_agent_system` fails the moment a read
 Then `node scripts/corpus.mjs --record some-repository` and commit both files.
 
 An entry with `source: local` names a directory of this repository by `path` instead, and is copied from its tracked files
-rather than cloned. Those are the offline subset the required gate runs, so they measure the working tree: an uncommitted
-change to an adapter shows up immediately.
+rather than cloned. Those are the offline subset and remain part of the required set, so they measure the working tree: an
+uncommitted change to an adapter shows up immediately.
+
+A static Git entry joins the required set only with a reviewed `requiredArchive` block. The block repeats the exact commit
+through GitHub's archive API and records `treeSha256`, `licensePath` and `licenseSha256`. Measure acquisition size, audit
+cost and distinct adapter or precision coverage before adding one. The required set is a bounded selection rather than a
+second name for the full corpus.
 
 ## An entry that runs
 

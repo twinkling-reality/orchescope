@@ -22,7 +22,7 @@ release/
 # docs/design/states/ are written by hand and are not this directory.
 /states/
 
-# Third party corpus repositories, cloned at their pinned commit and never vendored
+# Third party corpus source, acquired at its pinned commit and never vendored
 corpus/.cache/
 
 # Local git worktrees used for renames and experiments; never part of the product

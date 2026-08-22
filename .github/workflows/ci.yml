@@ -1,7 +1,8 @@
 name: ci
 
-# Every job here runs without a credential. Nothing in the required set reaches a paid provider, a registry token or a
-# hosted service, so a fork's pull request runs the same checks as a maintainer's branch.
+# Every job here runs without a credential. The corpus job reads three public GitHub commit archives under exact tree
+# and licence pins; nothing reaches a paid provider, private service or registry token, so a fork's pull request runs
+# the same checks as a maintainer's branch.
 
 on:
   push:
@@ -113,8 +114,9 @@ jobs:
         run: pnpm schemas:verify
 
   corpus:
-    name: discovery measured against the offline corpus
+    name: discovery measured against the required corpus
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v4
@@ -124,11 +126,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      # The offline subset only. The rest of the corpus clones third party repositories at pinned commits, which
-      # needs network access this required gate deliberately does not depend on, so it runs from optional-live.yml.
-      # A difference here is a reviewed diff rather than an automatic update: the numbers move when a reader
-      # changes, and which direction that is has to be decided by a person.
-      - run: pnpm corpus:offline
+      # Two local entries plus three selected third party repositories. Their full commit archives are bounded and
+      # pinned by normalized source tree and licence digests, so source remains outside this repository while real
+      # positive and negative systems run on every change. The full clone-backed and exercised corpus remains in
+      # optional-live.yml because it exceeds this selected acquisition boundary.
+      - run: pnpm corpus:required
 
   package:
     name: build, pack, install and audit with the tarball

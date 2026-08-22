@@ -194,9 +194,12 @@ defect in an adapter.
   `adapters.adapter:langgraph.componentsFound: expected 1240, observed 0` first, with the blind spot line naming
   `@langchain/langgraph, langgraph, @langchain/core used in source, read by adapter:langgraph`. The same break in the
   manifest adapter fails the offline subset. Both were reverted; the working tree is clean.
-- **The required gate runs the offline subset.** `pnpm corpus:offline` is a job in `ci.yml` and is also run through the
-  real script by `tests/e2e/corpus.test.ts`. The pinned corpus needs network access the required gate refuses to depend
-  on, so it runs from `optional-live.yml` on dispatch and uploads its summary.
+- **The required gate now includes three real repositories without vendoring them.** The local-only
+  `pnpm corpus:offline` remains the network-free contributor command. Required CI runs `pnpm corpus:required`, which
+  adds two compact agent applications and the strongest client-only negative from full-commit archives. The reader
+  pins normalized source trees and licence files, bounds every container dimension and rejects links and extra roots.
+  Five repositories reproduce their expectations and 22 of 22 injected shapes hold. The full clone-backed and
+  exercised corpus remains in `optional-live.yml` because its environment and time costs exceed this selected gate.
 
 **What the corpus already says**, before a single new adapter is written:
 

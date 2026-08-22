@@ -41,8 +41,9 @@ repositories:
     kind: agent_system
     why: >-
       The bundled demonstration, which is the only entry that exercises the manifest adapter and the only one that
-      runs with no network at all. It is the offline subset, so a change to the traversal, the effect reader or the
-      prompt reader is caught by the required gate rather than by a dispatch a maintainer has to remember to start.
+      runs with no network at all. It is in both the offline and required subsets, so a change to the traversal, the
+      effect reader or the prompt reader is caught by the gate rather than by a dispatch a maintainer has to remember
+      to start.
 
   - name: orchescope-discovery
     source: local
