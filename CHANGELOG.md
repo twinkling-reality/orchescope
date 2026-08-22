@@ -2,7 +2,7 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
-## Unreleased
+## 0.9.0
 
 Where breadth comes from as agent systems proliferate, asked with measurements and answered in accepted
 decisions: the fact model rather than the adapter count, provenance rather than a confidence band, a corpus
