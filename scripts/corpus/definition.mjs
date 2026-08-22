@@ -112,6 +112,7 @@ const checkMultiRepositorySystem = (system, index, repositories, names, problems
       problem(`repository ${coordinate.name} does not repeat its exact corpus URL and commit`);
     }
   }
+  checkMultiRepositoryExercise(system.exercise, referenced, problem);
 };
 
 /**
@@ -187,6 +188,20 @@ const checkExercise = (exercise, problem) => {
         'exercise.requiresEnvironment has to name the environment variables the run cannot start without',
       );
     }
+  }
+};
+
+const checkMultiRepositoryExercise = (exercise, referenced, problem) => {
+  if (exercise === undefined) return;
+  checkExercise(exercise, problem);
+  if (exercise.pythonPackages !== undefined) {
+    problem('a multi-repository exercise has to use a Node environment');
+  }
+  if (
+    typeof exercise.runtimeRepository !== 'string' ||
+    !referenced.has(exercise.runtimeRepository)
+  ) {
+    problem('exercise.runtimeRepository has to name one participating repository');
   }
 };
 

@@ -1,0 +1,123 @@
+{
+  "componentJoins": [
+    {
+      "component": {
+        "componentId": "tool:read_text_file",
+        "repositoryUrl": "https://github.com/modelcontextprotocol/servers",
+        "revision": "3e805376da81c063c2798410906b5fd134334a43"
+      },
+      "observedKind": "tool",
+      "observedName": "read_text_file",
+      "rule": "code_location"
+    },
+    {
+      "component": {
+        "componentId": "agent:mcp-assistant~7383b0",
+        "repositoryUrl": "https://github.com/openai/openai-agents-js",
+        "revision": "52b2702fc034fb47f79ec50fad173f0e9b068ca6"
+      },
+      "observedKind": "agent",
+      "observedName": "MCP Assistant",
+      "rule": "code_location"
+    },
+    {
+      "component": {
+        "componentId": "mcp_server:filesystem-server-via-local-package",
+        "repositoryUrl": "https://github.com/openai/openai-agents-js",
+        "revision": "52b2702fc034fb47f79ec50fad173f0e9b068ca6"
+      },
+      "observedKind": "mcp_server",
+      "observedName": "Filesystem Server, via local package",
+      "rule": "code_location"
+    }
+  ],
+  "coverage": {
+    "eligibleRepositories": 2,
+    "joinedComponents": 3,
+    "joinedCrossRepositoryRelations": 1,
+    "observedComponents": 4,
+    "observedRelations": 2,
+    "refusals": [
+      {
+        "attribute": "observedSource",
+        "count": 1,
+        "reason": "missing",
+        "samples": [
+          {
+            "observedKind": "tool",
+            "observedName": "read_text_file"
+          }
+        ],
+        "scope": "component"
+      }
+    ],
+    "repositoriesSupplied": 2,
+    "sourceIdentity": [
+      {
+        "attribute": "code.file.path",
+        "observedComponents": 1,
+        "purpose": "code_location",
+        "reason": "missing"
+      },
+      {
+        "attribute": "orchescope.code.repository.path",
+        "observedComponents": 1,
+        "purpose": "source_identity",
+        "reason": "missing"
+      },
+      {
+        "attribute": "vcs.ref.head.revision",
+        "observedComponents": 1,
+        "purpose": "source_identity",
+        "reason": "missing"
+      },
+      {
+        "attribute": "vcs.repository.url.full",
+        "observedComponents": 1,
+        "purpose": "source_identity",
+        "reason": "missing"
+      }
+    ],
+    "withinRepositoryRelations": 1
+  },
+  "name": "openai-agents-js-filesystem-mcp",
+  "relations": [
+    {
+      "executions": 1,
+      "from": {
+        "componentId": "mcp_server:filesystem-server-via-local-package",
+        "repositoryUrl": "https://github.com/openai/openai-agents-js",
+        "revision": "52b2702fc034fb47f79ec50fad173f0e9b068ca6"
+      },
+      "kind": "calls_tool",
+      "to": {
+        "componentId": "tool:read_text_file",
+        "repositoryUrl": "https://github.com/modelcontextprotocol/servers",
+        "revision": "3e805376da81c063c2798410906b5fd134334a43"
+      }
+    }
+  ],
+  "repositories": [
+    {
+      "components": 15,
+      "relations": 14,
+      "repositoryUrl": "https://github.com/modelcontextprotocol/servers",
+      "revision": "3e805376da81c063c2798410906b5fd134334a43"
+    },
+    {
+      "components": 668,
+      "relations": 265,
+      "repositoryUrl": "https://github.com/openai/openai-agents-js",
+      "revision": "52b2702fc034fb47f79ec50fad173f0e9b068ca6"
+    }
+  ],
+  "runtime": {
+    "runs": 1,
+    "services": [
+      "mcp-filesystem-server",
+      "openai-agents-filesystem-example",
+      "openai-agents-js"
+    ],
+    "spans": 6
+  }
+}

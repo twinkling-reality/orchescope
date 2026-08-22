@@ -122,12 +122,18 @@ export const prepareEnvironment = (root, entry, checkout) =>
     : prepareNodeEnvironment(root, entry);
 
 /** Returns what the run produced, so a corpus summary can say whether spans arrived at all. */
-export const exerciseRepository = (root, entry, checkout, environment) => {
+export const exerciseRepository = (
+  root,
+  entry,
+  checkout,
+  environment,
+  additionalCheckouts = [],
+) => {
   const script = join(root, entry.exercise.script);
   const command =
     environment.interpreter === undefined
-      ? ['node', script, checkout, environment.modules]
-      : [environment.interpreter, script, checkout];
+      ? ['node', script, checkout, environment.modules, ...additionalCheckouts]
+      : [environment.interpreter, script, checkout, ...additionalCheckouts];
   const output = run(
     'node',
     [join(root, 'apps/cli/src/main.ts'), '--cwd', checkout, 'trace', '--json', '--', ...command],
@@ -139,5 +145,5 @@ export const exerciseRepository = (root, entry, checkout, environment) => {
       `the exercise of ${entry.name} failed: ${document.error?.message ?? 'no message'}`,
     );
   }
-  return { runs: 1, spans: document.data.spanCount };
+  return { runs: 1, spans: document.data.spanCount, services: [...document.data.services].sort() };
 };

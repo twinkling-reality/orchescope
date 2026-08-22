@@ -774,3 +774,32 @@ multiRepositorySystems:
       missing, conflicting or stale, either endpoint lacks a source coordinate in its own checkout, or the emitted
       server build cannot be mapped uniquely to the pinned source. The two-entry corpus list locates checkouts and
       is never observed evidence that the request crossed between them.
+    exercise:
+      why: >-
+        The client repository's own filesystem example launches the server repository's actual compiled package over
+        stdio. A deterministic model selects the real read_text_file tool from the server's advertised list and reads
+        one line from the example's own sample file. The integration captures client and server source call sites,
+        carries W3C context in MCP request metadata and exports both processes to the same bounded trace receiver.
+
+        The driver supplies execution wiring, instrumentation and a model response. It does not supply repository
+        identity: each span derives its URL, revision and file from the clean Git checkout owning its runtime frame.
+      runtimeRepository: openai-agents-js
+      script: corpus/runs/openai-agents-js-filesystem-mcp/exercise.mjs
+      nodePackages:
+        - '@openai/agents@0.13.5'
+        - '@openai/agents-core@0.13.5'
+        - openai@6.46.0
+        - '@modelcontextprotocol/sdk@1.26.0'
+        - '@modelcontextprotocol/server-filesystem@2026.1.14'
+        - zod@4.4.3
+        - diff@5.2.2
+        - glob@10.5.0
+        - minimatch@10.2.4
+        - zod-to-json-schema@3.25.1
+        - '@opentelemetry/api@1.9.0'
+        - '@opentelemetry/sdk-trace-node@2.2.0'
+        - '@opentelemetry/exporter-trace-otlp-http@0.207.0'
+        - '@opentelemetry/resources@2.2.0'
+        - typescript@5.8.2
+        - '@types/node@22.10.2'
+        - '@types/diff@5.0.9'

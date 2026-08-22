@@ -66,6 +66,7 @@ const multiRepositorySystems = readMultiRepositorySystems(repositoryRoot) as rea
   repositories: readonly { name: string; url: string; commit: string }[];
   crossingEvidence: string;
   falsifier: string;
+  exercise?: { runtimeRepository: string; script: string; nodePackages: readonly string[] };
 }[];
 
 const expectationOf = (name: string): Expectation =>
@@ -135,6 +136,26 @@ describe('the corpus', () => {
         assert.equal(entry?.url, coordinate.url, `${system.name} has a stale URL`);
         assert.equal(entry?.commit, coordinate.commit, `${system.name} has a stale commit`);
       }
+    }
+  });
+
+  it('records every exercised multi-repository system separately', () => {
+    const exercised = multiRepositorySystems.filter((system) => system.exercise !== undefined);
+    assert.ok(
+      exercised.length > 0,
+      'no multi-repository system can exercise its crossing evidence',
+    );
+    for (const system of exercised) {
+      assert.ok(
+        system.repositories.some(
+          (repository) => repository.name === system.exercise?.runtimeRepository,
+        ),
+        `${system.name} stores its run outside the participating repositories`,
+      );
+      assert.ok(
+        existsSync(join(repositoryRoot, 'corpus/expected', `${system.name}.federation.json`)),
+        `${system.name} has no federated expectation`,
+      );
     }
   });
 });

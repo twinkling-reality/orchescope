@@ -19,9 +19,10 @@ import { fileURLToPath } from 'node:url';
 import { auditRepository, clearStoredState } from './corpus/audit.mjs';
 import { cacheDirectory, checkout } from './corpus/checkout.mjs';
 import { claimDifference, differences } from './corpus/comparison.mjs';
-import { isOffline, readCorpus } from './corpus/definition.mjs';
+import { isOffline, readCorpusDocument } from './corpus/definition.mjs';
 import { injectionVerdicts } from './corpus/negatives.mjs';
 import { exerciseRepository, missingInterpreter, prepareEnvironment } from './corpus/exercise.mjs';
+import { describeFederation, exerciseFederatedSystem } from './corpus/federation.mjs';
 import { observationOf } from './corpus/observation.mjs';
 import { describe } from './corpus/summary.mjs';
 
@@ -85,20 +86,29 @@ const releaseLock = takeLock();
 process.once('exit', releaseLock);
 
 const expectationPath = (name) => join(root, 'corpus/expected', `${name}.json`);
+const federationExpectationPath = (name) =>
+  join(root, 'corpus/expected', `${name}.federation.json`);
 
-const readExpectation = (name) => {
+const readExpectationAt = (path) => {
   try {
-    return JSON.parse(readFileSync(expectationPath(name), 'utf8'));
+    return JSON.parse(readFileSync(path, 'utf8'));
   } catch {
     return undefined;
   }
 };
 
-const entries = readCorpus(root).filter(
+const corpus = readCorpusDocument(root);
+const allEntries = corpus.repositories;
+const entries = allEntries.filter(
   (entry) =>
     (!offline || isOffline(entry)) && (selected.length === 0 || selected.includes(entry.name)),
 );
-if (entries.length === 0) {
+const systems = offline
+  ? []
+  : corpus.multiRepositorySystems.filter(
+      (system) => selected.length === 0 || selected.includes(system.name),
+    );
+if (entries.length === 0 && systems.length === 0) {
   console.error('no corpus entry matched');
   process.exit(2);
 }
@@ -154,7 +164,7 @@ for (const entry of entries) {
         : exerciseRepository(root, entry, directory, prepareEnvironment(root, entry, directory));
     const { audit, bundle } = auditRepository(root, entry.name, directory);
     const observation = observationOf(entry, audit, bundle, exercised);
-    const expected = readExpectation(entry.name);
+    const expected = readExpectationAt(expectationPath(entry.name));
     const found = [
       ...(expected === undefined
         ? [{ path: '', expected: 'a recorded expectation', observed: 'no file' }]
@@ -174,6 +184,62 @@ for (const entry of entries) {
     results.push({ entry, observation, differences: found, injections });
   } catch (error) {
     results.push({ entry, error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+const entryByName = new Map(allEntries.map((entry) => [entry.name, entry]));
+const federationResults = [];
+for (const system of systems) {
+  if (system.exercise === undefined) {
+    federationResults.push({
+      system,
+      error: 'has no exercise that can test its crossing evidence',
+    });
+    continue;
+  }
+  if (!exercise) {
+    federationResults.push({
+      system,
+      skipped: 'needs --exercise, which runs both pinned repositories and their protocol crossing',
+    });
+    continue;
+  }
+  const missing = (system.exercise.requiresEnvironment ?? []).filter(
+    (name) => (process.env[name] ?? '') === '',
+  );
+  if (missing.length > 0) {
+    federationResults.push({
+      system,
+      skipped: `needs ${missing.join(' and ')} in the environment, which this run reaches a provider with`,
+    });
+    continue;
+  }
+  try {
+    const repositoryDirectories = system.repositories.map((coordinate) => {
+      const entry = entryByName.get(coordinate.name);
+      if (entry === undefined)
+        throw new Error(`repository ${coordinate.name} is not a corpus entry`);
+      return checkout(root, entry, true);
+    });
+    const runtimeIndex = system.repositories.findIndex(
+      (coordinate) => coordinate.name === system.exercise.runtimeRepository,
+    );
+    const runtimeDirectory = repositoryDirectories[runtimeIndex];
+    if (runtimeDirectory === undefined) throw new Error('the runtime repository has no checkout');
+    clearStoredState(runtimeDirectory);
+    const environment = prepareEnvironment(root, system, runtimeDirectory);
+    const observation = exerciseFederatedSystem(root, system, repositoryDirectories, environment);
+    const expected = readExpectationAt(federationExpectationPath(system.name));
+    const found =
+      expected === undefined
+        ? [{ path: '', expected: 'a recorded expectation', observed: 'no file' }]
+        : differences(expected, observation);
+    federationResults.push({ system, observation, differences: found });
+  } catch (error) {
+    federationResults.push({
+      system,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -238,6 +304,42 @@ for (const result of results) {
   }
 }
 
+let federationDiffering = 0;
+let federationFailed = 0;
+let federationSkipped = 0;
+for (const result of federationResults) {
+  console.log('');
+  if (result.skipped !== undefined) {
+    federationSkipped += 1;
+    console.log(`${result.system.name}  not measured: ${result.skipped}`);
+    continue;
+  }
+  if (result.error !== undefined) {
+    federationFailed += 1;
+    console.log(`${result.system.name}  could not be measured`);
+    console.log(`  ${result.error.split('\n').join('\n  ')}`);
+    continue;
+  }
+  for (const line of describeFederation(result.observation)) console.log(line);
+  if (record) {
+    const path = federationExpectationPath(result.system.name);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, `${stableJson(result.observation)}\n`, { mode: 0o644 });
+    console.log(`  recorded      corpus/expected/${result.system.name}.federation.json`);
+    continue;
+  }
+  if (result.differences.length === 0) {
+    console.log('  expectation   matched');
+    continue;
+  }
+  federationDiffering += 1;
+  console.log(`  expectation   ${result.differences.length} difference(s)`);
+  for (const difference of result.differences) {
+    const where = difference.path === '' ? 'the expectation' : difference.path;
+    console.log(`    ${where}: expected ${difference.expected}, observed ${difference.observed}`);
+  }
+}
+
 const summaryPath = join(cacheDirectory(root), 'corpus-summary.json');
 mkdirSync(dirname(summaryPath), { recursive: true });
 writeFileSync(
@@ -258,6 +360,14 @@ writeFileSync(
         : {}),
       ...(result.error === undefined ? {} : { error: result.error }),
     })),
+    federatedSystems: federationResults.map((result) => ({
+      name: result.system.name,
+      ...(result.skipped !== undefined ? { skipped: result.skipped } : {}),
+      ...(result.error === undefined && result.skipped === undefined
+        ? { observation: result.observation, differences: result.differences ?? [] }
+        : {}),
+      ...(result.error === undefined ? {} : { error: result.error }),
+    })),
   })}\n`,
   { mode: 0o644 },
 );
@@ -272,6 +382,13 @@ const injected = results.reduce((total, result) => total + (result.injections?.l
 console.log(
   `${injected} injected shape(s) across the repositories that are not agent systems: ${injected - results.reduce((total, result) => total + (result.injections ?? []).filter((injection) => injection.broken.length > 0).length, 0)} held, ${broken} repositor${broken === 1 ? 'y' : 'ies'} broke one`,
 );
+if (federationResults.length > 0) {
+  console.log(
+    `${federationResults.length} federated system${federationResults.length === 1 ? '' : 's'}: ` +
+      `${federationResults.length - federationDiffering - federationFailed - federationSkipped} ${record ? 'recorded' : 'matched'}, ` +
+      `${federationDiffering} differing, ${federationFailed} not measured, ${federationSkipped} skipped`,
+  );
+}
 console.log(`summary written to ${summaryPath.slice(root.length + 1)}`);
 
 if (record) {
@@ -284,4 +401,6 @@ if (record) {
  * A broken invariant fails a recording run too. `--record` rewrites what a scan produced and cannot rewrite
  * this, which is the whole point of holding it here rather than in an expectation.
  */
-process.exit(broken > 0 || failed > 0 ? 1 : differing > 0 && !record ? 1 : 0);
+const measurementFailed = failed > 0 || federationFailed > 0;
+const expectationMoved = differing > 0 || federationDiffering > 0;
+process.exit(broken > 0 || measurementFailed ? 1 : expectationMoved && !record ? 1 : 0);

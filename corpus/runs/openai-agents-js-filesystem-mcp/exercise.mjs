@@ -29,8 +29,7 @@ const directory = (value) => {
 
 const clientCheckout = directory(clientArgument);
 const modules = directory(modulesArgument);
-const serverCheckout = directory(serverArgument);
-const serverPackage = join(serverCheckout, 'src/filesystem');
+const serverPackage = directory(serverArgument);
 const serverEntry = join(serverPackage, 'dist/index.js');
 const example = join(clientCheckout, 'examples/mcp/filesystem-example.ts');
 const exampleUrl = pathToFileURL(example).href;
