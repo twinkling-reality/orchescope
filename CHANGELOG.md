@@ -4,6 +4,16 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## 0.9.0
 
+Released 2026-08-22 from npm as `orchescope@0.9.0`, published locally with `npm publish --no-provenance`,
+so this release carries no registry attestation. `pnpm package` built a tarball byte identical to the one on the
+registry, which was checked by downloading the published package and comparing:
+
+```
+sha256  fa79ac36990e6e4c6ba023ab5cc35e3c3334796bd605e86b4c26a6a507701307
+```
+
+Installed from the registry, the binary reports `0.9.0` and `orchescope doctor` passes every required check.
+
 Where breadth comes from as agent systems proliferate, asked with measurements and answered in accepted
 decisions: the fact model rather than the adapter count, provenance rather than a confidence band, a corpus
 gate that holds invariants a recording cannot rewrite, and a manifest role that separates a consumed system
