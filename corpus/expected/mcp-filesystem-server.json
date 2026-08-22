@@ -1,0 +1,122 @@
+{
+  "adapters": {
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 15,
+      "edgesFound": 14,
+      "filesInspected": 1,
+      "status": "completed"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:search-index": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": true,
+  "components": {
+    "byKind": {
+      "mcp_server": 1,
+      "tool": 14
+    },
+    "declaredInTest": 0,
+    "total": 15
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 14,
+    "inSupportedLanguages": 12,
+    "parsed": 12,
+    "skipped": 0,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "observability-coverage": 1
+    },
+    "bySeverity": {
+      "info": 1
+    },
+    "componentsByRule": {
+      "observability-coverage": 5
+    },
+    "strengths": 0,
+    "total": 1
+  },
+  "foundNothing": [],
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "mcp-filesystem-server",
+  "relations": {
+    "byKind": {
+      "provides_tool": 14
+    },
+    "total": 14
+  }
+}

@@ -11,8 +11,8 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { copyFileSync, existsSync, mkdirSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 const git = (args, cwd) =>
   execFileSync('git', args, {
@@ -61,7 +61,18 @@ const checkoutGit = (root, entry, allowNetwork) => {
   }
   // Forced, because a formatter or an editor pointed at the cache would otherwise change what is measured.
   git(['checkout', '--quiet', '--force', '--detach', entry.commit], directory);
-  return directory;
+  if (entry.subpath === undefined) return directory;
+  const repositoryRoot = realpathSync(directory);
+  const candidate = resolve(directory, entry.subpath);
+  if (!existsSync(candidate) || !statSync(candidate).isDirectory()) {
+    throw new Error(`${entry.name}: ${entry.subpath} is not a directory at ${entry.commit}`);
+  }
+  const auditRoot = realpathSync(candidate);
+  const inside = relative(repositoryRoot, auditRoot);
+  if (inside.length === 0 || inside.startsWith('..') || isAbsolute(inside)) {
+    throw new Error(`${entry.name}: ${entry.subpath} resolves outside its pinned repository`);
+  }
+  return auditRoot;
 };
 
 const checkoutLocal = (root, entry) => {

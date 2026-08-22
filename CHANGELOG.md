@@ -41,6 +41,21 @@ relation joins remain zero of 16 and the remaining three findings describe the u
 gaps. Resource attributes stay attached to the span that carried them, so one process cannot donate a revision
 to another span. Declaration-shaped endpoint attributes remain unable to prove their own runtime relation.
 
+### One upstream MCP example pins both repositories it actually runs
+
+The multi-repository boundary previously had a source primitive and no real system to test it against. The
+corpus now pins the OpenAI Agents JavaScript repository's own filesystem example together with the separate
+MCP Servers repository at the peeled commit for filesystem server release 2026.1.14. The client package and
+lock select that exact release, the example launches its entry point over stdio, and both repositories are
+MIT. This is one upstream-authored integration rather than two projects chosen because their APIs fit.
+
+The second checkout is audited at `src/filesystem`, the independently published package inside its monorepo.
+It contributes 1 implemented MCP server, 14 tools and 14 `provides_tool` relations across 12 supported files.
+The corpus definition repeats both canonical URLs and full revisions, states why they form one system and
+pre-registers the runtime falsifier. A cross-repository join needs a successful `tools/call` whose W3C trace
+context crosses the real stdio boundary and whose two endpoints each carry source identity for their own
+checkout. The corpus list only locates source; it cannot prove that the request crossed.
+
 ### Three source files git read as binary, one of them where every component identity is minted
 
 A single literal NUL byte makes git treat a file as binary, and a binary file produces no diff. Three held

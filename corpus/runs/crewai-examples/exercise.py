@@ -53,6 +53,8 @@ os.environ["CREWAI_DISABLE_TELEMETRY"] = "true"
 os.environ["CREWAI_TRACING_ENABLED"] = "false"
 
 CHECKOUT = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path.cwd()
+# The integration lives in the tracked harness. An exercise must not leave interpreter cache files in it.
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 sys.path.insert(0, str(CHECKOUT / "crews/marketing_strategy/src"))
 

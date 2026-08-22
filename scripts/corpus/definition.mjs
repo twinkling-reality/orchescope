@@ -39,6 +39,19 @@ const checkGitSource = (entry, problem) => {
     problem('commit has to be a full forty character revision, because a branch is not a pin');
   }
   if (entry.path !== undefined) problem('path belongs to a local entry');
+  if (entry.subpath !== undefined) {
+    if (
+      typeof entry.subpath !== 'string' ||
+      entry.subpath.length === 0 ||
+      entry.subpath.startsWith('/') ||
+      entry.subpath.endsWith('/') ||
+      entry.subpath
+        .split('/')
+        .some((segment) => segment.length === 0 || segment === '.' || segment === '..')
+    ) {
+      problem('subpath has to name a normalized directory inside the pinned repository');
+    }
+  }
 };
 
 const checkLocalSource = (entry, problem) => {
@@ -49,6 +62,55 @@ const checkLocalSource = (entry, problem) => {
   }
   if (entry.url !== undefined || entry.commit !== undefined) {
     problem('url and commit belong to a git entry');
+  }
+  if (entry.subpath !== undefined) problem('subpath belongs to a git entry');
+};
+
+const checkMultiRepositorySystem = (system, index, repositories, names, problems) => {
+  const where =
+    isRecord(system) && typeof system.name === 'string'
+      ? system.name
+      : `multi-repository system ${index + 1}`;
+  const problem = (detail) => problems.push(`${where}: ${detail}`);
+  if (!isRecord(system)) {
+    problem('is not a mapping');
+    return;
+  }
+  if (typeof system.name !== 'string' || !NAME.test(system.name)) {
+    problem('name has to be lower case letters, digits and hyphens');
+  } else if (names.has(system.name)) {
+    problem('name is already used by another multi-repository system');
+  } else {
+    names.add(system.name);
+  }
+  for (const field of ['why', 'crossingEvidence', 'falsifier']) {
+    if (typeof system[field] !== 'string' || system[field].trim().length === 0) {
+      problem(`${field} has to state the evidence boundary`);
+    }
+  }
+  if (!Array.isArray(system.repositories) || system.repositories.length < 2) {
+    problem('repositories has to pin at least two repositories');
+    return;
+  }
+  const referenced = new Set();
+  for (const coordinate of system.repositories) {
+    if (!isRecord(coordinate) || typeof coordinate.name !== 'string') {
+      problem('every repository coordinate has to name a corpus entry');
+      continue;
+    }
+    if (referenced.has(coordinate.name)) {
+      problem(`repository ${coordinate.name} is repeated`);
+      continue;
+    }
+    referenced.add(coordinate.name);
+    const repository = repositories.get(coordinate.name);
+    if (repository === undefined || repository.source !== 'git') {
+      problem(`repository ${coordinate.name} is not a pinned git corpus entry`);
+      continue;
+    }
+    if (coordinate.url !== repository.url || coordinate.commit !== repository.commit) {
+      problem(`repository ${coordinate.name} does not repeat its exact corpus URL and commit`);
+    }
   }
 };
 
@@ -146,8 +208,8 @@ const checkEntry = (entry, index, names, problems) => {
   else problem('source has to be git or local');
 };
 
-/** Entries are returned in file order, which is the order a reader sees them in the summary. */
-export const readCorpus = (root) => {
+/** The validated definition, retaining composite systems separately from the repositories the runner scans. */
+export const readCorpusDocument = (root) => {
   const path = join(root, 'corpus/corpus.yaml');
   const document = parse(readFileSync(path, 'utf8'));
   if (!isRecord(document)) throw new Error(`${path} is not a mapping`);
@@ -165,11 +227,30 @@ export const readCorpus = (root) => {
   for (const [index, entry] of document.repositories.entries()) {
     checkEntry(entry, index, names, problems);
   }
+  const multiRepositorySystems = document.multiRepositorySystems ?? [];
+  if (!Array.isArray(multiRepositorySystems)) {
+    problems.push('multiRepositorySystems has to be a list');
+  } else {
+    const repositories = new Map(
+      document.repositories
+        .filter((entry) => isRecord(entry) && typeof entry.name === 'string')
+        .map((entry) => [entry.name, entry]),
+    );
+    const systemNames = new Set();
+    for (const [index, system] of multiRepositorySystems.entries()) {
+      checkMultiRepositorySystem(system, index, repositories, systemNames, problems);
+    }
+  }
   if (problems.length > 0) {
     throw new Error(`${path} is not usable:\n  ${problems.join('\n  ')}`);
   }
-  return document.repositories;
+  return { repositories: document.repositories, multiRepositorySystems };
 };
+
+/** Entries are returned in file order, which is the order a reader sees them in the summary. */
+export const readCorpus = (root) => readCorpusDocument(root).repositories;
+
+export const readMultiRepositorySystems = (root) => readCorpusDocument(root).multiRepositorySystems;
 
 /** The subset that needs no network, which is what the required gate runs. */
 export const isOffline = (entry) => entry.source === 'local';

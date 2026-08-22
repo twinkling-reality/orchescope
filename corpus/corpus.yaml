@@ -20,6 +20,10 @@
 # code, so they are skipped unless `--exercise` is passed, and the skip is printed rather than silent. An exercise
 # that reaches a provider names the variables it cannot start without in `requiresEnvironment`, and a machine
 # without them skips that entry with the reason printed rather than failing inside somebody else's SDK.
+# A git entry may name `subpath` when one independently published package inside a monorepo is the audit target. The
+# checkout and revision still belong to the repository root. `multiRepositorySystems` repeats the exact URL and
+# commit of every participating entry, then states the runtime crossing evidence and its refusal condition. That
+# list locates source and never counts as evidence that two processes communicated.
 #
 # Both polarities count. A repository that is not an agent system is a precision test: the number it holds is a
 # ceiling, and the guard against a reader being loosened until it matches ordinary English.
@@ -188,6 +192,20 @@ repositories:
         - '@opentelemetry/exporter-trace-otlp-http'
       requiresEnvironment:
         - OPENAI_API_KEY
+
+  - name: mcp-filesystem-server
+    source: git
+    url: https://github.com/modelcontextprotocol/servers.git
+    commit: 3e805376da81c063c2798410906b5fd134334a43
+    subpath: src/filesystem
+    kind: agent_system
+    why: >-
+      The independently versioned server launched by the pinned OpenAI Agents JavaScript repository's own
+      `examples/mcp/filesystem-example.ts`. That example requests `@modelcontextprotocol/server-filesystem`
+      2026.1.14, its lock resolves exactly 2026.1.14, and this is the peeled commit of that release tag. The audit
+      root is the filesystem package rather than the whole MCP Servers monorepo, which bounds the topology to the
+      implemented stdio server and its filesystem tools without pretending the other server packages are part of
+      this application.
 
   - name: langgraph
     source: git
@@ -729,3 +747,30 @@ repositories:
       The upstream repository is marked deprecated at this commit. The commit is pinned and stays readable, and a
       client of a framework is the shape being tested rather than this project in particular, so a replacement
       would have to be another repository that is about agents and declares none.
+
+multiRepositorySystems:
+  - name: openai-agents-js-filesystem-mcp
+    repositories:
+      - name: openai-agents-js
+        url: https://github.com/openai/openai-agents-js.git
+        commit: 52b2702fc034fb47f79ec50fad173f0e9b068ca6
+      - name: mcp-filesystem-server
+        url: https://github.com/modelcontextprotocol/servers.git
+        commit: 3e805376da81c063c2798410906b5fd134334a43
+    why: >-
+      This is one upstream-authored agent system across two independently versioned MIT repositories. The OpenAI
+      Agents example constructs an agent with `MCPServerStdio`, resolves the separately published filesystem server
+      entry point and launches it as a child process. The server registers the tools the agent lists and calls over
+      that stdio session. The package constraint and lock in the client repository select release 2026.1.14, whose
+      release tag peels to the server commit pinned here.
+    crossingEvidence: >-
+      Acceptance requires a successful MCP `tools/call` over the real stdio boundary with client and server spans in
+      one W3C trace. The client request span and server handler span must preserve their parent relationship, and
+      each side must carry its own canonical repository URL, full revision and source coordinate. The successful
+      filesystem result is evidence that the request crossed; the repository identities say which implementations
+      handled it.
+    falsifier: >-
+      Refuse the pairing when trace context does not cross the stdio request, either repository URL or revision is
+      missing, conflicting or stale, either endpoint lacks a source coordinate in its own checkout, or the emitted
+      server build cannot be mapped uniquely to the pinned source. The two-entry corpus list locates checkouts and
+      is never observed evidence that the request crossed between them.

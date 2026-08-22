@@ -535,19 +535,28 @@ repository coordinate in front of that namespace, and three designs are possible
 Design 3 remains the candidate. ADR 0007 has now proved its source primitive inside one repository:
 `crewai-examples-exercised` reports 3 code-location joins from runtime-derived Python frames, repository
 coordinate and full revision. The same run reports 0 name-only joins and keeps relation joins at 0. The
-primitive therefore fires without turning a role into a location, but no pinned entry yet says whether it
-can preserve identity across independently versioned repositories.
+primitive therefore fires without turning a role into a location.
+
+The other condition is now pinned as `openai-agents-js-filesystem-mcp`. The OpenAI Agents JavaScript
+repository's own filesystem example launches `@modelcontextprotocol/server-filesystem` over stdio, and its
+lock selects release 2026.1.14. The release tag in the independently versioned MCP Servers repository peels
+to the exact second commit in the corpus definition. Both are MIT. Scanning only the published filesystem
+package reports 1 implemented server, 14 tools and 14 `provides_tool` relations across 12 supported files.
+The combined system is not inferred from compatibility: the client repository contains the program that
+starts this server package and calls its tools.
 
 **The boundary holds, and the condition that moves it is stated:** a pinned corpus entry that is a
 multi repository agent system, and `byCodeLocation` greater than zero on at least one exercised entry. The
-second condition is now met. The first is the remaining corpus decision, and it must be met by a real
-system rather than a hand-written topology before a federated identity contract moves.
+source condition is met by CrewAI and the real multi-repository system is now pinned. What remains is the
+runtime falsifier: a successful MCP `tools/call` must carry one W3C trace across the real stdio boundary,
+with each endpoint carrying the source identity of its own exact checkout. A workspace list, two compatible
+package names or one trace carrying only one repository must still produce no cross-repository join.
 
 **One clause moved and one did not.** Per-attribute provenance now names repository, revision, file, line
 and function separately on each accepted source identity. Coverage names `code.file.path`,
 `orchescope.code.repository.path`, `vcs.repository.url.full` and `vcs.ref.head.revision` with observed
-sample counts where another instrumentor omits them. There is still no pinned multi-repository entry, so
-the product boundary holds on that clause alone while Stage 3 finds the real system ADR 0008 must judge.
+sample counts where another instrumentor omits them. ADR 0008 must now judge federation against the pinned
+MCP crossing and refuse it if that trace evidence cannot qualify both sides independently.
 
 ## The success metric
 

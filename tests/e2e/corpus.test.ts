@@ -7,7 +7,11 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { DEFAULT_ADAPTERS } from '../../packages/discovery/src/index.ts';
 import { claimDifference, differences } from '../../scripts/corpus/comparison.mjs';
-import { isOffline, readCorpus } from '../../scripts/corpus/definition.mjs';
+import {
+  isOffline,
+  readCorpus,
+  readMultiRepositorySystems,
+} from '../../scripts/corpus/definition.mjs';
 
 /**
  * The corpus harness measured against itself.
@@ -53,6 +57,15 @@ const entries = readCorpus(repositoryRoot) as readonly {
   name: string;
   kind: string;
   source: string;
+  url?: string;
+  commit?: string;
+}[];
+
+const multiRepositorySystems = readMultiRepositorySystems(repositoryRoot) as readonly {
+  name: string;
+  repositories: readonly { name: string; url: string; commit: string }[];
+  crossingEvidence: string;
+  falsifier: string;
 }[];
 
 const expectationOf = (name: string): Expectation =>
@@ -103,6 +116,26 @@ describe('the corpus', () => {
       entries.some((entry) => isOffline(entry)),
       'the required gate needs an offline subset',
     );
+  });
+
+  it('pins every repository in a real multi-repository system by URL and revision', () => {
+    assert.ok(multiRepositorySystems.length > 0, 'no multi-repository system is pinned');
+    for (const system of multiRepositorySystems) {
+      assert.ok(system.repositories.length >= 2, `${system.name} has fewer than two repositories`);
+      assert.ok(
+        system.crossingEvidence.includes('trace'),
+        `${system.name} names no trace evidence`,
+      );
+      assert.ok(
+        system.falsifier.toLowerCase().includes('refuse'),
+        `${system.name} states no refusal`,
+      );
+      for (const coordinate of system.repositories) {
+        const entry = entries.find((candidate) => candidate.name === coordinate.name);
+        assert.equal(entry?.url, coordinate.url, `${system.name} has a stale URL`);
+        assert.equal(entry?.commit, coordinate.commit, `${system.name} has a stale commit`);
+      }
+    }
   });
 });
 
