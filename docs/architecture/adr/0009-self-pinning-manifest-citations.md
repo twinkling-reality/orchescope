@@ -68,6 +68,24 @@ stable file location. It carries manifest evidence and no source location rather
 under the same byte ceiling as source analysis. The resulting snapshots are scan-local and are not
 persisted as another source copy.
 
+## What the measurement said
+
+The demonstration manifest advances to version 3 with 18 citations across 11 unique source files and
+43,335 source bytes. Every cited line contains the component name or runtime name, every author-recorded
+digest matches the independently scanned bytes, and the manifest adapter completes with 18 components and
+20 relations. The graph locations carry the scanned digests.
+
+Adding the 18 digest fields grows that manifest from 7,568 to 9,116 bytes, an increase of 1,548 bytes or
+20.5%. Ten audits of identical copied repositories measured version 2 discovery at 37.0ms mean and 37ms
+median. Version 3 measured 38.4ms mean and 38ms median, an increase of 1.4ms mean and 1ms median for the 11
+bounded reads.
+
+The negative cases each hold independently. Changing the file after recording its digest reports the
+citation as stale and leaves its source location out of the graph. Updating the digest while pointing at a
+line with neither accepted name reports the line claim. Partial citation triples fail schema validation.
+Escaped symlinks, oversized input, binary bytes and invalid UTF-8 produce bounded refusal facts, and version
+2 still accepts its established path and line shape without applying either version 3 check.
+
 ## What would reverse this
 
 The decision is false if any of these cases does not hold:

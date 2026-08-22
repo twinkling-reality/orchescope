@@ -29,7 +29,7 @@ tool.
 | Phase | State | Evidence |
 | --- | --- | --- |
 | 1. Research and stack selection | done | `docs/research/`, `docs/architecture/adr/0001-stack-selection.md` |
-| 2. Contracts and domain core | done | `packages/schema`, `packages/domain`, twelve documents under `schemas/` |
+| 2. Contracts and domain core | done | `packages/schema`, `packages/domain`, thirteen documents under `schemas/` |
 | 3. Source analysis and discovery | done | `pnpm --silent orchescope --cwd apps/demo audit`, adapter fixtures per ecosystem |
 | 4. Graph, identity, invariants | done | `packages/graph/test/graph.test.ts`, 23 tests |
 | 5. Runtime observation and reconciliation | done | `packages/traces/test/traces.test.ts`, the delta in the demo audit |
@@ -71,6 +71,9 @@ and it is listed item by item because only some of it is done.
   `tests/e2e/documented-manifests.test.ts` audits every documented manifest example through the real reader. A manifest
   the validator rejects is now a failed adapter run whose detail names the field, printed on the terminal and shown in the
   report rather than swallowed. `orchescope init --manifest` writes a template that validates and declares nothing.
+  Manifest version 3 makes every source citation carry its write-time file digest, verifies that digest and the cited
+  name-bearing line against bounded repository snapshots, and omits a stale location rather than presenting it as current.
+  Version 1 and version 2 retain closed readers with their established meaning.
 - **A repository with nothing detected gets a report rather than a shrug**: what was looked for, what could not be
   inspected, and `orchescope init --manifest` as the next step instead of a trace that cannot help.
 - **An empty traced run names its causes**: the receiver address, the OpenTelemetry variables that were set, the three

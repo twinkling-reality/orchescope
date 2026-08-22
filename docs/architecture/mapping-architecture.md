@@ -156,7 +156,8 @@ decide them are the ones above. The two supporting numbers worth carrying:
 - **Direction 3 is already the policy.** `docs/guides/adapter-development.md:3-4` says start with the
   manifest. What was new is the word "verifies", and it was worth building: the engine accepted
   `definedIn: src/does-not-exist.rb`, and `fileHash` was written 0 of 17,115 times. Both are closed in
-  Stage 3 below, and what a citation still cannot be checked against is named there.
+  Stage 3 below. ADR 0009 records the later version 3 contract that also closes the cited text and
+  write-time digest checks named there.
 
 ## The claim
 
@@ -463,7 +464,7 @@ in the marketing crew and nothing else: 3 code-location joins, 0 name-only joins
 missing source attributes. The earlier zero remains the right answer to the name-only question.
 
 **A refutable manifest.** The manifest is already a first class input and already the documented first
-step, so what is new here is only the verification. The engine today accepts
+step, so what is new here is only the verification. The engine used to accept
 `definedIn: src/does-not-exist.rb, definedAtLine: 4242`, and this repository's own reference manifest
 would fail the check that makes a manifest safe: 16 of 18 components cite line 1, and 4 of 18 cite a file
 that does not contain the name. The checks a deterministic engine can run with no model:
@@ -476,17 +477,18 @@ that does not contain the name. The checks a deterministic engine can run with n
   applies to an interpolated role,
 - the file hash recorded at write time still matches, or the manifest is reported stale rather than read.
 
-**Four of those are built and the rest are named.** A `definedIn` naming no file the scan walked, a line
-beyond what the file is long enough to hold, a `runtimeName` carrying a placeholder, and an edge endpoint
-naming nothing declared or discovered are all refuted, and a manifest failing any of them is a failed
-adapter run naming each claim while what it got right is still read. Two are not built and the reason is the
-same in both cases: checking that the cited line's text contains the name means opening the file, and an
-adapter never opens one, and there is no field on the manifest for a hash recorded at write time. The
-traversal now records every path it walked whatever the language, because `collectFiles` keeps only what a
-parser reads and the manifest exists for exactly the languages it does not.
+**All six checks are built.** A `definedIn` naming no file the scan walked, an impossible line, a
+`runtimeName` carrying a placeholder and an edge endpoint naming nothing declared or discovered retain
+their established refutations. [ADR 0009](adr/0009-self-pinning-manifest-citations.md) adds manifest version
+3 for the remaining pair. A citation now supplies `definedIn`, `definedAtLine` and `definedFileHash`
+together. Discovery reads only that bounded set of files under the traversal byte ceiling and hands the
+adapter the scanned digest plus the requested UTF-8 lines. The adapter still opens nothing. A stale digest
+or a line containing neither the component name nor its runtime name fails the adapter, and the refuted
+source location stays out of the graph while the component's other valid declaration facts remain.
 
 Manifest version 2 adds one schema-local refutation beside those repository checks: `details.for` must
 agree with the component `kind`. A mismatch is reported and the invalid details do not reach the graph.
+Version 1 and version 2 remain separate closed readers and gain no version 3 meaning.
 
 The location this build was inventing is also gone: a component with `definedIn` and no `definedAtLine`
 recorded line 1, which is a claim no manifest makes, and that citation is refused rather than completed.
@@ -495,7 +497,14 @@ recorded line 1, which is a claim no manifest makes, and that citation is refuse
 1, and 4 of those cited a file that does not contain the component's name at all, `account-worker` and
 `inventory-worker` naming `src/agents/workers.ts` where they are declared in `src/agents/definitions.ts`,
 and `demo-small` and `demo-large` naming `src/model.ts` where they are named in `src/main.ts`. All 18 now
-cite a line containing the name they declare, which is four errors the engine still cannot catch.
+use version 3, cite a line containing an accepted name and pin the file bytes they were written against.
+They cover 11 unique files and 43,335 bytes. All 18 pass; changing one file fails the manifest adapter as
+stale, and moving the name off the cited line fails independently with a current digest.
+
+The reference manifest grows from 7,568 to 9,116 bytes, 1,548 bytes or 20.5%, for its 18 digests. Across ten
+audits of identical copied repositories, version 2 discovery measured 37.0ms mean and 37ms median; version
+3 measured 38.4ms mean and 38ms median. The bounded verification added 1.4ms mean and 1ms median on this
+fixture.
 
 **The bound reproduced, and [ADR 0006](adr/0006-manifest-component-details.md) moved it on the field it
 named.** The version 1 one component manifest for `open-agent-platform` still flips
@@ -506,9 +515,9 @@ false at 27 components while keeping one visible `mcp_server` in the graph. Chan
 meaning. A consumed server can therefore participate in a system another component establishes without
 claiming that its consumer repository implements one.
 
-**Cost per new framework versus per repository.** A manifest costs 0 per framework and roughly 571 lines
-of hand written YAML per application repository, at the reference manifest's measured 7.0 lines per
-entity. One adapter is cheaper than manifesting 1.68 median application repositories. So the manifest is
+**Cost per new framework versus per repository.** A manifest costs 0 per framework and roughly 610 lines
+of hand written YAML per application repository, at the reference manifest's measured 7.5 lines per
+entity. One adapter is cheaper than manifesting 1.57 median application repositories. So the manifest is
 the honest escape hatch it is documented as, and it is not a path to breadth. The staged answer keeps it
 as an escape hatch and makes it refutable.
 

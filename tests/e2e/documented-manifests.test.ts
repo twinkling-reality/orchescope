@@ -6,6 +6,7 @@ import { dirname, join, relative } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { parse as parseYaml } from 'yaml';
 
 /**
  * The manifest is the documented escape hatch for a system no adapter can read, so an example a reader could
@@ -58,24 +59,43 @@ const unparsedProject = (): string => {
  * for naming files that are not there. That refusal is the point of the check and it is not what these
  * cases are about: what is being asked here is whether the reader accepts the shape a reader would copy. So
  * the fixture gives each example the repository its own citations describe, in whatever language they name,
- * with enough lines for the line each one cites.
+ * with the accepted name on the cited line. The documented digest is calculated from this exact content,
+ * which makes a copied example a complete contract rather than a schema-only sample.
  */
 const writeManifest = (root: string, body: string): void => {
   mkdirSync(join(root, '.orchescope'), { recursive: true });
   writeFileSync(join(root, '.orchescope/manifest.yaml'), body);
 
-  const cited = new Map<string, number>();
-  const lines = body.split('\n');
-  for (const [index, line] of lines.entries()) {
-    const file = /^\s*definedIn:\s*(\S+)\s*$/.exec(line)?.[1];
-    if (file === undefined) continue;
-    const at = /^\s*definedAtLine:\s*(\d+)\s*$/.exec(lines[index + 1] ?? '')?.[1];
-    cited.set(file, Math.max(cited.get(file) ?? 1, Number(at ?? 1)));
+  const parsed = parseYaml(body) as {
+    readonly components?: readonly {
+      readonly name?: string;
+      readonly runtimeName?: string;
+      readonly definedIn?: string;
+      readonly definedAtLine?: number;
+    }[];
+  };
+  const cited = new Map<string, Map<number, string>>();
+  for (const component of parsed.components ?? []) {
+    if (
+      component.definedIn === undefined ||
+      component.definedAtLine === undefined ||
+      component.name === undefined
+    ) {
+      continue;
+    }
+    const lines = cited.get(component.definedIn) ?? new Map<number, string>();
+    lines.set(component.definedAtLine, component.runtimeName ?? component.name);
+    cited.set(component.definedIn, lines);
   }
-  for (const [file, deepest] of cited) {
+  for (const [file, namedLines] of cited) {
     const target = join(root, file);
     mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, `${'// a line the manifest may cite\n'.repeat(deepest)}`);
+    const deepest = Math.max(...namedLines.keys());
+    const contents = Array.from(
+      { length: deepest },
+      (_unused, index) => `// ${namedLines.get(index + 1) ?? 'source'}\n`,
+    ).join('');
+    writeFileSync(target, contents);
   }
 };
 

@@ -10,11 +10,12 @@ gate that holds invariants a recording cannot rewrite, and a manifest role that 
 from the repository implementing it. The first CrewAI run anywhere in this corpus first exposed an ambiguous
 name join and now proves three source-qualified joins against the exact pinned checkout. Five live precision
 failures found by the corpus on the first run of the invariants written to catch them, all of them one defect.
-Every location now says which revision of which file it was read from, and every manifest citation is checked
-against the repository rather than taken. Four interfaces with no producer, three deleted and one given the
+Every location now says which revision of which file it was read from, and every version 3 manifest citation
+is checked against the repository rather than taken. Four interfaces with no producer, three deleted and one given the
 process it was written for. Four measurements that ended in a decline remain recorded where the next reader
 will find them, and every published bound that moved has its own falsifier.
-Published document changes: manifest advances from version 1 to version 2 with component details; system
+Published document changes: manifest advances from version 1 through version 2 component details to version
+3 self-pinning source citations; system
 graph v1 adds optional observed source identity, repository URL and Git-derived repository subroot fields;
 trace bundle v1 preserves optional per-span resource attributes and recognises MCP client requests; report v1
 extends missing-attribute coverage with source-identity purposes and refusal reasons; federation v1 qualifies
@@ -257,7 +258,7 @@ the one input nothing checked against the repository it describes. `definedIn: s
 definedAtLine: 4242` was accepted, and the component appeared in the graph with a location a reader could
 click. Passing the schema says a document is well formed. It says nothing about whether any of it is true.
 
-**Five claims are now refuted.** A `definedIn` that names no file the scan found. A line beyond what the
+**Seven claims are now refuted.** A `definedIn` that names no file the scan found. A line beyond what the
 file is long enough to hold. A `runtimeName` carrying a placeholder,
 which is a name no run reports and which the CrewAI reader already refuses in a declared role. And an edge
 endpoint naming nothing this manifest declares and nothing any other adapter found, which used to be
@@ -266,12 +267,18 @@ reported as a failed adapter run naming each claim, and what it got right is sti
 among eighteen does not lose the seventeen. Manifest version 2 adds the fifth: `details.for` must agree
 with the component `kind`, and invalid details do not enter the graph.
 
+Manifest version 3 adds the remaining two. `definedIn`, `definedAtLine` and `definedFileHash` are one closed
+citation shape. Discovery snapshots only those requested files under the traversal ceilings. The adapter
+verifies the scanned digest and verifies that the cited UTF-8 line contains the component name or its
+`runtimeName`. A stale digest or wrong line fails the adapter, and that source location stays out of the
+graph while the component's other valid declaration facts remain. Version 1 and version 2 keep separate
+closed readers and acquire no version 3 meaning.
+
 **The traversal had to start recording what it walked.** `collectFiles` drops every language no parser
 reads, which is the right set for parsing and the wrong one for asking whether a path is there, and the one
 input that exists precisely for the languages this build cannot parse is the manifest. It now carries the
-paths as well, so `definedIn: src/orchestrator.rb` is answerable. The line is refuted only where the
-traversal sized the file, which is every language this build reads and none of the ones a manifest is for:
-that is where a refutation stops without opening the file, and an adapter never opens one.
+paths as well, so `definedIn: src/orchestrator.rb` is answerable. Version 3 discovery opens only the bounded
+cited set and hands line and digest facts to the adapter, which still opens nothing.
 
 **And a location this build was inventing is gone.** A component with `definedIn` and no `definedAtLine`
 recorded line 1, which is a claim the manifest never made and a link that lands on the imports. There is no
@@ -282,8 +289,13 @@ completed, and nothing fabricated reaches the graph.
 line 1, and for 4 of them the cited file does not contain the component's name anywhere: `account-worker`
 and `inventory-worker` are declared in `src/agents/definitions.ts` and cited `src/agents/workers.ts`, and
 `demo-small` and `demo-large` are named in `src/main.ts` and cited `src/model.ts`. Every one of the 18 now
-cites a line that contains the name it declares. Four of those errors are ones the engine still cannot
-catch, because checking the text of a cited line means opening the file.
+cites a line that contains the name it declares. All 18 now use version 3 and pin those 11 files by digest.
+The engine catches both classes: a source edit reports the declaration as stale, and a current digest with
+the name moved off the cited line reports the incorrect line.
+
+The 18 hashes grow the reference manifest from 7,568 to 9,116 bytes, 20.5%. Ten copied-repository audits
+measured version 2 discovery at 37.0ms mean and 37ms median, and version 3 at 38.4ms mean and 38ms median.
+The bounded verification adds 1.4ms mean and 1ms median on the demonstration.
 
 **The bound reproduced, and manifest version 2 moves exactly the answer it names.** The honest one
 component version 1 manifest for `open-agent-platform` still flips `agentSystemDetected` from false to true

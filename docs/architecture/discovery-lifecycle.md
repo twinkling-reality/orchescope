@@ -29,7 +29,8 @@ Before any source is parsed, three inputs are read:
   comment.
 - **The Orchescope manifest**, `.orchescope/manifest.yaml`, which is a first class input rather than a fallback: what it
   declares is `manifest` presence, and its `runtimeName` values are what let a reconciliation match a component whose
-  runtime name differs from its source name.
+  runtime name differs from its source name. Version 3 source citations are snapshotted under the traversal's path, file
+  count and byte ceilings. Only requested lines and the scanned byte digest reach the manifest adapter.
 
 ## 2. Traverse
 

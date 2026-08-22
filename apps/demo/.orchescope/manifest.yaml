@@ -1,4 +1,4 @@
-schemaVersion: 2
+schemaVersion: 3
 
 # The demonstration system is written by hand: it imports no agent framework and no model SDK, because it has to run
 # offline with no credentials. That is exactly the case this manifest exists for. Orchescope has no adapter that can
@@ -19,6 +19,7 @@ components:
     description: Plans the response, calls tools, hands off to workers and writes the final answer.
     definedIn: src/agents/definitions.ts
     definedAtLine: 146
+    definedFileHash: 18cad38fc3064f36f03d145dff1e2668972476012814ee43bc1368ff2edfe680
     runtimeName: orchestrator
     tags: [demo, orchestrator]
 
@@ -27,6 +28,7 @@ components:
     description: Answers account questions from the account tool result.
     definedIn: src/agents/definitions.ts
     definedAtLine: 47
+    definedFileHash: 18cad38fc3064f36f03d145dff1e2668972476012814ee43bc1368ff2edfe680
     runtimeName: account-worker
     tags: [demo, worker]
 
@@ -35,6 +37,7 @@ components:
     description: Answers stock questions from the inventory tool result.
     definedIn: src/agents/definitions.ts
     definedAtLine: 53
+    definedFileHash: 18cad38fc3064f36f03d145dff1e2668972476012814ee43bc1368ff2edfe680
     runtimeName: inventory-worker
     tags: [demo, worker]
 
@@ -43,6 +46,7 @@ components:
     description: Added only when the worker count is raised above two.
     definedIn: src/agents/definitions.ts
     definedAtLine: 59
+    definedFileHash: 18cad38fc3064f36f03d145dff1e2668972476012814ee43bc1368ff2edfe680
     runtimeName: shipping-worker
     tags: [demo, worker, optional]
 
@@ -51,6 +55,7 @@ components:
     description: Added only when the worker count is raised above three.
     definedIn: src/agents/definitions.ts
     definedAtLine: 65
+    definedFileHash: 18cad38fc3064f36f03d145dff1e2668972476012814ee43bc1368ff2edfe680
     runtimeName: billing-worker
     tags: [demo, worker, optional]
 
@@ -59,6 +64,7 @@ components:
     description: Scripted local model. Deterministic given the seed, no credentials, no network.
     definedIn: src/main.ts
     definedAtLine: 20
+    definedFileHash: 88c6aee000b6b7d88fbda7a26e3c9c8d69dc8c2a72ee045329f936eee6d00fce
     runtimeName: demo-small
     tags: [demo, model]
 
@@ -67,6 +73,7 @@ components:
     description: Fallback model. Configured for the case where the small model fails, and not exercised on the default path.
     definedIn: src/main.ts
     definedAtLine: 21
+    definedFileHash: 88c6aee000b6b7d88fbda7a26e3c9c8d69dc8c2a72ee045329f936eee6d00fce
     runtimeName: demo-large
     tags: [demo, model, fallback]
 
@@ -75,6 +82,7 @@ components:
     description: Reads the account record for a customer.
     definedIn: src/tools/account.ts
     definedAtLine: 12
+    definedFileHash: 8a4498cf4d92814734c20fa02f37f3297d01e354afa5cb78f97559b852a17c7d
     sideEffect: read_only
     runtimeName: lookup_account
     tags: [demo, tool]
@@ -84,6 +92,7 @@ components:
     description: Reads stock levels for a stock keeping unit.
     definedIn: src/tools/inventory.ts
     definedAtLine: 12
+    definedFileHash: 3f1afcc531d77adc3ad8001f9e9a2f89bcb53680ea2d667d3e3d9a6b1d0606e6
     sideEffect: read_only
     runtimeName: check_inventory
     tags: [demo, tool]
@@ -93,6 +102,7 @@ components:
     description: Issues a refund against a payment. Retried on failure and does not pass an idempotency key.
     definedIn: src/tools/refund.ts
     definedAtLine: 22
+    definedFileHash: 4568658be7c600ec2bfea7bf1825248b312642a487a98f902a32d2a241823f7b
     sideEffect: financial
     permissions:
       - kind: network
@@ -106,6 +116,7 @@ components:
     description: Sends a customer notification. Passes an idempotency key on every attempt.
     definedIn: src/tools/notification.ts
     definedAtLine: 18
+    definedFileHash: a4e21c735969c277824d0b03a75d89755103e119bca3d97c1c599b1dc5e941f7
     sideEffect: idempotent_write
     permissions:
       - kind: network
@@ -119,6 +130,7 @@ components:
     description: Reads the policy documents. The content is treated as untrusted input.
     definedIn: src/tools/policies.ts
     definedAtLine: 19
+    definedFileHash: 466c8f974fc0f956bc2f77e137429972cbdeb0579d15bd2a9a6a9d08741a5dec
     sideEffect: read_only
     runtimeName: search_policies
     tags: [demo, tool]
@@ -128,6 +140,7 @@ components:
     description: Hands the request to a person. Registered and unreachable on the default path.
     definedIn: src/tools/escalation.ts
     definedAtLine: 18
+    definedFileHash: 044b85df1a213a64e388ab3055969518be5c2bc81b76995f609abd269fb958a2
     sideEffect: external_notification
     runtimeName: escalate_to_human
     tags: [demo, tool, never-exercised]
@@ -137,6 +150,7 @@ components:
     description: Small in repository document set searched for refund policy text.
     definedIn: src/tools/policies.ts
     definedAtLine: 20
+    definedFileHash: 466c8f974fc0f956bc2f77e137429972cbdeb0579d15bd2a9a6a9d08741a5dec
     runtimeName: policy-store
     tags: [demo, retrieval]
 
@@ -145,6 +159,7 @@ components:
     description: Per conversation state read and written by the orchestrator.
     definedIn: src/memory.ts
     definedAtLine: 14
+    definedFileHash: 0d319e6481618423a25fd551598c154dd21694c155f0da5fb902f4e995eb440d
     runtimeName: conversation-memory
     tags: [demo, memory]
 
@@ -153,6 +168,7 @@ components:
     description: Pending refund requests, drained by a worker pool sized by the worker count.
     definedIn: src/queue.ts
     definedAtLine: 18
+    definedFileHash: 6858f47df22bca40f25f19a87b3225e46b15600408794a4b2e07bb87811e31be
     runtimeName: refunds
     tags: [demo, queue]
 
@@ -161,6 +177,7 @@ components:
     description: Append only audit record written from a helper that the agent definitions do not reference.
     definedIn: src/audit.ts
     definedAtLine: 15
+    definedFileHash: a64c31b005ad148338e4daa2ee311fa5cca19bb85811a3ec84858c9c6e607488
     sideEffect: non_idempotent_write
     runtimeName: audit-log
     tags: [demo, side-effect]
@@ -170,6 +187,7 @@ components:
     description: Explicit approval checked before a refund executes.
     definedIn: src/tools/refund.ts
     definedAtLine: 60
+    definedFileHash: 4568658be7c600ec2bfea7bf1825248b312642a487a98f902a32d2a241823f7b
     runtimeName: issue_refund
     tags: [demo, approval]
 

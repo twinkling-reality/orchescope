@@ -93,13 +93,14 @@ a `runtimeName` is what lets reconciliation match a component whose telemetry na
 validator accepts, and declares nothing until you fill it in:
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 components:
   - kind: tool
     name: issue_refund
     runtimeName: issue_refund
     definedIn: src/tools/refund.ts
     definedAtLine: 24
+    definedFileHash: f9f0cd2d1b5909c995c3fcc75261e76bf76872b5ff68d43069b307e38df7524f
     sideEffect: financial
   - kind: external_service
     name: payment-gateway
@@ -132,6 +133,11 @@ effect.
 
 A manifest the validator rejects is reported as a failed adapter with the field that failed, and the audit says so on the
 terminal. It is never ignored.
+
+Version 3 source citations supply `definedIn`, `definedAtLine` and `definedFileHash` together. The digest is the lowercase
+SHA-256 of the complete file bytes at the time the declaration is written. The audit fails the manifest adapter when the
+file has changed or the cited line contains neither the component name nor its `runtimeName`, and it omits that refuted
+source location from the graph. Version 1 and version 2 remain readable under their previous closed shapes.
 
 ## Performance
 
