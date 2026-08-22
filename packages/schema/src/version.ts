@@ -9,6 +9,7 @@
  */
 
 export const SCHEMA_VERSIONS = {
+  federation: 1,
   systemGraph: 1,
   finding: 1,
   scenario: 1,
@@ -36,6 +37,7 @@ const kebab = (value: string): string => value.replace(/[A-Z]/g, (c) => `-${c.to
  * dropping support for an old artifact is a deliberate, reviewable change.
  */
 export const MIN_READABLE_VERSIONS: Record<SchemaName, number> = {
+  federation: 1,
   systemGraph: 1,
   finding: 1,
   scenario: 1,

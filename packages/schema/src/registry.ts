@@ -4,6 +4,7 @@ import { ChaosReport } from './chaos.ts';
 import { Comparison } from './comparison.ts';
 import { OrchescopeConfig } from './config.ts';
 import { FindingSet } from './finding.ts';
+import { FederationReport } from './federation.ts';
 import { Goal } from './goal.ts';
 import { SystemGraph } from './graph.ts';
 import { Manifest } from './manifest.ts';
@@ -18,6 +19,7 @@ import { MIN_READABLE_VERSIONS, SCHEMA_VERSIONS, type SchemaName } from './versi
  * and the schema compatibility check in CI, so a new document type cannot be forgotten in one of them.
  */
 export const DOCUMENT_SCHEMAS: Readonly<Record<SchemaName, TSchema>> = {
+  federation: FederationReport,
   systemGraph: SystemGraph,
   finding: FindingSet,
   scenario: Scenario,

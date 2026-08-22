@@ -26,6 +26,7 @@ import type {
   Sha256Hex,
   SystemGraph,
 } from '@orchescope/schema';
+import { createSourceMatcher, type SourceMatcher } from './source-match.ts';
 
 /**
  * Reconciliation between the declared system and the observed system.
@@ -72,9 +73,8 @@ export type ReconcileResult = {
 const PRODUCER = 'reconciler';
 
 type StaticLookups = {
-  readonly graph: SystemGraph;
   readonly byId: Map<ComponentId, Component>;
-  readonly byFileAndName: Map<string, Component[]>;
+  readonly sourceMatcher: SourceMatcher;
   readonly byKindAndName: Map<string, Component[]>;
   /**
    * Indexed by the last path segment of the name. A model is declared as `gpt-4o-mini` in one repository and reported
@@ -98,9 +98,8 @@ const push = <K, V>(map: Map<K, V[]>, key: K, value: V): void => {
 
 const buildLookups = (graph: SystemGraph): StaticLookups => {
   const lookups: StaticLookups = {
-    graph,
     byId: new Map(),
-    byFileAndName: new Map(),
+    sourceMatcher: createSourceMatcher(graph),
     byKindAndName: new Map(),
     byKindAndBareName: new Map(),
     byRuntimeName: new Map(),
@@ -112,9 +111,6 @@ const buildLookups = (graph: SystemGraph): StaticLookups => {
     const name = component.identity.localName;
     push(lookups.byKindAndName, `${component.kind}|${name}`, component);
     push(lookups.byKindAndBareName, `${component.kind}|${bareName(name)}`, component);
-    for (const location of component.sourceLocations) {
-      push(lookups.byFileAndName, `${location.file}|${name}`, component);
-    }
     const runtimeName = component.metadata['runtimeName'];
     if (typeof runtimeName === 'string' && runtimeName.length > 0) {
       push(
@@ -164,61 +160,23 @@ const sourceCandidates = (
 ): Resolution => {
   const source = observed.observedSource;
   if (source === undefined) return { kind: 'unmatched', refusals: [] };
-  const repository = source.identity.repositoryUrl;
-  const revision = source.identity.revision;
-  const staticGit = lookups.graph.provenance.git;
-  const refusals: MissingSpanAttribute[] = [];
-  if (staticGit?.repositoryUrl !== repository) {
-    refusals.push(sourceRefusal('vcs.repository.url.full', 'repository_mismatch'));
+  const result = lookups.sourceMatcher.match({
+    observedKind: observed.kind,
+    observedName: name,
+    observedSource: source,
+  });
+  if (result.kind === 'matched') {
+    return { kind: 'matched', component: result.component, rule: 'code_location', refusals: [] };
   }
-  if (staticGit?.commit !== revision || staticGit?.dirty !== false) {
-    refusals.push(sourceRefusal('vcs.ref.head.revision', 'revision_mismatch'));
-  }
-  if (refusals.length > 0) return { kind: 'unmatched', refusals };
-
-  const candidates = [
-    ...new Map(
-      (lookups.byFileAndName.get(`${source.identity.file}|${name}`) ?? [])
-        .filter((component) => component.kind === observed.kind)
-        .map((component) => [component.id, component]),
-    ).values(),
-  ];
-  if (candidates.length === 0) {
-    return {
-      kind: 'unmatched',
-      refusals: [sourceRefusal('code.file.path', 'source_not_declared')],
-    };
-  }
-
-  const line = source.identity.line;
-  const matching =
-    line === undefined
-      ? candidates
-      : candidates.filter((component) =>
-          component.sourceLocations.some(
-            (location) =>
-              location.file === source.identity.file &&
-              line >= location.startLine &&
-              line <= (location.endLine ?? location.startLine),
-          ),
-        );
-  if (matching.length === 1) {
-    const component = matching[0];
-    return component === undefined
-      ? { kind: 'unmatched', refusals: [] }
-      : { kind: 'matched', component, rule: 'code_location', refusals: [] };
-  }
-  if (matching.length > 1) {
+  const refusals = [sourceRefusal(result.refusal.attribute, result.refusal.reason)];
+  if (result.kind === 'ambiguous') {
     return {
       kind: 'ambiguous',
-      candidates: matching.map((component) => component.id),
-      refusals: [sourceRefusal('code.file.path', 'ambiguous_source_mapping')],
+      candidates: result.candidates,
+      refusals,
     };
   }
-  return {
-    kind: 'unmatched',
-    refusals: [sourceRefusal('code.line.number', 'line_outside_declaration')],
-  };
+  return { kind: 'unmatched', refusals };
 };
 
 const resolveObserved = (lookups: StaticLookups, observed: ObservedComponent): Resolution => {

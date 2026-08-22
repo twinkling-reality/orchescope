@@ -23,6 +23,11 @@ export {
   type RunSideEffects,
 } from './delta.ts';
 export { diffGraphs } from './diff.ts';
+export {
+  federate,
+  type FederateInput,
+  type FederationGraphInput,
+} from './federate.ts';
 export type { ComponentDraft, EdgeDraft } from './drafts.ts';
 export {
   type BuiltGraph,
@@ -32,6 +37,13 @@ export {
 } from './graph-builder.ts';
 export { type IndexedGraph, indexGraph } from './indexed-graph.ts';
 export { sourceLocationKey } from './merge.ts';
+export {
+  createSourceMatcher,
+  type ObservedSourceEndpoint,
+  type SourceMatcher,
+  type SourceMatchRefusal,
+  type SourceMatchResult,
+} from './source-match.ts';
 export {
   type AmbiguousMatch,
   type ComponentMatch,

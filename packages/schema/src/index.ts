@@ -107,6 +107,17 @@ export {
   SuggestedExperiment,
 } from './finding.ts';
 export {
+  FederatedComponentJoin,
+  FederatedComponentReference,
+  FederatedRelation,
+  FederatedRepository,
+  FederationRefusal,
+  FederationRefusalReason,
+  FederationRefusalSample,
+  FederationReport,
+  RepositoryCoordinate,
+} from './federation.ts';
+export {
   AcceptanceCriterion,
   Goal,
   GoalScope,

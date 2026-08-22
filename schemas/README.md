@@ -3,6 +3,7 @@
 These files are emitted from `packages/schema` by `pnpm schemas`. Do not edit them by hand: the TypeBox
 definitions are the source of truth and CI fails when these files drift from them.
 
+- `federation.v1.json`: federation, version 1, readable from version 1
 - `system-graph.v1.json`: systemGraph, version 1, readable from version 1
 - `finding.v1.json`: finding, version 1, readable from version 1
 - `scenario.v1.json`: scenario, version 1, readable from version 1
