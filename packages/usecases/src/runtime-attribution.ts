@@ -26,12 +26,18 @@ export const observedKeyToComponentId = (
 ): ReadonlyMap<string, ComponentId> => {
   const byKey = new Map<string, ComponentId>();
   for (const match of reconciled.matches) {
-    byKey.set(componentKey(match.observedKind, match.observedName), match.componentId);
+    byKey.set(
+      componentKey(match.observedKind, match.observedName, match.observedSource),
+      match.componentId,
+    );
   }
   const runtimeOnly = new Set<string>(reconciled.runtimeOnlyComponentIds);
   for (const component of reconciled.graph.components) {
     if (!runtimeOnly.has(component.id)) continue;
-    byKey.set(componentKey(component.kind, component.displayName), component.id);
+    byKey.set(
+      componentKey(component.kind, component.displayName, component.observedSource),
+      component.id,
+    );
   }
   return byKey;
 };
@@ -68,10 +74,19 @@ export const resolveComponentMetrics = (
 ): readonly ComponentRunMetrics[] => {
   const byComponent = new Map<ComponentId, ComponentRunMetrics>();
   for (const metric of observed) {
-    const componentId = componentIdByKey.get(componentKey(metric.kind, metric.observedName));
+    const componentId = componentIdByKey.get(
+      componentKey(metric.kind, metric.observedName, metric.observedSource),
+    );
     if (componentId === undefined) continue;
     const current = byComponent.get(componentId);
-    const { observedName: _name, kind: _kind, provider, model, ...counters } = metric;
+    const {
+      observedName: _name,
+      kind: _kind,
+      observedSource: _source,
+      provider,
+      model,
+      ...counters
+    } = metric;
     const cost = costOf(pricing, provider, model, counters);
     if (current === undefined) {
       byComponent.set(componentId, { ...counters, componentId, ...cost });

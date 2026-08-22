@@ -658,6 +658,275 @@
             },
             "type": "object"
           },
+          "observedSource": {
+            "additionalProperties": false,
+            "properties": {
+              "identity": {
+                "additionalProperties": false,
+                "properties": {
+                  "file": {
+                    "description": "Repository relative POSIX path.",
+                    "minLength": 1,
+                    "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                    "type": "string"
+                  },
+                  "function": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "line": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "repositoryUrl": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "revision": {
+                    "pattern": "^[0-9a-f]{40}$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "repositoryUrl",
+                  "revision",
+                  "file"
+                ],
+                "type": "object"
+              },
+              "provenance": {
+                "additionalProperties": false,
+                "properties": {
+                  "file": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "attributes": {
+                        "items": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "resourceAttributes": {
+                        "items": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "spanFields": {
+                        "items": {
+                          "anyOf": [
+                            {
+                              "const": "name",
+                              "type": "string"
+                            },
+                            {
+                              "const": "operation",
+                              "type": "string"
+                            },
+                            {
+                              "const": "parentSpanId",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "attributes",
+                      "spanFields"
+                    ],
+                    "type": "object"
+                  },
+                  "function": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "attributes": {
+                        "items": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "resourceAttributes": {
+                        "items": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "spanFields": {
+                        "items": {
+                          "anyOf": [
+                            {
+                              "const": "name",
+                              "type": "string"
+                            },
+                            {
+                              "const": "operation",
+                              "type": "string"
+                            },
+                            {
+                              "const": "parentSpanId",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "attributes",
+                      "spanFields"
+                    ],
+                    "type": "object"
+                  },
+                  "line": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "attributes": {
+                        "items": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "resourceAttributes": {
+                        "items": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "spanFields": {
+                        "items": {
+                          "anyOf": [
+                            {
+                              "const": "name",
+                              "type": "string"
+                            },
+                            {
+                              "const": "operation",
+                              "type": "string"
+                            },
+                            {
+                              "const": "parentSpanId",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "attributes",
+                      "spanFields"
+                    ],
+                    "type": "object"
+                  },
+                  "repositoryUrl": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "attributes": {
+                        "items": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "resourceAttributes": {
+                        "items": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "spanFields": {
+                        "items": {
+                          "anyOf": [
+                            {
+                              "const": "name",
+                              "type": "string"
+                            },
+                            {
+                              "const": "operation",
+                              "type": "string"
+                            },
+                            {
+                              "const": "parentSpanId",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "attributes",
+                      "spanFields"
+                    ],
+                    "type": "object"
+                  },
+                  "revision": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "attributes": {
+                        "items": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "resourceAttributes": {
+                        "items": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "spanFields": {
+                        "items": {
+                          "anyOf": [
+                            {
+                              "const": "name",
+                              "type": "string"
+                            },
+                            {
+                              "const": "operation",
+                              "type": "string"
+                            },
+                            {
+                              "const": "parentSpanId",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "attributes",
+                      "spanFields"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "repositoryUrl",
+                  "revision",
+                  "file"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "identity",
+              "provenance"
+            ],
+            "type": "object"
+          },
           "permissions": {
             "items": {
               "additionalProperties": false,
@@ -1655,6 +1924,10 @@
               "type": "boolean"
             },
             "ref": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "repositoryUrl": {
               "minLength": 1,
               "type": "string"
             }

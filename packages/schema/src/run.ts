@@ -128,6 +128,7 @@ export const RunRecord = Type.Object(
         {
           commit: Type.Optional(Type.String({ pattern: '^[0-9a-f]{7,40}$' })),
           ref: Type.Optional(NonEmptyString()),
+          repositoryUrl: Type.Optional(NonEmptyString()),
           dirty: Type.Boolean(),
         },
         { additionalProperties: false },

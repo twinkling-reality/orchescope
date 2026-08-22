@@ -121,7 +121,30 @@ describe('attribute provenance on observed topology', () => {
       agent('Chief Marketing Strategist', '2222222222222222', 1000),
     ]);
     assert.deepEqual(topology.coverage.missingSpanAttributes, [
-      { attribute: 'code.file.path', purpose: 'code_location', observedComponents: 2 },
+      {
+        attribute: 'code.file.path',
+        purpose: 'code_location',
+        reason: 'missing',
+        observedComponents: 2,
+      },
+      {
+        attribute: 'orchescope.code.repository.path',
+        purpose: 'source_identity',
+        reason: 'missing',
+        observedComponents: 2,
+      },
+      {
+        attribute: 'vcs.ref.head.revision',
+        purpose: 'source_identity',
+        reason: 'missing',
+        observedComponents: 2,
+      },
+      {
+        attribute: 'vcs.repository.url.full',
+        purpose: 'source_identity',
+        reason: 'missing',
+        observedComponents: 2,
+      },
     ]);
   });
 });

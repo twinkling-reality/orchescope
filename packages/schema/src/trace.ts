@@ -110,6 +110,8 @@ export const NormalizedSpan = Type.Object(
     status: SpanStatus,
     statusMessage: Type.Optional(Type.String({ maxLength: 1000 })),
     attributes: Type.Record(Type.String(), MetadataValue),
+    /** Bounded attributes of the resource that emitted this span, retained per span. */
+    resourceAttributes: Type.Optional(Type.Record(Type.String(), MetadataValue)),
     events: Type.Array(SpanEvent),
     serviceName: NonEmptyString(),
     scopeName: Type.Optional(NonEmptyString()),

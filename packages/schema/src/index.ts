@@ -172,6 +172,8 @@ export {
   ObservedCodeLocation,
   ObservedComponent,
   ObservedEdge,
+  ObservedSource,
+  ObservedSourceIdentity,
   ObservedValueProvenance,
   RuntimeTopology,
 } from './runtime-topology.ts';

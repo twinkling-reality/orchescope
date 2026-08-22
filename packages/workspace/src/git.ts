@@ -11,6 +11,7 @@ import { execFileSync } from 'node:child_process';
 export type GitFacts = {
   readonly commit?: string;
   readonly ref?: string;
+  readonly repositoryUrl?: string;
   readonly dirty: boolean;
 };
 
@@ -92,12 +93,30 @@ export const readGitFacts = (root: string): GitFacts | undefined => {
   if (inside !== 'true') return undefined;
   const commit = run(root, ['rev-parse', 'HEAD']);
   const ref = run(root, ['rev-parse', '--abbrev-ref', 'HEAD']);
+  const remote = run(root, ['remote', 'get-url', 'origin']);
   const status = run(root, ['status', '--porcelain', '--untracked-files=no']);
   return {
     ...(commit === undefined || !/^[0-9a-f]{7,40}$/.test(commit) ? {} : { commit }),
     ...(ref === undefined || ref.length === 0 ? {} : { ref }),
+    ...(remote === undefined ? {} : canonicalRepositoryUrl(remote)),
     dirty: status !== undefined && status.length > 0,
   };
+};
+
+const canonicalRepositoryUrl = (remote: string): { readonly repositoryUrl?: string } => {
+  try {
+    const parsed = new URL(remote);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return {};
+    if (parsed.username.length > 0 || parsed.password.length > 0) return {};
+    parsed.hostname = parsed.hostname.toLowerCase();
+    parsed.pathname = parsed.pathname.replace(/\.git$/, '').replace(/\/$/, '');
+    parsed.search = '';
+    parsed.hash = '';
+    if (parsed.pathname.length <= 1) return {};
+    return { repositoryUrl: parsed.toString().replace(/\/$/, '') };
+  } catch {
+    return {};
+  }
 };
 
 /**

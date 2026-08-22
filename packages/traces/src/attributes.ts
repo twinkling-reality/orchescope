@@ -62,6 +62,7 @@ export const VCS = {
   revision: 'vcs.repository.ref.revision',
   headRevision: 'vcs.ref.head.revision',
   repositoryName: 'vcs.repository.name',
+  repositoryUrl: 'vcs.repository.url.full',
   refName: 'vcs.ref.head.name',
 } as const;
 
@@ -90,6 +91,8 @@ export const ORCHESCOPE = {
   sideEffectKey: 'orchescope.side_effect.idempotency_key',
   sideEffectOutcome: 'orchescope.side_effect.outcome',
   queueWaitMs: 'orchescope.queue.wait_ms',
+  repositoryPath: 'orchescope.code.repository.path',
+  sourceCapture: 'orchescope.source.capture',
 } as const;
 
 export type Attributes = Readonly<Record<string, MetadataValue>>;

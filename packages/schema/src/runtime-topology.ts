@@ -41,17 +41,64 @@ export type ObservedCodeLocation = Static<typeof ObservedCodeLocation>;
  */
 export const ObservedValueProvenance = Type.Object(
   {
+    /** Attributes carried by the span itself. */
     attributes: Type.Array(NonEmptyString()),
+    /** Attributes carried by the resource that owns this span. */
+    resourceAttributes: Type.Optional(Type.Array(NonEmptyString())),
     spanFields: Type.Array(literals(['name', 'operation', 'parentSpanId'] as const)),
   },
   { additionalProperties: false },
 );
 export type ObservedValueProvenance = Static<typeof ObservedValueProvenance>;
 
+/** A runtime coordinate complete enough to compare with a separately scanned repository. */
+export const ObservedSourceIdentity = Type.Object(
+  {
+    repositoryUrl: NonEmptyString(),
+    revision: Type.String({ pattern: '^[0-9a-f]{40}$' }),
+    file: RelativePath,
+    line: Type.Optional(OneBasedLine),
+    function: Type.Optional(NonEmptyString()),
+  },
+  { additionalProperties: false },
+);
+export type ObservedSourceIdentity = Static<typeof ObservedSourceIdentity>;
+
+/** The exact span or resource attribute behind each field in an observed source identity. */
+export const ObservedSource = Type.Object(
+  {
+    identity: ObservedSourceIdentity,
+    provenance: Type.Object(
+      {
+        repositoryUrl: ObservedValueProvenance,
+        revision: ObservedValueProvenance,
+        file: ObservedValueProvenance,
+        line: Type.Optional(ObservedValueProvenance),
+        function: Type.Optional(ObservedValueProvenance),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  { additionalProperties: false },
+);
+export type ObservedSource = Static<typeof ObservedSource>;
+
 export const MissingSpanAttribute = Type.Object(
   {
     attribute: NonEmptyString(),
-    purpose: literals(['code_location'] as const),
+    purpose: literals(['code_location', 'source_identity'] as const),
+    reason: Type.Optional(
+      literals([
+        'missing',
+        'conflicting_attributes',
+        'invalid_path',
+        'repository_mismatch',
+        'revision_mismatch',
+        'line_outside_declaration',
+        'ambiguous_source_mapping',
+        'source_not_declared',
+      ] as const),
+    ),
     /** Observed components in this run that did not carry the attribute. */
     observedComponents: NonNegativeInt,
   },
@@ -77,6 +124,8 @@ export const ObservedComponent = Type.Object(
     provider: Type.Optional(NonEmptyString()),
     model: Type.Optional(NonEmptyString()),
     codeLocation: Type.Optional(ObservedCodeLocation),
+    /** Complete runtime source identity, including separate provenance for every field. */
+    observedSource: Type.Optional(ObservedSource),
     /** Set when the span carried MCP attributes, which makes the tool a cross process call. */
     mcpServer: Type.Optional(NonEmptyString()),
     /** True when the component performed at least one declared side effect. */
@@ -101,8 +150,10 @@ export const ObservedEdge = Type.Object(
     kind: NonEmptyString(),
     fromKind: NonEmptyString(),
     fromObservedName: NonEmptyString(),
+    fromObservedSource: Type.Optional(ObservedSource),
     toKind: NonEmptyString(),
     toObservedName: NonEmptyString(),
+    toObservedSource: Type.Optional(ObservedSource),
     executionCount: NonNegativeInt,
     errorCount: NonNegativeInt,
     retryCount: NonNegativeInt,
@@ -144,6 +195,7 @@ export const RuntimeTopology = Type.Object(
           revision: Type.Optional(Type.String({ pattern: '^[0-9a-f]{7,40}$' })),
           ref: Type.Optional(NonEmptyString()),
           repositoryName: Type.Optional(NonEmptyString()),
+          repositoryUrl: Type.Optional(NonEmptyString()),
         },
         { additionalProperties: false },
       ),

@@ -44,6 +44,10 @@
             "ref": {
               "minLength": 1,
               "type": "string"
+            },
+            "repositoryUrl": {
+              "minLength": 1,
+              "type": "string"
             }
           },
           "required": [
@@ -114,6 +118,10 @@
               "type": "boolean"
             },
             "ref": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "repositoryUrl": {
               "minLength": 1,
               "type": "string"
             }

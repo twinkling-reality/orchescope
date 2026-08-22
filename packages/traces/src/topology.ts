@@ -5,9 +5,11 @@ import type {
   ComponentRunMetrics,
   Evidence,
   EvidenceId,
+  MissingSpanAttribute,
   NormalizedSpan,
   ObservedComponent,
   ObservedEdge,
+  ObservedSource,
   ObservedValueProvenance,
   RunMetrics,
   RuntimeTopology,
@@ -15,8 +17,6 @@ import type {
   TraceBundle,
 } from '@orchescope/schema';
 import {
-  attributeProvenance,
-  CODE,
   componentKindFor,
   GEN_AI,
   MCP,
@@ -27,13 +27,16 @@ import {
   providerNamed,
   readBoolean,
   readNumber,
-  readNumberAttribute,
   readString,
-  readStringAttribute,
 } from './attributes.ts';
 import { graphNodeSpan } from './graph-node-span.ts';
 import { type ObservedHandoff, recognizeHandoffs } from './handoff.ts';
 import { isStructuralSpan } from './structural-span.ts';
+import {
+  sourceIdentityKey,
+  sourceIdentityOf,
+  type SourceIdentityResult,
+} from './source-identity.ts';
 import { supersededSpans } from './superseded-span.ts';
 
 /**
@@ -145,6 +148,8 @@ type ComponentAccumulator = {
   provider: string | undefined;
   model: string | undefined;
   codeLocation: { file: string; line?: number; function?: string } | undefined;
+  observedSource: ObservedSource | undefined;
+  sourceRefusals: Map<string, MissingSpanAttribute>;
   mcpServer: string | undefined;
   performedSideEffect: boolean;
   evidence: Set<string>;
@@ -160,8 +165,10 @@ type EdgeAccumulator = {
   kind: string;
   fromKind: string;
   fromObservedName: string;
+  fromObservedSource: ObservedSource | undefined;
   toKind: string;
   toObservedName: string;
+  toObservedSource: ObservedSource | undefined;
   executionCount: number;
   errorCount: number;
   retryCount: number;
@@ -180,6 +187,7 @@ type EdgeAccumulator = {
 
 type MutableValueProvenance = {
   readonly attributes: Set<string>;
+  readonly resourceAttributes: Set<string>;
   readonly spanFields: Set<ObservedValueProvenance['spanFields'][number]>;
 };
 
@@ -187,6 +195,7 @@ const mutableProvenance = (
   source: ObservedValueProvenance = { attributes: [], spanFields: [] },
 ): MutableValueProvenance => ({
   attributes: new Set(source.attributes),
+  resourceAttributes: new Set(source.resourceAttributes ?? []),
   spanFields: new Set(source.spanFields),
 });
 
@@ -195,13 +204,20 @@ const mergeProvenance = (
   source: ObservedValueProvenance | MutableValueProvenance,
 ): void => {
   for (const attribute of source.attributes) target.attributes.add(attribute);
+  for (const attribute of source.resourceAttributes ?? []) target.resourceAttributes.add(attribute);
   for (const field of source.spanFields) target.spanFields.add(field);
 };
 
 const projectProvenance = (source: MutableValueProvenance): ObservedValueProvenance => ({
   attributes: [...source.attributes].sort(),
+  ...(source.resourceAttributes.size === 0
+    ? {}
+    : { resourceAttributes: [...source.resourceAttributes].sort() }),
   spanFields: [...source.spanFields].sort(),
 });
+
+const missingAttributeKey = (missing: MissingSpanAttribute): string =>
+  `${missing.purpose}|${missing.attribute}|${missing.reason ?? ''}`;
 
 /**
  * What one span nested inside another says about the two components, read from the child's kind.
@@ -247,31 +263,10 @@ const edgeKindFor = (fromKind: string, toKind: string, operation: string): strin
   return EDGE_KIND_BY_TARGET[toKind] ?? 'observed_after';
 };
 
-const codeLocationOf = (
-  span: NormalizedSpan,
-): {
-  readonly location: ComponentAccumulator['codeLocation'];
-  readonly provenance: ObservedValueProvenance;
-} => {
-  const file = readStringAttribute(span.attributes, CODE.filePath, CODE.legacyFilePath);
-  if (file === undefined) return { location: undefined, provenance: attributeProvenance() };
-  const line = readNumberAttribute(span.attributes, CODE.lineNumber, CODE.legacyLineNumber);
-  const functionName = readStringAttribute(span.attributes, CODE.functionName, CODE.legacyFunction);
-  return {
-    location: {
-      file: file.value.replace(/^\.\//, ''),
-      ...(line === undefined ? {} : { line: line.value }),
-      ...(functionName === undefined ? {} : { function: functionName.value }),
-    },
-    provenance: attributeProvenance(
-      file.attribute,
-      ...(line === undefined ? [] : [line.attribute]),
-      ...(functionName === undefined ? [] : [functionName.attribute]),
-    ),
-  };
+const componentKey = (kind: string, name: string, source?: ObservedSource): string => {
+  const base = `${kind}|${name.toLowerCase()}`;
+  return source === undefined ? base : `${base}|${sourceIdentityKey(source)}`;
 };
-
-const componentKey = (kind: string, name: string): string => `${kind}|${name.toLowerCase()}`;
 
 const evidenceAttribute = (
   span: NormalizedSpan,
@@ -295,6 +290,7 @@ export type TopologyResult = {
   readonly componentMetricsByName: readonly (ComponentRunMetrics & {
     readonly observedName: string;
     readonly kind: string;
+    readonly observedSource?: ObservedSource;
     /** The provider and model the spans reported, which is what a price is keyed by. */
     readonly provider: string | undefined;
     readonly model: string | undefined;
@@ -356,6 +352,7 @@ const emptyAccumulator = (
   kind: ComponentKind,
   observedName: string,
   operation: AgentOperation,
+  source: SourceIdentityResult,
   provenance: {
     readonly kind: ObservedValueProvenance;
     readonly name: ObservedValueProvenance;
@@ -374,7 +371,11 @@ const emptyAccumulator = (
   outputTokens: 0,
   provider: undefined,
   model: undefined,
-  codeLocation: undefined,
+  codeLocation: source.codeLocation,
+  observedSource: source.observedSource,
+  sourceRefusals: new Map(
+    source.refusals.map((missing) => [missingAttributeKey(missing), missing]),
+  ),
   mcpServer: undefined,
   performedSideEffect: false,
   evidence: new Set<string>(),
@@ -382,7 +383,7 @@ const emptyAccumulator = (
   provenance: {
     kind: mutableProvenance(provenance.kind),
     name: mutableProvenance(provenance.name),
-    codeLocation: mutableProvenance(),
+    codeLocation: mutableProvenance(source.codeLocationProvenance),
   },
 });
 
@@ -416,6 +417,7 @@ const accumulateComponent = (
     readonly tokens: SpanTokens;
     readonly retried: boolean;
     readonly evidenceId: string;
+    readonly source: SourceIdentityResult;
     readonly provenance: {
       readonly kind: ObservedValueProvenance;
       readonly name: ObservedValueProvenance;
@@ -435,9 +437,12 @@ const accumulateComponent = (
   mergeProvenance(accumulator.provenance.name, facts.provenance.name);
   accumulator.provider = accumulator.provider ?? providerNamed(span.attributes);
   accumulator.model = accumulator.model ?? modelNamed(span.attributes);
-  const codeLocation = codeLocationOf(span);
-  accumulator.codeLocation = accumulator.codeLocation ?? codeLocation.location;
-  mergeProvenance(accumulator.provenance.codeLocation, codeLocation.provenance);
+  accumulator.codeLocation = accumulator.codeLocation ?? facts.source.codeLocation;
+  accumulator.observedSource = accumulator.observedSource ?? facts.source.observedSource;
+  mergeProvenance(accumulator.provenance.codeLocation, facts.source.codeLocationProvenance);
+  for (const missing of facts.source.refusals) {
+    accumulator.sourceRefusals.set(missingAttributeKey(missing), missing);
+  }
   accumulator.mcpServer =
     accumulator.mcpServer ?? readString(span.attributes, MCP.serverName, MCP.methodName);
   accumulator.performedSideEffect =
@@ -454,9 +459,11 @@ type EdgeEnds = {
   readonly kind: string;
   readonly fromKind: string;
   readonly fromObservedName: string;
+  readonly fromObservedSource?: ObservedSource;
   readonly fromKey: string;
   readonly toKind: string;
   readonly toObservedName: string;
+  readonly toObservedSource?: ObservedSource;
   readonly toKey: string;
   readonly provenance: {
     readonly relation: ObservedValueProvenance;
@@ -482,8 +489,10 @@ const accumulateEdge = (
     kind: ends.kind,
     fromKind: ends.fromKind,
     fromObservedName: ends.fromObservedName,
+    fromObservedSource: ends.fromObservedSource,
     toKind: ends.toKind,
     toObservedName: ends.toObservedName,
+    toObservedSource: ends.toObservedSource,
     executionCount: 0,
     errorCount: 0,
     retryCount: 0,
@@ -532,6 +541,9 @@ const projectComponents = (
     ...(accumulator.provider === undefined ? {} : { provider: accumulator.provider }),
     ...(accumulator.model === undefined ? {} : { model: accumulator.model }),
     ...(accumulator.codeLocation === undefined ? {} : { codeLocation: accumulator.codeLocation }),
+    ...(accumulator.observedSource === undefined
+      ? {}
+      : { observedSource: accumulator.observedSource }),
     ...(accumulator.mcpServer === undefined ? {} : { mcpServer: accumulator.mcpServer }),
     performedSideEffect: accumulator.performedSideEffect,
     evidence: [...accumulator.evidence] as EvidenceId[],
@@ -548,8 +560,14 @@ const projectEdges = (edges: ReadonlyMap<string, EdgeAccumulator>): ObservedEdge
     kind: accumulator.kind,
     fromKind: accumulator.fromKind,
     fromObservedName: accumulator.fromObservedName,
+    ...(accumulator.fromObservedSource === undefined
+      ? {}
+      : { fromObservedSource: accumulator.fromObservedSource }),
     toKind: accumulator.toKind,
     toObservedName: accumulator.toObservedName,
+    ...(accumulator.toObservedSource === undefined
+      ? {}
+      : { toObservedSource: accumulator.toObservedSource }),
     executionCount: accumulator.executionCount,
     errorCount: accumulator.errorCount,
     retryCount: accumulator.retryCount,
@@ -782,7 +800,8 @@ const visitSpan = (
     return;
   }
   const { kind, observedName, provenance } = component;
-  const key = componentKey(kind, observedName);
+  const source = sourceIdentityOf(span);
+  const key = componentKey(kind, observedName, source.observedSource);
   spanToComponentKey.set(span.spanId, key);
 
   const tokens = tokensOf(span);
@@ -802,11 +821,12 @@ const visitSpan = (
   });
   evidence.push(spanRecord);
 
-  const facts = { tokens, retried, evidenceId: spanRecord.id, provenance };
+  const facts = { tokens, retried, evidenceId: spanRecord.id, source, provenance };
   components.set(
     key,
     accumulateComponent(
-      components.get(key) ?? emptyAccumulator(kind, observedName, span.operation, provenance),
+      components.get(key) ??
+        emptyAccumulator(kind, observedName, span.operation, source, provenance),
       node,
       facts,
     ),
@@ -828,9 +848,15 @@ const visitSpan = (
         kind: edgeKindFor(parentAccumulator.kind, kind, span.operation),
         fromKind: parentAccumulator.kind,
         fromObservedName: parentAccumulator.observedName,
+        ...(parentAccumulator.observedSource === undefined
+          ? {}
+          : { fromObservedSource: parentAccumulator.observedSource }),
         fromKey: parentKey,
         toKind: kind,
         toObservedName: observedName,
+        ...(facts.source.observedSource === undefined
+          ? {}
+          : { toObservedSource: facts.source.observedSource }),
         toKey: key,
         provenance: {
           relation: { attributes: [], spanFields: ['parentSpanId'] },
@@ -862,23 +888,26 @@ export const deriveTopology = (bundle: TraceBundle): TopologyResult => {
 
   const observedComponents = projectComponents(components);
   const observedEdges = projectEdges(edges);
-  const codeLocationAttributes: ReadonlySet<string> = new Set([CODE.filePath, CODE.legacyFilePath]);
-  const withoutCodeLocation = observedComponents.filter(
-    (component) =>
-      !component.provenance.codeLocation.attributes.some((attribute) =>
-        codeLocationAttributes.has(attribute),
-      ),
-  ).length;
+  const missingSourceAttributes = new Map<string, MissingSpanAttribute>();
+  for (const accumulator of components.values()) {
+    for (const missing of accumulator.sourceRefusals.values()) {
+      const key = missingAttributeKey(missing);
+      const previous = missingSourceAttributes.get(key);
+      missingSourceAttributes.set(key, {
+        ...missing,
+        observedComponents: (previous?.observedComponents ?? 0) + 1,
+      });
+    }
+  }
   const duplicateSideEffects = countDuplicateEffects(bundle.sideEffects);
   const effectsThatHappened = bundle.sideEffects.filter((effect) => effect.outcome !== 'failed');
-  const vcsRevision = bundle.spans
-    .map((span) =>
-      readString(span.attributes, 'vcs.repository.ref.revision', 'vcs.ref.head.revision'),
-    )
-    .find((value) => value !== undefined);
-  const vcsRepository = bundle.spans
-    .map((span) => readString(span.attributes, 'vcs.repository.name'))
-    .find((value) => value !== undefined);
+  const observedSources = observedComponents
+    .map((component) => component.observedSource?.identity)
+    .filter((source) => source !== undefined);
+  const vcsRevisions = new Set(observedSources.map((source) => source.revision));
+  const vcsRepositories = new Set(observedSources.map((source) => source.repositoryUrl));
+  const vcsRevision = vcsRevisions.size === 1 ? [...vcsRevisions][0] : undefined;
+  const vcsRepositoryUrl = vcsRepositories.size === 1 ? [...vcsRepositories][0] : undefined;
 
   const runMetrics: RunMetrics = {
     durationMs: rootDuration,
@@ -909,6 +938,9 @@ export const deriveTopology = (bundle: TraceBundle): TopologyResult => {
     componentId: 'unassigned',
     observedName: accumulator.observedName,
     kind: accumulator.kind,
+    ...(accumulator.observedSource === undefined
+      ? {}
+      : { observedSource: accumulator.observedSource }),
     provider: accumulator.provider,
     model: accumulator.model,
     executionCount: accumulator.spanCount,
@@ -927,23 +959,18 @@ export const deriveTopology = (bundle: TraceBundle): TopologyResult => {
       edges: observedEdges,
       sideEffects: [...bundle.sideEffects],
       coverage: {
-        missingSpanAttributes:
-          withoutCodeLocation === 0
-            ? []
-            : [
-                {
-                  attribute: CODE.filePath,
-                  purpose: 'code_location',
-                  observedComponents: withoutCodeLocation,
-                },
-              ],
+        missingSpanAttributes: [...missingSourceAttributes.values()].sort((left, right) => {
+          const leftKey = missingAttributeKey(left);
+          const rightKey = missingAttributeKey(right);
+          return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+        }),
       },
-      ...(vcsRevision === undefined && vcsRepository === undefined
+      ...(vcsRevision === undefined && vcsRepositoryUrl === undefined
         ? {}
         : {
             vcs: {
               ...(vcsRevision === undefined ? {} : { revision: vcsRevision }),
-              ...(vcsRepository === undefined ? {} : { repositoryName: vcsRepository }),
+              ...(vcsRepositoryUrl === undefined ? {} : { repositoryUrl: vcsRepositoryUrl }),
             },
           }),
       unattributed: [...unattributed].map(([reason, count]) => ({

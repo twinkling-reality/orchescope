@@ -3,7 +3,6 @@ import {
   edgeId as buildEdgeId,
   derivedEvidence,
   identityFingerprint,
-  moduleNamespace,
   normalizeLocalName,
   quantile,
   runtimeIdentity,
@@ -21,6 +20,8 @@ import type {
   MissingSpanAttribute,
   ObservedComponent,
   ObservedEdge,
+  ObservedSource,
+  ObservedValueProvenance,
   RuntimeTopology,
   Sha256Hex,
   SystemGraph,
@@ -48,6 +49,7 @@ export type MatchRule = 'code_location' | 'runtime_name' | 'kind_and_name';
 export type ComponentMatch = {
   readonly observedName: string;
   readonly observedKind: string;
+  readonly observedSource?: ObservedSource;
   readonly componentId: ComponentId;
   readonly rule: MatchRule;
 };
@@ -70,8 +72,9 @@ export type ReconcileResult = {
 const PRODUCER = 'reconciler';
 
 type StaticLookups = {
+  readonly graph: SystemGraph;
   readonly byId: Map<ComponentId, Component>;
-  readonly byModuleAndName: Map<string, Component[]>;
+  readonly byFileAndName: Map<string, Component[]>;
   readonly byKindAndName: Map<string, Component[]>;
   /**
    * Indexed by the last path segment of the name. A model is declared as `gpt-4o-mini` in one repository and reported
@@ -95,8 +98,9 @@ const push = <K, V>(map: Map<K, V[]>, key: K, value: V): void => {
 
 const buildLookups = (graph: SystemGraph): StaticLookups => {
   const lookups: StaticLookups = {
+    graph,
     byId: new Map(),
-    byModuleAndName: new Map(),
+    byFileAndName: new Map(),
     byKindAndName: new Map(),
     byKindAndBareName: new Map(),
     byRuntimeName: new Map(),
@@ -108,9 +112,8 @@ const buildLookups = (graph: SystemGraph): StaticLookups => {
     const name = component.identity.localName;
     push(lookups.byKindAndName, `${component.kind}|${name}`, component);
     push(lookups.byKindAndBareName, `${component.kind}|${bareName(name)}`, component);
-    push(lookups.byModuleAndName, `${component.identity.namespace}|${name}`, component);
     for (const location of component.sourceLocations) {
-      push(lookups.byModuleAndName, `${moduleNamespace(location.file)}|${name}`, component);
+      push(lookups.byFileAndName, `${location.file}|${name}`, component);
     }
     const runtimeName = component.metadata['runtimeName'];
     if (typeof runtimeName === 'string' && runtimeName.length > 0) {
@@ -131,39 +134,123 @@ const uniqueCandidate = (candidates: readonly Component[] | undefined): Componen
 };
 
 type Resolution =
-  | { readonly kind: 'matched'; readonly component: Component; readonly rule: MatchRule }
-  | { readonly kind: 'ambiguous'; readonly candidates: readonly ComponentId[] }
-  | { readonly kind: 'unmatched' };
+  | {
+      readonly kind: 'matched';
+      readonly component: Component;
+      readonly rule: MatchRule;
+      readonly refusals: readonly MissingSpanAttribute[];
+    }
+  | {
+      readonly kind: 'ambiguous';
+      readonly candidates: readonly ComponentId[];
+      readonly refusals: readonly MissingSpanAttribute[];
+    }
+  | { readonly kind: 'unmatched'; readonly refusals: readonly MissingSpanAttribute[] };
+
+const sourceRefusal = (
+  attribute: string,
+  reason: NonNullable<MissingSpanAttribute['reason']>,
+): MissingSpanAttribute => ({
+  attribute,
+  purpose: 'source_identity',
+  reason,
+  observedComponents: 1,
+});
+
+const sourceCandidates = (
+  lookups: StaticLookups,
+  observed: ObservedComponent,
+  name: string,
+): Resolution => {
+  const source = observed.observedSource;
+  if (source === undefined) return { kind: 'unmatched', refusals: [] };
+  const repository = source.identity.repositoryUrl;
+  const revision = source.identity.revision;
+  const staticGit = lookups.graph.provenance.git;
+  const refusals: MissingSpanAttribute[] = [];
+  if (staticGit?.repositoryUrl !== repository) {
+    refusals.push(sourceRefusal('vcs.repository.url.full', 'repository_mismatch'));
+  }
+  if (staticGit?.commit !== revision || staticGit?.dirty !== false) {
+    refusals.push(sourceRefusal('vcs.ref.head.revision', 'revision_mismatch'));
+  }
+  if (refusals.length > 0) return { kind: 'unmatched', refusals };
+
+  const candidates = [
+    ...new Map(
+      (lookups.byFileAndName.get(`${source.identity.file}|${name}`) ?? [])
+        .filter((component) => component.kind === observed.kind)
+        .map((component) => [component.id, component]),
+    ).values(),
+  ];
+  if (candidates.length === 0) {
+    return {
+      kind: 'unmatched',
+      refusals: [sourceRefusal('code.file.path', 'source_not_declared')],
+    };
+  }
+
+  const line = source.identity.line;
+  const matching =
+    line === undefined
+      ? candidates
+      : candidates.filter((component) =>
+          component.sourceLocations.some(
+            (location) =>
+              location.file === source.identity.file &&
+              line >= location.startLine &&
+              line <= (location.endLine ?? location.startLine),
+          ),
+        );
+  if (matching.length === 1) {
+    const component = matching[0];
+    return component === undefined
+      ? { kind: 'unmatched', refusals: [] }
+      : { kind: 'matched', component, rule: 'code_location', refusals: [] };
+  }
+  if (matching.length > 1) {
+    return {
+      kind: 'ambiguous',
+      candidates: matching.map((component) => component.id),
+      refusals: [sourceRefusal('code.file.path', 'ambiguous_source_mapping')],
+    };
+  }
+  return {
+    kind: 'unmatched',
+    refusals: [sourceRefusal('code.line.number', 'line_outside_declaration')],
+  };
+};
 
 const resolveObserved = (lookups: StaticLookups, observed: ObservedComponent): Resolution => {
   const name = normalizeLocalName(observed.observedName);
 
-  if (observed.codeLocation !== undefined) {
-    const byCode = uniqueCandidate(
-      lookups.byModuleAndName.get(`${moduleNamespace(observed.codeLocation.file)}|${name}`),
-    );
-    if (byCode !== undefined && byCode.kind === observed.kind) {
-      return { kind: 'matched', component: byCode, rule: 'code_location' };
-    }
-  }
+  if (observed.observedSource !== undefined) return sourceCandidates(lookups, observed, name);
 
   const byRuntimeName = uniqueCandidate(lookups.byRuntimeName.get(`${observed.kind}|${name}`));
   if (byRuntimeName !== undefined) {
-    return { kind: 'matched', component: byRuntimeName, rule: 'runtime_name' };
+    return { kind: 'matched', component: byRuntimeName, rule: 'runtime_name', refusals: [] };
   }
 
   const candidates = lookups.byKindAndName.get(`${observed.kind}|${name}`);
   const unique = uniqueCandidate(candidates);
-  if (unique !== undefined) return { kind: 'matched', component: unique, rule: 'kind_and_name' };
+  if (unique !== undefined) {
+    return { kind: 'matched', component: unique, rule: 'kind_and_name', refusals: [] };
+  }
 
   // A qualified name and a bare name mean the same component when only one declaration shares the last segment.
   const bare = uniqueCandidate(lookups.byKindAndBareName.get(`${observed.kind}|${bareName(name)}`));
-  if (bare !== undefined) return { kind: 'matched', component: bare, rule: 'kind_and_name' };
+  if (bare !== undefined) {
+    return { kind: 'matched', component: bare, rule: 'kind_and_name', refusals: [] };
+  }
 
   if (candidates !== undefined && candidates.length > 1) {
-    return { kind: 'ambiguous', candidates: candidates.map((component) => component.id) };
+    return {
+      kind: 'ambiguous',
+      candidates: candidates.map((component) => component.id),
+      refusals: [],
+    };
   }
-  return { kind: 'unmatched' };
+  return { kind: 'unmatched', refusals: [] };
 };
 
 const observationFrom = (
@@ -225,8 +312,38 @@ type Mutable = {
   readonly matches: ComponentMatch[];
   readonly ambiguous: AmbiguousMatch[];
   readonly runtimeOnly: ComponentId[];
+  readonly sourceRefusals: Map<string, MissingSpanAttribute>;
   /** observed kind + normalised name to the component it resolved to, and how it was resolved. */
   readonly resolved: Map<string, { readonly id: ComponentId; readonly rule: MatchRule }>;
+};
+
+const observedResolutionKey = (
+  kind: string,
+  name: string,
+  source: ObservedSource | undefined,
+): string => {
+  const identity = source?.identity;
+  const base = `${kind}|${normalizeLocalName(name)}`;
+  if (identity === undefined) return base;
+  return [
+    base,
+    identity.repositoryUrl,
+    identity.revision,
+    identity.file,
+    identity.line ?? '',
+    identity.function ?? '',
+  ].join('|');
+};
+
+const addSourceRefusals = (state: Mutable, refusals: readonly MissingSpanAttribute[]): void => {
+  for (const refusal of refusals) {
+    const key = `${refusal.purpose}|${refusal.attribute}|${refusal.reason ?? ''}`;
+    const previous = state.sourceRefusals.get(key);
+    state.sourceRefusals.set(key, {
+      ...refusal,
+      observedComponents: (previous?.observedComponents ?? 0) + refusal.observedComponents,
+    });
+  }
 };
 
 const markObserved = (
@@ -253,6 +370,7 @@ const markObserved = (
 
   state.components.set(component.id, {
     ...component,
+    ...(observed.observedSource === undefined ? {} : { observedSource: observed.observedSource }),
     presence: { ...component.presence, runtime: true },
     basis: strongerBasis(component.basis, 'observed'),
     evidence: [...new Set([...component.evidence, ...observed.evidence, record.id])],
@@ -272,6 +390,7 @@ const markObserved = (
   state.matches.push({
     observedName: observed.observedName,
     observedKind: observed.kind,
+    ...(observed.observedSource === undefined ? {} : { observedSource: observed.observedSource }),
     componentId: component.id,
     rule,
   });
@@ -316,6 +435,7 @@ const addRuntimeOnly = (
               startLine: observed.codeLocation.line ?? 1,
             },
           ],
+    ...(observed.observedSource === undefined ? {} : { observedSource: observed.observedSource }),
     configLocations: [],
     evidence: [...new Set([...observed.evidence, record.id])],
     permissions: [],
@@ -338,7 +458,11 @@ const reconcileComponents = (
   topology: RuntimeTopology,
 ): void => {
   for (const observed of topology.components) {
-    const key = `${observed.kind}|${normalizeLocalName(observed.observedName)}`;
+    const key = observedResolutionKey(
+      observed.kind,
+      observed.observedName,
+      observed.observedSource,
+    );
     const alreadyResolved = state.resolved.get(key);
     if (alreadyResolved !== undefined) {
       const component = state.components.get(alreadyResolved.id);
@@ -348,6 +472,7 @@ const reconcileComponents = (
       }
     }
     const resolution = resolveObserved(lookups, observed);
+    addSourceRefusals(state, resolution.refusals);
     if (resolution.kind === 'matched') {
       const current = state.components.get(resolution.component.id) ?? resolution.component;
       markObserved(state, current, observed, resolution.rule, topology.runIds);
@@ -370,10 +495,14 @@ const reconcileComponents = (
 const reconcileEdges = (state: Mutable, topology: RuntimeTopology): void => {
   for (const observed of topology.edges) {
     const fromResolved = state.resolved.get(
-      `${observed.fromKind}|${normalizeLocalName(observed.fromObservedName)}`,
+      observedResolutionKey(
+        observed.fromKind,
+        observed.fromObservedName,
+        observed.fromObservedSource,
+      ),
     );
     const toResolved = state.resolved.get(
-      `${observed.toKind}|${normalizeLocalName(observed.toObservedName)}`,
+      observedResolutionKey(observed.toKind, observed.toObservedName, observed.toObservedSource),
     );
     if (fromResolved === undefined || toResolved === undefined) continue;
     const from = fromResolved.id;
@@ -385,16 +514,19 @@ const reconcileEdges = (state: Mutable, topology: RuntimeTopology): void => {
     const observation = observationFrom(observed, topology.runIds);
 
     if (existing !== undefined) {
+      const provenanceInputs = (provenance: ObservedValueProvenance): readonly string[] => [
+        ...provenance.attributes.map((attribute) => `span:${attribute}`),
+        ...(provenance.resourceAttributes ?? []).map((attribute) => `resource:${attribute}`),
+      ];
       const endpointAttributes = new Set([
-        ...observed.provenance.from.attributes,
-        ...observed.provenance.to.attributes,
+        ...provenanceInputs(observed.provenance.from),
+        ...provenanceInputs(observed.provenance.to),
       ]);
+      const relationAttributes = provenanceInputs(observed.provenance.relation);
       const exactlyRederived =
         observed.provenance.relation.spanFields.length === 0 &&
-        observed.provenance.relation.attributes.length > 0 &&
-        observed.provenance.relation.attributes.every((attribute) =>
-          endpointAttributes.has(attribute),
-        );
+        relationAttributes.length > 0 &&
+        relationAttributes.every((attribute) => endpointAttributes.has(attribute));
       if (exactlyRederived) continue;
       state.edges.set(id, {
         ...existing,
@@ -434,10 +566,14 @@ const reconcileEdges = (state: Mutable, topology: RuntimeTopology): void => {
 
 const aggregateMissingAttributes = (
   topologies: readonly RuntimeTopology[],
+  additional: readonly MissingSpanAttribute[] = [],
 ): readonly MissingSpanAttribute[] => {
   const counts = new Map<string, MissingSpanAttribute>();
-  for (const missing of topologies.flatMap((topology) => topology.coverage.missingSpanAttributes)) {
-    const key = `${missing.purpose}|${missing.attribute}`;
+  for (const missing of [
+    ...topologies.flatMap((topology) => topology.coverage.missingSpanAttributes),
+    ...additional,
+  ]) {
+    const key = `${missing.purpose}|${missing.attribute}|${missing.reason ?? ''}`;
     const previous = counts.get(key);
     counts.set(key, {
       ...missing,
@@ -461,6 +597,7 @@ export const reconcile = (
     matches: [],
     ambiguous: [],
     runtimeOnly: [],
+    sourceRefusals: new Map(),
     resolved: new Map(),
   };
 
@@ -491,6 +628,8 @@ export const reconcile = (
     matches: state.matches,
     ambiguous: state.ambiguous,
     runtimeOnlyComponentIds: state.runtimeOnly,
-    missingSpanAttributes: aggregateMissingAttributes(topologies),
+    missingSpanAttributes: aggregateMissingAttributes(topologies, [
+      ...state.sourceRefusals.values(),
+    ]),
   };
 };

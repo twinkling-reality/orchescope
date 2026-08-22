@@ -1005,6 +1005,20 @@ describe('how a join was made', () => {
    */
   const model = componentDraft({ kind: 'model', name: 'test', file: 'tests/fixtures/models.py' });
   const agent = componentDraft({ kind: 'agent', name: 'support_agent', file: 'src/support.py' });
+  const repositoryUrl = 'https://github.com/example/support';
+  const revision = 'a'.repeat(40);
+  const observedSource = (file: string, line: number, commit = revision) => ({
+    identity: { repositoryUrl, revision: commit, file, line },
+    provenance: {
+      repositoryUrl: { attributes: ['vcs.repository.url.full'], spanFields: [] },
+      revision: { attributes: ['vcs.ref.head.revision'], spanFields: [] },
+      file: {
+        attributes: ['code.file.path', 'orchescope.code.repository.path'],
+        spanFields: [],
+      },
+      line: { attributes: ['code.line.number'], spanFields: [] },
+    },
+  });
 
   it('says which components were joined on a name alone', () => {
     const graph = buildGraph([model, agent]);
@@ -1023,6 +1037,156 @@ describe('how a join was made', () => {
     assert.equal(result.delta.joins.byKindAndName, 1);
     assert.deepEqual(result.delta.joins.onNameAlone, ['model:test']);
     assert.equal(result.delta.joins.byCodeLocation, 0);
+  });
+
+  it('uses a complete runtime source coordinate to select one same-named declaration', () => {
+    const selected = componentDraft({
+      kind: 'agent',
+      name: 'support_agent',
+      file: 'services/support.py',
+      line: 12,
+    });
+    const competing = componentDraft({
+      kind: 'agent',
+      name: 'support_agent',
+      file: 'examples/support.py',
+      line: 12,
+    });
+    const graph = buildGraph([selected, competing], [], {
+      git: { repositoryUrl, commit: revision, ref: 'main', dirty: false },
+    });
+    const reconciled = reconcile(graph, [
+      runtimeTopology({
+        components: [
+          observedComponent({
+            kind: 'agent',
+            observedName: 'support_agent',
+            codeLocation: { file: 'services/support.py', line: 12 },
+            observedSource: observedSource('services/support.py', 12),
+          }),
+        ],
+      }),
+    ]);
+    const result = computeDelta({
+      graph: reconciled.graph,
+      runs: [],
+      spanToComponent: new Map(),
+      matches: reconciled.matches,
+      ambiguous: reconciled.ambiguous,
+    });
+    assert.equal(result.delta.joins.byCodeLocation, 1);
+    assert.deepEqual(result.delta.joins.ambiguous, []);
+    const matched = reconciled.graph.components.find(
+      (component) => component.sourceLocations[0]?.file === 'services/support.py',
+    );
+    const untouched = reconciled.graph.components.find(
+      (component) => component.sourceLocations[0]?.file === 'examples/support.py',
+    );
+    assert.equal(matched?.presence.runtime, true);
+    assert.equal(untouched?.presence.runtime, false);
+    assert.deepEqual(matched?.observedSource?.provenance.file.attributes, [
+      'code.file.path',
+      'orchescope.code.repository.path',
+    ]);
+  });
+
+  it('refuses the wrong revision without falling back to a unique name', () => {
+    const graph = buildGraph([agent], [], {
+      git: { repositoryUrl, commit: revision, ref: 'main', dirty: false },
+    });
+    const reconciled = reconcile(graph, [
+      runtimeTopology({
+        components: [
+          observedComponent({
+            kind: 'agent',
+            observedName: 'support_agent',
+            codeLocation: { file: 'src/support.py', line: 1 },
+            observedSource: observedSource('src/support.py', 1, 'b'.repeat(40)),
+          }),
+        ],
+      }),
+    ]);
+    assert.equal(reconciled.matches.length, 0);
+    assert.equal(reconciled.runtimeOnlyComponentIds.length, 1);
+    assert.ok(
+      reconciled.missingSpanAttributes.some(
+        (entry) =>
+          entry.attribute === 'vcs.ref.head.revision' && entry.reason === 'revision_mismatch',
+      ),
+    );
+  });
+
+  it('refuses a different repository coordinate without falling back to a unique name', () => {
+    const graph = buildGraph([agent], [], {
+      git: { repositoryUrl, commit: revision, ref: 'main', dirty: false },
+    });
+    const source = observedSource('src/support.py', 1);
+    const reconciled = reconcile(graph, [
+      runtimeTopology({
+        components: [
+          observedComponent({
+            kind: 'agent',
+            observedName: 'support_agent',
+            codeLocation: { file: 'src/support.py', line: 1 },
+            observedSource: {
+              ...source,
+              identity: {
+                ...source.identity,
+                repositoryUrl: 'https://github.com/example/other',
+              },
+            },
+          }),
+        ],
+      }),
+    ]);
+    assert.equal(reconciled.matches.length, 0);
+    assert.ok(
+      reconciled.missingSpanAttributes.some(
+        (entry) =>
+          entry.attribute === 'vcs.repository.url.full' && entry.reason === 'repository_mismatch',
+      ),
+    );
+  });
+
+  it('refuses an observed line outside the declaration range', () => {
+    const graph = buildGraph([agent], [], {
+      git: { repositoryUrl, commit: revision, ref: 'main', dirty: false },
+    });
+    const reconciled = reconcile(graph, [
+      runtimeTopology({
+        components: [
+          observedComponent({
+            kind: 'agent',
+            observedName: 'support_agent',
+            codeLocation: { file: 'src/support.py', line: 9 },
+            observedSource: observedSource('src/support.py', 9),
+          }),
+        ],
+      }),
+    ]);
+    assert.equal(reconciled.matches.length, 0);
+    assert.ok(
+      reconciled.missingSpanAttributes.some(
+        (entry) =>
+          entry.attribute === 'code.line.number' && entry.reason === 'line_outside_declaration',
+      ),
+    );
+  });
+
+  it('does not call a legacy file-only match a code-location join', () => {
+    const graph = buildGraph([agent]);
+    const reconciled = reconcile(graph, [
+      runtimeTopology({
+        components: [
+          observedComponent({
+            kind: 'agent',
+            observedName: 'support_agent',
+            codeLocation: { file: 'src/support.py', line: 1 },
+          }),
+        ],
+      }),
+    ]);
+    assert.equal(reconciled.matches[0]?.rule, 'kind_and_name');
   });
 
   it('reports an observed name that matched more than one declaration and joined none', () => {

@@ -1,6 +1,7 @@
 import { type Static, type TProperties, Type } from '@sinclair/typebox';
 import { ClaimBasis, ConfigLocation, EvidenceId, SourceLocation } from './evidence.ts';
 import { ComponentAlias, ComponentId, ComponentIdentity } from './identity.ts';
+import { ObservedSource } from './runtime-topology.ts';
 import {
   Confidence,
   literals,
@@ -231,6 +232,8 @@ export const Component = Type.Object(
     /** Adapter identifiers that contributed this component, in discovery order. */
     discoveredBy: Type.Array(NonEmptyString(), { minItems: 1 }),
     sourceLocations: Type.Array(SourceLocation),
+    /** Runtime source coordinate and the exact trace inputs that supplied each field. */
+    observedSource: Type.Optional(ObservedSource),
     configLocations: Type.Array(ConfigLocation),
     /**
      * True when every source location that declares this component is a test file.

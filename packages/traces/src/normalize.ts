@@ -110,6 +110,7 @@ const normalizeSpan = (
   context: {
     readonly serviceName: string;
     readonly scopeName: string | undefined;
+    readonly resourceAttributes: Attributes;
     readonly maxAttributeBytes: number;
   },
 ): NormalizedSpan => {
@@ -128,6 +129,7 @@ const normalizeSpan = (
     status: raw.status,
     ...(raw.statusMessage === undefined ? {} : { statusMessage: raw.statusMessage.slice(0, 1000) }),
     attributes,
+    resourceAttributes: boundAttributes(context.resourceAttributes, context.maxAttributeBytes),
     events: raw.events.map((event) => ({
       name: event.name,
       timeUnixNano: event.timeUnixNano,
@@ -169,6 +171,7 @@ export const normalizeTraces = (
         const span = normalizeSpan(raw, {
           serviceName,
           scopeName: scopeSpans.scopeName,
+          resourceAttributes: resourceSpans.resourceAttributes,
           maxAttributeBytes: options.maxAttributeBytes,
         });
         spans.push(span);

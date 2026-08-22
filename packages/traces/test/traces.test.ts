@@ -141,6 +141,23 @@ describe('normalizeTraces', () => {
     assert.equal(result.bundle.source, 'otlp_http_json');
     assert.equal(result.bundle.spans.length, 1);
     assert.equal(result.serviceBySpanId.get('1'.repeat(16)), 'demo');
+    assert.deepEqual(result.bundle.spans[0]?.resourceAttributes, { 'service.name': 'demo' });
+  });
+
+  it('retains VCS resource identity on the span that resource emitted', () => {
+    const document = payload([{ name: 'chat', spanId: '1'.repeat(16), start: 0, end: 10 }]);
+    const resource = document.resourceSpans[0]?.resource;
+    assert.ok(resource !== undefined);
+    resource.attributes = attributeList({
+      'service.name': 'demo',
+      'vcs.repository.url.full': 'https://github.com/example/demo',
+      'vcs.ref.head.revision': 'a'.repeat(40),
+    });
+    const result = normalizeTraces(decodeTraceJson(document), options);
+    assert.equal(
+      result.bundle.spans[0]?.resourceAttributes?.['vcs.repository.url.full'],
+      'https://github.com/example/demo',
+    );
   });
 
   it('computes a duration in milliseconds from nanosecond timestamps', () => {

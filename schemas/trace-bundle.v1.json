@@ -401,6 +401,43 @@
             "pattern": "^[0-9a-f]{16}$",
             "type": "string"
           },
+          "resourceAttributes": {
+            "patternProperties": {
+              "^(.*)$": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            "type": "object"
+          },
           "retryAttempt": {
             "minimum": 0,
             "type": "integer"
