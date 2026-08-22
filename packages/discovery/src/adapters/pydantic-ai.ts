@@ -1,11 +1,16 @@
-import { CONFIDENCE_BANDS, identityKey } from '@orchescope/domain';
+import { CONFIDENCE_BANDS } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type { ComponentIdentity, EdgePolicy } from '@orchescope/schema';
-import type { CallFact, DefinitionFact, ObjectEntryFact } from '@orchescope/source-analysis';
+import type {
+  CallFact,
+  DefinitionFact,
+  ModuleFacts,
+  ObjectEntryFact,
+} from '@orchescope/source-analysis';
 import { booleanValue, findEntry, numberValue, stringValue } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { createDrafts, sourceIdentity } from '../drafts.ts';
-import { decoratedDefinitions, definitionForCall, matchCalls, projectUses } from '../matching.ts';
+import { definitionForCall, matchCalls, projectUses } from '../matching.ts';
 import { addModelReference } from '../model-reference.ts';
 
 /**
@@ -45,6 +50,9 @@ const keywordEntries = (call: CallFact): readonly ObjectEntryFact[] => {
 
 type DiscoveredAgent = {
   readonly identity: ComponentIdentity;
+  readonly file: string;
+  readonly variable: string | undefined;
+  readonly enclosing: string | undefined;
   /** Retries the agent declares, which a tool inherits when it declares none of its own. */
   readonly retries: number | undefined;
 };
@@ -132,7 +140,22 @@ const addAgents = (
     }
     context.bindings.register(match.module.file, name, identity);
 
-    agents.push({ identity, retries: numberValue(findEntry(entries, 'retries')?.value) });
+    const stableVariable =
+      definition?.kind === 'variable' &&
+      match.module.definitions.filter(
+        (candidate) =>
+          candidate.name === definition.name && candidate.enclosing === definition.enclosing,
+      ).length === 1 &&
+      !match.module.assignments.some(
+        (assignment) => assignment.target.length === 1 && assignment.target[0] === definition.name,
+      );
+    agents.push({
+      identity,
+      file: match.module.file,
+      variable: stableVariable ? definition.name : undefined,
+      enclosing: definition?.enclosing,
+      retries: numberValue(findEntry(entries, 'retries')?.value),
+    });
 
     const model = declaredModel(match.call, entries);
     if (model === undefined) continue;
@@ -163,6 +186,60 @@ const decoratorEntries = (
   return first !== undefined && first.kind === 'object' ? first.entries : [];
 };
 
+const addDecoratedTool = (input: {
+  readonly context: DiscoveryContext;
+  readonly builder: SystemGraphBuilder;
+  readonly module: ModuleFacts;
+  readonly definition: DefinitionFact;
+  readonly method: string;
+  readonly owner: string;
+  readonly agent: DiscoveredAgent;
+}): void => {
+  const { context, builder, module, definition, method, owner, agent } = input;
+  const entries = decoratorEntries(definition, method);
+  const name = stringValue(findEntry(entries, 'name')?.value) ?? definition.name;
+  const identity = sourceIdentity('tool', module.file, name);
+  const requiresApproval = booleanValue(findEntry(entries, 'requires_approval')?.value);
+  const attempts = numberValue(findEntry(entries, 'retries')?.value) ?? agent.retries;
+
+  builder.addComponent(
+    drafts.sourceComponent({
+      kind: 'tool',
+      file: module.file,
+      name,
+      location: definition.location,
+      symbol: `@${owner}.${method} ${definition.name}`,
+      confidence: CONFIDENCE_BANDS.deterministic,
+      details: {
+        for: 'tool',
+        ...(requiresApproval === undefined ? {} : { approvalRequired: requiresApproval }),
+      },
+      metadata: { framework: 'pydantic-ai', declaredName: name, registeredOn: owner },
+      tags: ['pydantic-ai'],
+    }),
+  );
+  context.bindings.register(module.file, definition.name, identity);
+  context.bindings.register(module.file, name, identity);
+  context.implementations.record({
+    identity,
+    file: module.file,
+    body: definition.location,
+    symbol: `@${owner}.${method} ${definition.name}`,
+  });
+
+  const policy = retryPolicy(attempts);
+  builder.addEdge(
+    drafts.edge({
+      kind: 'calls_tool',
+      from: agent.identity,
+      to: identity,
+      location: definition.location,
+      symbol: `@${owner}.${method} ${name}`,
+      ...(policy === undefined ? {} : { policy }),
+    }),
+  );
+};
+
 /**
  * Tools, each attributed to the agent its decorator names.
  *
@@ -176,66 +253,27 @@ const addTools = (
 ): { readonly components: number; readonly edges: number } => {
   let components = 0;
   let edges = 0;
-  const byIdentity = new Map(agents.map((agent) => [identityKey(agent.identity), agent]));
 
-  for (const decorated of decoratedDefinitions(context.modules, TOOL_DECORATORS, PACKAGES)) {
-    for (const decorator of decorated.definition.decorators) {
-      const method = decorator.path[decorator.path.length - 1];
-      const owner = decorator.path[0];
-      if (method === undefined || !TOOL_DECORATORS.includes(method)) continue;
-      if (owner === undefined || decorator.path.length < 2) continue;
-      const ownerIdentity = context.bindings.lookup(decorated.module.file, owner);
-      if (ownerIdentity === undefined) continue;
-      const agent = byIdentity.get(identityKey(ownerIdentity));
-      if (agent === undefined) continue;
+  for (const module of context.modules) {
+    for (const definition of module.definitions) {
+      for (const decorator of definition.decorators) {
+        const method = decorator.path[decorator.path.length - 1];
+        const owner = decorator.path[0];
+        if (method === undefined || !TOOL_DECORATORS.includes(method)) continue;
+        if (owner === undefined || decorator.path.length < 2) continue;
+        const agent = agents.find(
+          (candidate) =>
+            candidate.file === module.file &&
+            candidate.variable === owner &&
+            candidate.enclosing === definition.enclosing,
+        );
+        if (agent === undefined) continue;
 
-      const entries = decoratorEntries(decorated.definition, method);
-      const name = stringValue(findEntry(entries, 'name')?.value) ?? decorated.definition.name;
-      const identity = sourceIdentity('tool', decorated.module.file, name);
-      const requiresApproval = booleanValue(findEntry(entries, 'requires_approval')?.value);
-      const attempts = numberValue(findEntry(entries, 'retries')?.value) ?? agent.retries;
-
-      builder.addComponent(
-        drafts.sourceComponent({
-          kind: 'tool',
-          file: decorated.module.file,
-          name,
-          location: decorated.definition.location,
-          symbol: `@${owner}.${method} ${decorated.definition.name}`,
-          confidence: decorated.resolved
-            ? CONFIDENCE_BANDS.deterministic
-            : CONFIDENCE_BANDS.heuristic,
-          details: {
-            for: 'tool',
-            ...(requiresApproval === undefined ? {} : { approvalRequired: requiresApproval }),
-          },
-          metadata: { framework: 'pydantic-ai', declaredName: name, registeredOn: owner },
-          tags: ['pydantic-ai'],
-        }),
-      );
-      components += 1;
-      context.bindings.register(decorated.module.file, decorated.definition.name, identity);
-      context.bindings.register(decorated.module.file, name, identity);
-      context.implementations.record({
-        identity,
-        file: decorated.module.file,
-        body: decorated.definition.location,
-        symbol: `@${owner}.${method} ${decorated.definition.name}`,
-      });
-
-      const policy = retryPolicy(attempts);
-      builder.addEdge(
-        drafts.edge({
-          kind: 'calls_tool',
-          from: agent.identity,
-          to: identity,
-          location: decorated.definition.location,
-          symbol: `@${owner}.${method} ${name}`,
-          ...(policy === undefined ? {} : { policy }),
-        }),
-      );
-      edges += 1;
-      break;
+        addDecoratedTool({ context, builder, module, definition, method, owner, agent });
+        components += 1;
+        edges += 1;
+        break;
+      }
     }
   }
   return { components, edges };
@@ -243,7 +281,7 @@ const addTools = (
 
 export const pydanticAiAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '1',
+  version: '2',
   packages: PACKAGES,
   appliesTo: (context) => projectUses(context, PACKAGES),
   discover: (context, builder): AdapterFindings => {

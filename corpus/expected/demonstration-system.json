@@ -7,9 +7,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 7,
-      "edgesFound": 4,
-      "filesInspected": 3,
+      "componentsFound": 4,
+      "edgesFound": 2,
+      "filesInspected": 2,
       "status": "completed"
     },
     "adapter:implementation-reach": {
@@ -85,18 +85,18 @@
       "agent": 5,
       "approval_boundary": 1,
       "database": 1,
-      "entrypoint": 3,
+      "entrypoint": 2,
       "external_service": 1,
       "memory": 1,
       "model": 2,
       "prompt": 6,
-      "queue": 2,
+      "queue": 1,
       "retrieval": 1,
       "side_effect": 1,
       "tool": 6
     },
     "declaredInTest": 0,
-    "total": 30
+    "total": 28
   },
   "discardedRelations": [],
   "files": {
@@ -140,18 +140,17 @@
     "byKind": {
       "calls_service": 1,
       "calls_tool": 6,
-      "consumes_from_queue": 1,
       "falls_back_to": 1,
       "guarded_by": 1,
       "hands_off_to": 4,
       "invokes_model": 3,
       "performs_side_effect": 1,
-      "publishes_to_queue": 2,
+      "publishes_to_queue": 1,
       "queries_database": 1,
       "queries_retrieval": 1,
       "reads_memory": 1,
       "writes_memory": 1
     },
-    "total": 24
+    "total": 22
   }
 }

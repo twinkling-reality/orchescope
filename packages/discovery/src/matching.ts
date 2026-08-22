@@ -1,17 +1,20 @@
 import { CONFIDENCE_BANDS } from '@orchescope/domain';
-import type { CallFact, DefinitionFact, ModuleFacts } from '@orchescope/source-analysis';
-import { calleeName } from '@orchescope/source-analysis';
+import type {
+  CalleeOrigin,
+  CallFact,
+  DefinitionFact,
+  ModuleFacts,
+} from '@orchescope/source-analysis';
 import type { DiscoveryContext } from './adapter.ts';
 import { type LocalModules, localModules, namesLocalModule } from './local-modules.ts';
 
 /**
  * Matching helpers shared by adapters.
  *
- * A framework call is recognised by its callee name plus the package the callee came from. When the
- * package cannot be established, because the helper was re-exported through a local module, the match
- * still succeeds if the file imports the framework at all, and the resulting component carries a lower
- * confidence. That distinction is the difference between "we resolved this" and "this is the only
- * plausible reading", and both are recorded rather than blurred.
+ * Runtime provider identity is recognised from the imported binding that owns a symbol. Written short
+ * names are not provider evidence: `Client`, `Queue`, `Agent` and `tool` all belong to unrelated
+ * ecosystems. A caller may explicitly opt into a lower-confidence unresolved spelling only for syntax
+ * distinctive enough to justify that narrower heuristic.
  */
 
 /**
@@ -40,6 +43,7 @@ export const importsAny = (
 ): boolean =>
   module.imports.some(
     (entry) =>
+      !entry.isType &&
       moduleMatches(entry.module, packages) &&
       !(local !== undefined && namesLocalModule(local, module, entry.module)),
   );
@@ -68,6 +72,96 @@ export type CallQuery = {
   /** When set, only calls whose callee path has this length are matched. */
   readonly pathLength?: number;
   readonly kind?: CallFact['kind'];
+  /** Canonical symbols this package documents as direct default exports. */
+  readonly defaultExportNames?: readonly string[];
+  /**
+   * Permit an origin-less distinctive spelling when this file has a verified runtime import from the
+   * provider. A wrong, type-only or local origin never falls back to this heuristic.
+   */
+  readonly allowUnresolvedWhenFrameworkImported?: boolean;
+};
+
+type RuntimeSymbol = {
+  readonly path: readonly string[];
+  readonly origin: CalleeOrigin | undefined;
+  readonly enclosing: string | undefined;
+};
+
+export type RuntimeSymbolMatch = {
+  readonly resolved: boolean;
+  readonly confidence: number;
+};
+
+/**
+ * A local declaration that can replace the imported root binding makes the recorded origin unsafe.
+ * The analyzers intentionally retain import origins as compact facts rather than a full scope graph, so
+ * this bounded refusal prevents a stale import binding from establishing provider identity.
+ */
+const hasExplicitLocalShadow = (module: ModuleFacts, symbol: RuntimeSymbol): boolean => {
+  const root = symbol.path[0];
+  if (root === undefined) return true;
+  return (
+    module.definitions.some(
+      (definition) =>
+        definition.name === root &&
+        (definition.enclosing === undefined || definition.enclosing === symbol.enclosing),
+    ) ||
+    module.assignments.some(
+      (assignment) => assignment.target.length === 1 && assignment.target[0] === root,
+    )
+  );
+};
+
+/** The provider-exported name represented by direct, renamed, namespace and default imports. */
+const importedRuntimeName = (symbol: RuntimeSymbol): string | undefined => {
+  const written = symbol.path[symbol.path.length - 1];
+  if (written === undefined || symbol.origin === undefined) return undefined;
+  if (symbol.origin.imported !== '*' && symbol.origin.imported !== 'default') {
+    return symbol.origin.imported;
+  }
+  if (symbol.origin.imported === 'default' && symbol.path.length === 1) return undefined;
+  return written;
+};
+
+/**
+ * Match one runtime symbol against an exact provider contract.
+ *
+ * Named aliases compare the original exported name. Namespace and supported default imports compare
+ * the final member, so all of `Client`, `PgClient`, `pg.Client` and a default-imported `pg.Client` can
+ * resolve to the same provider symbol without granting authority to an unrelated bare `Client`.
+ */
+export const matchRuntimeSymbol = (
+  modules: readonly ModuleFacts[],
+  module: ModuleFacts,
+  symbol: RuntimeSymbol,
+  query: Pick<
+    CallQuery,
+    'names' | 'packages' | 'defaultExportNames' | 'allowUnresolvedWhenFrameworkImported'
+  >,
+): RuntimeSymbolMatch | undefined => {
+  const local = localModules(modules);
+  if (hasExplicitLocalShadow(module, symbol)) return undefined;
+
+  const origin = symbol.origin;
+  if (origin !== undefined) {
+    if (origin.isType) return undefined;
+    if (!moduleMatches(origin.module, query.packages)) return undefined;
+    if (namesLocalModule(local, module, origin.module)) return undefined;
+    const imported = importedRuntimeName(symbol);
+    if (imported === undefined) {
+      if (origin.imported !== 'default' || symbol.path.length !== 1) return undefined;
+      if (!query.names.some((name) => query.defaultExportNames?.includes(name) === true)) {
+        return undefined;
+      }
+    } else if (!query.names.includes(imported)) return undefined;
+    return { resolved: true, confidence: CONFIDENCE_BANDS.deterministic };
+  }
+
+  if (query.allowUnresolvedWhenFrameworkImported !== true) return undefined;
+  const written = symbol.path[symbol.path.length - 1];
+  if (written === undefined || !query.names.includes(written)) return undefined;
+  if (!importsAny(module, query.packages, local)) return undefined;
+  return { resolved: false, confidence: CONFIDENCE_BANDS.heuristic };
 };
 
 export const matchCalls = (
@@ -75,23 +169,25 @@ export const matchCalls = (
   query: CallQuery,
 ): readonly MatchedCall[] => {
   const matches: MatchedCall[] = [];
-  const local = localModules(modules);
   for (const module of modules) {
-    const frameworkImported = importsAny(module, query.packages, local);
     for (const call of module.calls) {
       if (query.kind !== undefined && call.kind !== query.kind) continue;
       if (query.pathLength !== undefined && call.calleePath.length !== query.pathLength) continue;
-      if (!query.names.includes(calleeName(call))) continue;
-      const resolved =
-        call.origin !== undefined &&
-        moduleMatches(call.origin.module, query.packages) &&
-        !namesLocalModule(local, module, call.origin.module);
-      if (!resolved && !frameworkImported) continue;
+      const matched = matchRuntimeSymbol(
+        modules,
+        module,
+        {
+          path: call.calleePath,
+          origin: call.origin,
+          enclosing: call.enclosing,
+        },
+        query,
+      );
+      if (matched === undefined) continue;
       matches.push({
         call,
         module,
-        resolved,
-        confidence: resolved ? CONFIDENCE_BANDS.deterministic : CONFIDENCE_BANDS.heuristic,
+        ...matched,
       });
     }
   }
@@ -121,25 +217,28 @@ export const decoratedDefinitions = (
   modules: readonly ModuleFacts[],
   decoratorNames: readonly string[],
   packages: readonly string[],
+  options: Pick<CallQuery, 'allowUnresolvedWhenFrameworkImported'> = {},
 ): readonly {
   readonly module: ModuleFacts;
   readonly definition: DefinitionFact;
   readonly resolved: boolean;
 }[] => {
   const results: { module: ModuleFacts; definition: DefinitionFact; resolved: boolean }[] = [];
-  const local = localModules(modules);
   for (const module of modules) {
-    const frameworkImported = importsAny(module, packages, local);
     for (const definition of module.definitions) {
       for (const decorator of definition.decorators) {
-        const name = decorator.path[decorator.path.length - 1];
-        if (name === undefined || !decoratorNames.includes(name)) continue;
-        const resolved =
-          decorator.origin !== undefined &&
-          moduleMatches(decorator.origin.module, packages) &&
-          !namesLocalModule(local, module, decorator.origin.module);
-        if (!resolved && !frameworkImported) continue;
-        results.push({ module, definition, resolved });
+        const matched = matchRuntimeSymbol(
+          modules,
+          module,
+          {
+            path: decorator.path,
+            origin: decorator.origin,
+            enclosing: definition.enclosing,
+          },
+          { names: decoratorNames, packages, ...options },
+        );
+        if (matched === undefined) continue;
+        results.push({ module, definition, resolved: matched.resolved });
         break;
       }
     }

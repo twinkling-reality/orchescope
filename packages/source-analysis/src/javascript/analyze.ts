@@ -702,17 +702,19 @@ const traverse = (
       return;
     }
     /*
-     * A value written onto something that already exists, kept only where the target is a member.
+     * A value written onto something that already exists.
      *
-     * A plain `x = ...` is already a variable definition and recording it here would say the same thing twice. What
-     * nothing else records is `agent.handoffs = [...]`, which is how a repository wires a cycle it could not name in
-     * a constructor. The right side walks on afterwards, so a call inside the value is still recorded as a call.
+     * Initial declarations remain DefinitionFacts. An AssignmentExpression is a subsequent write, including a
+     * root target such as `graph = replacement`; retaining it is what lets a consumer refuse provider
+     * identity that no longer belongs to a stable binding. Member targets still carry post-construction
+     * wiring such as `agent.handoffs = [...]`. The right side walks on afterwards, so a call inside the
+     * value is still recorded as a call.
      */
     case 'AssignmentExpression': {
       const target = asNode(field(node, 'left'));
       const value = asNode(field(node, 'right'));
       const path = target === undefined ? [] : memberPath(target);
-      if (path.length > 1 && value !== undefined) {
+      if (path.length > 0 && value !== undefined) {
         context.assignments.push({
           target: path,
           value: argumentFact(value, context),

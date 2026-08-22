@@ -2,16 +2,11 @@ import type {
   ArgumentFact,
   CallFact,
   DecoratorFact,
+  DefinitionFact,
   ModuleFacts,
 } from '@orchescope/source-analysis';
-import {
-  calleeName,
-  dotted,
-  findEntry,
-  numberValue,
-  objectArgument,
-} from '@orchescope/source-analysis';
-import { importsAny } from './matching.ts';
+import { calleeName, findEntry, numberValue, objectArgument } from '@orchescope/source-analysis';
+import { importsAny, matchRuntimeSymbol } from './matching.ts';
 
 /**
  * A retry a library declares, rather than one a repository writes out as a loop.
@@ -128,8 +123,22 @@ export const usesTenacity = (module: ModuleFacts): boolean => importsAny(module,
  * Answers only for a construction that states a policy. `Retrying(some_function)` hands tenacity the work
  * as an argument and is the helper form, which is read elsewhere and by its wrapped operation.
  */
-export const constructedRetry = (call: CallFact): DeclaredRetry | undefined => {
-  if (!RETRY_CONSTRUCTORS.has(calleeName(call))) return undefined;
+export const constructedRetry = (
+  modules: readonly ModuleFacts[],
+  module: ModuleFacts,
+  call: CallFact,
+): DeclaredRetry | undefined => {
+  const matched = matchRuntimeSymbol(
+    modules,
+    module,
+    {
+      path: call.calleePath,
+      origin: call.origin,
+      enclosing: call.enclosing,
+    },
+    { names: [...RETRY_CONSTRUCTORS], packages: TENACITY_PACKAGES },
+  );
+  if (matched === undefined) return undefined;
   const entries = objectArgument(call);
   if (entries.length === 0) return undefined;
   return policyFrom(entries, `a loop over tenacity's ${calleeName(call)}`);
@@ -150,16 +159,22 @@ export const namesRetryConstructor = (path: readonly string[]): boolean => {
  * shorthand and declares its defaults, which are to retry forever with no wait.
  */
 export const decoratedRetry = (
+  modules: readonly ModuleFacts[],
   module: ModuleFacts,
+  definition: DefinitionFact,
   decorator: DecoratorFact,
 ): DeclaredRetry | undefined => {
-  const path = decorator.path;
-  if (path[path.length - 1] !== 'retry') return undefined;
-  const fromTenacity =
-    decorator.origin !== undefined
-      ? TENACITY_PACKAGES.includes(decorator.origin.module)
-      : dotted(path) === 'tenacity.retry' || usesTenacity(module);
-  if (!fromTenacity) return undefined;
+  const matched = matchRuntimeSymbol(
+    modules,
+    module,
+    {
+      path: decorator.path,
+      origin: decorator.origin,
+      enclosing: definition.enclosing,
+    },
+    { names: ['retry'], packages: TENACITY_PACKAGES },
+  );
+  if (matched === undefined) return undefined;
   const entries = decorator.args[0]?.kind === 'object' ? decorator.args[0].entries : [];
   return policyFrom(entries, "a function decorated with tenacity's retry");
 };

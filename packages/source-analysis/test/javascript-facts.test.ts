@@ -146,6 +146,22 @@ describe('javascript fact extraction', () => {
     assert.equal(method?.async, true);
   });
 
+  it('records a root reassignment separately from the initial definition', () => {
+    const facts = analyze(`
+      import { StateGraph } from '@langchain/langgraph';
+      let graph = new StateGraph({});
+      graph = replacement;
+    `);
+    assert.equal(facts.definitions.filter((entry) => entry.name === 'graph').length, 1);
+    assert.deepEqual(facts.assignments, [
+      {
+        target: ['graph'],
+        value: { kind: 'identifier', name: 'replacement' },
+        location: facts.assignments[0]?.location,
+      },
+    ]);
+  });
+
   it('reports parse errors instead of throwing', () => {
     const facts = analyze('export const broken = {');
     assert.ok(facts.parseErrors.length > 0);

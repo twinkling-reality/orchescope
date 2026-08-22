@@ -17,7 +17,7 @@ import {
   jsonPointer,
 } from '../config-files.ts';
 import { configIdentity, createDrafts, sourceIdentity } from '../drafts.ts';
-import { decoratedDefinitions, definitionForCall, matchCalls, projectUses } from '../matching.ts';
+import { definitionForCall, matchCalls, projectUses } from '../matching.ts';
 
 /**
  * Model Context Protocol discovery, from configuration files and from SDK call sites.
@@ -256,21 +256,31 @@ const discoverServers = (
     context.bindings.register(match.module.file, name, identity);
     // The variable too, because `@mcp.tool()` names the variable rather than the server.
     const variable = definitionForCall(match.module, match.call);
-    if (variable !== undefined)
+    if (variable?.kind === 'variable')
       context.bindings.register(match.module.file, variable.name, identity);
   }
   return { components: matches.length, matches };
 };
 
 /** The variable a server was assigned to, per file, so a decorator on it can be attributed. */
+const receiverKey = (file: string, enclosing: string | undefined, name: string): string =>
+  `${file}|${enclosing ?? '<module>'}|${name}`;
+
 const serversByVariable = (
   servers: readonly SdkMatch[],
 ): ReadonlyMap<string, { readonly server: SdkMatch; readonly name: string }> => {
   const byVariable = new Map<string, { server: SdkMatch; name: string }>();
   for (const server of servers) {
     const variable = definitionForCall(server.module, server.call);
-    if (variable === undefined) continue;
-    byVariable.set(`${server.module.file}|${variable.name}`, {
+    if (variable?.kind !== 'variable') continue;
+    const definitions = server.module.definitions.filter(
+      (candidate) => candidate.name === variable.name && candidate.enclosing === variable.enclosing,
+    );
+    const reassigned = server.module.assignments.some(
+      (assignment) => assignment.target.length === 1 && assignment.target[0] === variable.name,
+    );
+    if (definitions.length !== 1 || reassigned) continue;
+    byVariable.set(receiverKey(server.module.file, variable.enclosing, variable.name), {
       server,
       name: serverNameOf(server),
     });
@@ -296,64 +306,64 @@ const discoverDecoratedTools = (
   let edges = 0;
   const byVariable = serversByVariable(servers);
 
-  for (const decorated of decoratedDefinitions(context.modules, ['tool'], SDK_PACKAGES)) {
-    for (const decorator of decorated.definition.decorators) {
-      const method = decorator.path[decorator.path.length - 1];
-      const owner = decorator.path[0];
-      if (method !== 'tool' || owner === undefined || decorator.path.length < 2) continue;
-      const server = byVariable.get(`${decorated.module.file}|${owner}`);
-      if (server === undefined) continue;
+  for (const module of context.modules) {
+    for (const definition of module.definitions) {
+      for (const decorator of definition.decorators) {
+        const method = decorator.path[decorator.path.length - 1];
+        const owner = decorator.path[0];
+        if (method !== 'tool' || owner === undefined || decorator.path.length < 2) continue;
+        const server = byVariable.get(receiverKey(module.file, definition.enclosing, owner));
+        if (server === undefined) continue;
 
-      const first = decorator.args[0];
-      const entries = first !== undefined && first.kind === 'object' ? first.entries : [];
-      const toolName = stringValue(findEntry(entries, 'name')?.value) ?? decorated.definition.name;
-      const description = stringValue(findEntry(entries, 'description')?.value);
-      const identity = sourceIdentity('tool', decorated.module.file, toolName);
+        const first = decorator.args[0];
+        const entries = first !== undefined && first.kind === 'object' ? first.entries : [];
+        const toolName = stringValue(findEntry(entries, 'name')?.value) ?? definition.name;
+        const description = stringValue(findEntry(entries, 'description')?.value);
+        const identity = sourceIdentity('tool', module.file, toolName);
 
-      builder.addComponent(
-        drafts.sourceComponent({
-          kind: 'tool',
-          file: decorated.module.file,
-          name: toolName,
-          location: decorated.definition.location,
-          symbol: `@${owner}.${method} ${decorated.definition.name}`,
-          confidence: decorated.resolved
-            ? CONFIDENCE_BANDS.deterministic
-            : CONFIDENCE_BANDS.heuristic,
-          ...(description === undefined ? {} : { description }),
-          details: { for: 'tool', ...annotationDetails(first) },
-          metadata: {
-            declaredBy: 'mcp-server',
-            runtimeName: toolName,
-            annotationsAreSelfDeclared: true,
-          },
-          tags: ['mcp', 'tool'],
-        }),
-      );
-      components += 1;
-      files.add(decorated.module.file);
-      context.bindings.register(decorated.module.file, decorated.definition.name, identity);
-      context.bindings.register(decorated.module.file, toolName, identity);
-      // A decorated tool states its body exactly: the definition the decorator is attached to.
-      context.implementations.record({
-        identity,
-        file: decorated.module.file,
-        body: decorated.definition.location,
-        symbol: `@${owner}.${method} ${decorated.definition.name}`,
-      });
+        builder.addComponent(
+          drafts.sourceComponent({
+            kind: 'tool',
+            file: module.file,
+            name: toolName,
+            location: definition.location,
+            symbol: `@${owner}.${method} ${definition.name}`,
+            confidence: CONFIDENCE_BANDS.deterministic,
+            ...(description === undefined ? {} : { description }),
+            details: { for: 'tool', ...annotationDetails(first) },
+            metadata: {
+              declaredBy: 'mcp-server',
+              runtimeName: toolName,
+              annotationsAreSelfDeclared: true,
+            },
+            tags: ['mcp', 'tool'],
+          }),
+        );
+        components += 1;
+        files.add(module.file);
+        context.bindings.register(module.file, definition.name, identity);
+        context.bindings.register(module.file, toolName, identity);
+        // A decorated tool states its body exactly: the definition the decorator is attached to.
+        context.implementations.record({
+          identity,
+          file: module.file,
+          body: definition.location,
+          symbol: `@${owner}.${method} ${definition.name}`,
+        });
 
-      builder.addEdge(
-        drafts.edge({
-          kind: 'provides_tool',
-          from: sourceIdentity('mcp_server', decorated.module.file, server.name),
-          to: identity,
-          location: decorated.definition.location,
-          symbol: `@${owner}.${method} ${toolName}`,
-          confidence: CONFIDENCE_BANDS.strongStructural,
-        }),
-      );
-      edges += 1;
-      break;
+        builder.addEdge(
+          drafts.edge({
+            kind: 'provides_tool',
+            from: sourceIdentity('mcp_server', module.file, server.name),
+            to: identity,
+            location: definition.location,
+            symbol: `@${owner}.${method} ${toolName}`,
+            confidence: CONFIDENCE_BANDS.strongStructural,
+          }),
+        );
+        edges += 1;
+        break;
+      }
     }
   }
   return { components, edges };
@@ -367,68 +377,77 @@ const discoverTools = (
 ): { components: number; edges: number } => {
   let components = 0;
   let edges = 0;
-  const registrations = matchCalls(context.modules, {
-    names: ['registerTool', 'tool', 'setRequestHandler', 'add_tool'],
-    packages: SDK_PACKAGES,
-  });
+  const byVariable = serversByVariable(servers);
 
-  for (const match of registrations) {
-    const first = match.call.args[0];
-    if (first === undefined || first.kind !== 'string') continue;
-    const toolName = first.value;
-    const config = match.call.args[1];
-    const description =
-      config !== undefined && config.kind === 'object'
-        ? stringValue(findEntry(config.entries, 'description')?.value)
-        : undefined;
+  for (const module of context.modules) {
+    for (const call of module.calls) {
+      const method = call.calleePath[call.calleePath.length - 1];
+      const owner = call.calleePath[0];
+      if (
+        method === undefined ||
+        owner === undefined ||
+        call.calleePath.length < 2 ||
+        !['registerTool', 'tool', 'setRequestHandler', 'add_tool'].includes(method)
+      ) {
+        continue;
+      }
+      const server = byVariable.get(receiverKey(module.file, call.enclosing, owner));
+      if (server === undefined) continue;
+      const first = call.args[0];
+      if (first === undefined || first.kind !== 'string') continue;
+      const toolName = first.value;
+      const config = call.args[1];
+      const description =
+        config !== undefined && config.kind === 'object'
+          ? stringValue(findEntry(config.entries, 'description')?.value)
+          : undefined;
 
-    builder.addComponent(
-      drafts.sourceComponent({
-        kind: 'tool',
-        file: match.module.file,
-        name: toolName,
-        location: match.call.location,
-        symbol: dotted(match.call.calleePath),
-        confidence: match.confidence,
-        ...(description === undefined ? {} : { description }),
-        details: { for: 'tool', ...annotationDetails(config) },
-        metadata: {
-          declaredBy: 'mcp-server',
-          runtimeName: toolName,
-          annotationsAreSelfDeclared: true,
-        },
-        tags: ['mcp', 'tool'],
-      }),
-    );
-    components += 1;
-    files.add(match.module.file);
-    const toolIdentity = sourceIdentity('tool', match.module.file, toolName);
-    context.bindings.register(match.module.file, toolName, toolIdentity);
-    /*
-     * The registration call is the tool's body: the handler is an argument to it, and an inline
-     * function argument carries no location of its own. What that body reaches is the tool's own
-     * behaviour, and nothing joined the two until it was recorded here.
-     */
-    context.implementations.record({
-      identity: toolIdentity,
-      file: match.module.file,
-      body: match.call.location,
-      symbol: `${dotted(match.call.calleePath)}("${toolName}")`,
-    });
+      builder.addComponent(
+        drafts.sourceComponent({
+          kind: 'tool',
+          file: module.file,
+          name: toolName,
+          location: call.location,
+          symbol: dotted(call.calleePath),
+          confidence: server.server.confidence,
+          ...(description === undefined ? {} : { description }),
+          details: { for: 'tool', ...annotationDetails(config) },
+          metadata: {
+            declaredBy: 'mcp-server',
+            runtimeName: toolName,
+            annotationsAreSelfDeclared: true,
+          },
+          tags: ['mcp', 'tool'],
+        }),
+      );
+      components += 1;
+      files.add(module.file);
+      const toolIdentity = sourceIdentity('tool', module.file, toolName);
+      context.bindings.register(module.file, toolName, toolIdentity);
+      /*
+       * The registration call is the tool's body: the handler is an argument to it, and an inline
+       * function argument carries no location of its own. What that body reaches is the tool's own
+       * behaviour, and nothing joined the two until it was recorded here.
+       */
+      context.implementations.record({
+        identity: toolIdentity,
+        file: module.file,
+        body: call.location,
+        symbol: `${dotted(call.calleePath)}("${toolName}")`,
+      });
 
-    const server = servers.find((candidate) => candidate.module.file === match.module.file);
-    if (server === undefined) continue;
-    builder.addEdge(
-      drafts.edge({
-        kind: 'provides_tool',
-        from: sourceIdentity('mcp_server', match.module.file, serverNameOf(server)),
-        to: toolIdentity,
-        location: match.call.location,
-        symbol: `${dotted(match.call.calleePath)}("${toolName}")`,
-        confidence: CONFIDENCE_BANDS.strongStructural,
-      }),
-    );
-    edges += 1;
+      builder.addEdge(
+        drafts.edge({
+          kind: 'provides_tool',
+          from: sourceIdentity('mcp_server', module.file, server.name),
+          to: toolIdentity,
+          location: call.location,
+          symbol: `${dotted(call.calleePath)}("${toolName}")`,
+          confidence: CONFIDENCE_BANDS.strongStructural,
+        }),
+      );
+      edges += 1;
+    }
   }
   return { components, edges };
 };
@@ -450,7 +469,7 @@ const discoverFromSdk = (
 
 export const mcpAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '1',
+  version: '2',
   packages: SDK_PACKAGES,
   appliesTo: (context) =>
     projectUses(context, SDK_PACKAGES) ||

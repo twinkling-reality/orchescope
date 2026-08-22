@@ -45,6 +45,7 @@ import {
 } from '../declared-retry.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
 import { keyDeclaredAt } from '../idempotency-key.ts';
+import { definitionForCall, matchRuntimeSymbol } from '../matching.ts';
 import {
   type DeclaredDeadline,
   deadlineOfRelation,
@@ -89,6 +90,16 @@ const HTTP_CLIENTS = [
   { path: 'urllib.request.urlopen', packages: ['urllib'] },
 ];
 
+const HTTP_CLIENT_CONSTRUCTORS: readonly {
+  readonly names: readonly string[];
+  readonly packages: readonly string[];
+  readonly client: string;
+}[] = [
+  { names: ['Client', 'AsyncClient'], packages: ['httpx'], client: 'httpx' },
+  { names: ['Session'], packages: ['requests'], client: 'requests' },
+  { names: ['create'], packages: ['axios'], client: 'axios' },
+];
+
 const HTTP_METHOD_NAMES = new Set([
   'get',
   'post',
@@ -104,42 +115,43 @@ const HTTP_METHOD_NAMES = new Set([
 ]);
 
 /**
- * Datastore clients, by the name that constructs one.
+ * Datastore clients, by their provider-exported runtime symbol.
  *
- * `connect` carries `receivers`, and it is the only entry here that has to. Every other name in this
- * table is a constructor nobody writes by accident; `connect` is a word any protocol library uses for
- * the thing every protocol library does, and matching it bare made `server.connect(new
- * StdioServerTransport())` report a SQLite database in a repository that has none. A receiver is
- * required rather than a package, because the call this entry exists for is Python's
- * `sqlite3.connect(path)` and Python names the module at the call site.
+ * Every name here is shared syntax somewhere else. Provider identity is therefore mandatory even for
+ * distinctive-looking constructors: a missing origin is missing evidence, not permission to infer a
+ * database from a short name.
  */
 const DATASTORE_CLIENTS: readonly {
   readonly names: readonly string[];
-  readonly receivers?: readonly string[];
+  readonly packages: readonly string[];
   readonly store: string;
 }[] = [
-  { names: ['PrismaClient'], store: 'prisma' },
-  { names: ['Pool', 'Client'], store: 'postgres' },
-  { names: ['createClient'], store: 'redis' },
-  { names: ['MongoClient'], store: 'mongodb' },
-  { names: ['create_engine', 'sessionmaker'], store: 'sqlalchemy' },
-  { names: ['connect'], receivers: ['sqlite3'], store: 'sqlite' },
-  { names: ['DatabaseSync'], store: 'sqlite' },
+  { names: ['PrismaClient'], packages: ['@prisma/client'], store: 'prisma' },
+  { names: ['Pool', 'Client'], packages: ['pg'], store: 'postgres' },
+  { names: ['createClient'], packages: ['redis', '@redis/client'], store: 'redis' },
+  { names: ['MongoClient'], packages: ['mongodb', 'pymongo'], store: 'mongodb' },
+  { names: ['create_engine', 'sessionmaker'], packages: ['sqlalchemy'], store: 'sqlalchemy' },
+  { names: ['connect'], packages: ['sqlite3'], store: 'sqlite' },
+  { names: ['DatabaseSync'], packages: ['node:sqlite'], store: 'sqlite' },
 ];
 
-/** Whether the call reaches a client through the receiver the entry requires, when it requires one. */
+/** Whether the call resolves to the candidate's exact runtime provider. */
 const datastoreCallMatches = (
+  context: DiscoveryContext,
+  module: ModuleFacts,
   candidate: (typeof DATASTORE_CLIENTS)[number],
   call: CallFact,
-): boolean => {
-  if (!candidate.names.includes(calleeName(call))) return false;
-  if (candidate.receivers === undefined) return true;
-  const receiver = call.calleePath[call.calleePath.length - 2];
-  return (
-    (receiver !== undefined && candidate.receivers.includes(receiver)) ||
-    (call.origin !== undefined && candidate.receivers.includes(call.origin.module))
-  );
-};
+): boolean =>
+  matchRuntimeSymbol(
+    context.modules,
+    module,
+    {
+      path: call.calleePath,
+      origin: call.origin,
+      enclosing: call.enclosing,
+    },
+    { names: candidate.names, packages: candidate.packages },
+  ) !== undefined;
 
 /**
  * The options object among a call's arguments, which these libraries put last rather than at a position.
@@ -158,10 +170,26 @@ const optionsOf = (call: CallFact): readonly ObjectEntryFact[] => {
   return [];
 };
 
-const QUEUE_CLIENTS: readonly { readonly names: readonly string[]; readonly queue: string }[] = [
-  { names: ['Queue', 'Worker', 'FlowProducer'], queue: 'bullmq' },
-  { names: ['Celery'], queue: 'celery' },
-  { names: ['SQSClient', 'SendMessageCommand'], queue: 'sqs' },
+const QUEUE_CLIENTS: readonly {
+  readonly names: readonly string[];
+  readonly packages: readonly string[];
+  readonly queue: string;
+  readonly relation: 'consumes_from_queue' | 'publishes_to_queue';
+}[] = [
+  {
+    names: ['Queue', 'FlowProducer'],
+    packages: ['bullmq'],
+    queue: 'bullmq',
+    relation: 'publishes_to_queue',
+  },
+  { names: ['Worker'], packages: ['bullmq'], queue: 'bullmq', relation: 'consumes_from_queue' },
+  { names: ['Celery'], packages: ['celery'], queue: 'celery', relation: 'publishes_to_queue' },
+  {
+    names: ['SQSClient', 'SendMessageCommand'],
+    packages: ['@aws-sdk/client-sqs'],
+    queue: 'sqs',
+    relation: 'publishes_to_queue',
+  },
 ];
 
 const RETRY_HELPERS = new Set([
@@ -632,7 +660,10 @@ const statedMethodOf = (call: CallFact): string | undefined => {
  * Resolved once per module rather than per call, and only to a client already in the table, so this
  * widens what a known client may be called and not what counts as one.
  */
-const clientAliases = (module: ModuleFacts): ReadonlyMap<string, string> => {
+const clientAliases = (
+  context: DiscoveryContext,
+  module: ModuleFacts,
+): ReadonlyMap<string, string> => {
   const aliases = new Map<string, string>();
   for (const definition of module.definitions) {
     if (definition.aliasedFrom === undefined) continue;
@@ -640,6 +671,24 @@ const clientAliases = (module: ModuleFacts): ReadonlyMap<string, string> => {
       const client = HTTP_CLIENTS.find((candidate) => candidate.path === dotted(alias));
       if (client !== undefined) aliases.set(definition.name, client.path);
     }
+  }
+  for (const call of module.calls) {
+    const definition = definitionForCall(module, call);
+    if (definition?.kind !== 'variable') continue;
+    const clientConstructor = HTTP_CLIENT_CONSTRUCTORS.find(
+      (candidate) =>
+        matchRuntimeSymbol(
+          context.modules,
+          module,
+          {
+            path: call.calleePath,
+            origin: call.origin,
+            enclosing: call.enclosing,
+          },
+          { names: candidate.names, packages: candidate.packages },
+        ) !== undefined,
+    );
+    if (clientConstructor !== undefined) aliases.set(definition.name, clientConstructor.client);
   }
   return aliases;
 };
@@ -794,7 +843,7 @@ const discoverHttp = (
   builder: SystemGraphBuilder,
   found: Found,
 ): void => {
-  const aliases = clientAliases(module);
+  const aliases = clientAliases(context, module);
   const deadlines = modelRelationDeadlines(module, aliases);
   for (const call of module.calls) {
     const request = requestAt(call, aliases);
@@ -883,8 +932,9 @@ const discoverStores = (
   found: Found,
 ): void => {
   for (const call of module.calls) {
-    const name = calleeName(call);
-    const store = DATASTORE_CLIENTS.find((candidate) => datastoreCallMatches(candidate, call));
+    const store = DATASTORE_CLIENTS.find((candidate) =>
+      datastoreCallMatches(context, module, candidate, call),
+    );
     if (store !== undefined) {
       const identity = globalIdentity('database', GLOBAL_NAMESPACES.datastore, store.store);
       builder.addComponent(
@@ -918,7 +968,19 @@ const discoverStores = (
       found.edges += 1;
       continue;
     }
-    const queue = QUEUE_CLIENTS.find((candidate) => candidate.names.includes(name));
+    const queue = QUEUE_CLIENTS.find(
+      (candidate) =>
+        matchRuntimeSymbol(
+          context.modules,
+          module,
+          {
+            path: call.calleePath,
+            origin: call.origin,
+            enclosing: call.enclosing,
+          },
+          { names: candidate.names, packages: candidate.packages },
+        ) !== undefined,
+    );
     if (queue === undefined) continue;
     const first = call.args[0];
     const queueName = first !== undefined && first.kind === 'string' ? first.value : queue.queue;
@@ -948,7 +1010,7 @@ const discoverStores = (
     context.callSiteEffects.record(module.file, call, identity);
     builder.addEdge(
       drafts.edge({
-        kind: name === 'Worker' ? 'consumes_from_queue' : 'publishes_to_queue',
+        kind: queue.relation,
         from: ensureCaller(module, call, context, builder, found),
         to: identity,
         location: call.location,
@@ -1274,12 +1336,13 @@ const callsWithin = (module: ModuleFacts, span: SourceLocation): readonly CallFa
  * arguments can be read, which is where the ceiling and the wait are written.
  */
 const iteratedRetryOf = (
+  modules: readonly ModuleFacts[],
   module: ModuleFacts,
   loop: ControlFlowFact,
 ): { readonly declared: DeclaredRetry; readonly call: CallFact } | undefined => {
   if (!loop.contains.some((path) => namesRetryConstructor(path))) return undefined;
   for (const call of callsWithin(module, loop.location)) {
-    const declared = constructedRetry(call);
+    const declared = constructedRetry(modules, module, call);
     if (declared !== undefined) return { declared, call };
   }
   return undefined;
@@ -1304,11 +1367,12 @@ type LoopRetry = {
 };
 
 const loopRetryOf = (
+  modules: readonly ModuleFacts[],
   module: ModuleFacts,
   loop: ControlFlowFact,
   declaresRetries: boolean,
 ): LoopRetry | undefined => {
-  const iterated = declaresRetries ? iteratedRetryOf(module, loop) : undefined;
+  const iterated = declaresRetries ? iteratedRetryOf(modules, module, loop) : undefined;
   if (iterated !== undefined) {
     return {
       evidence: iterated.declared.declaredAs,
@@ -1439,7 +1503,7 @@ const discoverRetryLoops = (
   const declaresRetries = usesTenacity(module);
   for (const loop of module.controlFlow) {
     if (loop.kind !== 'loop') continue;
-    const read = loopRetryOf(module, loop, declaresRetries);
+    const read = loopRetryOf(context.modules, module, loop, declaresRetries);
     if (read === undefined) continue;
     drawRetriedOperations({
       module,
@@ -1485,7 +1549,7 @@ const discoverDecoratedRetries = (
   if (!usesTenacity(module)) return;
   for (const definition of module.definitions) {
     const declared = definition.decorators
-      .map((decorator) => decoratedRetry(module, decorator))
+      .map((decorator) => decoratedRetry(context.modules, module, definition, decorator))
       .find((candidate) => candidate !== undefined);
     if (declared === undefined) continue;
     drawRetriedOperations({
@@ -1514,7 +1578,7 @@ const discoverDecoratedRetries = (
 
 export const effectsAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '1',
+  version: '2',
   // A side effect is a convention, not a package.
   packages: [],
   appliesTo: (context) => context.modules.length > 0,

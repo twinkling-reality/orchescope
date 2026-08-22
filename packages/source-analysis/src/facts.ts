@@ -275,7 +275,9 @@ export type ControlFlowFact = {
  * The target is the dotted path written on the left, so `triage_agent.handoffs` arrives as two segments and a reader
  * can ask which name it belongs to. The value is reduced the same way a call argument is, because it is the same
  * grammar: a list, an identifier, a call, or a literal. Appending and extending are calls and are already recorded as
- * calls, so this is only the shape that is not one.
+ * calls, so this is only the shape that is not one. JavaScript and TypeScript root reassignments are retained too:
+ * `graph = replacement` is evidence that a constructor's provider identity no longer authorizes subsequent calls through
+ * that binding. Initial declarations remain DefinitionFacts.
  */
 export type AssignmentFact = {
   readonly target: readonly string[];

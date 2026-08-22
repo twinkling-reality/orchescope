@@ -23,7 +23,13 @@ import type {
 } from '../adapter.ts';
 import { createDrafts, sourceIdentity } from '../drafts.ts';
 import { routesDeclaredInNodes } from '../graph-node-route.ts';
-import { definitionForCall, importsAny, moduleMatches, projectUses } from '../matching.ts';
+import {
+  definitionForCall,
+  importsAny,
+  matchRuntimeSymbol,
+  moduleMatches,
+  projectUses,
+} from '../matching.ts';
 import { addModelReference } from '../model-reference.ts';
 
 /**
@@ -51,6 +57,8 @@ const PACKAGES = [
   'langgraph.graph',
   'langgraph.prebuilt',
 ];
+const GRAPH_PACKAGES = ['@langchain/langgraph', 'langgraph', 'langgraph.graph'];
+const GRAPH_CONSTRUCTORS = ['StateGraph', 'MessageGraph', 'Graph'];
 const ADAPTER_ID = 'adapter:langgraph';
 const drafts = createDrafts(ADAPTER_ID);
 
@@ -62,18 +70,31 @@ const SENTINELS = new Set(['__start__', '__end__']);
 const nodeIdentity = (file: string, name: string): ComponentIdentity =>
   sourceIdentity('agent', file, name);
 
-const shadowsImportedRoot = (module: ModuleFacts, name: string): boolean =>
+const shadowsImportedRoot = (
+  module: ModuleFacts,
+  name: string,
+  enclosing: string | undefined,
+): boolean =>
   module.definitions.some(
-    (definition) => definition.enclosing === undefined && definition.name === name,
+    (definition) =>
+      definition.name === name &&
+      (definition.enclosing === undefined || definition.enclosing === enclosing),
+  ) ||
+  module.assignments.some(
+    (assignment) => assignment.target.length === 1 && assignment.target[0] === name,
   );
 
-const literalName = (module: ModuleFacts, value: unknown): string | undefined => {
+const literalName = (
+  module: ModuleFacts,
+  value: unknown,
+  enclosing: string | undefined,
+): string | undefined => {
   const argument = value as { kind?: string } | undefined;
   if (argument === undefined) return undefined;
   if (argument.kind === 'string') return (argument as { value: string }).value;
   if (argument.kind === 'identifier') {
     const name = (argument as { name: string }).name;
-    if (shadowsImportedRoot(module, name)) return undefined;
+    if (shadowsImportedRoot(module, name, enclosing)) return undefined;
     const imported = module.imports.find(
       (entry) => !entry.isType && entry.local === name && moduleMatches(entry.module, PACKAGES),
     )?.imported;
@@ -83,11 +104,16 @@ const literalName = (module: ModuleFacts, value: unknown): string | undefined =>
     const path = (argument as { path: readonly string[] }).path;
     const root = path[0];
     const last = path[path.length - 1];
-    if (root === undefined || shadowsImportedRoot(module, root)) return undefined;
+    if (root === undefined || shadowsImportedRoot(module, root, enclosing)) return undefined;
     const namespace = module.imports.find(
       (entry) => !entry.isType && entry.local === root && moduleMatches(entry.module, PACKAGES),
     );
-    if (namespace === undefined) return undefined;
+    if (
+      namespace === undefined ||
+      (namespace.imported !== '*' && namespace.imported !== 'default')
+    ) {
+      return undefined;
+    }
     return last === 'START' ? '__start__' : last === 'END' ? '__end__' : undefined;
   }
   return undefined;
@@ -106,7 +132,7 @@ const nodeNameFrom = (
   call: ModuleFacts['calls'][number],
   method: string,
 ): string | undefined => {
-  const declared = literalName(module, call.args[0]);
+  const declared = literalName(module, call.args[0], call.enclosing);
   if (declared !== undefined) return SENTINELS.has(declared) ? undefined : declared;
   if (module.language !== 'python' || method !== 'add_node') return undefined;
   const argument = call.args[0];
@@ -193,34 +219,127 @@ const recordBoundary = (
 
 const graphName = (file: string): string => `${file.split('/').pop() ?? 'graph'}-graph`;
 
+type VerifiedGraph = {
+  readonly call: CallFact;
+  readonly receiver: string;
+  readonly enclosing: string | undefined;
+  readonly groupIdentity: ComponentIdentity;
+};
+
+const graphConstructorShape = (call: CallFact): boolean => {
+  const origin = call.origin;
+  if (origin === undefined) return GRAPH_CONSTRUCTORS.includes(calleeName(call));
+  if (origin.imported === '*' || origin.imported === 'default') {
+    return GRAPH_CONSTRUCTORS.includes(calleeName(call));
+  }
+  return call.calleePath.length === 1;
+};
+
 /** The graph object itself, which becomes the group the nodes belong to. */
 const discoverGraphConstruction = (
   module: ModuleFacts,
+  context: DiscoveryContext,
   builder: SystemGraphBuilder,
-): { readonly components: number; readonly groupIdentity: ComponentIdentity | undefined } => {
-  const constructions = module.calls.filter((call) =>
-    ['StateGraph', 'MessageGraph', 'Graph'].includes(calleeName(call)),
-  );
-  for (const call of constructions) {
+  topology: TopologyAccumulator,
+): { readonly components: number; readonly graph: VerifiedGraph | undefined } => {
+  const constructions: {
+    readonly call: CallFact;
+    readonly receiver: string;
+    readonly enclosing: string | undefined;
+  }[] = [];
+  for (const call of module.calls) {
+    if (!graphConstructorShape(call)) continue;
+    const matched = matchRuntimeSymbol(
+      context.modules,
+      module,
+      {
+        path: call.calleePath,
+        origin: call.origin,
+        enclosing: call.enclosing,
+      },
+      { names: GRAPH_CONSTRUCTORS, packages: GRAPH_PACKAGES },
+    );
+    if (matched === undefined) {
+      if (GRAPH_CONSTRUCTORS.includes(calleeName(call))) {
+        refuseTopology(topology, {
+          kind: 'adapter_input',
+          reason: `${calleeName(call)} did not resolve to a LangGraph runtime provider.`,
+          location: call.location,
+        });
+      }
+      continue;
+    }
+    const definition = definitionForCall(module, call);
+    if (definition === undefined || definition.kind !== 'variable') {
+      refuseTopology(topology, {
+        kind: 'adapter_input',
+        reason: `${dotted(call.calleePath)} was not assigned to a locally verifiable graph receiver.`,
+        location: call.location,
+      });
+      continue;
+    }
+    const definitions = module.definitions.filter(
+      (candidate) =>
+        candidate.name === definition.name && candidate.enclosing === definition.enclosing,
+    );
+    if (definitions.length !== 1) {
+      refuseTopology(topology, {
+        kind: 'adapter_input',
+        reason: `${definition.name} has ${definitions.length} definitions in the graph construction scope, so its provider identity is not stable.`,
+        location: call.location,
+      });
+      continue;
+    }
+    const reassigned = module.assignments.some(
+      (assignment) => assignment.target.length === 1 && assignment.target[0] === definition.name,
+    );
+    if (reassigned) {
+      refuseTopology(topology, {
+        kind: 'adapter_input',
+        reason: `${definition.name} is reassigned after construction, so its provider identity is not stable.`,
+        location: call.location,
+      });
+      continue;
+    }
+    constructions.push({ call, receiver: definition.name, enclosing: definition.enclosing });
+  }
+
+  for (const construction of constructions) {
+    const name =
+      constructions.length === 1
+        ? graphName(module.file)
+        : `${graphName(module.file)}:${construction.receiver}`;
     builder.addComponent(
       drafts.sourceComponent({
         kind: 'agent_group',
         file: module.file,
-        name: graphName(module.file),
-        displayName: dotted(call.calleePath),
-        location: call.location,
-        symbol: dotted(call.calleePath),
-        metadata: { framework: 'langgraph' },
+        name,
+        displayName: dotted(construction.call.calleePath),
+        location: construction.call.location,
+        symbol: dotted(construction.call.calleePath),
+        metadata: { framework: 'langgraph', receiver: construction.receiver },
         tags: ['langgraph'],
       }),
     );
   }
+  if (constructions.length > 1) {
+    refuseTopology(topology, {
+      kind: 'adapter_input',
+      reason:
+        'Multiple LangGraph constructions in one module cannot be partitioned without graph-scoped node identities.',
+      ...(constructions[0] === undefined ? {} : { location: constructions[0].call.location }),
+    });
+  }
+  const only = constructions.length === 1 ? constructions[0] : undefined;
   return {
     components: constructions.length,
-    groupIdentity:
-      constructions.length > 0
-        ? sourceIdentity('agent_group', module.file, graphName(module.file))
-        : undefined,
+    graph:
+      only === undefined
+        ? undefined
+        : {
+            ...only,
+            groupIdentity: sourceIdentity('agent_group', module.file, graphName(module.file)),
+          },
   };
 };
 
@@ -250,10 +369,11 @@ const discoverNodes = (
   declaredNodes: Set<string>,
   implementations: Map<string, string>,
   topology: TopologyAccumulator,
+  calls: readonly CallFact[],
 ): Counts => {
   let components = 0;
   let edges = 0;
-  for (const call of module.calls) {
+  for (const call of calls) {
     const method = calleeName(call);
     if (!NODE_METHODS.has(method)) continue;
     const name = nodeNameFrom(module, call, method);
@@ -306,8 +426,8 @@ const addDirectEdge = (
   declaredNodes: ReadonlySet<string>,
   topology: TopologyAccumulator,
 ): number => {
-  const from = literalName(module, call.args[0]);
-  const to = literalName(module, call.args[1]);
+  const from = literalName(module, call.args[0], call.enclosing);
+  const to = literalName(module, call.args[1], call.enclosing);
   if (from === undefined || to === undefined) {
     refuseTopology(topology, {
       kind: 'explicit_relation',
@@ -495,7 +615,7 @@ const explicitDestinations = (
   if (argument.kind === 'object') {
     const destinations: ConditionalDestination[] = [];
     for (const entry of argument.entries) {
-      const to = stringValue(entry.value) ?? literalName(module, entry.value);
+      const to = stringValue(entry.value) ?? literalName(module, entry.value, call.enclosing);
       if (to === undefined) {
         refuseTopology(topology, {
           kind: 'conditional_destination',
@@ -509,7 +629,7 @@ const explicitDestinations = (
   if (argument.kind === 'array') {
     const destinations: ConditionalDestination[] = [];
     for (const item of argument.items) {
-      const to = stringValue(item) ?? literalName(module, item);
+      const to = stringValue(item) ?? literalName(module, item, call.enclosing);
       if (to === undefined) {
         refuseTopology(topology, {
           kind: 'conditional_destination',
@@ -656,7 +776,7 @@ const addConditionalEdges = (
   topology: TopologyAccumulator,
 ): number => {
   topology.conditionalConstructs += 1;
-  const from = literalName(module, call.args[0]);
+  const from = literalName(module, call.args[0], call.enclosing);
   if (from === undefined || !declaredNodes.has(from)) {
     refuseTopology(topology, {
       kind: 'conditional_destination',
@@ -737,7 +857,17 @@ const discoverReactAgents = (
   if (module.language !== 'python') return { components, edges };
 
   for (const call of module.calls) {
-    if (calleeName(call) !== 'create_react_agent') continue;
+    const matched = matchRuntimeSymbol(
+      context.modules,
+      module,
+      {
+        path: call.calleePath,
+        origin: call.origin,
+        enclosing: call.enclosing,
+      },
+      { names: ['create_react_agent'], packages: GRAPH_PACKAGES },
+    );
+    if (matched === undefined) continue;
     const entries = keywordEntries(call);
     const definition = definitionForCall(module, call);
     const name = stringValue(findEntry(entries, 'name')?.value) ?? definition?.name;
@@ -842,7 +972,7 @@ const discoverModule = (
   const topologyInputs = module.calls.filter((call) => {
     const name = calleeName(call);
     return (
-      ['StateGraph', 'MessageGraph', 'Graph'].includes(name) ||
+      GRAPH_CONSTRUCTORS.includes(name) ||
       NODE_METHODS.has(name) ||
       EDGE_METHODS.has(name) ||
       CONDITIONAL_METHODS.has(name) ||
@@ -862,19 +992,54 @@ const discoverModule = (
   const entryBoundariesBefore = topology.entryBoundaries;
   const declaredNodes = new Set<string>();
   const implementations = new Map<string, string>();
-  const construction = discoverGraphConstruction(module, builder);
+  const construction = discoverGraphConstruction(module, context, builder, topology);
+  const graphMethods = module.calls.filter((call) => {
+    const method = calleeName(call);
+    return NODE_METHODS.has(method) || EDGE_METHODS.has(method) || CONDITIONAL_METHODS.has(method);
+  });
+  const verifiedMethods: CallFact[] = [];
+  for (const call of graphMethods) {
+    const receiver = call.calleePath.slice(0, -1).join('.');
+    const chainedFromConstruction =
+      construction.graph !== undefined &&
+      definitionForCall(module, call)?.name === construction.graph.receiver &&
+      matchRuntimeSymbol(
+        context.modules,
+        module,
+        {
+          path: call.calleePath,
+          origin: call.origin,
+          enclosing: call.enclosing,
+        },
+        { names: GRAPH_CONSTRUCTORS, packages: GRAPH_PACKAGES },
+      ) !== undefined;
+    if (
+      construction.graph !== undefined &&
+      call.enclosing === construction.graph.enclosing &&
+      (receiver === construction.graph.receiver || chainedFromConstruction)
+    ) {
+      verifiedMethods.push(call);
+      continue;
+    }
+    refuseTopology(topology, {
+      kind: 'adapter_input',
+      reason: `${receiver || 'An unbound receiver'}.${calleeName(call)} was not a locally verified LangGraph graph receiver.`,
+      location: call.location,
+    });
+  }
   const nodes = discoverNodes(
     module,
     context,
     builder,
-    construction.groupIdentity,
+    construction.graph?.groupIdentity,
     declaredNodes,
     implementations,
     topology,
+    verifiedMethods,
   );
 
   let edges = nodes.edges;
-  for (const call of module.calls) {
+  for (const call of verifiedMethods) {
     const method = calleeName(call);
     if (EDGE_METHODS.has(method)) {
       edges += addDirectEdge(module, builder, call, method, declaredNodes, topology);
@@ -919,9 +1084,7 @@ const discoverModule = (
       ...(frameworkImport === undefined ? {} : { location: frameworkImport.location }),
     });
   } else if (construction.components > 0 && topology.entryBoundaries === entryBoundariesBefore) {
-    const graphCall = module.calls.find((call) =>
-      ['StateGraph', 'MessageGraph', 'Graph'].includes(calleeName(call)),
-    );
+    const graphCall = construction.graph?.call;
     refuseTopology(topology, {
       kind: 'entry_boundary',
       reason: 'No supported entry boundary was found for this LangGraph construction.',
@@ -939,7 +1102,7 @@ const discoverModule = (
 
 export const langGraphAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '2',
+  version: '3',
   packages: PACKAGES,
   appliesTo: (context) => projectUses(context, PACKAGES),
   discover: (context, builder): AdapterFindings => {

@@ -4,6 +4,7 @@ import type { ComponentIdentity, EdgeKind, EdgePolicy, SourceLocation } from '@o
 import type {
   ArgumentFact,
   CallFact,
+  DefinitionFact,
   ModuleFacts,
   ObjectEntryFact,
 } from '@orchescope/source-analysis';
@@ -17,7 +18,13 @@ import {
 } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
-import { decoratedDefinitions, definitionForCall, matchCalls, projectUses } from '../matching.ts';
+import {
+  decoratedDefinitions,
+  definitionForCall,
+  matchCalls,
+  matchRuntimeSymbol,
+  projectUses,
+} from '../matching.ts';
 
 /**
  * The OpenAI Agents SDK, in both ecosystems.
@@ -44,6 +51,13 @@ const toolNameFrom = (entries: readonly ObjectEntryFact[], fallback: string): st
 const approvalFrom = (entries: readonly ObjectEntryFact[]): boolean | undefined =>
   booleanValue(findEntry(entries, 'needsApproval')?.value) ??
   booleanValue(findEntry(entries, 'needs_approval')?.value);
+
+const decoratorName = (decorator: DefinitionFact['decorators'][number]): string | undefined =>
+  decorator.origin !== undefined &&
+  decorator.origin.imported !== '*' &&
+  decorator.origin.imported !== 'default'
+    ? decorator.origin.imported
+    : decorator.path[decorator.path.length - 1];
 
 const registerTools = (
   context: DiscoveryContext,
@@ -92,7 +106,7 @@ const registerTools = (
 
   for (const decorated of decoratedDefinitions(context.modules, ['function_tool'], PACKAGES)) {
     const decorator = decorated.definition.decorators.find(
-      (entry) => entry.path[entry.path.length - 1] === 'function_tool',
+      (entry) => decoratorName(entry) === 'function_tool',
     );
     const entries = decorator?.args[0]?.kind === 'object' ? decorator.args[0].entries : [];
     const declaredName = toolNameFrom(entries, decorated.definition.name);
@@ -151,14 +165,16 @@ const registerGuardrails = (
   const decorators = ['input_guardrail', 'output_guardrail'];
   for (const decorated of decoratedDefinitions(context.modules, decorators, PACKAGES)) {
     const decorator = decorated.definition.decorators.find((entry) =>
-      decorators.includes(entry.path[entry.path.length - 1] ?? ''),
+      decorators.includes(decoratorName(entry) ?? ''),
     );
     const entries = decorator?.args[0]?.kind === 'object' ? decorator.args[0].entries : [];
     // The decorator names the guardrail the way a run reports it; the function name is what the agent list cites.
     const declaredName =
       stringValue(findEntry(entries, 'name')?.value) ?? decorated.definition.name;
     const guards =
-      decorator?.path[decorator.path.length - 1] === 'output_guardrail' ? 'output' : 'input';
+      decorator !== undefined && decoratorName(decorator) === 'output_guardrail'
+        ? 'output'
+        : 'input';
     const identity = sourceIdentity('evaluator', decorated.module.file, declaredName);
     builder.addComponent(
       drafts.sourceComponent({
@@ -275,12 +291,28 @@ type PendingAgent = {
   readonly entries: readonly ObjectEntryFact[];
 };
 
-const agentConstructionCalls = (context: DiscoveryContext) => [
-  ...matchCalls(context.modules, { names: ['Agent'], packages: PACKAGES }),
-  ...matchCalls(context.modules, { names: ['create'], packages: PACKAGES, pathLength: 2 }).filter(
-    (match) => match.call.calleePath[0] === 'Agent',
-  ),
-];
+const agentConstructionCalls = (context: DiscoveryContext) => {
+  const matches = matchCalls(context.modules, { names: ['Agent'], packages: PACKAGES }).filter(
+    (match) => match.call.calleePath[match.call.calleePath.length - 1] !== 'create',
+  );
+  for (const module of context.modules) {
+    for (const call of module.calls) {
+      if (call.calleePath.length !== 2 || call.calleePath[1] !== 'create') continue;
+      const matched = matchRuntimeSymbol(
+        context.modules,
+        module,
+        {
+          path: call.calleePath,
+          origin: call.origin,
+          enclosing: call.enclosing,
+        },
+        { names: ['Agent'], packages: PACKAGES },
+      );
+      if (matched !== undefined) matches.push({ module, call, ...matched });
+    }
+  }
+  return matches;
+};
 
 /**
  * Agents and the models they name, recorded first so that a relation between two agents can resolve both ends.
@@ -522,7 +554,7 @@ const registerAgents = (
 
 export const openAiAgentsAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '1',
+  version: '2',
   packages: PACKAGES,
   appliesTo: (context) => projectUses(context, PACKAGES),
   discover: (context, builder): AdapterFindings => {

@@ -659,7 +659,7 @@ const discoverFromSource = (
 
 export const crewAiAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '1',
+  version: '2',
   packages: PACKAGES,
   /*
    * A crew document is a name CrewAI owns outright, so its presence is the repository saying so even where
