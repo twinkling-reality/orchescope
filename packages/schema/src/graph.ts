@@ -203,6 +203,8 @@ export const GraphProvenance = Type.Object(
           commit: Type.Optional(Type.String({ pattern: '^[0-9a-f]{7,40}$' })),
           ref: Type.Optional(NonEmptyString()),
           repositoryUrl: Type.Optional(NonEmptyString()),
+          /** Git-root-relative path of the scan root, absent when the two roots are equal. */
+          repositoryPath: Type.Optional(RelativePath),
           dirty: Type.Boolean(),
         },
         { additionalProperties: false },

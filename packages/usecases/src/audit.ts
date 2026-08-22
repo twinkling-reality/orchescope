@@ -19,7 +19,7 @@ import type {
 } from '@orchescope/schema';
 import { DEFAULT_EXCLUDED_DIRECTORIES, type FactCache } from '@orchescope/source-analysis';
 import { deriveTopology } from '@orchescope/traces';
-import { readTrackedPaths, type Workspace } from '@orchescope/workspace';
+import { readGitRepositoryPath, readTrackedPaths, type Workspace } from '@orchescope/workspace';
 import { resolveCapabilities } from './capabilities.ts';
 import { judgeGoal } from './goal.ts';
 import { discoverScenarios } from './scenario.ts';
@@ -325,6 +325,12 @@ const assembleReport = (input: {
   });
 };
 
+const gitForScan = (workspace: Workspace) => {
+  if (workspace.git === undefined) return undefined;
+  const repositoryPath = readGitRepositoryPath(workspace.paths.root);
+  return { ...workspace.git, ...(repositoryPath === undefined ? {} : { repositoryPath }) };
+};
+
 export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
   const { workspace } = request;
   const { config } = workspace;
@@ -351,6 +357,7 @@ export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
      * per directory, and absent when the root is not a checkout, in which case the rules are all there is.
      */
     const tracked = readTrackedPaths(workspace.paths.root);
+    const git = gitForScan(workspace);
     const scan = await discover({
       /*
        * Parsing is the longest thing this command does and it is synchronous throughout, so without
@@ -386,7 +393,7 @@ export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
       ...(tracked === undefined ? {} : { trackedFileCount: tracked.fileCount }),
       concurrency: config.analysis.concurrency,
       ...(request.cache === undefined ? {} : { cache: request.cache }),
-      ...(workspace.git === undefined ? {} : { git: workspace.git }),
+      ...(git === undefined ? {} : { git }),
     });
     discoverPhase.finish(
       `${formatCount(scan.graph.components.length, 'component')}, ${formatCount(scan.graph.edges.length, 'edge')}, ${formatCount(scan.graph.coverage.filesParsed, 'file')} parsed`,

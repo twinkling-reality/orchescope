@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
-import { readGitFacts } from '../src/git.ts';
+import { readGitFacts, readGitRepositoryPath } from '../src/git.ts';
 
 const roots: string[] = [];
 
@@ -38,5 +38,14 @@ describe('Git repository identity', () => {
   it('stays absent when the remote cannot be represented as a browser coordinate', () => {
     const facts = readGitFacts(repository('git@github.com:openai/example.git'));
     assert.equal(facts?.repositoryUrl, undefined);
+  });
+
+  it('derives a package subroot from Git rather than from a supplied repository coordinate', () => {
+    const root = repository('https://github.com/openai/example.git');
+    const packageRoot = join(root, 'packages', 'server');
+    mkdirSync(packageRoot, { recursive: true });
+
+    assert.equal(readGitRepositoryPath(packageRoot), 'packages/server');
+    assert.equal(readGitRepositoryPath(root), undefined);
   });
 });

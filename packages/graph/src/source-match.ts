@@ -81,7 +81,20 @@ export const createSourceMatcher = (graph: SystemGraph): SourceMatcher => {
         };
       }
 
-      const key = `${source.file}|${endpoint.observedKind}|${normalizeLocalName(endpoint.observedName)}`;
+      const graphFile = (() => {
+        const prefix = git.repositoryPath;
+        if (prefix === undefined) return source.file;
+        return source.file.startsWith(`${prefix}/`)
+          ? source.file.slice(prefix.length + 1)
+          : undefined;
+      })();
+      if (graphFile === undefined) {
+        return {
+          kind: 'refused',
+          refusal: { attribute: 'code.file.path', reason: 'source_not_declared' },
+        };
+      }
+      const key = `${graphFile}|${endpoint.observedKind}|${normalizeLocalName(endpoint.observedName)}`;
       const candidates = [
         ...new Map(
           (byFileKindAndName.get(key) ?? []).map((component) => [component.id, component]),
@@ -100,7 +113,7 @@ export const createSourceMatcher = (graph: SystemGraph): SourceMatcher => {
           : candidates.filter((component) =>
               component.sourceLocations.some(
                 (location) =>
-                  location.file === source.file &&
+                  location.file === graphFile &&
                   (source.line as number) >= location.startLine &&
                   (source.line as number) <= (location.endLine ?? location.startLine),
               ),

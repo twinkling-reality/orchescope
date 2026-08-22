@@ -229,4 +229,39 @@ describe('repository federation', () => {
     assert.equal(report.relations.length, 0);
     assert.ok(report.coverage.refusals.some((refusal) => refusal.reason === 'repository_dirty'));
   });
+
+  it('matches repository-relative runtime source inside a separately scanned package subroot', () => {
+    const subrootGraph = buildGraph([declaration()], [], {
+      git: {
+        repositoryUrl: SERVER_URL,
+        commit: SERVER_REVISION,
+        repositoryPath: 'packages/server',
+        dirty: false,
+      },
+    });
+    const serverSource = source(SERVER_URL, SERVER_REVISION, 'packages/server/src/shared.ts');
+    const report = federate({
+      repositories: [
+        { graph: subrootGraph, evidence: [] },
+        { graph: graph(CLIENT_URL, CLIENT_REVISION), evidence: [] },
+      ],
+      topologies: [
+        runtimeTopology({
+          components: [
+            observedComponent({
+              kind: 'agent',
+              observedName: 'shared',
+              observedSource: serverSource,
+            }),
+          ],
+        }),
+      ],
+      runtimeEvidence: [],
+      orchescopeVersion: '0.8.0',
+      generatedAt: TEST_TIMESTAMP,
+    });
+
+    assert.equal(report.componentJoins.length, 1);
+    assert.equal(report.componentJoins[0]?.component.repository.repositoryUrl, SERVER_URL);
+  });
 });

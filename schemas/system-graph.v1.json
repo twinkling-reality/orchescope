@@ -1927,6 +1927,12 @@
               "minLength": 1,
               "type": "string"
             },
+            "repositoryPath": {
+              "description": "Repository relative POSIX path.",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+              "type": "string"
+            },
             "repositoryUrl": {
               "minLength": 1,
               "type": "string"

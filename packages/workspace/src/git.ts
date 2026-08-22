@@ -1,4 +1,6 @@
 import { execFileSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
+import { relative, sep } from 'node:path';
 
 /**
  * Git facts, read for provenance.
@@ -101,6 +103,35 @@ export const readGitFacts = (root: string): GitFacts | undefined => {
     ...(remote === undefined ? {} : canonicalRepositoryUrl(remote)),
     dirty: status !== undefined && status.length > 0,
   };
+};
+
+/**
+ * The scan root's location inside its Git checkout.
+ *
+ * A package inside a monorepo stores source locations relative to the package root, while runtime source
+ * identity is relative to the Git root. This prefix is derived from Git and the resolved scan root, not
+ * from an operator-authored workspace list. It is absent for a repository-root scan or when Git cannot
+ * establish one contained relationship.
+ */
+export const readGitRepositoryPath = (root: string): string | undefined => {
+  const topLevel = run(root, ['rev-parse', '--show-toplevel']);
+  if (topLevel === undefined) return undefined;
+  let fromTop: string;
+  try {
+    fromTop = relative(realpathSync(topLevel), realpathSync(root)).split(sep).join('/');
+  } catch {
+    return undefined;
+  }
+  if (
+    fromTop.length === 0 ||
+    fromTop === '.' ||
+    fromTop.startsWith('../') ||
+    fromTop === '..' ||
+    fromTop.startsWith('/')
+  ) {
+    return undefined;
+  }
+  return fromTop;
 };
 
 const canonicalRepositoryUrl = (remote: string): { readonly repositoryUrl?: string } => {

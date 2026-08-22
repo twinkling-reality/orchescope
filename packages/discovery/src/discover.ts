@@ -17,6 +17,7 @@ import type {
   Sha256Hex,
   SkippedFile,
   SystemGraph,
+  GraphProvenance,
   UnsupportedArea,
 } from '@orchescope/schema';
 import {
@@ -67,7 +68,7 @@ export type ScanRequest = {
   readonly concurrency: number;
   readonly cache?: FactCache;
   readonly adapters?: readonly AgentSystemAdapter[];
-  readonly git?: { readonly commit?: string; readonly ref?: string; readonly dirty: boolean };
+  readonly git?: NonNullable<GraphProvenance['git']>;
   /** Called once per parsed file, so a caller can report a determinate count during the parse. */
   readonly onFileParsed?: (completed: number, total: number) => void;
 };
