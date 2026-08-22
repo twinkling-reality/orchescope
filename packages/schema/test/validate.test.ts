@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { Type } from '@sinclair/typebox';
+import { Manifest, ManifestV1, ManifestV2 } from '../src/manifest.ts';
 import { DOCUMENT_SCHEMAS, documentDescriptors } from '../src/registry.ts';
 import { compileChecker, formatIssues, validate, validateDocument } from '../src/validate.ts';
 import { MIN_READABLE_VERSIONS, SCHEMA_VERSIONS } from '../src/version.ts';
@@ -155,6 +156,81 @@ describe('validateDocument', () => {
     const result = validateDocument(Document, 1, 1, { schemaVersion: 1, id: '' });
     assert.equal(result.ok, false);
     if (!result.ok) assert.ok(result.issues.some((issue) => issue.path === '/id'));
+  });
+});
+
+describe('manifest document versions', () => {
+  const digest = 'a'.repeat(64);
+
+  it('accepts a complete version 3 citation or no citation', () => {
+    assert.equal(
+      validate(Manifest, {
+        schemaVersion: 3,
+        components: [
+          {
+            kind: 'agent',
+            name: 'triage',
+            definedIn: 'src/triage.rb',
+            definedAtLine: 12,
+            definedFileHash: digest,
+          },
+          { kind: 'tool', name: 'lookup' },
+        ],
+        edges: [],
+      }).ok,
+      true,
+    );
+  });
+
+  it('refuses every partial version 3 citation', () => {
+    const fields = {
+      definedIn: 'src/triage.rb',
+      definedAtLine: 12,
+      definedFileHash: digest,
+    };
+    for (const omitted of Object.keys(fields) as (keyof typeof fields)[]) {
+      const citation = { ...fields };
+      delete citation[omitted];
+      assert.equal(
+        validate(Manifest, {
+          schemaVersion: 3,
+          components: [{ kind: 'agent', name: 'triage', ...citation }],
+          edges: [],
+        }).ok,
+        false,
+        `a citation without ${omitted} was accepted`,
+      );
+    }
+  });
+
+  it('keeps version 1 and version 2 closed under their established shapes', () => {
+    const version1 = {
+      schemaVersion: 1,
+      components: [
+        { kind: 'agent', name: 'triage', definedIn: 'src/triage.rb', definedAtLine: 12 },
+      ],
+      edges: [],
+    };
+    const version2 = {
+      ...version1,
+      schemaVersion: 2,
+      components: [
+        {
+          ...version1.components[0],
+          details: { for: 'agent', framework: 'bespoke', role: 'orchestrator' },
+        },
+      ],
+    };
+    assert.equal(validate(ManifestV1, version1).ok, true);
+    assert.equal(validate(ManifestV2, version2).ok, true);
+    assert.equal(
+      validate(ManifestV2, {
+        ...version2,
+        components: [{ ...version2.components[0], definedFileHash: digest }],
+      }).ok,
+      false,
+      'version 2 silently accepted a version 3 field',
+    );
   });
 });
 

@@ -20,7 +20,7 @@ export const SCHEMA_VERSIONS = {
   goal: 1,
   report: 1,
   traceBundle: 1,
-  manifest: 2,
+  manifest: 3,
   config: 3,
 } as const;
 

@@ -5,11 +5,19 @@ import {
   MANIFEST_NAMESPACE,
 } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
-import type { ComponentIdentity, ComponentKind, Manifest } from '@orchescope/schema';
+import type {
+  ComponentDetails,
+  ComponentIdentity,
+  ComponentKind,
+  Manifest,
+  ManifestV1 as ManifestV1Document,
+  ManifestV2 as ManifestV2Document,
+} from '@orchescope/schema';
 import {
   formatIssues,
   Manifest as ManifestSchema,
   ManifestV1,
+  ManifestV2,
   MIN_READABLE_VERSIONS,
   SCHEMA_VERSIONS,
   validateDocument,
@@ -43,15 +51,35 @@ const validateManifest = (data: unknown) => {
     typeof data === 'object' && data !== null && !Array.isArray(data)
       ? (data as { readonly schemaVersion?: unknown }).schemaVersion
       : undefined;
-  return version === 1
-    ? validateDocument(ManifestV1, SCHEMA_VERSIONS.manifest, MIN_READABLE_VERSIONS.manifest, data)
-    : validateDocument(
-        ManifestSchema,
-        SCHEMA_VERSIONS.manifest,
-        MIN_READABLE_VERSIONS.manifest,
-        data,
-      );
+  if (version === 1) {
+    return validateDocument(
+      ManifestV1,
+      SCHEMA_VERSIONS.manifest,
+      MIN_READABLE_VERSIONS.manifest,
+      data,
+    );
+  }
+  if (version === 2) {
+    return validateDocument(
+      ManifestV2,
+      SCHEMA_VERSIONS.manifest,
+      MIN_READABLE_VERSIONS.manifest,
+      data,
+    );
+  }
+  return validateDocument(
+    ManifestSchema,
+    SCHEMA_VERSIONS.manifest,
+    MIN_READABLE_VERSIONS.manifest,
+    data,
+  );
 };
+
+type ReadableManifest = ManifestV1Document | ManifestV2Document | Manifest;
+type ReadableManifestComponent = ReadableManifest['components'][number];
+
+const detailsOf = (component: ReadableManifestComponent): ComponentDetails | undefined =>
+  'details' in component ? component.details : undefined;
 
 const manifestIdentity = (kind: ComponentKind, name: string): ComponentIdentity =>
   buildIdentity(kind, MANIFEST_NAMESPACE, name);
@@ -71,7 +99,7 @@ const manifestIdentity = (kind: ComponentKind, name: string): ComponentIdentity 
  * strongest lookup after a code location does not merely fail to match: it waits to match something else.
  */
 const refutations = (
-  manifest: Manifest,
+  manifest: ReadableManifest,
   context: DiscoveryContext,
   configFile: string,
 ): readonly string[] => {
@@ -79,10 +107,9 @@ const refutations = (
   const found: string[] = [];
 
   for (const declared of manifest.components) {
-    if (declared.details !== undefined && declared.details.for !== declared.kind) {
-      found.push(
-        `${declared.name} has kind ${declared.kind} but details for ${declared.details.for}`,
-      );
+    const details = detailsOf(declared);
+    if (details !== undefined && details.for !== declared.kind) {
+      found.push(`${declared.name} has kind ${declared.kind} but details for ${details.for}`);
     }
     if (declared.definedIn !== undefined) {
       const byteLength = walked.get(declared.definedIn);
@@ -129,7 +156,7 @@ const refutations = (
  * looked up against components discovered by other adapters so a manifest can annotate real code.
  */
 const resolveEndpoint = (
-  manifest: Manifest,
+  manifest: ReadableManifest,
   context: DiscoveryContext,
   configPath: string,
   name: string,
@@ -143,9 +170,10 @@ const addDeclaredComponent = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   configFile: string,
-  declared: Manifest['components'][number],
+  declared: ReadableManifestComponent,
   index: number,
 ): void => {
+  const details = detailsOf(declared);
   const identity = manifestIdentity(declared.kind, declared.name);
   const pointer = jsonPointer(['components', index]);
   builder.addComponent({
@@ -172,9 +200,7 @@ const addDeclaredComponent = (
     ],
     ...(declared.sideEffect === undefined ? {} : { sideEffect: declared.sideEffect }),
     ...(declared.permissions === undefined ? {} : { permissions: declared.permissions }),
-    ...(declared.details === undefined || declared.details.for !== declared.kind
-      ? {}
-      : { details: declared.details }),
+    ...(details === undefined || details.for !== declared.kind ? {} : { details }),
     tags: [...(declared.tags ?? []), 'manifest'],
     metadata: {
       ...(declared.metadata ?? {}),
@@ -187,7 +213,7 @@ const addDeclaredComponent = (
 
 /** An edge whose endpoints cannot both be resolved is skipped: a relation to nothing is not a relation. */
 const addDeclaredEdges = (
-  manifest: Manifest,
+  manifest: ReadableManifest,
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   configFile: string,
@@ -234,7 +260,7 @@ export const manifestAdapter: AgentSystemAdapter = {
         problem: `${document.path} is not a valid manifest: ${formatIssues(validated.issues)}`,
       };
     }
-    const manifest = validated.value as Manifest;
+    const manifest = validated.value as ReadableManifest;
     for (const [index, declared] of manifest.components.entries()) {
       addDeclaredComponent(context, builder, document.path, declared, index);
     }
