@@ -13,6 +13,7 @@ import {
   stringValue,
 } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
+import { promptCallSupport, registerPromptEntries } from '../prompt-input.ts';
 import { asRecord, asString, asStringArray, jsonPointer } from '../config-files.ts';
 import { configIdentity, createDrafts, sourceIdentity } from '../drafts.ts';
 import { definitionForCall, matchCalls, projectUses } from '../matching.ts';
@@ -320,6 +321,20 @@ const discoverAgentsDocument = (
         tags: ['crewai', 'declared'],
       }),
     );
+    for (const channel of ['role', 'goal', 'backstory'] as const) {
+      const value = asString(agent[channel]);
+      if (value === undefined) continue;
+      context.promptInputs.register({
+        kind: 'config',
+        producer: ADAPTER_ID,
+        consumer: identity,
+        channel,
+        value,
+        configFile: document.path,
+        pointer: jsonPointer([agentName, channel]),
+        supportingPointers: [jsonPointer([agentName])],
+      });
+    }
     components += 1;
     context.bindings.register(document.path, agentName, identity);
 
@@ -589,6 +604,16 @@ const discoverAgentCalls = (
       context.bindings.register(match.module.file, definition.name, identity);
     }
     context.bindings.register(match.module.file, name, identity);
+    registerPromptEntries({
+      registry: context.promptInputs,
+      producer: ADAPTER_ID,
+      module: match.module,
+      call: match.call,
+      consumer: identity,
+      entries,
+      channels: ['role', 'goal', 'backstory'],
+      supportingLocations: promptCallSupport(match.module, match.call),
+    });
   }
   return { components, declinedRoles };
 };

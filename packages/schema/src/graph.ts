@@ -118,6 +118,7 @@ const UnsupportedAreaKind = literals([
   'adapter_found_nothing',
   'adapter_blind_spot',
   'discarded_relation',
+  'topology_incomplete',
   /*
    * A directory the configuration excluded that the repository tracks files inside. The owner of this
    * one is the configuration rather than this build or the repository, which is why it is its own kind:
@@ -132,6 +133,8 @@ export const UnsupportedArea = Type.Object(
       description: 'What Orchescope could not model, for example "Go source files".',
     }),
     kind: Type.Optional(UnsupportedAreaKind),
+    /** Missing means the gap can affect every property in version 1 documents. */
+    scope: Type.Optional(literals(['control_flow', 'prompt_use'] as const)),
     reason: NonEmptyString(),
     remediation: Type.Optional(
       NonEmptyString({ description: 'How the user can supply the missing facts.' }),
@@ -144,6 +147,8 @@ export type UnsupportedArea = Static<typeof UnsupportedArea>;
 const TopologyProducerCoverage = Type.Object(
   {
     adapterId: NonEmptyString(),
+    /** Missing means control flow for version 1 documents. */
+    scope: Type.Optional(literals(['control_flow', 'prompt_use'] as const)),
     status: literals(['complete', 'incomplete'] as const),
     inspectedInputs: NonNegativeInt,
     relationsFound: NonNegativeInt,
@@ -180,7 +185,10 @@ const TopologyUnresolved = Type.Object(
       'terminal_boundary',
       'config_backed_bound',
       'adapter_input',
+      'prompt_input',
     ] as const),
+    /** Missing means control flow for version 1 documents. */
+    scope: Type.Optional(literals(['control_flow', 'prompt_use'] as const)),
     reason: NonEmptyString({ maxLength: 500 }),
     location: Type.Optional(SourceLocation),
   },
@@ -210,6 +218,9 @@ export const TopologyCoverage = Type.Object(
     configurationBounds: NonNegativeInt,
     configurationBoundFacts: Type.Array(TopologyConfigurationBound, { maxItems: 10 }),
     unresolvedCount: NonNegativeInt,
+    /** Exact full-population counts; missing keeps an earlier version 1 document conservative. */
+    controlFlowUnresolvedCount: Type.Optional(NonNegativeInt),
+    promptUseUnresolvedCount: Type.Optional(NonNegativeInt),
     unresolved: Type.Array(TopologyUnresolved, { maxItems: 10 }),
   },
   { additionalProperties: false },

@@ -11,6 +11,7 @@ import type { BindingRegistry } from './bindings.ts';
 import type { CallSiteEffects } from './call-site-effect.ts';
 import type { ConfigDocument } from './config-files.ts';
 import type { ImplementationSpanRegistry } from './implementation-span.ts';
+import type { PromptInputRegistry } from './prompt-input.ts';
 import type { SymbolIndex } from './symbol-index.ts';
 
 /**
@@ -70,6 +71,8 @@ export type DiscoveryContext = {
    * was declared, and a call site that declared nothing.
    */
   readonly callSiteEffects: CallSiteEffects;
+  /** Exact framework/model call inputs whose API contract makes them prompt-bearing. */
+  readonly promptInputs: PromptInputRegistry;
   readonly deadline: Deadline;
 };
 
@@ -103,6 +106,8 @@ export type AdapterApplicability = readonly {
 }[];
 
 export type TopologyDiscovery = {
+  /** Missing is the version 1 control-flow population. */
+  readonly scope?: 'control_flow' | 'prompt_use';
   readonly status: 'complete' | 'incomplete';
   readonly inspectedInputs: number;
   readonly explicitRelations: number;
@@ -131,7 +136,10 @@ export type TopologyDiscovery = {
       | 'entry_boundary'
       | 'terminal_boundary'
       | 'config_backed_bound'
-      | 'adapter_input';
+      | 'adapter_input'
+      | 'prompt_input';
+    /** Missing is the version 1 control-flow population. */
+    readonly scope?: 'control_flow' | 'prompt_use';
     readonly reason: string;
     readonly location?: SourceLocation;
   }[];

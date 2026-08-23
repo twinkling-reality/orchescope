@@ -12,14 +12,24 @@ import type { Language } from './language.ts';
  */
 
 export type ArgumentFact =
-  | { readonly kind: 'object'; readonly entries: readonly ObjectEntryFact[] }
+  | {
+      readonly kind: 'object';
+      readonly entries: readonly ObjectEntryFact[];
+      /** False when a spread or computed key means the retained entries are not the whole object. */
+      readonly complete?: boolean;
+    }
   | { readonly kind: 'string'; readonly value: string }
   | { readonly kind: 'number'; readonly value: number }
   | { readonly kind: 'boolean'; readonly value: boolean }
   | { readonly kind: 'null' }
   | { readonly kind: 'identifier'; readonly name: string }
   | { readonly kind: 'member'; readonly path: readonly string[] }
-  | { readonly kind: 'array'; readonly items: readonly ArgumentFact[] }
+  | {
+      readonly kind: 'array';
+      readonly items: readonly ArgumentFact[];
+      /** False when a spread means the retained items are not the whole array. */
+      readonly complete?: boolean;
+    }
   /** `args` carries what the call was given, which is where an SDK such as `openai('gpt-4o-mini')` puts the model. */
   | {
       readonly kind: 'call';
@@ -40,6 +50,8 @@ export type ArgumentFact =
        * that puts the two halves back together.
        */
       readonly substitutedNames?: readonly string[];
+      /** False means the bounded name list omitted at least one substitution. */
+      readonly substitutionsComplete?: boolean;
     }
   /**
    * A value computed from other values, flattened to the operators used and the names read.
@@ -98,6 +110,8 @@ export type DecoratorFact = {
   readonly path: readonly string[];
   readonly origin: CalleeOrigin | undefined;
   readonly args: readonly ArgumentFact[];
+  /** Exact decorator expression establishing this callable annotation. */
+  readonly location: SourceLocation;
 };
 
 export type DefinitionFact = {

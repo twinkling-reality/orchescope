@@ -153,12 +153,12 @@ class Agents:
     );
     const topology = result.graph.coverage.topology;
     assert.equal(topology?.status, 'incomplete');
-    assert.equal(topology?.unresolvedCount, 2);
+    assert.equal(topology?.unresolvedCount, 3);
     assert.deepEqual(
       topology?.unresolved
         .map((entry) => entry.location?.startLine)
         .sort((left, right) => (left ?? 0) - (right ?? 0)),
-      [13, 14],
+      [13, 14, 16],
     );
     const producer = topology?.producers.find(
       (entry) => entry.adapterId === 'adapter:langchain-v1-create-agent',
@@ -276,5 +276,131 @@ def build():
     );
     assert.equal(refusals?.length, 3);
     assert.ok(refusals?.every((entry) => entry.location !== undefined));
+  });
+
+  it('cites exact cross-module dynamic prompt authority and wiring on the prompt edge', async () => {
+    const result = await scanLangChainV1({
+      'src/prompts.py': `from langchain.agents.middleware import dynamic_prompt
+
+@dynamic_prompt
+def wired(request):
+    return f"Answer briefly for {request.runtime.context.user_role}."
+`,
+      'src/app.py': `from langchain.agents import create_agent
+from .prompts import wired
+
+MIDDLEWARE = [wired]
+
+assistant = create_agent(
+    model="openai:gpt-4.1-mini",
+    tools=[],
+    name="assistant",
+    middleware=MIDDLEWARE,
+)
+`,
+    });
+
+    const prompt = result.graph.components.find((component) => component.kind === 'prompt');
+    assert.ok(prompt);
+    const edge = result.graph.edges.find(
+      (candidate) => candidate.kind === 'uses_prompt' && candidate.to === prompt.id,
+    );
+    assert.ok(edge);
+    const exactLocations = (evidenceIds: readonly string[]) =>
+      result.evidence
+        .flatMap((record) =>
+          evidenceIds.includes(record.id) && record.kind === 'source_span'
+            ? [`${record.location.file}:${record.location.startLine}`]
+            : [],
+        )
+        .sort();
+    const authorityAndWiring = [
+      'src/app.py:1',
+      'src/app.py:2',
+      'src/app.py:4',
+      'src/app.py:6',
+      'src/prompts.py:1',
+      'src/prompts.py:3',
+      'src/prompts.py:4',
+      'src/prompts.py:5',
+    ];
+    assert.deepEqual(exactLocations(prompt.evidence), authorityAndWiring);
+    assert.deepEqual(exactLocations(edge.evidence), authorityAndWiring);
+  });
+
+  it('requires dynamic middleware list and item definitions to precede their use', async () => {
+    const result = await scanLangChainV1({
+      'src/accepted.py': `from langchain.agents import create_agent
+from langchain.agents.middleware import dynamic_prompt
+
+@dynamic_prompt
+def wired(request):
+    return "Accepted prompt."
+
+MIDDLEWARE = [wired]
+accepted = create_agent(model="openai:gpt", tools=[], middleware=MIDDLEWARE)
+`,
+      'src/list_after.py': `from langchain.agents import create_agent
+from langchain.agents.middleware import dynamic_prompt
+
+@dynamic_prompt
+def wired(request):
+    return "List defined too late."
+
+after = create_agent(model="openai:gpt", tools=[], middleware=LATE)
+LATE = [wired]
+`,
+      'src/item_after.py': `from langchain.agents import create_agent
+from langchain.agents.middleware import dynamic_prompt
+
+after = create_agent(model="openai:gpt", tools=[], middleware=[wired])
+
+@dynamic_prompt
+def wired(request):
+    return "Item defined too late."
+`,
+      'src/same_line.py': `from langchain.agents import create_agent
+from langchain.agents.middleware import dynamic_prompt
+
+@dynamic_prompt
+def wired(request):
+    return "Same-line list defined too late."
+
+after = create_agent(model="openai:gpt", tools=[], name="same-line", middleware=LATE); LATE = [wired]
+`,
+      'src/ambiguous_authority.py': `from langchain.agents import create_agent
+from langchain.agents.middleware import dynamic_prompt
+from langchain.agents.middleware import dynamic_prompt
+
+@dynamic_prompt
+def wired(request):
+    return "Authority without one exact import citation is refused."
+
+agent = create_agent(model="openai:gpt", tools=[], middleware=[wired])
+`,
+    });
+
+    const prompts = result.graph.components.filter((component) => component.kind === 'prompt');
+    assert.equal(prompts.length, 1);
+    assert.equal(prompts[0]?.sourceLocations[0]?.file, 'src/accepted.py');
+    const refusedFiles = result.graph.coverage.topology?.unresolved
+      .filter(
+        (entry) =>
+          entry.scope === 'prompt_use' &&
+          /middleware\.dynamic_prompt: prompt value is computed/u.test(entry.reason),
+      )
+      .map((entry) => entry.location?.file)
+      .sort();
+    assert.equal(result.graph.coverage.topology?.promptUseUnresolvedCount, 4);
+    assert.deepEqual(refusedFiles, ['src/item_after.py', 'src/list_after.py', 'src/same_line.py']);
+    assert.equal(
+      result.graph.coverage.topology?.unresolved.some(
+        (entry) =>
+          entry.scope === 'prompt_use' &&
+          entry.location?.file === 'src/ambiguous_authority.py' &&
+          /middleware\.dynamic_prompt\.wired/u.test(entry.reason),
+      ),
+      true,
+    );
   });
 });

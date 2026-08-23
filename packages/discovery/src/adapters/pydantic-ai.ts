@@ -1,4 +1,4 @@
-import { CONFIDENCE_BANDS } from '@orchescope/domain';
+import { CONFIDENCE_BANDS, identityKey } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type { ComponentIdentity, EdgePolicy } from '@orchescope/schema';
 import type {
@@ -10,8 +10,9 @@ import type {
 import { booleanValue, findEntry, numberValue, stringValue } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { createDrafts, sourceIdentity } from '../drafts.ts';
-import { definitionForCall, matchCalls, projectUses } from '../matching.ts';
+import { definitionForCall, hasLocalBinding, matchCalls, projectUses } from '../matching.ts';
 import { addModelReference } from '../model-reference.ts';
+import { promptCallSupport, registerPromptEntries } from '../prompt-input.ts';
 
 /**
  * Pydantic AI.
@@ -53,6 +54,7 @@ type DiscoveredAgent = {
   readonly file: string;
   readonly variable: string | undefined;
   readonly enclosing: string | undefined;
+  readonly supportingLocations: readonly import('@orchescope/schema').SourceLocation[];
   /** Retries the agent declares, which a tool inherits when it declares none of its own. */
   readonly retries: number | undefined;
 };
@@ -139,6 +141,20 @@ const addAgents = (
       context.bindings.register(match.module.file, definition.name, identity);
     }
     context.bindings.register(match.module.file, name, identity);
+    const supportingLocations = [
+      ...promptCallSupport(match.module, match.call),
+      ...(definition === undefined ? [] : [definition.location]),
+    ];
+    registerPromptEntries({
+      registry: context.promptInputs,
+      producer: ADAPTER_ID,
+      module: match.module,
+      call: match.call,
+      consumer: identity,
+      entries,
+      channels: ['instructions', 'system_prompt'],
+      supportingLocations,
+    });
 
     const stableVariable =
       definition?.kind === 'variable' &&
@@ -154,6 +170,7 @@ const addAgents = (
       file: match.module.file,
       variable: stableVariable ? definition.name : undefined,
       enclosing: definition?.enclosing,
+      supportingLocations,
       retries: numberValue(findEntry(entries, 'retries')?.value),
     });
 
@@ -173,6 +190,71 @@ const addAgents = (
     edges += added.edges;
   }
   return { components, edges, agents };
+};
+
+const runInputConsumer = (
+  context: DiscoveryContext,
+  module: ModuleFacts,
+  call: CallFact,
+  receiver: string,
+  agents: readonly DiscoveredAgent[],
+):
+  | {
+      readonly identity: ComponentIdentity;
+      readonly supportingLocations: readonly import('@orchescope/schema').SourceLocation[];
+    }
+  | undefined => {
+  const local = agents.filter(
+    (agent) =>
+      agent.file === module.file &&
+      agent.variable === receiver &&
+      agent.enclosing === call.enclosing,
+  );
+  if (local.length === 1) {
+    const agent = local[0];
+    return agent === undefined
+      ? undefined
+      : { identity: agent.identity, supportingLocations: agent.supportingLocations };
+  }
+  if (local.length > 1 || hasLocalBinding(module, call.enclosing, receiver)) return undefined;
+  const consumer = context.bindings.lookup(module.file, receiver);
+  if (consumer?.kind !== 'agent') return undefined;
+  const matches = agents.filter((agent) => identityKey(agent.identity) === identityKey(consumer));
+  if (matches.length !== 1) return undefined;
+  const imported = module.imports.filter((entry) => entry.local === receiver && !entry.isType);
+  return {
+    identity: consumer,
+    supportingLocations: [
+      ...(matches[0]?.supportingLocations ?? []),
+      ...(imported.length === 1 && imported[0] !== undefined ? [imported[0].location] : []),
+    ],
+  };
+};
+
+const registerRunInputs = (context: DiscoveryContext, agents: readonly DiscoveredAgent[]): void => {
+  for (const module of context.modules) {
+    for (const call of module.calls) {
+      const method = call.calleePath.at(-1);
+      if (!['run', 'run_sync', 'run_stream'].includes(method ?? '')) continue;
+      const receiver = call.calleePath[0];
+      if (receiver === undefined) continue;
+      const resolved = runInputConsumer(context, module, call, receiver, agents);
+      if (resolved === undefined) continue;
+      const entries = keywordEntries(call);
+      const prompt = findEntry(entries, 'user_prompt')?.value ?? call.args[0];
+      if (prompt === undefined || prompt.kind === 'object') continue;
+      context.promptInputs.register({
+        producer: ADAPTER_ID,
+        module,
+        call,
+        consumer: resolved.identity,
+        channel: 'user_prompt',
+        value: prompt,
+        location: findEntry(entries, 'user_prompt')?.location ?? call.location,
+        supportingLocations: [...resolved.supportingLocations, call.location],
+      });
+    }
+  }
 };
 
 const decoratorEntries = (
@@ -287,6 +369,7 @@ export const pydanticAiAdapter: AgentSystemAdapter = {
   discover: (context, builder): AdapterFindings => {
     const agents = addAgents(context, builder);
     const tools = addTools(context, builder, agents.agents);
+    registerRunInputs(context, agents.agents);
     const filesInspected = context.modules
       .filter((module) => module.imports.some((entry) => PACKAGES.includes(entry.module)))
       .map((module) => module.file);

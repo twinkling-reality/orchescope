@@ -290,6 +290,62 @@ reviewer:
     assert.match(planner?.configLocations[0]?.fileHash ?? '', HEX_DIGEST);
   });
 
+  it('cites both the configuration prompt and the agent binding on uses_prompt', async () => {
+    const { result } = await scan(build);
+    const role = result.graph.components.find(
+      (component) =>
+        component.kind === 'prompt' &&
+        component.metadata['channel'] === 'role' &&
+        component.configLocations.some((location) => location.pointer === '/planner/role'),
+    );
+    assert.ok(role);
+    const edge = result.graph.edges.find(
+      (candidate) => candidate.kind === 'uses_prompt' && candidate.to === role.id,
+    );
+    assert.ok(edge);
+    const pointers = edge.configLocations.map((location) => location.pointer).sort();
+    assert.deepEqual(pointers, ['/planner', '/planner/role']);
+    assert.equal(edge.evidence.length, 2);
+  });
+
+  it('marks only exact configuration placeholders as interpolated input', async () => {
+    const { result } = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'crew-prompts', dependencies: ['crewai>=0.80'] });
+      workspace.write(
+        'src/crew.py',
+        `from crewai import Agent
+
+agent = Agent(role="reviewer")
+`,
+      );
+      workspace.write(
+        'agents.yaml',
+        `reviewer:
+  role: 'Return {"kind":"object"} and {{topic}} literally.'
+  goal: 'Review {topic}.'
+`,
+      );
+    });
+
+    const configPrompt = (channel: string) =>
+      result.graph.components.find(
+        (component) =>
+          component.kind === 'prompt' &&
+          component.metadata['channel'] === channel &&
+          component.configLocations.some((location) => location.file === 'agents.yaml'),
+      );
+    const role = configPrompt('role');
+    const goal = configPrompt('goal');
+    assert.equal(
+      role?.details?.for === 'prompt' ? role.details.interpolatesUntrustedInput : undefined,
+      false,
+    );
+    assert.equal(
+      goal?.details?.for === 'prompt' ? goal.details.interpolatesUntrustedInput : undefined,
+      true,
+    );
+  });
+
   /*
    * `runtimeName` is consulted before kind and name, so a value that is not a name any run can report does
    * not merely fail to match: it waits in the strongest lookup in the reconciler to match something else.
@@ -2816,7 +2872,7 @@ export const HELP = "Answer the question in the box. You are never charged for a
     });
     const prompts = adapters.find((entry) => entry.adapterId === 'adapter:prompts');
     assert.equal(prompts?.componentsFound, 0);
-    assert.match(prompts?.detail ?? '', /no model or agent was discovered/);
+    assert.equal(prompts?.status, 'not_applicable');
     assert.equal(
       ids.some((id) => id.startsWith('prompt:')),
       false,
@@ -5003,7 +5059,7 @@ Context:
       prompt.details?.for === 'prompt' && prompt.details.interpolatesUntrustedInput,
       true,
     );
-    assert.equal(prompt.metadata['assembledElsewhere'], true);
+    assert.equal(prompt.metadata['assembledElsewhere'], undefined);
   });
 
   /* A template that names the prompt and nothing else is the same prompt under another name. */
@@ -5036,7 +5092,7 @@ export const answer = async (question: string): Promise<unknown> =>
    * spliced, and an initialising call is what says the value is something else.
    */
   it('takes none when the name holds the thing containing the prompt rather than the prompt', async () => {
-    const prompt = await promptOf((workspace) => {
+    const { result } = await scan((workspace) => {
       writeNodeProject(workspace, {
         name: 'storyteller',
         dependencies: { '@openai/agents': '^0.1.0' },
@@ -5056,9 +5112,16 @@ export const tell = async (topic: string): Promise<unknown> =>
 `,
       );
     });
+    const prompts = result.graph.components.filter((component) => component.kind === 'prompt');
+    const instructions = prompts.find((prompt) => prompt.metadata['channel'] === 'instructions');
+    const input = prompts.find((prompt) => prompt.metadata['channel'] === 'input');
     assert.equal(
-      prompt?.details?.for === 'prompt' && prompt.details.interpolatesUntrustedInput,
+      instructions?.details?.for === 'prompt' && instructions.details.interpolatesUntrustedInput,
       false,
+    );
+    assert.equal(
+      input?.details?.for === 'prompt' && input.details.interpolatesUntrustedInput,
+      true,
     );
   });
 });

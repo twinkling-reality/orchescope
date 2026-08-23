@@ -538,6 +538,29 @@ const modelEndpointCalledAt = (
   return { endpoint, url };
 };
 
+const registerInferencePrompt = (input: {
+  readonly context: DiscoveryContext;
+  readonly module: ModuleFacts;
+  readonly call: CallFact;
+  readonly consumer: ComponentIdentity;
+  readonly supportingLocations: readonly SourceLocation[];
+}): void => {
+  for (const [slot, argument] of input.call.args.entries()) {
+    if (argument.kind !== 'object') continue;
+    input.context.promptInputs.register({
+      producer: ADAPTER_ID,
+      module: input.module,
+      call: input.call,
+      consumer: input.consumer,
+      channel: 'inference_payload',
+      slot,
+      value: argument,
+      location: input.call.location,
+      supportingLocations: input.supportingLocations,
+    });
+  }
+};
+
 /**
  * The deadline each model relation may claim, settled across the module before any edge is written.
  *
@@ -646,6 +669,16 @@ const discoverModelEndpoint = (input: {
     ...(requestImportLocation === undefined ? [] : [requestImportLocation]),
     ...modelResolution.locations,
   ];
+  registerInferencePrompt({
+    context,
+    module,
+    call,
+    consumer: modelIdentity,
+    supportingLocations: [
+      ...(requestImportLocation === undefined ? [] : [requestImportLocation]),
+      call.location,
+    ],
+  });
   for (const evidenceLocation of supportingLocations) {
     builder.addComponent(
       drafts.sourceComponent({

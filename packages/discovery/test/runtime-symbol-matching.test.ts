@@ -156,6 +156,36 @@ describe('runtime provider symbol matching', () => {
     );
   });
 
+  it('rejects a retained import origin when a callable parameter shadows its root', () => {
+    const shadowed = moduleFacts({
+      definitions: [
+        {
+          kind: 'function',
+          name: 'build',
+          exported: false,
+          async: false,
+          decorators: [],
+          parameters: [{ name: 'Client', location }],
+          location,
+          initializer: undefined,
+          enclosing: undefined,
+        },
+      ],
+    });
+    assert.equal(
+      matchRuntimeSymbol(
+        [shadowed],
+        shadowed,
+        {
+          ...symbol(['Client'], { module: 'pg', imported: 'Client', isType: false }),
+          enclosing: 'build',
+        },
+        postgres,
+      ),
+      undefined,
+    );
+  });
+
   it('allows an unresolved spelling only through the explicit bounded heuristic', () => {
     const module = moduleFacts({
       imports: [

@@ -74,6 +74,7 @@ describe('an area no adapter models', () => {
           { area: 'go source files (1)', kind: 'language_not_analysed', reason: 'x' },
           { area: 'mcp used in source', kind: 'adapter_found_nothing', reason: 'y' },
           { area: 'edge to nowhere', kind: 'discarded_relation', reason: 'z' },
+          { area: 'prompt use: 1 unresolved', kind: 'topology_incomplete', reason: 'p' },
           { area: 'something older', reason: 'w' },
         ] as never,
       }),
@@ -81,7 +82,8 @@ describe('an area no adapter models', () => {
         'gap             . unparsed   go source files (1)',
         'gap             . unread     mcp used in source',
         'gap             . discarded  edge to nowhere',
-        'gap             . unread     something older',
+        'gap             . incomplete  prompt use: 1 unresolved',
+        'gap             1 more kinds of gap, in the report',
       ],
     );
   });

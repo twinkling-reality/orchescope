@@ -10,6 +10,7 @@ import {
   stringValue,
 } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
+import { promptCallSupport, registerPromptEntries } from '../prompt-input.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
 import { definitionForCall, matchCalls, projectUses } from '../matching.ts';
 
@@ -228,6 +229,18 @@ const discoverGenerationCalls = (
       }),
     );
     components += 1;
+    if (!callee.endsWith('embed')) {
+      registerPromptEntries({
+        registry: context.promptInputs,
+        producer: ADAPTER_ID,
+        module: match.module,
+        call: match.call,
+        consumer: callerIdentity,
+        entries,
+        channels: ['system', 'prompt', 'messages'],
+        supportingLocations: promptCallSupport(match.module, match.call),
+      });
+    }
 
     builder.addEdge(
       drafts.edge({

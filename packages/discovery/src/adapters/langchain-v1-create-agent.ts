@@ -12,6 +12,7 @@ import { findEntry, stringValue } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, TopologyDiscovery } from '../adapter.ts';
 import { createDrafts, sourceIdentity } from '../drafts.ts';
 import { addModelReference } from '../model-reference.ts';
+import { promptCallSupport, registerPromptEntries } from '../prompt-input.ts';
 import {
   createAgentApplicability,
   createAgentCandidateImport,
@@ -23,6 +24,7 @@ import {
   LANGCHAIN_CREATE_AGENT_PACKAGES,
   type ExactCreateAgentImport,
 } from './langchain-v1-create-agent-origin.ts';
+import { registerDynamicPrompts } from './langchain-v1-dynamic-prompt.ts';
 import { addCreateAgentTools } from './langchain-v1-create-agent-tools.ts';
 
 /**
@@ -324,6 +326,25 @@ export const langChainV1CreateAgentAdapter: AgentSystemAdapter = {
         });
 
         const entries = keywordEntries(call);
+        const promptSupport = [imported.entry.location, ...promptCallSupport(module, call)];
+        registerPromptEntries({
+          registry: context.promptInputs,
+          producer: LANGCHAIN_CREATE_AGENT_ADAPTER_ID,
+          module,
+          call,
+          consumer: identity,
+          entries,
+          channels: ['system_prompt'],
+          supportingLocations: promptSupport,
+        });
+        registerDynamicPrompts({
+          context,
+          module,
+          call,
+          entries,
+          consumer: identity,
+          support: promptSupport,
+        });
         const model = modelArgument(call, entries);
         const declaredModel = stringValue(model.value);
         if (declaredModel === undefined || declaredModel.trim().length === 0) {

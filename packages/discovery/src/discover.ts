@@ -10,7 +10,12 @@ import {
   sha256Hex,
   sha256OfJson,
 } from '@orchescope/domain';
-import { type BuiltGraph, type DiscardedEdge, SystemGraphBuilder } from '@orchescope/graph';
+import {
+  type BuiltGraph,
+  controlFlowTopologyComplete,
+  type DiscardedEdge,
+  SystemGraphBuilder,
+} from '@orchescope/graph';
 import { MAX_MANIFEST_COMPONENTS } from '@orchescope/schema';
 import type {
   AdapterRun,
@@ -53,6 +58,7 @@ import {
   readConfigDocuments,
 } from './config-files.ts';
 import { createImplementationSpanRegistry } from './implementation-span.ts';
+import { createPromptInputRegistry } from './prompt-input.ts';
 import { localModules, namesLocalModule } from './local-modules.ts';
 import { manifestCitationRequests } from './manifest-citations.ts';
 import { DEFAULT_ADAPTERS } from './registry.ts';
@@ -407,6 +413,24 @@ const topologySampleKey = (sample: {
 }): string =>
   `${sample.location?.file ?? ''}:${sample.location?.startLine ?? 0}:${sample.kind}:${sample.reason ?? ''}`;
 
+const topologyLocationStamp =
+  (digests: ReadonlyMap<string, Sha256Hex>) =>
+  <T extends { readonly file: string }>(location: T): T => {
+    const fileHash = digests.get(location.file);
+    return fileHash === undefined || 'fileHash' in location
+      ? location
+      : ({ ...location, fileHash } as T);
+  };
+
+const aggregateTopologyComplete = (
+  inspectedInputs: number,
+  unresolvedCount: number,
+  producers: TopologyCoverage['producers'],
+): boolean =>
+  inspectedInputs > 0 &&
+  unresolvedCount === 0 &&
+  producers.every((producer) => producer.status === 'complete');
+
 /**
  * One closed-world answer requires every applicable relation producer to state its population.
  *
@@ -433,14 +457,9 @@ const aggregateTopology = (
   let terminalBoundaries = 0;
   let configurationBounds = 0;
   let unresolvedCount = 0;
-
-  const stamp = <T extends { readonly file: string }>(location: T): T => {
-    const fileHash = digests.get(location.file);
-    return fileHash === undefined || 'fileHash' in location
-      ? location
-      : ({ ...location, fileHash } as T);
-  };
-
+  let controlFlowUnresolvedCount = 0;
+  let promptUseUnresolvedCount = 0;
+  const stamp = topologyLocationStamp(digests);
   for (let index = 0; index < executions.length; index += 1) {
     const execution = executions[index];
     const adapter = adapters[index];
@@ -455,6 +474,7 @@ const aggregateTopology = (
     if (topology !== undefined) {
       producers.push({
         adapterId: adapter.id,
+        ...(topology.scope === undefined ? {} : { scope: topology.scope }),
         status: topology.status,
         inspectedInputs: topology.inspectedInputs,
         relationsFound: execution.run.edgesFound,
@@ -468,6 +488,11 @@ const aggregateTopology = (
       terminalBoundaries += topology.terminalBoundaries;
       configurationBounds += topology.configurationBounds;
       unresolvedCount += topology.unresolvedCount;
+      if (topology.scope === 'prompt_use') {
+        promptUseUnresolvedCount += topology.unresolvedCount;
+      } else {
+        controlFlowUnresolvedCount += topology.unresolvedCount;
+      }
       boundaryFacts.push(
         ...topology.boundaryFacts.map((fact) => ({ ...fact, location: stamp(fact.location) })),
       );
@@ -481,6 +506,9 @@ const aggregateTopology = (
       unresolved.push(
         ...topology.unresolved.map((entry) => ({
           ...entry,
+          ...(entry.scope === undefined && topology.scope !== undefined
+            ? { scope: topology.scope }
+            : {}),
           ...(entry.location === undefined ? {} : { location: stamp(entry.location) }),
         })),
       );
@@ -495,11 +523,13 @@ const aggregateTopology = (
     if (!needsPopulation) continue;
     producers.push({
       adapterId: adapter.id,
+      scope: 'control_flow',
       status: 'incomplete',
       inspectedInputs: 0,
       relationsFound: execution.run.edgesFound,
     });
     unresolvedCount += 1;
+    controlFlowUnresolvedCount += 1;
     const location =
       structured === undefined
         ? firstAdapterInput(adapter, modules)
@@ -524,10 +554,7 @@ const aggregateTopology = (
       `${right.reference.file}:${right.reference.startLine}:${right.name}`,
     ),
   );
-  const complete =
-    inspectedInputs > 0 &&
-    unresolvedCount === 0 &&
-    producers.every((producer) => producer.status === 'complete');
+  const complete = aggregateTopologyComplete(inspectedInputs, unresolvedCount, producers);
   return {
     status: complete ? 'complete' : 'incomplete',
     producers,
@@ -544,28 +571,43 @@ const aggregateTopology = (
     configurationBounds,
     configurationBoundFacts: configurationBoundFacts.slice(0, MAX_TOPOLOGY_SAMPLES),
     unresolvedCount,
+    controlFlowUnresolvedCount,
+    promptUseUnresolvedCount,
     unresolved: unresolved.slice(0, MAX_TOPOLOGY_SAMPLES),
   };
 };
 
 const incompleteTopologyArea = (topology: TopologyCoverage | undefined): UnsupportedArea[] => {
   if (topology === undefined || topology.status === 'complete') return [];
-  const first = topology.unresolved[0];
+  const promptOnly = controlFlowTopologyComplete(topology);
+  const controlRefusals = topology.unresolved.filter(
+    (entry) => entry.scope === undefined || entry.scope === 'control_flow',
+  );
+  const promptRefusals = topology.unresolved.filter((entry) => entry.scope === 'prompt_use');
+  const relevant = promptOnly ? promptRefusals : controlRefusals;
+  const first = relevant[0];
   const location = first?.location;
   const where = location === undefined ? '' : ` at ${location.file}:${location.startLine}`;
-  const reasons = topology.unresolved
+  const reasons = relevant
     .slice(0, 3)
     .map((entry) => entry.reason)
     .join(' ');
   return [
     {
-      area: `topology: ${topology.unresolvedCount} unresolved${where}`,
+      area: `${promptOnly ? 'prompt use' : 'topology'}: ${
+        promptOnly
+          ? (topology.promptUseUnresolvedCount ?? topology.unresolvedCount)
+          : (topology.controlFlowUnresolvedCount ?? topology.unresolvedCount)
+      } unresolved${where}`,
+      kind: 'topology_incomplete',
+      scope: promptOnly ? 'prompt_use' : 'control_flow',
       reason:
         reasons.length === 0
           ? 'A relation producer did not state the inspected population needed for a closed-world topology claim.'
           : reasons.slice(0, 500),
-      remediation:
-        'Review the bounded topology refusals in JSON and declare dynamic wiring in .orchescope/manifest.yaml where a source adapter cannot resolve it.',
+      remediation: promptOnly
+        ? 'Review the bounded prompt-use refusals in JSON and replace computed prompt inputs with source-settled declarations where practical.'
+        : 'Review the bounded topology refusals in JSON and declare dynamic wiring in .orchescope/manifest.yaml where a source adapter cannot resolve it.',
     },
   ];
 };
@@ -699,6 +741,7 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
   const bindings = createBindingRegistry(symbols);
   const implementations = createImplementationSpanRegistry();
   const callSiteEffects = createCallSiteEffects();
+  const promptInputs = createPromptInputRegistry();
   const projectName =
     request.projectName ?? manifests.projectName ?? request.root.split('/').pop() ?? 'project';
 
@@ -713,6 +756,7 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
     bindings,
     implementations,
     callSiteEffects,
+    promptInputs,
     deadline: request.deadline,
   };
 

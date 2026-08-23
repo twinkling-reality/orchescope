@@ -134,7 +134,7 @@ desk = Agent(
     const coverage = result.graph.coverage.adapters.find(
       (adapter) => adapter.adapterId === 'adapter:prompts',
     );
-    assert.equal(coverage?.adapterVersion, '2');
+    assert.equal(coverage?.adapterVersion, '3');
     assert.equal(coverage?.componentsFound, 1);
   });
 
@@ -161,7 +161,7 @@ export const desk = new Agent({ name: 'desk', instructions: SYSTEM });
     assert.equal(
       result.graph.coverage.adapters.find((adapter) => adapter.adapterId === 'adapter:prompts')
         ?.adapterVersion,
-      '2',
+      '3',
     );
   });
 

@@ -31,6 +31,7 @@ import {
   projectUses,
 } from '../matching.ts';
 import { addModelReference } from '../model-reference.ts';
+import { promptCallSupport, registerPromptEntries } from '../prompt-input.ts';
 
 /**
  * LangGraph, in both ecosystems.
@@ -896,6 +897,16 @@ const discoverReactAgents = (
     components += 1;
     context.bindings.register(module.file, name, identity);
     if (definition !== undefined) context.bindings.register(module.file, definition.name, identity);
+    registerPromptEntries({
+      registry: context.promptInputs,
+      producer: ADAPTER_ID,
+      module,
+      call,
+      consumer: identity,
+      entries,
+      channels: ['prompt'],
+      supportingLocations: promptCallSupport(module, call),
+    });
 
     const model = stringValue(call.args[0]) ?? stringValue(findEntry(entries, 'model')?.value);
     if (model !== undefined) {

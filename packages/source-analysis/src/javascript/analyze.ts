@@ -135,12 +135,17 @@ const MAX_SUBSTITUTED_NAMES = 8;
 
 const templateValue = (
   node: Node,
-): { value: string; hasSubstitutions: boolean; substitutedNames: readonly string[] } => {
+): {
+  value: string;
+  hasSubstitutions: boolean;
+  substitutedNames: readonly string[];
+  substitutionsComplete: boolean;
+} => {
   const quasis = nodeArray(field(node, 'quasis'));
   const expressions = nodeArray(field(node, 'expressions'));
   const substituted = new Set<string>();
   for (const expression of expressions) {
-    collectIdentifiers(expression, substituted, MAX_SUBSTITUTED_NAMES);
+    collectIdentifiers(expression, substituted, MAX_SUBSTITUTED_NAMES + 1);
   }
   const parts: string[] = [];
   for (const quasi of quasis) {
@@ -159,7 +164,8 @@ const templateValue = (
     // biome-ignore lint/suspicious/noTemplateCurlyInString: this is the marker recorded in place of a substitution
     value: parts.join('${...}'),
     hasSubstitutions: expressions.length > 0,
-    substitutedNames: [...substituted],
+    substitutedNames: [...substituted].slice(0, MAX_SUBSTITUTED_NAMES),
+    substitutionsComplete: substituted.size <= MAX_SUBSTITUTED_NAMES,
   };
 };
 
@@ -208,6 +214,7 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
         value: template.value,
         hasSubstitutions: template.hasSubstitutions,
         substitutedNames: template.substitutedNames,
+        substitutionsComplete: template.substitutionsComplete,
       };
     }
     case 'Identifier': {
@@ -216,14 +223,27 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
         ? { kind: 'unknown', nodeType: node.type }
         : { kind: 'identifier', name };
     }
-    case 'ObjectExpression':
-      return { kind: 'object', entries: objectEntries(node, context) };
+    case 'ObjectExpression': {
+      const properties = nodeArray(field(node, 'properties'));
+      const complete = properties.every(
+        (property) =>
+          (property.type === 'Property' || property.type === 'ObjectProperty') &&
+          field(property, 'computed') !== true,
+      );
+      return { kind: 'object', entries: objectEntries(node, context), complete };
+    }
     case 'ArrayExpression': {
       const items: ArgumentFact[] = [];
-      for (const element of nodeArray(field(node, 'elements'))) {
+      const elements = nodeArray(field(node, 'elements'));
+      for (const element of elements) {
+        if (element.type === 'SpreadElement') continue;
         items.push(argumentFact(element, context));
       }
-      return { kind: 'array', items };
+      return {
+        kind: 'array',
+        items,
+        complete: elements.every((element) => element.type !== 'SpreadElement'),
+      };
     }
     case 'MemberExpression': {
       const path = memberPath(node);
@@ -384,11 +404,17 @@ const decoratorFacts = (node: Node, context: Context): readonly DecoratorFact[] 
         args: nodeArray(field(expression, 'arguments')).map((argument) =>
           argumentFact(argument, context),
         ),
+        location: context.index.location(context.file, decorator.start, decorator.end),
       });
       continue;
     }
     const path = calleePath(expression);
-    facts.push({ path, origin: originFor(path, context), args: [] });
+    facts.push({
+      path,
+      origin: originFor(path, context),
+      args: [],
+      location: context.index.location(context.file, decorator.start, decorator.end),
+    });
   }
   return facts;
 };

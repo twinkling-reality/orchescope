@@ -31,6 +31,7 @@ import {
   modelCallDeadline,
 } from '../model-deadline.ts';
 import { resolveSourceValue, type ResolvedSourceValue } from '../source-value.ts';
+import { registerPromptEntries } from '../prompt-input.ts';
 
 /**
  * Raw model SDK usage.
@@ -507,6 +508,59 @@ const relationDeadlines = (calls: readonly ModelCall[]): ReadonlyMap<string, Dec
   return declared;
 };
 
+const registerModelPromptInput = (input: {
+  readonly module: ModuleFacts;
+  readonly context: DiscoveryContext;
+  readonly call: CallFact;
+  readonly provider: (typeof PROVIDERS)[number];
+  readonly method: string;
+  readonly model: string;
+  readonly entries: readonly import('@orchescope/source-analysis').ObjectEntryFact[];
+  readonly supportingLocations: readonly SourceLocation[];
+}): void => {
+  const { module, context, call, provider, method, model, entries, supportingLocations } = input;
+  const consumer =
+    call.enclosing === undefined
+      ? modelIdentity(provider.provider, model)
+      : sourceIdentity('agent', module.file, call.enclosing);
+  const channels = method.includes('embeddings')
+    ? []
+    : method.includes('responses')
+      ? ['instructions', 'input']
+      : method.includes('messages') || method.includes('chat.completions')
+        ? ['system', 'messages']
+        : method.includes('generateContent') || method.includes('generate_content')
+          ? ['contents']
+          : ['prompt'];
+  registerPromptEntries({
+    registry: context.promptInputs,
+    producer: ADAPTER_ID,
+    module,
+    call,
+    consumer,
+    entries,
+    channels,
+    supportingLocations: [...supportingLocations, call.location],
+  });
+  if (
+    channels.includes('contents') &&
+    findEntry(entries, 'contents') === undefined &&
+    call.args[0] !== undefined &&
+    call.args[0].kind !== 'object'
+  ) {
+    context.promptInputs.register({
+      producer: ADAPTER_ID,
+      module,
+      call,
+      consumer,
+      channel: 'contents',
+      value: call.args[0],
+      location: call.location,
+      supportingLocations: [...supportingLocations, call.location],
+    });
+  }
+};
+
 const registerModelCalls = (
   module: ModuleFacts,
   builder: SystemGraphBuilder,
@@ -524,6 +578,16 @@ const registerModelCalls = (
       numberValue(findEntry(entries, 'max_output_tokens')?.value);
     const temperature = numberValue(findEntry(entries, 'temperature')?.value);
     const streaming = method.includes('stream') || findEntry(entries, 'stream') !== undefined;
+    registerModelPromptInput({
+      module,
+      context,
+      call,
+      provider,
+      method,
+      model,
+      entries,
+      supportingLocations,
+    });
 
     builder.addComponent(
       drafts.sourceComponent({

@@ -132,6 +132,7 @@ const hasExplicitLocalShadow = (module: ModuleFacts, symbol: RuntimeSymbol): boo
   const root = symbol.path[0];
   if (root === undefined) return true;
   return (
+    hasLocalBinding(module, symbol.enclosing, root) ||
     module.definitions.some(
       (definition) =>
         definition.name === root &&

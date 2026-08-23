@@ -58,7 +58,7 @@
       "componentsFound": 0,
       "edgesFound": 0,
       "filesInspected": 0,
-      "status": "completed"
+      "status": "not_applicable"
     },
     "adapter:pydantic-ai": {
       "componentsFound": 0,
@@ -93,9 +93,9 @@
   },
   "discardedRelations": [],
   "files": {
-    "discovered": 56,
-    "inSupportedLanguages": 55,
-    "parsed": 55,
+    "discovered": 64,
+    "inSupportedLanguages": 63,
+    "parsed": 63,
     "skipped": 0,
     "truncated": false
   },

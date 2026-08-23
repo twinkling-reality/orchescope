@@ -1,5 +1,5 @@
 import { identityKey, isInferredEntryPoint, partOfDeclaredTopology } from '@orchescope/domain';
-import type { Component, ComponentId, Edge, EdgeKind } from '@orchescope/schema';
+import type { Component, ComponentId, Edge, EdgeKind, TopologyCoverage } from '@orchescope/schema';
 import type { IndexedGraph } from './indexed-graph.ts';
 
 /**
@@ -287,6 +287,34 @@ export type TopologyRequirements = {
   readonly entryComponentIds: readonly ComponentId[];
 };
 
+/** Whether every topology refusal is explicitly bounded to prompt-use rather than control flow. */
+export const controlFlowTopologyComplete = (topology: TopologyCoverage): boolean => {
+  const sampledPromptRefusals = topology.unresolved.filter(
+    (entry) => entry.scope === 'prompt_use',
+  ).length;
+  const sampledControlRefusals = topology.unresolved.length - sampledPromptRefusals;
+  const hasScopedCounts =
+    topology.controlFlowUnresolvedCount !== undefined ||
+    topology.promptUseUnresolvedCount !== undefined;
+  if (hasScopedCounts) {
+    return (
+      topology.controlFlowUnresolvedCount !== undefined &&
+      topology.promptUseUnresolvedCount !== undefined &&
+      topology.controlFlowUnresolvedCount + topology.promptUseUnresolvedCount ===
+        topology.unresolvedCount &&
+      sampledControlRefusals <= topology.controlFlowUnresolvedCount &&
+      sampledPromptRefusals <= topology.promptUseUnresolvedCount &&
+      topology.controlFlowUnresolvedCount === 0
+    );
+  }
+  if (topology.status === 'complete') return topology.unresolvedCount === 0;
+  return (
+    topology.unresolvedCount > 0 &&
+    topology.unresolved.length === topology.unresolvedCount &&
+    topology.unresolved.every((entry) => entry.scope === 'prompt_use')
+  );
+};
+
 /**
  * Whether the evidence population can support closed-world topology properties.
  *
@@ -311,14 +339,22 @@ export const topologyRequirements = (index: IndexedGraph): TopologyRequirements 
     (index.graph.coverage.filesSkipped ?? index.graph.coverage.skipped.length) === 0 &&
     (index.graph.coverage.filesInSupportedLanguages === undefined ||
       index.graph.coverage.filesParsed >= index.graph.coverage.filesInSupportedLanguages) &&
-    index.graph.coverage.unsupported.length === 0;
+    index.graph.coverage.unsupported.every(
+      (area) => area.kind === 'topology_incomplete' && area.scope === 'prompt_use',
+    );
+  const controlProducers = topology.producers.filter(
+    (producer) => producer.scope === undefined || producer.scope === 'control_flow',
+  );
+  const inspectedInputs = controlProducers.reduce(
+    (total, producer) => total + producer.inspectedInputs,
+    0,
+  );
   const complete =
     scanPopulationComplete &&
-    topology.status === 'complete' &&
-    topology.inspectedInputs > 0 &&
-    topology.unresolvedCount === 0 &&
-    topology.producers.length > 0 &&
-    topology.producers.every(
+    controlFlowTopologyComplete(topology) &&
+    inspectedInputs > 0 &&
+    controlProducers.length > 0 &&
+    controlProducers.every(
       (producer) => producer.status === 'complete' && producer.inspectedInputs > 0,
     );
   const targets = new Set(topology.entryTargets.map(identityKey));
@@ -330,8 +366,8 @@ export const topologyRequirements = (index: IndexedGraph): TopologyRequirements 
     topology.entryTargets.length > 0 &&
     entryComponentIds.length === topology.entryTargets.length;
   return {
-    status: complete ? 'complete' : 'incomplete',
-    inspectedInputs: topology.inspectedInputs,
+    status: controlProducers.length === 0 ? 'unknown' : complete ? 'complete' : 'incomplete',
+    inspectedInputs,
     acyclicityComplete: complete,
     reachabilityComplete: complete && entryTargetsComplete,
     narrownessComplete: complete,

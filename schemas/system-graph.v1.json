@@ -1633,6 +1633,10 @@
               "minimum": 0,
               "type": "integer"
             },
+            "controlFlowUnresolvedCount": {
+              "minimum": 0,
+              "type": "integer"
+            },
             "entryBoundaries": {
               "minimum": 0,
               "type": "integer"
@@ -1690,6 +1694,18 @@
                     "minimum": 0,
                     "type": "integer"
                   },
+                  "scope": {
+                    "anyOf": [
+                      {
+                        "const": "control_flow",
+                        "type": "string"
+                      },
+                      {
+                        "const": "prompt_use",
+                        "type": "string"
+                      }
+                    ]
+                  },
                   "status": {
                     "anyOf": [
                       {
@@ -1712,6 +1728,10 @@
                 "type": "object"
               },
               "type": "array"
+            },
+            "promptUseUnresolvedCount": {
+              "minimum": 0,
+              "type": "integer"
             },
             "status": {
               "anyOf": [
@@ -1762,6 +1782,10 @@
                       {
                         "const": "adapter_input",
                         "type": "string"
+                      },
+                      {
+                        "const": "prompt_input",
+                        "type": "string"
                       }
                     ]
                   },
@@ -1806,6 +1830,18 @@
                     "maxLength": 500,
                     "minLength": 1,
                     "type": "string"
+                  },
+                  "scope": {
+                    "anyOf": [
+                      {
+                        "const": "control_flow",
+                        "type": "string"
+                      },
+                      {
+                        "const": "prompt_use",
+                        "type": "string"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -1871,6 +1907,10 @@
                     "type": "string"
                   },
                   {
+                    "const": "topology_incomplete",
+                    "type": "string"
+                  },
+                  {
                     "const": "excluded_from_analysis",
                     "type": "string"
                   }
@@ -1884,6 +1924,18 @@
                 "description": "How the user can supply the missing facts.",
                 "minLength": 1,
                 "type": "string"
+              },
+              "scope": {
+                "anyOf": [
+                  {
+                    "const": "control_flow",
+                    "type": "string"
+                  },
+                  {
+                    "const": "prompt_use",
+                    "type": "string"
+                  }
+                ]
               }
             },
             "required": [

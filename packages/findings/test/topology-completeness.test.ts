@@ -121,6 +121,165 @@ describe('topology evidence completeness', () => {
     );
   });
 
+  it('keeps prompt-use refusals visible without changing complete control-flow properties', () => {
+    const complete = withTopology(
+      buildGraph([agent, worker], [edgeDraft('hands_off_to', agent, worker)]),
+      'complete',
+    );
+    const topology = complete.coverage.topology;
+    assert.ok(topology);
+    const graph: SystemGraph = {
+      ...complete,
+      coverage: {
+        ...complete.coverage,
+        topology: {
+          ...topology,
+          status: 'incomplete',
+          producers: [
+            ...topology.producers,
+            {
+              adapterId: 'adapter:prompts',
+              scope: 'prompt_use',
+              status: 'incomplete',
+              inspectedInputs: 1,
+              relationsFound: 0,
+            },
+          ],
+          inspectedInputs: topology.inspectedInputs + 1,
+          unresolvedCount: 11,
+          controlFlowUnresolvedCount: 0,
+          promptUseUnresolvedCount: 11,
+          unresolved: [
+            {
+              kind: 'prompt_input',
+              scope: 'prompt_use',
+              reason: 'system_prompt is computed',
+              location: { file: 'src/agent.py', startLine: 8 },
+            },
+          ],
+        },
+      },
+    };
+    const outcome = architectureShapeRule.evaluate(contextFor(graph));
+    const strength = outcome.drafts.find((draft) => draft.polarity === 'strength');
+    assert.ok(strength);
+    assert.equal(
+      strength.metrics?.find((metric) => metric.name === 'topologyInputsInspected')?.sampleSize,
+      7,
+    );
+  });
+
+  it('refuses contradictory scoped counts when the sample contains a control-flow gap', () => {
+    const complete = withTopology(
+      buildGraph([agent, worker], [edgeDraft('hands_off_to', agent, worker)]),
+      'complete',
+    );
+    const topology = complete.coverage.topology;
+    assert.ok(topology);
+    const graph: SystemGraph = {
+      ...complete,
+      coverage: {
+        ...complete.coverage,
+        topology: {
+          ...topology,
+          status: 'incomplete',
+          controlFlowUnresolvedCount: 0,
+          promptUseUnresolvedCount: 1,
+          unresolvedCount: 1,
+          unresolved: [
+            {
+              kind: 'conditional_destination',
+              reason: 'the bounded sample contradicts the claimed prompt-only population',
+              location: { file: 'src/graph.py', startLine: 15 },
+            },
+          ],
+        },
+      },
+    };
+    const outcome = architectureShapeRule.evaluate(contextFor(graph));
+    assert.equal(outcome.status, 'insufficient_evidence');
+    assert.equal(
+      outcome.drafts.some((draft) => draft.polarity === 'strength'),
+      false,
+    );
+  });
+
+  it('never falls back to legacy sampling when scoped counts are missing or mismatched', () => {
+    const complete = withTopology(
+      buildGraph([agent, worker], [edgeDraft('hands_off_to', agent, worker)]),
+      'complete',
+    );
+    const topology = complete.coverage.topology;
+    assert.ok(topology);
+    const promptSample = [
+      {
+        kind: 'prompt_input' as const,
+        scope: 'prompt_use' as const,
+        reason: 'the sample alone cannot repair invalid full-population counts',
+        location: { file: 'src/agent.py', startLine: 8 },
+      },
+    ];
+    for (const counts of [
+      { controlFlowUnresolvedCount: 0 },
+      { promptUseUnresolvedCount: 1 },
+      { controlFlowUnresolvedCount: 0, promptUseUnresolvedCount: 2 },
+      { controlFlowUnresolvedCount: 1, promptUseUnresolvedCount: 1 },
+    ]) {
+      const graph: SystemGraph = {
+        ...complete,
+        coverage: {
+          ...complete.coverage,
+          topology: {
+            ...topology,
+            status: 'incomplete',
+            unresolvedCount: 1,
+            unresolved: promptSample,
+            ...counts,
+          },
+        },
+      };
+      const outcome = architectureShapeRule.evaluate(contextFor(graph));
+      assert.equal(outcome.status, 'insufficient_evidence');
+      assert.equal(
+        outcome.drafts.some((draft) => draft.polarity === 'strength'),
+        false,
+      );
+    }
+  });
+
+  it('treats a legacy unscoped refusal as incomplete control flow', () => {
+    const complete = withTopology(
+      buildGraph([agent, worker], [edgeDraft('hands_off_to', agent, worker)]),
+      'complete',
+    );
+    const topology = complete.coverage.topology;
+    assert.ok(topology);
+    const graph: SystemGraph = {
+      ...complete,
+      coverage: {
+        ...complete.coverage,
+        topology: {
+          ...topology,
+          status: 'incomplete',
+          unresolvedCount: 1,
+          unresolved: [
+            {
+              kind: 'conditional_destination',
+              reason: 'legacy router destination is dynamic',
+              location: { file: 'src/graph.py', startLine: 15 },
+            },
+          ],
+        },
+      },
+    };
+    const outcome = architectureShapeRule.evaluate(contextFor(graph));
+    assert.equal(outcome.status, 'insufficient_evidence');
+    assert.equal(
+      outcome.drafts.some((draft) => draft.polarity === 'strength'),
+      false,
+    );
+  });
+
   it('starts reachability at handled entry targets rather than promoting a disconnected cycle', () => {
     const second = componentDraft({ kind: 'agent', name: 'second', file: 'src/graph.py', line: 4 });
     const third = componentDraft({ kind: 'agent', name: 'third', file: 'src/graph.py', line: 5 });

@@ -55,10 +55,10 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 12,
+      "componentsFound": 0,
       "edgesFound": 0,
-      "filesInspected": 3,
-      "status": "completed"
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:pydantic-ai": {
       "componentsFound": 0,
@@ -95,14 +95,13 @@
       "external_service": 1,
       "memory": 1,
       "model": 2,
-      "prompt": 6,
       "queue": 1,
       "retrieval": 1,
       "side_effect": 1,
       "tool": 6
     },
     "declaredInTest": 0,
-    "total": 28
+    "total": 22
   },
   "discardedRelations": [],
   "files": {

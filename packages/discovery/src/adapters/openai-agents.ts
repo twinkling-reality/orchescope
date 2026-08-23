@@ -1,4 +1,4 @@
-import { CONFIDENCE_BANDS } from '@orchescope/domain';
+import { CONFIDENCE_BANDS, identityKey } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type { ComponentIdentity, EdgeKind, EdgePolicy, SourceLocation } from '@orchescope/schema';
 import type {
@@ -21,10 +21,12 @@ import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from 
 import {
   decoratedDefinitions,
   definitionForCall,
+  hasLocalBinding,
   matchCalls,
   matchRuntimeSymbol,
   projectUses,
 } from '../matching.ts';
+import { promptCallSupport, registerPromptEntries } from '../prompt-input.ts';
 
 /**
  * The OpenAI Agents SDK, in both ecosystems.
@@ -289,6 +291,9 @@ type PendingAgent = {
   readonly module: ModuleFacts;
   readonly call: CallFact;
   readonly entries: readonly ObjectEntryFact[];
+  readonly variable: string | undefined;
+  readonly enclosing: string | undefined;
+  readonly supportingLocations: readonly SourceLocation[];
 };
 
 const agentConstructionCalls = (context: DiscoveryContext) => {
@@ -359,7 +364,41 @@ const addAgents = (
       context.bindings.register(match.module.file, definition.name, identity);
     }
     context.bindings.register(match.module.file, declared, identity);
-    pending.push({ identity, module: match.module, call: match.call, entries });
+    const supportingLocations = [
+      ...promptCallSupport(match.module, match.call),
+      ...(definition === undefined ? [] : [definition.location]),
+    ];
+    registerPromptEntries({
+      registry: context.promptInputs,
+      producer: ADAPTER_ID,
+      module: match.module,
+      call: match.call,
+      consumer: identity,
+      entries,
+      channels: ['instructions'],
+      supportingLocations,
+    });
+    const stableVariable =
+      definition?.kind === 'variable' &&
+      match.module.definitions.filter(
+        (candidate) =>
+          candidate.name === definition.name && candidate.enclosing === definition.enclosing,
+      ).length === 1 &&
+      !match.module.assignments.some(
+        (assignment) =>
+          assignment.target.length === 1 &&
+          assignment.target[0] === definition.name &&
+          assignment.enclosing === definition.enclosing,
+      );
+    pending.push({
+      identity,
+      module: match.module,
+      call: match.call,
+      entries,
+      variable: stableVariable ? definition.name : undefined,
+      enclosing: definition?.enclosing,
+      supportingLocations,
+    });
 
     if (model === undefined) continue;
     builder.addComponent(
@@ -541,7 +580,7 @@ const addAssignedHandoffs = (context: DiscoveryContext, builder: SystemGraphBuil
 const registerAgents = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
-): { components: number; edges: number } => {
+): { components: number; edges: number; pending: readonly PendingAgent[] } => {
   const added = addAgents(context, builder);
   let edges = 0;
   for (const agent of added.pending) {
@@ -549,7 +588,83 @@ const registerAgents = (
   }
   // After the agents, because both ends of a handoff have to be registered before the relation can resolve.
   edges += addAssignedHandoffs(context, builder);
-  return { components: added.components, edges };
+  return { components: added.components, edges, pending: added.pending };
+};
+
+const runInputConsumer = (
+  context: DiscoveryContext,
+  module: ModuleFacts,
+  call: CallFact,
+  agentName: string,
+  agents: readonly PendingAgent[],
+):
+  | {
+      readonly identity: ComponentIdentity;
+      readonly supportingLocations: readonly SourceLocation[];
+    }
+  | undefined => {
+  const local = agents.filter(
+    (agent) =>
+      agent.module.file === module.file &&
+      agent.variable === agentName &&
+      agent.enclosing === call.enclosing,
+  );
+  if (local.length === 1) {
+    const agent = local[0];
+    return agent === undefined
+      ? undefined
+      : { identity: agent.identity, supportingLocations: agent.supportingLocations };
+  }
+  if (local.length > 1 || hasLocalBinding(module, call.enclosing, agentName)) return undefined;
+  const consumer = context.bindings.lookup(module.file, agentName);
+  if (consumer?.kind !== 'agent') return undefined;
+  const matches = agents.filter((agent) => identityKey(agent.identity) === identityKey(consumer));
+  if (matches.length !== 1) return undefined;
+  const imported = module.imports.filter((entry) => entry.local === agentName && !entry.isType);
+  return {
+    identity: consumer,
+    supportingLocations: [
+      ...(matches[0]?.supportingLocations ?? []),
+      ...(imported.length === 1 && imported[0] !== undefined ? [imported[0].location] : []),
+    ],
+  };
+};
+
+const registerRunInputs = (context: DiscoveryContext, agents: readonly PendingAgent[]): void => {
+  for (const module of context.modules) {
+    for (const call of module.calls) {
+      const method = call.calleePath.at(-1);
+      if (method !== 'run' && method !== 'run_sync') continue;
+      const providerCall = matchRuntimeSymbol(
+        context.modules,
+        module,
+        { path: call.calleePath, origin: call.origin, enclosing: call.enclosing },
+        { names: ['Runner', 'run', 'run_sync'], packages: PACKAGES },
+      );
+      if (providerCall === undefined) continue;
+      const entries = objectArgument(call);
+      const startingAgent = findEntry(entries, 'starting_agent');
+      const agentValue =
+        startingAgent?.value ?? (call.args[0]?.kind === 'object' ? undefined : call.args[0]);
+      const agentName = agentValue?.kind === 'identifier' ? agentValue.name : undefined;
+      const resolved =
+        agentName === undefined
+          ? undefined
+          : runInputConsumer(context, module, call, agentName, agents);
+      const prompt = findEntry(entries, 'input')?.value ?? call.args[1];
+      if (resolved === undefined || prompt === undefined || prompt.kind === 'object') continue;
+      context.promptInputs.register({
+        producer: ADAPTER_ID,
+        module,
+        call,
+        consumer: resolved.identity,
+        channel: 'input',
+        value: prompt,
+        location: findEntry(entries, 'input')?.location ?? call.location,
+        supportingLocations: [...promptCallSupport(module, call), ...resolved.supportingLocations],
+      });
+    }
+  }
 };
 
 export const openAiAgentsAdapter: AgentSystemAdapter = {
@@ -563,6 +678,7 @@ export const openAiAgentsAdapter: AgentSystemAdapter = {
     const guardrails = registerGuardrails(context, builder);
     const servers = registerMcpServers(context, builder);
     const agents = registerAgents(context, builder);
+    registerRunInputs(context, agents.pending);
     const filesInspected = context.modules
       .filter((module) => module.imports.some((entry) => PACKAGES.includes(entry.module)))
       .map((module) => module.file);

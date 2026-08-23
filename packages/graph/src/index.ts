@@ -7,6 +7,7 @@
 export {
   controlFlowCycles,
   controlFlowCycleEdges,
+  controlFlowTopologyComplete,
   type DegreeStats,
   declaredCallersOf,
   degrees,

@@ -102,10 +102,12 @@ const hasInterpolation = (node: Node): boolean =>
 const MAX_SUBSTITUTED_NAMES = 8;
 
 /** The names an f-string substitutes, which is what says how a value was assembled. */
-const substitutedNamesIn = (node: Node): readonly string[] => {
+const substitutionsIn = (
+  node: Node,
+): { readonly names: readonly string[]; readonly complete: boolean } => {
   const names = new Set<string>();
   const walk = (candidate: Node): void => {
-    if (names.size >= MAX_SUBSTITUTED_NAMES) return;
+    if (names.size > MAX_SUBSTITUTED_NAMES) return;
     if (candidate.type === 'identifier') {
       names.add(candidate.text);
       return;
@@ -115,7 +117,10 @@ const substitutedNamesIn = (node: Node): readonly string[] => {
   for (const child of namedChildren(node)) {
     if (child.type === 'interpolation') walk(child);
   }
-  return [...names];
+  return {
+    names: [...names].slice(0, MAX_SUBSTITUTED_NAMES),
+    complete: names.size <= MAX_SUBSTITUTED_NAMES,
+  };
 };
 
 const attributePath = (node: Node): readonly string[] => {
@@ -234,14 +239,15 @@ const subscriptPath = (node: Node): ArgumentFact => {
 const stringArgumentFact = (node: Node): ArgumentFact => {
   const value = stringLiteralValue(node);
   if (value === undefined) return { kind: 'unknown', nodeType: node.type };
-  return hasInterpolation(node)
-    ? {
-        kind: 'template',
-        value,
-        hasSubstitutions: true,
-        substitutedNames: substitutedNamesIn(node),
-      }
-    : { kind: 'string', value };
+  if (!hasInterpolation(node)) return { kind: 'string', value };
+  const substitutions = substitutionsIn(node);
+  return {
+    kind: 'template',
+    value,
+    hasSubstitutions: true,
+    substitutedNames: substitutions.names,
+    substitutionsComplete: substitutions.complete,
+  };
 };
 
 const numberArgumentFact = (node: Node): ArgumentFact => {
@@ -301,21 +307,28 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
        * spelled two ways.
        */
       const callee = childField(node, 'function');
-      const { positional, keywords } = splitArguments(node, context);
+      const { positional, keywords, keywordsComplete } = splitArguments(node, context);
       return {
         kind: 'call',
         path: callee === undefined ? [] : attributePath(callee),
         args:
-          keywords.length === 0
+          keywords.length === 0 && keywordsComplete
             ? positional
-            : [...positional, { kind: 'object', entries: keywords }],
+            : [...positional, { kind: 'object', entries: keywords, complete: keywordsComplete }],
       };
     }
     case 'list':
     case 'tuple':
     case 'set': {
-      const items = namedChildren(node).map((child) => argumentFact(child, context));
-      return { kind: 'array', items };
+      const children = namedChildren(node);
+      const items = children
+        .filter((child) => !child.type.includes('splat'))
+        .map((child) => argumentFact(child, context));
+      return {
+        kind: 'array',
+        items,
+        complete: children.every((child) => !child.type.includes('splat')),
+      };
     }
     case 'dictionary': {
       const entries: ObjectEntryFact[] = [];
@@ -332,7 +345,11 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
           location: location(context.file, pair),
         });
       }
-      return { kind: 'object', entries };
+      return {
+        kind: 'object',
+        entries,
+        complete: namedChildren(node).every((child) => child.type === 'pair'),
+      };
     }
     case 'lambda':
       return { kind: 'function' };
@@ -735,14 +752,15 @@ const decoratorFacts = (node: Node, context: Context): readonly DecoratorFact[] 
     if (inner.type === 'call') {
       const callee = childField(inner, 'function');
       const path = callee === undefined ? [] : attributePath(callee);
-      const { positional, keywords } = splitArguments(inner, context);
+      const { positional, keywords, keywordsComplete } = splitArguments(inner, context);
       facts.push({
         path,
         origin: path[0] === undefined ? undefined : context.bindings.get(path[0]),
         args:
-          keywords.length === 0
+          keywords.length === 0 && keywordsComplete
             ? positional
-            : [...positional, { kind: 'object', entries: keywords }],
+            : [...positional, { kind: 'object', entries: keywords, complete: keywordsComplete }],
+        location: location(context.file, child),
       });
       continue;
     }
@@ -751,6 +769,7 @@ const decoratorFacts = (node: Node, context: Context): readonly DecoratorFact[] 
       path,
       origin: path[0] === undefined ? undefined : context.bindings.get(path[0]),
       args: [],
+      location: location(context.file, child),
     });
   }
   return facts;
@@ -772,13 +791,17 @@ const decoratorFacts = (node: Node, context: Context): readonly DecoratorFact[] 
 const splitArguments = (
   call: Node,
   context: Context,
-): { positional: ArgumentFact[]; keywords: ObjectEntryFact[] } => {
+): { positional: ArgumentFact[]; keywords: ObjectEntryFact[]; keywordsComplete: boolean } => {
   const positional: ArgumentFact[] = [];
   const keywords: ObjectEntryFact[] = [];
+  let keywordsComplete = true;
   const list = childField(call, 'arguments');
-  if (list === undefined) return { positional, keywords };
+  if (list === undefined) return { positional, keywords, keywordsComplete };
   for (const child of namedChildren(list)) {
-    if (child.type === 'dictionary_splat') continue;
+    if (child.type === 'dictionary_splat') {
+      keywordsComplete = false;
+      continue;
+    }
     if (child.type === 'keyword_argument') {
       const nameNode = childField(child, 'name');
       const valueNode = childField(child, 'value');
@@ -792,7 +815,7 @@ const splitArguments = (
     }
     positional.push(argumentFact(child, context));
   }
-  return { positional, keywords };
+  return { positional, keywords, keywordsComplete };
 };
 
 /** Traverses one conditional consequence with a scoped type-only binding set when it cannot run. */
@@ -962,11 +985,11 @@ const recordCall = (
 ): void => {
   const callee = childField(node, 'function');
   const path = callee === undefined ? [] : attributePath(callee);
-  const { positional, keywords } = splitArguments(node, context);
+  const { positional, keywords, keywordsComplete } = splitArguments(node, context);
   const args =
-    keywords.length === 0
+    keywords.length === 0 && keywordsComplete
       ? positional
-      : [...positional, { kind: 'object' as const, entries: keywords }];
+      : [...positional, { kind: 'object' as const, entries: keywords, complete: keywordsComplete }];
 
   const envName = environmentName(path, positional);
   if (envName !== undefined) {
