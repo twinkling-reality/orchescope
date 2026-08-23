@@ -26,14 +26,21 @@ type Coverage = AuditResult['graph']['coverage'];
 const adapterName = (adapterId: string): string => adapterId.replace(/^adapter:/, '');
 
 /**
- * The three kinds a reader of an agent system asks about first.
+ * The component identities a reader of an agent system asks about first.
  *
- * Every supported ecosystem names agents, tools and models; the rest of the graph's vocabulary
- * (prompts, queues, entry points, memories) is either an implementation detail of one of those or a
- * word a reader would have to be taught. A project with none of the three falls back to the part count,
- * because naming zero of everything is worse than naming a size.
+ * A workflow step is not necessarily an agent. Keeping workflows and their registered steps in this
+ * inventory makes that distinction visible on the terminal surface instead of replacing a false agent
+ * count with silence. Prompts, queues, entry points and memories remain in the full graph. A project with
+ * none of these headline identities falls back to the part count, because naming zero of everything is
+ * worse than naming a size.
  */
-const HEADLINE_KINDS = ['agent', 'tool', 'model'] as const;
+const HEADLINE_KINDS = [
+  { kind: 'agent', singular: 'agent' },
+  { kind: 'workflow', singular: 'workflow' },
+  { kind: 'workflow_step', singular: 'workflow step' },
+  { kind: 'tool', singular: 'tool' },
+  { kind: 'model', singular: 'model' },
+] as const;
 
 /** `a`, `a and b`, `a, b and c`. No serial comma, so the last two read as a pair. */
 const joinWords = (parts: readonly string[]): string =>
@@ -46,9 +53,9 @@ const inventory = (result: AuditResult): string => {
   for (const component of result.graph.components) {
     counts.set(component.kind, (counts.get(component.kind) ?? 0) + 1);
   }
-  const named = HEADLINE_KINDS.flatMap((kind) => {
+  const named = HEADLINE_KINDS.flatMap(({ kind, singular }) => {
     const count = counts.get(kind) ?? 0;
-    return count === 0 ? [] : [formatCount(count, kind)];
+    return count === 0 ? [] : [formatCount(count, singular)];
   });
   return named.length === 0
     ? formatCount(result.bundle.summary.componentCount, 'part')

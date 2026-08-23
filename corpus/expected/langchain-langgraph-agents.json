@@ -89,9 +89,9 @@
   "components": {
     "byKind": {
       "agent": 1,
-      "agent_group": 1,
       "model": 1,
-      "provider": 1
+      "provider": 1,
+      "workflow": 1
     },
     "declaredInTest": 0,
     "total": 4

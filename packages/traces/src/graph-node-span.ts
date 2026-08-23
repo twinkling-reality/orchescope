@@ -42,8 +42,8 @@ const LANGGRAPH_NODE = 'langgraph_node';
  *
  * The two instrumentors disagree about whether it produces a span at all. The same two node graph written in
  * Python and in JavaScript emits three spans there and four here: JavaScript opens one for `__start__`, carrying
- * `langgraph_node: "__start__"` and named after it, and Python opens none. Read as a node it became
- * `agent:__start__`, reported at medium severity as a part of the system that ran without being declared, with
+ * `langgraph_node: "__start__"` and named after it, and Python opens none. Read as an application step it became
+ * `workflow_step:__start__`, reported at medium severity as a part of the system that ran without being declared, with
  * nothing in the repository a reader could declare in answer, and once per graph invocation, so a run through a
  * subgraph reported it again.
  *

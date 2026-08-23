@@ -15,6 +15,7 @@ const CONTROL_FLOW_KINDS: ReadonlySet<EdgeKind> = new Set([
   'invokes_model',
   'calls_tool',
   'hands_off_to',
+  'transitions_to',
   'queries_retrieval',
   'reads_memory',
   'writes_memory',
@@ -99,6 +100,7 @@ const nothingPointsAt = (index: IndexedGraph, candidate: Component): boolean =>
 export const entryPoints = (index: IndexedGraph): readonly Component[] => {
   const candidates = [
     ...index.componentsOfKind('entrypoint'),
+    ...index.componentsOfKind('workflow'),
     ...index.componentsOfKind('agent_group'),
     ...index.componentsOfKind('agent'),
   ];
@@ -378,6 +380,8 @@ export const topologyRequirements = (index: IndexedGraph): TopologyRequirements 
 /** Components declared but never observed, restricted to kinds that can appear in a trace. */
 const OBSERVABLE_KINDS = new Set([
   'agent',
+  'workflow',
+  'workflow_step',
   'model',
   'tool',
   'mcp_server',

@@ -17,7 +17,8 @@ A holdout is unseen only when its URL, revision, source, and expected answer wer
 research notes, implementation work, and development discussion before the freeze. Local Deep Researcher and every
 other repository already named by this repository are regression inputs, never holdouts.
 
-The [blocked a38ed43f evaluation](../research/a38ed43f-blocked-blind-evaluation.md) and the
+The [blocked a38ed43f evaluation](../research/a38ed43f-blocked-blind-evaluation.md), the
+[blocked 604fce75 evaluation](../research/604fce75-blocked-blind-evaluation.md), and the
 [passed 95c7756c evaluation](../research/95c7756c-passed-blind-evaluation.md) are durable records of completed
 applications of this protocol. Every repository selected in a completed evaluation, and its source lineage, is
 part of a used population. Those repositories and their source lineages are permanently ineligible as blind holdouts
@@ -108,6 +109,7 @@ inside `pnpm verify`; the named command makes the release boundary reviewable wi
 | Completed-zero applicable adapters remain visible. | `packages/discovery/test/configurable-producers.test.ts`, `persists exact completed-zero applicability and uses it for the existing gap accounting` |
 | Input order does not change semantic identity or selected evidence. | `packages/findings/test/semantic-identity.test.ts`, `ignores component, edge and evidence order as well as prose, severity and time`; `packages/report/test/evidence-selection.test.ts`, `is invariant to evidence and citation permutations` |
 | Every strength names the evidence population supporting its scope. | `packages/findings/test/static-rules.test.ts`, `binds a complete caller-population absence to a universal approval strength`; `packages/findings/test/runtime-rules.test.ts`, `binds the aggregate component population to the subject of a coverage claim`; `packages/findings/test/experiment-evidence.test.ts`, `does not invent absent cost or retry ratios for a complete strength` |
+| Workflow registration does not establish agent identity or an agent handoff. | `packages/discovery/test/adapters.test.ts`, `discovers the graph as a workflow and every registered node as a workflow step` |
 
 The deterministic fixtures falsify one assumption at a time. The independently selected positive and negative prevent
 those author-controlled fixtures from becoming the evidence that a candidate generalizes.

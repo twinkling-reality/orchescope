@@ -12,6 +12,7 @@ export const EDGE_KINDS = [
   'invokes_model',
   'calls_tool',
   'hands_off_to',
+  'transitions_to',
   'uses_prompt',
   'reads_memory',
   'writes_memory',

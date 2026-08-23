@@ -17,8 +17,8 @@ import type {
   TopologyDiscovery,
 } from '../adapter.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
-import { definitionForCall, hasBindingAt, matchRuntimeSymbol, moduleMatches } from '../matching.ts';
 import { localModules, namesLocalModule } from '../local-modules.ts';
+import { definitionForCall, hasBindingAt, matchRuntimeSymbol, moduleMatches } from '../matching.ts';
 import {
   clientTimeoutMs,
   type DeclaredDeadline,
@@ -26,8 +26,8 @@ import {
   deadlineOnRelation,
   modelCallDeadline,
 } from '../model-deadline.ts';
-import { resolveSourceValue, type ResolvedSourceValue } from '../source-value.ts';
 import { registerPromptEntries } from '../prompt-input.ts';
+import { type ResolvedSourceValue, resolveSourceValue } from '../source-value.ts';
 import { discoverLangChainOpenAiModels } from './langchain-openai-chat-model.ts';
 import {
   chatOpenAiApplicability,
@@ -759,6 +759,60 @@ const registerModelCalls = (
   }
 };
 
+const locationContains = (outer: SourceLocation, inner: SourceLocation): boolean => {
+  const outerEnd = outer.endLine ?? outer.startLine;
+  const innerEnd = inner.endLine ?? inner.startLine;
+  return inner.startLine >= outer.startLine && innerEnd <= outerEnd;
+};
+
+/**
+ * A literal fallback supplied to Python's environment readers.
+ *
+ * The environment may select another value at runtime, so this is a configuration default rather than
+ * an exact binding. The nested call has to resolve to the Python `os` module: a local `getenv` or an
+ * object with a same-named method cannot establish a model identity.
+ */
+const environmentStringDefault = (
+  context: DiscoveryContext,
+  module: ModuleFacts,
+  outerCall: CallFact,
+  value: ArgumentFact,
+): ResolvedSourceValue | undefined => {
+  if (module.language !== 'python' || value.kind !== 'call') return undefined;
+  const environmentName = stringValue(value.args[0]);
+  const fallback = value.args[1];
+  if (environmentName === undefined || fallback?.kind !== 'string') return undefined;
+  const path = dotted(value.path);
+  if (!['os.getenv', 'os.environ.get', 'environ.get', 'getenv'].includes(path)) return undefined;
+  const importedNames =
+    path === 'os.environ.get' ? ['get'] : path === 'environ.get' ? ['environ'] : ['getenv'];
+  const candidates = module.calls.filter(
+    (candidate) =>
+      dotted(candidate.calleePath) === path &&
+      candidate.enclosing === outerCall.enclosing &&
+      locationContains(outerCall.location, candidate.location) &&
+      stringValue(candidate.args[0]) === environmentName &&
+      stringValue(candidate.args[1]) === fallback.value &&
+      matchRuntimeSymbol(
+        context.modules,
+        module,
+        {
+          path: candidate.calleePath,
+          origin: candidate.origin,
+          enclosing: candidate.enclosing,
+          location: candidate.location,
+        },
+        { names: importedNames, packages: ['os'] },
+      )?.resolved === true,
+  );
+  if (candidates.length === 0) return undefined;
+  return {
+    value: fallback,
+    basis: 'configuration_default',
+    locations: candidates.map((candidate) => candidate.location),
+  };
+};
+
 const stringResolution = (
   context: DiscoveryContext,
   module: ModuleFacts,
@@ -766,6 +820,8 @@ const stringResolution = (
   value: ArgumentFact | undefined,
 ): ResolvedSourceValue | undefined => {
   if (value === undefined) return undefined;
+  const environmentDefault = environmentStringDefault(context, module, call, value);
+  if (environmentDefault !== undefined) return environmentDefault;
   const resolved = resolveSourceValue({
     context,
     module,
@@ -809,7 +865,8 @@ const addWrapperEvidence = (input: {
       ? input.providerResolution.value.value
       : undefined;
   const defaultSelection =
-    modelResolution.basis === 'configuration_default' && providerDefaultValue === wrapper.provider;
+    modelResolution.basis === 'configuration_default' &&
+    (providerDefaultValue === undefined || providerDefaultValue === wrapper.provider);
   const metadata = {
     framework: 'langchain',
     configurationSelection: 'possible',
@@ -925,7 +982,7 @@ const registerLangChainWrappers = (
 
 export const modelSdkAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '3',
+  version: '4',
   packages: ALL_PACKAGES,
   applicability: modelSdkApplicability,
   appliesTo: (context) => modelSdkApplicability(context).length > 0,

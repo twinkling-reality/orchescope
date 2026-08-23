@@ -405,7 +405,7 @@ describe('the spans the instrumentation opens for its own structure', () => {
     );
     assert.deepEqual(
       named.topology.components.map((component) => `${component.kind}:${component.observedName}`),
-      ['agent_group:airline crew'],
+      ['workflow:airline crew'],
     );
   });
 });

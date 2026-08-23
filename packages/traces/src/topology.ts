@@ -31,12 +31,12 @@ import {
 } from './attributes.ts';
 import { graphNodeSpan } from './graph-node-span.ts';
 import { type ObservedHandoff, recognizeHandoffs } from './handoff.ts';
-import { isStructuralSpan } from './structural-span.ts';
 import {
+  type SourceIdentityResult,
   sourceIdentityKey,
   sourceIdentityOf,
-  type SourceIdentityResult,
 } from './source-identity.ts';
+import { isStructuralSpan } from './structural-span.ts';
 import { supersededSpans } from './superseded-span.ts';
 
 /**
@@ -232,6 +232,8 @@ const EDGE_KIND_BY_TARGET: Readonly<Record<string, string>> = {
   tool: 'calls_tool',
   agent: 'contains',
   agent_group: 'contains',
+  workflow: 'contains',
+  workflow_step: 'contains',
   retrieval: 'queries_retrieval',
   memory: 'reads_memory',
   queue: 'consumes_from_queue',
@@ -726,7 +728,7 @@ const encloseChildren = (
  *
  * The graph node is asked first because it outranks the kind the dialect gives the span: LangChain labels
  * a graph, a node and a lambda alike as a chain, so the kind decides an operation of `invoke_workflow` for
- * all three, while the node the span names is one of the application's own agents. Where nothing names a
+ * all three, while the node the span names is one of the application's own workflow steps. Where nothing names a
  * node this is the reading it always was.
  */
 const componentOf = (
@@ -744,7 +746,7 @@ const componentOf = (
   const graphNode = graphNodeSpan(span);
   if (graphNode !== undefined) {
     return {
-      kind: 'agent',
+      kind: 'workflow_step',
       observedName: graphNode.name,
       provenance: { kind: graphNode.provenance, name: graphNode.provenance },
     };

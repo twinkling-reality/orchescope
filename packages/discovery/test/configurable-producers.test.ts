@@ -123,6 +123,129 @@ def perplexity(query):
 };
 
 describe('configuration-backed model and search producers', () => {
+  it('retains a Python environment fallback as a possible static model default', async () => {
+    const workspace = createWorkspace();
+    workspace.write(
+      'src/research/llm.py',
+      `import os
+from langchain_ollama import ChatOllama
+
+def get_llm():
+    return ChatOllama(model=os.getenv("OLLAMA_MODEL", "qwen2.5:7b"))
+`,
+    );
+    const result = await scan(workspace);
+    const model = result.graph.components.find(
+      (component) => component.id === 'model:ollama/qwen2.5-7b',
+    );
+    assert.ok(model !== undefined, 'the literal environment fallback was not retained');
+    assert.equal(model.metadata['configurationSelection'], 'possible');
+    assert.equal(model.metadata['configurationDefault'], true);
+    assert.equal(model.metadata['modelValueBasis'], 'static_default');
+    assert.ok(
+      model.sourceLocations.some(
+        (location) => location.file === 'src/research/llm.py' && location.startLine === 5,
+      ),
+      'the environment fallback call is absent from the model evidence',
+    );
+    assert.equal(
+      result.graph.coverage.unsupported.some((entry) => entry.kind === 'adapter_found_nothing'),
+      false,
+    );
+  });
+
+  it('retains exact standard-library environment reader import forms', async () => {
+    const workspace = createWorkspace();
+    workspace.write(
+      'src/research/module_environment.py',
+      `import os
+from langchain_ollama import ChatOllama
+
+def get_llm():
+    return ChatOllama(model=os.environ.get("FIRST_MODEL", "first"))
+`,
+    );
+    workspace.write(
+      'src/research/imported_environment.py',
+      `from os import environ
+from langchain_ollama import ChatOllama
+
+def get_llm():
+    return ChatOllama(model=environ.get("SECOND_MODEL", "second"))
+`,
+    );
+    workspace.write(
+      'src/research/imported_getenv.py',
+      `from os import getenv
+from langchain_ollama import ChatOllama
+
+def get_llm():
+    return ChatOllama(model=getenv("THIRD_MODEL", "third"))
+`,
+    );
+    const result = await scan(workspace);
+    const modelIds = result.graph.components
+      .filter((component) => component.kind === 'model')
+      .map((component) => component.id)
+      .sort();
+    assert.deepEqual(modelIds, ['model:ollama/first', 'model:ollama/second', 'model:ollama/third']);
+  });
+
+  it('does not read a local same-named environment method as a model default', async () => {
+    const workspace = createWorkspace();
+    workspace.write(
+      'src/research/llm.py',
+      `from langchain_ollama import ChatOllama
+
+class os:
+    @staticmethod
+    def getenv(name, fallback):
+        return fallback
+
+def get_llm():
+    return ChatOllama(model=os.getenv("OLLAMA_MODEL", "made-up"))
+`,
+    );
+    const result = await scan(workspace);
+    assert.equal(
+      result.graph.components.some((component) => component.kind === 'model'),
+      false,
+    );
+    assert.equal(
+      result.graph.coverage.unsupported.some((entry) => entry.kind === 'adapter_found_nothing'),
+      true,
+    );
+  });
+
+  it('does not trust a stale os import after the binding is reassigned', async () => {
+    const workspace = createWorkspace();
+    workspace.write(
+      'src/research/llm.py',
+      `import os
+from langchain_ollama import ChatOllama
+
+class FakeEnvironment:
+    @staticmethod
+    def getenv(name, fallback):
+        return fallback
+
+os = FakeEnvironment()
+
+def get_llm():
+    return ChatOllama(model=os.getenv("OLLAMA_MODEL", "rebound"))
+`,
+    );
+    const result = await scan(workspace);
+    assert.equal(
+      result.graph.components.some((component) => component.id === 'model:ollama/rebound'),
+      false,
+    );
+    assert.equal(
+      result.graph.coverage.unsupported.some((entry) => entry.kind === 'adapter_found_nothing'),
+      true,
+    );
+  });
+
   it('discovers exact model wrappers, four search possibilities and only the declared defaults', async () => {
     const workspace = createWorkspace();
     writeTargetShape(workspace);

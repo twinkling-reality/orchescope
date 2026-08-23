@@ -92,6 +92,7 @@ dependencies = [
   "pydantic-ai>=1.0",
   "crewai",
   "mcp>=1.0",
+  "openai-agents>=0.4",
   "azure-search-documents",
   "tenacity",
   "httpx",
@@ -202,7 +203,7 @@ export const enqueue = () => deliveries.add('deliver', { id: 1 });
 
 export const worker = new Worker('emails', async () => undefined, { concurrency: 4 });
 `,
-  // A graph, which is where one agent hands off to the next.
+  // A graph, which declares workflow transitions without claiming agent identity for its steps.
   'src/graph.ts': `import { StateGraph, START, END } from '@langchain/langgraph';
 
 const graph = new StateGraph({ channels: {} });
@@ -217,6 +218,12 @@ graph.addEdge('researcher', 'writer');
 graph.addEdge('writer', END);
 
 export const app = graph.compile();
+`,
+  // An agent handoff requires explicit agent construction and wiring, not adjacency in a workflow.
+  'src/handoffs.py': `from agents import Agent
+
+refunds = Agent(name="Refunds", instructions="Issue approved refunds.")
+triage = Agent(name="Triage", instructions="Route the customer.", handoffs=[refunds])
 `,
   'bounds_configuration.py': `from pydantic import BaseModel, Field
 

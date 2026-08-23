@@ -317,7 +317,7 @@ describe('deriveTopology', () => {
     ]);
     assert.deepEqual(
       result.topology.edges.map((edge) => `${edge.kind} ${edge.fromKind} -> ${edge.toKind}`),
-      ['contains agent -> agent_group'],
+      ['contains agent -> workflow'],
     );
   });
 

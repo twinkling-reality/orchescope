@@ -20,15 +20,6 @@ import {
 } from '@orchescope/graph';
 import type { Component, ComponentId, Edge, EvidenceId, SideEffectClass } from '@orchescope/schema';
 import {
-  auditedComponents,
-  auditedComponentsOfKind,
-  auditedEdges,
-  auditedEdgesOfKind,
-  declaredInTestCount,
-  narrowedAway,
-} from './audited-population.ts';
-import type { RemediationVariants } from './remediation-variant.ts';
-import {
   examined,
   type FindingDraft,
   fired,
@@ -38,6 +29,15 @@ import {
   type Rule,
   type RuleContext,
 } from '../rule.ts';
+import {
+  auditedComponents,
+  auditedComponentsOfKind,
+  auditedEdges,
+  auditedEdgesOfKind,
+  declaredInTestCount,
+  narrowedAway,
+} from './audited-population.ts';
+import type { RemediationVariants } from './remediation-variant.ts';
 
 /**
  * Rules that read the declared model only.
@@ -1106,18 +1106,18 @@ const cycleDrafts = (graph: IndexedGraph): readonly FindingDraft[] =>
       };
     });
 
-export const architectureShapeRule: Rule = {
-  id: 'topology-shape',
-  category: 'architecture',
-  summary: 'Fan out, reachability and cycles in the declared control flow.',
-  evaluate: (context) => {
-    const drafts: FindingDraft[] = [];
-    const requirements = topologyRequirements(context.graph);
-    const stats = degrees(context.graph);
-    const highFanOut = stats.filter((entry) => entry.controlFlowOutDegree >= 8);
-    for (const entry of highFanOut) {
+const wideFanOutDrafts = (context: RuleContext): readonly FindingDraft[] =>
+  degrees(context.graph)
+    .filter((entry) => entry.controlFlowOutDegree >= 8)
+    .flatMap((entry): readonly FindingDraft[] => {
       const component = context.graph.component(entry.componentId);
-      if (component === undefined || component.kind !== 'agent') continue;
+      if (
+        component === undefined ||
+        (component.kind !== 'agent' && component.kind !== 'workflow_step')
+      ) {
+        return [];
+      }
+      const isAgent = component.kind === 'agent';
       const relationEvidence = context.graph
         .outgoing(component.id)
         .filter((edge) => isControlFlowKind(edge.kind))
@@ -1128,33 +1128,50 @@ export const architectureShapeRule: Rule = {
         inputs: relationEvidence,
         note: `${component.id} has ${entry.controlFlowOutDegree} outgoing control-flow relations`,
       });
-      drafts.push({
-        ruleId: 'topology-shape',
-        situation: 'agent-wide-control-flow-fanout',
-        category: 'agent_complexity',
-        occurrence: {
-          key: 'wide-fan-out',
-          groupedTitle: '{count} agents each coordinate eight or more downstream operations',
+      return [
+        {
+          ruleId: 'topology-shape',
+          situation: isAgent
+            ? 'agent-wide-control-flow-fanout'
+            : 'workflow-step-wide-control-flow-fanout',
+          category: isAgent ? 'agent_complexity' : 'architecture',
+          occurrence: {
+            key: 'wide-fan-out',
+            groupedTitle: isAgent
+              ? '{count} agents each coordinate eight or more downstream operations'
+              : '{count} workflow steps each branch to eight or more downstream steps',
+          },
+          polarity: 'risk',
+          severity: 'low',
+          confidence: CONFIDENCE_BANDS.deterministic,
+          basis: 'discovered',
+          title: `${component.displayName} coordinates ${entry.controlFlowOutDegree} downstream operations`,
+          explanation: isAgent
+            ? `This agent has ${formatCount(entry.controlFlowOutDegree, 'outgoing control flow path')}. Wide coordination is not wrong on its own, and it does make the agent's prompt, its failure handling and its token cost harder to reason about.`
+            : `This workflow step has ${formatCount(entry.controlFlowOutDegree, 'outgoing control flow path')}. Wide branching is not wrong on its own, and every branch adds another route whose condition and failure behavior have to be reviewed.`,
+          impact: 'Every added branch multiplies the paths that have to be tested.',
+          components: [component.id],
+          newEvidence: [record],
+          claimEvidence: {
+            mechanism: [record.id],
+            subject: component.evidence.slice(0, 2) as EvidenceId[],
+            conclusion: [record.id],
+          },
+          goalEligible: false,
+          goalReason: 'Splitting an orchestrator is a design decision, not a bounded edit.',
+          tags: ['complexity'],
         },
-        polarity: 'risk',
-        severity: 'low',
-        confidence: CONFIDENCE_BANDS.deterministic,
-        basis: 'discovered',
-        title: `${component.displayName} coordinates ${entry.controlFlowOutDegree} downstream operations`,
-        explanation: `This agent has ${formatCount(entry.controlFlowOutDegree, 'outgoing control flow path')}. Wide coordination is not wrong on its own, and it does make the agent's prompt, its failure handling and its token cost harder to reason about.`,
-        impact: 'Every added branch multiplies the paths that have to be tested.',
-        components: [component.id],
-        newEvidence: [record],
-        claimEvidence: {
-          mechanism: [record.id],
-          subject: component.evidence.slice(0, 2) as EvidenceId[],
-          conclusion: [record.id],
-        },
-        goalEligible: false,
-        goalReason: 'Splitting an orchestrator is a design decision, not a bounded edit.',
-        tags: ['complexity'],
-      });
-    }
+      ];
+    });
+
+export const architectureShapeRule: Rule = {
+  id: 'topology-shape',
+  category: 'architecture',
+  summary: 'Fan out, reachability and cycles in the declared control flow.',
+  evaluate: (context) => {
+    const drafts: FindingDraft[] = [];
+    const requirements = topologyRequirements(context.graph);
+    drafts.push(...wideFanOutDrafts(context));
 
     if (requirements.reachabilityComplete) {
       drafts.push(
@@ -1173,16 +1190,19 @@ export const architectureShapeRule: Rule = {
      *
      * "Reachable, acyclic and narrow" is true of a graph with no relations in it, and of a repository where the
      * only components are the databases and services some code happens to touch. Reporting it there reads as an
-     * endorsement of an agent system that was never found, so the claim requires an agent and a relation between
-     * components before it is made.
+     * endorsement of an agent system that was never found, so the claim requires an agent, agent group or supported
+     * agent-framework workflow and a relation between components before it is made.
      */
     const audited = auditedComponents(context.graph);
-    const hasAgent = audited.some(
-      (component) => component.kind === 'agent' || component.kind === 'agent_group',
+    const hasAgentSystemTopology = audited.some(
+      (component) =>
+        component.kind === 'agent' ||
+        component.kind === 'agent_group' ||
+        component.kind === 'workflow',
     );
     if (
       drafts.length === 0 &&
-      hasAgent &&
+      hasAgentSystemTopology &&
       auditedEdges(context.graph).length > 0 &&
       requirements.acyclicityComplete &&
       requirements.reachabilityComplete &&
@@ -1191,7 +1211,7 @@ export const architectureShapeRule: Rule = {
       const population = absenceEvidence({
         producer: PRODUCER,
         searched:
-          'an unreachable control-flow participant, declared control-flow cycle, or wide agent fan-out',
+          'an unreachable control-flow participant, declared control-flow cycle, or wide agent or workflow-step fan-out',
         scope:
           'all applicable relation producers, conditional destinations and accounted entry boundaries',
         inspectedCount: requirements.inspectedInputs,
@@ -1207,7 +1227,7 @@ export const architectureShapeRule: Rule = {
           confidence: CONFIDENCE_BANDS.deterministic,
           basis: 'discovered',
           title: 'The declared topology is reachable, acyclic and narrow',
-          explanation: `Every declared control-flow participant is reachable from an accounted entry boundary, the complete control-flow population contains no cycle, and no agent coordinates more than eight downstream operations. The claim covers ${requirements.inspectedInputs} inspected topology inputs.`,
+          explanation: `Every declared control-flow participant is reachable from an accounted entry boundary, the complete control-flow population contains no cycle, and no agent or workflow step coordinates more than eight downstream operations. The claim covers ${requirements.inspectedInputs} inspected topology inputs.`,
           impact: 'The system can be reasoned about one path at a time.',
           components: audited.slice(0, 5).map((component) => component.id),
           newEvidence: [population],
@@ -1233,7 +1253,7 @@ export const architectureShapeRule: Rule = {
     }
     if (
       drafts.length === 0 &&
-      hasAgent &&
+      hasAgentSystemTopology &&
       (!requirements.acyclicityComplete ||
         !requirements.reachabilityComplete ||
         !requirements.narrownessComplete)

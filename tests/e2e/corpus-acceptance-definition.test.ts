@@ -116,12 +116,12 @@ describe('corpus acceptance definitions', () => {
     const target = entries.find((entry) => entry.name === 'local-deep-researcher');
     const exposedPositive = entries.find((entry) => entry.name === 'langchain-langgraph-agents');
     assert.equal(target?.exercise, undefined);
-    assert.deepEqual(target?.acceptance?.exactIdsByKind['agent'], [
-      'agent:finalize_summary',
-      'agent:generate_query',
-      'agent:reflect_on_summary',
-      'agent:summarize_sources',
-      'agent:web_research',
+    assert.deepEqual(target?.acceptance?.exactIdsByKind['workflow_step'], [
+      'workflow_step:finalize_summary',
+      'workflow_step:generate_query',
+      'workflow_step:reflect_on_summary',
+      'workflow_step:summarize_sources',
+      'workflow_step:web_research',
     ]);
     assert.deepEqual(target?.acceptance?.exactIdsByKind['retrieval'], [
       'retrieval:duckduckgo',
@@ -176,9 +176,9 @@ describe('corpus acceptance definitions', () => {
 
     assert.deepEqual(exposedPositive?.acceptance?.exactIdsByKind, {
       agent: ['agent:assistant'],
-      agent_group: ['agent_group:graph.py-graph'],
       model: ['model:openai/gpt-5-mini'],
       provider: ['provider:openai'],
+      workflow: ['workflow:graph.py-graph'],
     });
     assert.deepEqual(exposedPositive?.acceptance?.graphPopulation, {
       components: 4,

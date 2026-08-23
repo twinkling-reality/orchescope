@@ -12,6 +12,8 @@ const MERMAID_MAX_EDGES = 400;
 const MERMAID_SHAPE: Readonly<Record<string, [string, string]>> = {
   agent: ['[', ']'],
   agent_group: ['[[', ']]'],
+  workflow: ['[[', ']]'],
+  workflow_step: ['[', ']'],
   model: ['(', ')'],
   provider: ['((', '))'],
   tool: ['{{', '}}'],
@@ -64,7 +66,7 @@ export const toMermaid = (graph: SystemGraph, options: MermaidOptions = {}): str
         ? component.presence.static
           ? ''
           : ' (runtime only)'
-        : ' (not exercised)';
+        : ' (no runtime evidence)';
       lines.push(
         `    ${mermaidId(component.id)}${open}${mermaidLabel(`${component.displayName}${marker}`)}${close}`,
       );

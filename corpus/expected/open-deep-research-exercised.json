@@ -7,8 +7,8 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 5,
-      "edgesFound": 4,
+      "componentsFound": 6,
+      "edgesFound": 6,
       "filesInspected": 1,
       "status": "completed"
     },
@@ -18,9 +18,15 @@
       "filesInspected": 0,
       "status": "not_applicable"
     },
+    "adapter:langchain-v1-create-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
     "adapter:langgraph": {
-      "componentsFound": 30,
-      "edgesFound": 43,
+      "componentsFound": 7,
+      "edgesFound": 0,
       "filesInspected": 8,
       "status": "completed"
     },
@@ -37,9 +43,9 @@
       "status": "completed"
     },
     "adapter:model-sdk": {
-      "componentsFound": 0,
-      "edgesFound": 0,
-      "filesInspected": 0,
+      "componentsFound": 2,
+      "edgesFound": 1,
+      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:openai-agents": {
@@ -49,9 +55,9 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 29,
-      "edgesFound": 3,
-      "filesInspected": 7,
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:pydantic-ai": {
@@ -61,7 +67,7 @@
       "status": "not_applicable"
     },
     "adapter:search-index": {
-      "componentsFound": 4,
+      "componentsFound": 5,
       "edgesFound": 2,
       "filesInspected": 1,
       "status": "completed"
@@ -82,18 +88,17 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 25,
-      "agent_group": 3,
       "entrypoint": 4,
-      "external_service": 1,
-      "model": 2,
-      "prompt": 29,
-      "provider": 1,
-      "retrieval": 1,
-      "tool": 1
+      "external_service": 2,
+      "model": 3,
+      "provider": 2,
+      "retrieval": 3,
+      "tool": 1,
+      "workflow": 7,
+      "workflow_step": 9
     },
-    "declaredInTest": 0,
-    "total": 67
+    "declaredInTest": 2,
+    "total": 31
   },
   "discardedRelations": [],
   "files": {
@@ -106,26 +111,22 @@
   "findings": {
     "byRule": {
       "declared-not-exercised": 1,
-      "exercised-not-declared": 2,
+      "exercised-not-declared": 1,
       "latency-concentrated-in-one-component": 1,
-      "model-call-without-timeout": 1,
+      "model-call-without-timeout": 2,
       "observability-coverage": 1,
-      "observed-name-matches-many-declarations": 1,
-      "tokens-concentrated-in-one-component": 1,
-      "topology-shape": 1
+      "tokens-concentrated-in-one-component": 1
     },
     "componentsByRule": {
-      "declared-not-exercised": 19,
-      "exercised-not-declared": 2,
+      "declared-not-exercised": 13,
+      "exercised-not-declared": 11,
       "latency-concentrated-in-one-component": 1,
       "model-call-without-timeout": 8,
       "observability-coverage": 10,
-      "observed-name-matches-many-declarations": 2,
-      "tokens-concentrated-in-one-component": 1,
-      "topology-shape": 8
+      "tokens-concentrated-in-one-component": 1
     },
     "strengths": 0,
-    "total": 9
+    "total": 7
   },
   "foundNothing": [
     "mcp is imported here and its adapter found nothing"
@@ -135,51 +136,76 @@
   "name": "open-deep-research-exercised",
   "relations": {
     "byKind": {
-      "calls_service": 1,
+      "calls_service": 2,
       "calls_tool": 1,
-      "contains": 23,
-      "hands_off_to": 23,
+      "contains": 5,
       "invokes_model": 6,
       "queries_retrieval": 2,
-      "served_by_provider": 1,
-      "uses_prompt": 3
+      "served_by_provider": 2
     },
-    "total": 60
+    "total": 18
   },
   "runtime": {
-    "ambiguousNames": [
-      "supervisor",
-      "supervisor_tools"
-    ],
+    "ambiguousNames": [],
     "contradictions": 0,
-    "declaredComponents": 26,
-    "declaredEdges": 26,
+    "declaredComponents": 13,
+    "declaredEdges": 7,
     "duplicateSideEffects": 0,
-    "exercisedComponents": 7,
+    "exercisedComponents": 0,
     "exercisedEdges": 0,
     "exercisedNotDeclared": [
-      "agent:supervisor",
-      "agent:supervisor_tools",
       "model:openai/gpt-4.1-mini-2025-04-14",
-      "tool:think_tool"
+      "tool:think_tool",
+      "workflow_step:clarify_with_user",
+      "workflow_step:compress_research",
+      "workflow_step:final_report_generation",
+      "workflow_step:research_supervisor",
+      "workflow_step:researcher",
+      "workflow_step:researcher_tools",
+      "workflow_step:supervisor",
+      "workflow_step:supervisor_tools",
+      "workflow_step:write_research_brief"
     ],
-    "joined": [
-      "agent:clarify_with_user",
-      "agent:compress_research",
-      "agent:final_report_generation",
-      "agent:research_supervisor",
-      "agent:researcher",
-      "agent:researcher_tools",
-      "agent:write_research_brief"
-    ],
-    "joinedOnNameAlone": [
-      "agent:clarify_with_user",
-      "agent:compress_research",
-      "agent:final_report_generation",
-      "agent:research_supervisor",
-      "agent:researcher",
-      "agent:researcher_tools",
-      "agent:write_research_brief"
+    "joined": [],
+    "joinedOnNameAlone": [],
+    "joins": {
+      "byCodeLocation": 0,
+      "byKindAndName": 0,
+      "byRuntimeName": 0
+    },
+    "missingSpanAttributes": [
+      {
+        "attribute": "code.file.path",
+        "evidenceOmitted": 1,
+        "evidenceSampled": 10,
+        "observedComponents": 11,
+        "purpose": "code_location",
+        "reason": "missing"
+      },
+      {
+        "attribute": "orchescope.code.repository.path",
+        "evidenceOmitted": 1,
+        "evidenceSampled": 10,
+        "observedComponents": 11,
+        "purpose": "source_identity",
+        "reason": "missing"
+      },
+      {
+        "attribute": "vcs.ref.head.revision",
+        "evidenceOmitted": 1,
+        "evidenceSampled": 10,
+        "observedComponents": 11,
+        "purpose": "source_identity",
+        "reason": "missing"
+      },
+      {
+        "attribute": "vcs.repository.url.full",
+        "evidenceOmitted": 1,
+        "evidenceSampled": 10,
+        "observedComponents": 11,
+        "purpose": "source_identity",
+        "reason": "missing"
+      }
     ],
     "runs": 1,
     "spans": 31

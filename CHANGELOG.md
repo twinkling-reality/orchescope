@@ -2,6 +2,77 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
+## 0.9.1
+
+Unreleased. `orchescope@0.9.1` is not on the registry and carries no registry attestation. The first frozen candidate,
+commit `604fce7516e47cd8971bedbb6da27b138e485fe0` with archive SHA-256
+`6210cafc465c56aa2b8ed6d6328499799bd4e6c553327708d1b1141fd522a274`, was independently evaluated and blocked. It
+was not published, tagged, pushed or attached to a release. A corrected candidate cannot be published until a different
+unseen positive and negative pair clears the blind gate.
+
+### Workflow topology is no longer presented as agent identity
+
+LangGraph `StateGraph` construction now produces a `workflow`; each registered node is a `workflow_step`; and declared
+control flow is `transitions_to`. Registration establishes that a callable is part of a workflow, not that it delegates
+to a model, and adjacency between registered steps is not an agent handoff. Explicit agent factories, including
+LangGraph's prebuilt agent factory, still produce `agent`; explicit transfers between agents still produce
+`hands_off_to`.
+
+This changes component and relation counts on every LangGraph graph: previous `agent_group` populations move to
+`workflow`, node populations previously reported as `agent` move to `workflow_step`, and graph edges previously reported
+as `hands_off_to` move to `transitions_to`. The agent-system detection flag remains true for a supported agent-framework
+workflow without turning its individual steps into agents. Static and runtime identities use the same vocabulary, and
+the graph, report, Mermaid, schema and corpus projections move together.
+
+The defect was found by the independently selected `support-agent-hitl` holdout. Only its `triage` step invokes a model;
+approval, refund execution and response formatting are deterministic steps. The frozen candidate nevertheless told the
+reader that it found four agents and derived agent handoffs between them, which is a publication-blocking identity
+claim. The exact positive is now a source-cited regression at its evaluated revision. Its Ollama model fallback inside
+`os.getenv` is retained as a possible static configuration default only when the call resolves to Python's `os` module.
+The selected negative contributed no distinct precision invariant and is not duplicated in the corpus. Both source
+lineages are permanently ineligible as future blind holdouts.
+
+Mermaid exports label a static component with no run population as `no runtime evidence`, not `not exercised`. The
+former states the evidence boundary; the latter asserted an execution absence that a static-only audit could not know.
+
+### Finding identity and evidence populations are stable and reviewable
+
+Finding identifiers are derived from rule, polarity, semantic situation and subject rather than list order, prose,
+severity or time. Adding an unrelated finding or reordering evidence no longer changes an existing identifier. Goals
+and comparisons therefore keep continuity when another finding appears.
+
+Every material finding clause is bound to evidence. Grouped findings record the complete population they summarize,
+the sample they display and what was withheld. Strengths name their evidence population and sample size; missing or
+dangling evidence causes a bounded refusal instead of a broader claim. Report exports retain every mandatory citation
+and its derivation inputs before optional evidence.
+
+Topology-dependent absence claims now require a complete topology population. Conditional routes, prompt uses,
+computed tools, dynamic models and applicable adapters that found nothing remain explicit refusals. An incomplete
+population cannot produce reachability or acyclic strengths merely because unresolved paths were omitted.
+
+### Provider, model, prompt and framework identities use source authority
+
+Provider recognition is qualified by the imported runtime symbol and rejects wrong packages, type-only imports,
+shadows and unresolved lookalikes. Configurable model and search paths retain bounded static alternatives, distinguish
+defaults from runtime selections and keep provider-library defaults separate from explicit endpoints. Direct
+`ChatOpenAI` construction, LangChain v1 `create_agent`, its model, tools and dynamic prompt boundary now have dedicated
+source readers.
+
+Prompt discovery binds text to semantic producer inputs rather than nearby prose. Formal Python module, class, function
+and method documentation strings cannot become executable prompt evidence. Source-settled prompt assembly preserves
+its lexical owner and refuses computed or provider-unqualified values instead of selecting an incidental string.
+
+### Blind evaluation and corpus gates cannot rewrite semantic acceptance
+
+The release boundary now requires an independent positive holdout and agent-adjacent negative selected after the
+candidate freezes, exhaustive exclusion before acquisition, an installed-tarball measurement, preserved raw evidence,
+and a different unseen pair after any fix. Completed evaluations permanently retire both selected source lineages.
+
+Pinned corpus entries can carry non-recordable semantic acceptance for exact identities, source-cited relations,
+producer applicability, topology refusals, finding polarity and strength counts. Recording can update aggregate
+observations but cannot teach the gate to accept a same-sized semantic substitution. Selected required repositories are
+also pinned by normalized archive-tree and licence digests.
+
 ## 0.9.0
 
 Released 2026-08-22 from npm as `orchescope@0.9.0`, published locally with `npm publish --no-provenance`,

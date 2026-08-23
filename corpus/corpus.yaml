@@ -557,7 +557,7 @@ repositories:
       relation between two of them was the whole declared graph, and topology-shape reported a strength saying the
       topology is reachable, acyclic and narrow. It is a supervisor loop. A strength claimed because the relations
       were invisible is worse than either a missing finding or a wrong one, which is why the count is here now:
-      hands_off_to reads eighteen where it read eight, and the strength is four cycles across eight components,
+      transitions_to reads eighteen where it read eight, and the strength is four cycles across eight components,
       which are supervisor and supervisor_tools, researcher and researcher_tools, and two more in the legacy
       graphs. Every one of the ten new relations is a Command(goto=) line in this repository that a reader can
       open.
@@ -581,33 +581,19 @@ repositories:
       against twenty six declared. That was recorded here before it was fixed, because an expectation written
       afterwards cannot show what the fix moved.
 
-      It also holds the count of a decision. A node whose implementation is a subgraph nests that subgraph's nodes
-      inside itself, and a nesting between two agents is a handoff, so this run draws five hands_off_to relations
-      between nodes that this repository declares no relation between at all: hands_off_to reads thirteen where the
-      scan without a run reads eight. Calling it containment instead buys nothing, since the declared contains is
-      from a graph to its nodes and a relation between two nodes joins neither way, and it would trade five relations
-      a reader can question for five a reader cannot see. The reading is kept, and the number is pinned so that
-      changing it is a decision rather than a diff.
+      It also holds the count of a corrected decision. A node whose implementation is a subgraph nests that
+      subgraph's steps inside itself. The run therefore observes five containment relations between workflow steps;
+      it does not establish that either step is an agent or that one handed work to the other. The static adapter
+      can prove seven workflow constructions in this checkout, but cannot partition their registered nodes across
+      multiple graph receivers in the same modules. The nine observed workflow steps therefore remain runtime-only
+      instead of being guessed into one of those workflows.
 
-      The declared half of it grew afterwards, and the delta got worse rather than better, which is the honest
-      outcome. Reading the routes a node declares by returning a Command takes declaredEdges from sixteen to
-      twenty six, and this run joins none of them either, because LangGraph opens each node's span under the
-      compiled graph rather than under whichever node routed to it. So the observed shape is containment and the
-      declared shape is routing, and ten more declared relations arrive with nothing to match. A join that reads
-      zero of twenty six is a truer statement than one that read zero of sixteen because ten of the twenty six
-      were invisible.
-
-      What the entry holds now is the counts that go quiet if the reading stops working. Seven of the nine nodes
-      join, and joinedOnNameAlone is the list of them. Ten spans are still declined and that number is the guard on
-      the other half: the compiled graph, the two subgraph loops and the runnables a node builds inside itself all
-      name nothing, and a reading that admitted them would report a node as having run four times. The two nodes
-      that do not join are the reason the entry is worth having at all. This repository declares supervisor and
-      supervisor_tools twice, once in the deep researcher graph and once in the legacy one, so the adapter
-      disambiguated both and a run naming a bare supervisor cannot say which it ran. Refusing to guess is the
-      behaviour being pinned. ambiguousNames had one producer before this and it is not the same case:
-      pydantic-ai-exercised reports agent because ninety eight declared agents in that library's examples carry that
-      name and no run could pick one. These two are inside one application, and the run names the subgraph that
-      contains the node it ran, so this is a tie something could break.
+      What the entry holds is the bounded result of that refusal: thirty one spans produce nine workflow steps, one
+      runtime model, one runtime tool and five containment relations; zero steps or relations join the declared
+      graph. Ten nested structural spans still name no component, which guards the other half of the reading: the
+      compiled graph, subgraph loops and runnables built inside a node must not be promoted into duplicate steps.
+      A future source reader that can prove graph-scoped node identity may improve this delta, but this expectation
+      cannot claim that proof before the adapter has it.
     exercise:
       why: >-
         The dialect measurement, and the second application in this corpus rather than a driver written around a
@@ -638,6 +624,204 @@ repositories:
       requiresEnvironment:
         - OPENAI_API_KEY
 
+  - name: support-agent-hitl
+    source: git
+    url: https://github.com/gaurav-oberoi/support-agent-hitl.git
+    commit: 66df5851249aa23ece37609ee1c856580fa2dcbd
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive application selected independently for the blind evaluation of candidate
+      604fce75. Its LangGraph workflow registers one model-delegating triage step beside deterministic approval,
+      side-effect and response steps. The frozen candidate called all four agents and its control-flow transitions
+      handoffs. This regression holds the generalized distinction: workflow registration establishes workflow steps,
+      not agent identity, and graph control flow establishes transitions, not agent handoffs.
+
+      The source also selects qwen2.5:7b as the bounded fallback of OLLAMA_MODEL inside ChatOllama. That exact default
+      keeps a nested environment lookup visible without turning the runtime override into an exact observed value.
+      The scan remains explicit about the three unresolved topology inputs and awards no strength.
+
+      The pinned repository has 19 tracked files and 603 added lines. Its MIT LICENSE has SHA-256
+      c11d6cf0f52527fbb6dc4af3b60cd2d1ae1a8eeeecc4a8bcc76fe67fd7899b43. This is a static regression only;
+      its bounded fake-model tests are not a runtime population and no credential or substitute live path is used.
+    acceptance:
+      graphPopulation:
+        components: 7
+        edges: 8
+      exactIdsByKind:
+        model:
+          - model:ollama/qwen2.5-7b
+        provider:
+          - provider:ollama
+        workflow:
+          - workflow:graph.py-graph
+        workflow_step:
+          - workflow_step:approval_gate
+          - workflow_step:execute_refund
+          - workflow_step:respond
+          - workflow_step:triage
+      absentKinds:
+        - agent
+        - agent_group
+      absentComponentTerms:
+        - assistant
+      requiredEdges:
+        - kind: transitions_to
+          from: workflow_step:triage
+          to: workflow_step:approval_gate
+          sourceFile: app/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_conditional_edges("triage") branch "approval_gate"'
+              sourceFile: app/graph.py
+              startLine: 37
+              endLine: 39
+            - producer: adapter:langgraph
+              symbol: 'add_conditional_edges("triage") branch "approval_gate"'
+              sourceFile: app/graph.py
+              startLine: 38
+              endLine: 38
+        - kind: transitions_to
+          from: workflow_step:triage
+          to: workflow_step:respond
+          sourceFile: app/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_conditional_edges("triage") branch "respond"'
+              sourceFile: app/graph.py
+              startLine: 37
+              endLine: 39
+            - producer: adapter:langgraph
+              symbol: 'add_conditional_edges("triage") branch "respond"'
+              sourceFile: app/graph.py
+              startLine: 38
+              endLine: 38
+        - kind: transitions_to
+          from: workflow_step:approval_gate
+          to: workflow_step:execute_refund
+          sourceFile: app/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_edge("approval_gate", "execute_refund")'
+              sourceFile: app/graph.py
+              startLine: 40
+              endLine: 40
+        - kind: served_by_provider
+          from: model:ollama/qwen2.5-7b
+          to: provider:ollama
+          sourceFile: app/llm.py
+          evidence:
+            - producer: adapter:model-sdk
+              symbol: ChatOllama
+              sourceFile: app/llm.py
+              startLine: 12
+              endLine: 16
+      componentMetadata:
+        model:ollama/qwen2.5-7b:
+          configurationDefault: true
+          configurationSelection: possible
+          framework: langchain
+          modelValueBasis: static_default
+        workflow:graph.py-graph:
+          framework: langgraph
+          receiver: graph
+        workflow_step:triage:
+          declaredName: triage
+          framework: langgraph
+          role: workflow_step
+      componentEvidence:
+        model:ollama/qwen2.5-7b:
+          - producer: adapter:model-sdk
+            symbol: ChatOllama
+            sourceFile: app/llm.py
+            startLine: 12
+            endLine: 16
+          - producer: adapter:model-sdk
+            symbol: ChatOllama configuration path
+            sourceFile: app/llm.py
+            startLine: 13
+            endLine: 13
+        workflow:graph.py-graph:
+          - producer: adapter:langgraph
+            symbol: StateGraph
+            sourceFile: app/graph.py
+            startLine: 30
+            endLine: 30
+        workflow_step:approval_gate:
+          - producer: adapter:langgraph
+            symbol: 'add_node("approval_gate")'
+            sourceFile: app/graph.py
+            startLine: 32
+            endLine: 32
+        workflow_step:execute_refund:
+          - producer: adapter:langgraph
+            symbol: 'add_node("execute_refund")'
+            sourceFile: app/graph.py
+            startLine: 33
+            endLine: 33
+        workflow_step:respond:
+          - producer: adapter:langgraph
+            symbol: 'add_node("respond")'
+            sourceFile: app/graph.py
+            startLine: 34
+            endLine: 34
+        workflow_step:triage:
+          - producer: adapter:langgraph
+            symbol: 'add_node("triage")'
+            sourceFile: app/graph.py
+            startLine: 31
+            endLine: 31
+      sourceCitations:
+        model:ollama/qwen2.5-7b:
+          - app/llm.py
+        provider:ollama:
+          - app/llm.py
+        workflow:graph.py-graph:
+          - app/graph.py
+        workflow_step:approval_gate:
+          - app/graph.py
+        workflow_step:execute_refund:
+          - app/graph.py
+        workflow_step:respond:
+          - app/graph.py
+        workflow_step:triage:
+          - app/graph.py
+      adapterApplicability:
+        adapter:model-sdk:
+          relevantImports: 1
+          distinctFiles: 1
+          omittedImports: 0
+          fileSample:
+            - module: langchain_ollama
+              imported: ChatOllama
+              sourceFile: app/llm.py
+              startLine: 8
+      topology:
+        status: incomplete
+        unresolvedCount: 3
+        conditionalDestinations: 2
+        requiredRefusals:
+          - kind: conditional_destination
+            sourceFile: app/graph.py
+            startLine: 74
+            reason: A LangGraph Command was not inside a named local node implementation.
+          - kind: adapter_input
+            sourceFile: app/llm.py
+            startLine: 8
+            reason: >-
+              adapter:model-sdk recognized a raw client or wrapper but has not stated a closed topology population for
+              that producer.
+          - kind: adapter_input
+            sourceFile: app/nodes.py
+            startLine: 16
+            reason: This module imports LangGraph but contains no supported topology construct.
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+        exactRisks:
+          - ruleId: observability-coverage
+            severity: info
+
   - name: langchain-langgraph-agents
     source: git
     url: https://github.com/Chaitanya-Keyal/langchain-langgraph-agents.git
@@ -650,7 +834,7 @@ repositories:
       and its control flow is declared with LangGraph. It catches documentation strings re-entering prompt or sink
       evidence and the exact create_agent origin and enclosing-method identity going quiet.
 
-      The static regression must retain agent:assistant and the LangGraph group, classify the repository as an agent
+      The static regression must retain agent:assistant and the LangGraph workflow, classify the repository as an agent
       system, keep formal documentation strings out of prompt components, report bounded dynamic model and tool
       refusals with incomplete topology, and award no strengths.
 
@@ -668,8 +852,8 @@ repositories:
       exactIdsByKind:
         agent:
           - agent:assistant
-        agent_group:
-          - agent_group:graph.py-graph
+        workflow:
+          - workflow:graph.py-graph
         model:
           - model:openai/gpt-5-mini
         provider:
@@ -707,7 +891,7 @@ repositories:
           declaredName: assistant
           factory: create_agent
           framework: langchain-v1
-        agent_group:graph.py-graph:
+        workflow:graph.py-graph:
           framework: langgraph
           receiver: graph
         model:openai/gpt-5-mini:
@@ -736,7 +920,7 @@ repositories:
             sourceFile: src/agent/agents.py
             startLine: 45
             endLine: 55
-        agent_group:graph.py-graph:
+        workflow:graph.py-graph:
           - producer: adapter:langgraph
             symbol: StateGraph
             sourceFile: src/agent/graph.py
@@ -772,7 +956,7 @@ repositories:
       sourceCitations:
         agent:assistant:
           - src/agent/agents.py
-        agent_group:graph.py-graph:
+        workflow:graph.py-graph:
           - src/agent/graph.py
         model:openai/gpt-5-mini:
           - src/agent/agents.py
@@ -870,12 +1054,12 @@ repositories:
     # aggregate expectation, so recording cannot accept a graph with the same totals and different semantics.
     acceptance:
       exactIdsByKind:
-        agent:
-          - agent:finalize_summary
-          - agent:generate_query
-          - agent:reflect_on_summary
-          - agent:summarize_sources
-          - agent:web_research
+        workflow_step:
+          - workflow_step:finalize_summary
+          - workflow_step:generate_query
+          - workflow_step:reflect_on_summary
+          - workflow_step:summarize_sources
+          - workflow_step:web_research
         model:
           - model:lmstudio/llama3.2
           - model:ollama/llama3.2
@@ -890,9 +1074,9 @@ repositories:
       absentComponentTerms:
         - postgres
       requiredEdges:
-        - kind: hands_off_to
-          from: agent:generate_query
-          to: agent:web_research
+        - kind: transitions_to
+          from: workflow_step:generate_query
+          to: workflow_step:web_research
           sourceFile: src/ollama_deep_researcher/graph.py
           evidence:
             - producer: adapter:langgraph
@@ -900,9 +1084,9 @@ repositories:
               sourceFile: src/ollama_deep_researcher/graph.py
               startLine: 459
               endLine: 459
-        - kind: hands_off_to
-          from: agent:web_research
-          to: agent:summarize_sources
+        - kind: transitions_to
+          from: workflow_step:web_research
+          to: workflow_step:summarize_sources
           sourceFile: src/ollama_deep_researcher/graph.py
           evidence:
             - producer: adapter:langgraph
@@ -910,9 +1094,9 @@ repositories:
               sourceFile: src/ollama_deep_researcher/graph.py
               startLine: 460
               endLine: 460
-        - kind: hands_off_to
-          from: agent:summarize_sources
-          to: agent:reflect_on_summary
+        - kind: transitions_to
+          from: workflow_step:summarize_sources
+          to: workflow_step:reflect_on_summary
           sourceFile: src/ollama_deep_researcher/graph.py
           evidence:
             - producer: adapter:langgraph
@@ -920,9 +1104,9 @@ repositories:
               sourceFile: src/ollama_deep_researcher/graph.py
               startLine: 461
               endLine: 461
-        - kind: hands_off_to
-          from: agent:reflect_on_summary
-          to: agent:web_research
+        - kind: transitions_to
+          from: workflow_step:reflect_on_summary
+          to: workflow_step:web_research
           sourceFile: src/ollama_deep_researcher/graph.py
           evidence:
             - producer: adapter:langgraph
@@ -930,9 +1114,9 @@ repositories:
               sourceFile: src/ollama_deep_researcher/graph.py
               startLine: 462
               endLine: 462
-        - kind: hands_off_to
-          from: agent:reflect_on_summary
-          to: agent:finalize_summary
+        - kind: transitions_to
+          from: workflow_step:reflect_on_summary
+          to: workflow_step:finalize_summary
           sourceFile: src/ollama_deep_researcher/graph.py
           evidence:
             - producer: adapter:langgraph
@@ -1155,15 +1339,15 @@ repositories:
             startLine: 303
             endLine: 303
       sourceCitations:
-        agent:finalize_summary:
+        workflow_step:finalize_summary:
           - src/ollama_deep_researcher/graph.py
-        agent:generate_query:
+        workflow_step:generate_query:
           - src/ollama_deep_researcher/graph.py
-        agent:reflect_on_summary:
+        workflow_step:reflect_on_summary:
           - src/ollama_deep_researcher/graph.py
-        agent:summarize_sources:
+        workflow_step:summarize_sources:
           - src/ollama_deep_researcher/graph.py
-        agent:web_research:
+        workflow_step:web_research:
           - src/ollama_deep_researcher/graph.py
         model:lmstudio/llama3.2:
           - src/ollama_deep_researcher/configuration.py
@@ -1262,20 +1446,19 @@ repositories:
       named after it, and that everything else composed inside it names nothing. Those are claims about what an
       instrumentor emits, and the JavaScript instrumentor is a different program.
 
-      What it holds is whether that reading survives the crossing. Both declared nodes join, so the shape of the
+      What it holds is whether that reading survives the crossing. Both declared workflow steps join, so the shape of the
       metadata document generalises, and the two declared relations join neither way, because LangGraph runs its
       nodes as siblings under one pregel span rather than nesting each in the one that routed to it.
 
       What it found is where the two instrumentors do not agree. The JavaScript one opens a node span for
       __start__, the name LangGraph keeps for the entry of a graph, and the Python one opens none: the same two node
       graph written in both produces three spans there and four here. It arrives named after itself and carrying
-      itself in langgraph_node, which is a node span's exact shape, so it was read as one and reported as an agent
-      that ran without being declared. No repository can declare it, because addNode rejects the name in both
+      itself in langgraph_node, which is a node span's exact shape, so it was read as one and reported as a workflow
+      step that ran without being declared. No repository can declare it, because addNode rejects the name in both
       ecosystems, and the adapter on the declared side has excluded it since it was written. That was recorded here
-      before it was fixed, because an expectation written afterwards cannot show what the fix moved: three agents
-      and seven components became two and six, and exercised-not-declared went from naming three components to two
-      while still reporting two findings, which is why componentsByRule is beside byRule. open-deep-research-exercised
-      does not move, and it is the control.
+      before it was fixed, because an expectation written afterwards cannot show what the fix moved. The corrected
+      graph has one workflow, two workflow steps, one model and one tool. The two steps join by kind and name; only
+      the model and tool remain exercised without declarations.
 
       The other disagreement is the provider, and this one is not a defect of this build. The Python instrumentor
       writes llm.provider and this one writes neither that nor llm.system, so the model here is named gpt-4o-mini

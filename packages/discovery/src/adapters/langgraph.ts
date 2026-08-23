@@ -39,7 +39,7 @@ import { promptCallSupport, registerPromptEntries } from '../prompt-input.ts';
  * A LangGraph topology is declared imperatively: nodes are added by name, then edges are added between
  * those names. The adapter reads the declared names rather than the runtime graph object, which is what
  * makes the discovery work without importing the user's code. Conditional edges are recorded with their
- * router. START and END are retained as entry and terminal boundary facts, not displayed as agents or
+ * router. START and END are retained as entry and terminal boundary facts, not displayed as workflow steps or
  * relations in the application topology.
  *
  * The two ecosystems name a node differently. `addNode("planner", planner)` states the name, and Python also
@@ -69,7 +69,7 @@ const CONDITIONAL_METHODS = new Set(['addConditionalEdges', 'add_conditional_edg
 const SENTINELS = new Set(['__start__', '__end__']);
 
 const nodeIdentity = (file: string, name: string): ComponentIdentity =>
-  sourceIdentity('agent', file, name);
+  sourceIdentity('workflow_step', file, name);
 
 const shadowsImportedRoot = (
   module: ModuleFacts,
@@ -224,7 +224,7 @@ type VerifiedGraph = {
   readonly call: CallFact;
   readonly receiver: string;
   readonly enclosing: string | undefined;
-  readonly groupIdentity: ComponentIdentity;
+  readonly workflowIdentity: ComponentIdentity;
 };
 
 const graphConstructorShape = (call: CallFact): boolean => {
@@ -236,7 +236,7 @@ const graphConstructorShape = (call: CallFact): boolean => {
   return call.calleePath.length === 1;
 };
 
-/** The graph object itself, which becomes the group the nodes belong to. */
+/** The graph object itself, which becomes the workflow the registered steps belong to. */
 const discoverGraphConstruction = (
   module: ModuleFacts,
   context: DiscoveryContext,
@@ -313,7 +313,7 @@ const discoverGraphConstruction = (
         : `${graphName(module.file)}:${construction.receiver}`;
     builder.addComponent(
       drafts.sourceComponent({
-        kind: 'agent_group',
+        kind: 'workflow',
         file: module.file,
         name,
         displayName: dotted(construction.call.calleePath),
@@ -340,7 +340,7 @@ const discoverGraphConstruction = (
         ? undefined
         : {
             ...only,
-            groupIdentity: sourceIdentity('agent_group', module.file, graphName(module.file)),
+            workflowIdentity: sourceIdentity('workflow', module.file, graphName(module.file)),
           },
   };
 };
@@ -367,7 +367,7 @@ const discoverNodes = (
   module: ModuleFacts,
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
-  groupIdentity: ComponentIdentity | undefined,
+  workflowIdentity: ComponentIdentity | undefined,
   declaredNodes: Set<string>,
   implementations: Map<string, string>,
   topology: TopologyAccumulator,
@@ -392,23 +392,22 @@ const discoverNodes = (
     const identity = nodeIdentity(module.file, name);
     builder.addComponent(
       drafts.sourceComponent({
-        kind: 'agent',
+        kind: 'workflow_step',
         file: module.file,
         name,
         location: call.location,
         symbol: `${method}("${name}")`,
-        details: { for: 'agent', framework: 'langgraph', role: 'worker' },
-        metadata: { framework: 'langgraph', declaredName: name },
+        metadata: { framework: 'langgraph', declaredName: name, role: 'workflow_step' },
         tags: ['langgraph'],
       }),
     );
     components += 1;
     context.bindings.register(module.file, name, identity);
-    if (groupIdentity !== undefined) {
+    if (workflowIdentity !== undefined) {
       builder.addEdge(
         drafts.edge({
           kind: 'contains',
-          from: groupIdentity,
+          from: workflowIdentity,
           to: identity,
           location: call.location,
           symbol: `${method}("${name}")`,
@@ -465,7 +464,7 @@ const addDirectEdge = (
   }
   builder.addEdge(
     drafts.edge({
-      kind: 'hands_off_to',
+      kind: 'transitions_to',
       from: nodeIdentity(module.file, from),
       to: nodeIdentity(module.file, to),
       location: call.location,
@@ -756,7 +755,7 @@ const addConditionalRelation = (
   for (const location of locations) {
     builder.addEdge(
       drafts.edge({
-        kind: 'hands_off_to',
+        kind: 'transitions_to',
         from: nodeIdentity(module.file, from),
         to: nodeIdentity(module.file, destination),
         location,
@@ -1045,7 +1044,7 @@ const discoverModule = (
     module,
     context,
     builder,
-    construction.graph?.groupIdentity,
+    construction.graph?.workflowIdentity,
     declaredNodes,
     implementations,
     topology,
@@ -1067,7 +1066,7 @@ const discoverModule = (
   for (const route of nodeRoutes.routes) {
     builder.addEdge(
       drafts.edge({
-        kind: 'hands_off_to',
+        kind: 'transitions_to',
         from: nodeIdentity(module.file, route.from),
         to: nodeIdentity(module.file, route.to),
         location: route.location,
@@ -1116,7 +1115,7 @@ const discoverModule = (
 
 export const langGraphAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '3',
+  version: '4',
   packages: PACKAGES,
   appliesTo: (context) => projectUses(context, PACKAGES),
   discover: (context, builder): AdapterFindings => {

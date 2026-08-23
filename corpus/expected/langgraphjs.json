@@ -88,11 +88,11 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 69,
-      "agent_group": 125,
       "database": 2,
       "entrypoint": 26,
-      "external_service": 22
+      "external_service": 22,
+      "workflow": 125,
+      "workflow_step": 69
     },
     "declaredInTest": 128,
     "total": 244
@@ -132,8 +132,8 @@
     "byKind": {
       "calls_service": 22,
       "contains": 70,
-      "hands_off_to": 24,
-      "queries_database": 4
+      "queries_database": 4,
+      "transitions_to": 24
     },
     "total": 120
   }

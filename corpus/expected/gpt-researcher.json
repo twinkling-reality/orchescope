@@ -88,13 +88,13 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 11,
-      "agent_group": 2,
       "entrypoint": 51,
       "external_service": 51,
       "mcp_server": 1,
       "provider": 1,
-      "retrieval": 1
+      "retrieval": 1,
+      "workflow": 2,
+      "workflow_step": 11
     },
     "declaredInTest": 0,
     "total": 118
@@ -131,7 +131,7 @@
     "byKind": {
       "calls_service": 51,
       "contains": 11,
-      "hands_off_to": 3
+      "transitions_to": 3
     },
     "total": 65
   }

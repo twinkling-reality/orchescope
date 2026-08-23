@@ -1,7 +1,6 @@
 import { type Static, type TProperties, Type } from '@sinclair/typebox';
 import { ClaimBasis, ConfigLocation, EvidenceId, SourceLocation } from './evidence.ts';
 import { ComponentAlias, ComponentId, ComponentIdentity } from './identity.ts';
-import { ObservedSource } from './runtime-topology.ts';
 import {
   Confidence,
   literals,
@@ -10,6 +9,7 @@ import {
   NonNegativeInt,
   Sha256Hex,
 } from './primitives.ts';
+import { ObservedSource } from './runtime-topology.ts';
 
 /**
  * The component vocabulary of an agentic system. A component is anything that can be pointed at
@@ -26,7 +26,9 @@ import {
  * with nothing to match.
  *
  * A worker is already in the model, as an agent whose `details.role` is `worker`, which is what CrewAI,
- * LangGraph, the OpenAI Agents SDK and the Vercel AI SDK all write. The other two named nothing at all.
+ * LangGraph's prebuilt agent factory, the OpenAI Agents SDK and the Vercel AI SDK all write. A LangGraph
+ * state-machine node is instead a `workflow_step`: registering a callable in a graph says nothing about
+ * whether that callable delegates to a model. The other two removed kinds named nothing at all.
  *
  * `tests/e2e/rule-input-producers.test.ts` asks this list against what a scan and a run can produce, so
  * adding a kind here means writing the producer or failing that check.
@@ -35,6 +37,8 @@ export const COMPONENT_KINDS = [
   'entrypoint',
   'agent',
   'agent_group',
+  'workflow',
+  'workflow_step',
   'model',
   'provider',
   'prompt',

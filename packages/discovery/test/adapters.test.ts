@@ -97,39 +97,56 @@ export const app = graph.compile();
     );
   };
 
-  it('discovers the graph as a group and every registered node as an agent', async () => {
-    const { ids, adapters } = await scan(build);
+  it('discovers the graph as a workflow and every registered node as a workflow step', async () => {
+    const { ids, edges, adapters } = await scan(build);
     assert.ok(
       adapters.some(
         (entry) => entry.adapterId === 'adapter:langgraph' && entry.status === 'completed',
       ),
       `the langgraph adapter did not apply: ${adapters.map((entry) => `${entry.adapterId}=${entry.status}`).join(', ')}`,
     );
-    assert.ok(ids.includes('agent:planner'), `expected agent:planner in ${ids.join(', ')}`);
-    assert.ok(ids.includes('agent:researcher'));
-    assert.ok(ids.includes('agent:writer'));
     assert.ok(
-      ids.some((id) => id.startsWith('agent_group:')),
-      'expected the graph itself as a group',
+      ids.includes('workflow_step:planner'),
+      `expected workflow_step:planner in ${ids.join(', ')}`,
+    );
+    assert.ok(ids.includes('workflow_step:researcher'));
+    assert.ok(ids.includes('workflow_step:writer'));
+    assert.equal(
+      ids.some((id) => id.startsWith('agent:')),
+      false,
+      'a graph registration alone cannot establish an agent identity',
+    );
+    assert.ok(
+      ids.some((id) => id.startsWith('workflow:')),
+      'expected the graph itself as a workflow',
+    );
+    assert.ok(
+      edges.includes('contains:workflow:graph.ts-graph->workflow_step:planner'),
+      `expected the workflow to contain its registered planner step in ${edges.join(', ')}`,
     );
   });
 
-  it('records a declared edge as a handoff and keeps a conditional branch', async () => {
+  it('records a declared transition and keeps a conditional branch', async () => {
     const { edges } = await scan(build);
     assert.ok(
-      edges.includes('hands_off_to:agent:planner->agent:researcher'),
+      edges.includes('transitions_to:workflow_step:planner->workflow_step:researcher'),
       `expected the planner to researcher edge in ${edges.join(', ')}`,
     );
     assert.ok(
-      edges.includes('hands_off_to:agent:researcher->agent:writer'),
+      edges.includes('transitions_to:workflow_step:researcher->workflow_step:writer'),
       'expected the conditional branch to the writer',
+    );
+    assert.equal(
+      edges.some((edge) => edge.startsWith('hands_off_to:')),
+      false,
+      'a workflow transition cannot be reported as an agent handoff',
     );
   });
 
   it('ignores the sentinel nodes, which are not components', async () => {
     const { ids } = await scan(build);
-    assert.equal(ids.includes('agent:START'), false);
-    assert.equal(ids.includes('agent:END'), false);
+    assert.equal(ids.includes('workflow_step:START'), false);
+    assert.equal(ids.includes('workflow_step:END'), false);
   });
 });
 
@@ -1720,7 +1737,7 @@ graph = builder.compile()
     );
   };
 
-  it('discovers the graph as a group and every registered node as an agent', async () => {
+  it('discovers the graph as a workflow and every registered node as a workflow step', async () => {
     const { ids, adapters } = await scan(build);
     assert.ok(
       adapters.some(
@@ -1729,44 +1746,44 @@ graph = builder.compile()
       `the langgraph adapter did not apply: ${adapters.map((entry) => `${entry.adapterId}=${entry.status}`).join(', ')}`,
     );
     assert.ok(
-      ids.includes('agent:researcher'),
+      ids.includes('workflow_step:researcher'),
       `expected the explicitly named node in ${ids.join(', ')}`,
     );
-    assert.ok(ids.includes('agent:writer'));
+    assert.ok(ids.includes('workflow_step:writer'));
     assert.ok(
-      ids.some((id) => id.startsWith('agent_group:')),
-      'expected the graph itself as a group',
+      ids.some((id) => id.startsWith('workflow:')),
+      'expected the graph itself as a workflow',
     );
   });
 
   it('takes the function name when the node is added without one', async () => {
     const { ids } = await scan(build);
     assert.ok(
-      ids.includes('agent:plan'),
+      ids.includes('workflow_step:plan'),
       `add_node(plan) should register a node called plan, saw ${ids.join(', ')}`,
     );
   });
 
-  it('records a declared edge as a handoff and keeps a conditional branch', async () => {
+  it('records a declared transition and keeps a conditional branch', async () => {
     const { edges } = await scan(build);
     assert.ok(
-      edges.includes('hands_off_to:agent:plan->agent:researcher'),
+      edges.includes('transitions_to:workflow_step:plan->workflow_step:researcher'),
       `expected the plan to researcher edge in ${edges.join(', ')}`,
     );
     assert.ok(
-      edges.includes('hands_off_to:agent:researcher->agent:writer'),
+      edges.includes('transitions_to:workflow_step:researcher->workflow_step:writer'),
       'expected the conditional branch to the writer',
     );
     assert.ok(
-      edges.includes('hands_off_to:agent:researcher->agent:plan'),
+      edges.includes('transitions_to:workflow_step:researcher->workflow_step:plan'),
       'expected the other conditional branch',
     );
   });
 
   it('models the sentinels as neither nodes nor relations', async () => {
     const { ids, edges } = await scan(build);
-    assert.equal(ids.includes('agent:START'), false);
-    assert.equal(ids.includes('agent:END'), false);
+    assert.equal(ids.includes('workflow_step:START'), false);
+    assert.equal(ids.includes('workflow_step:END'), false);
     assert.equal(
       edges.some((edge) => edge.includes('START') || edge.includes('END')),
       false,
@@ -1824,17 +1841,17 @@ graph = builder.compile()
     );
   };
 
-  it('records the node a command names as a handoff from the node that returns it', async () => {
+  it('records the node a command names as a transition from the node that returns it', async () => {
     // Both registration forms are here: `add_node(plan)` takes the function's own name as the node's, and
     // `add_node("research", research)` names it. Either way what the route needs is which function
     // implements which node, and a route is read out of each.
     const { edges } = await scan(build);
     assert.ok(
-      edges.includes('hands_off_to:agent:plan->agent:research'),
+      edges.includes('transitions_to:workflow_step:plan->workflow_step:research'),
       `expected the command route in ${edges.join(', ')}`,
     );
     assert.ok(
-      edges.includes('hands_off_to:agent:research->agent:write_answer'),
+      edges.includes('transitions_to:workflow_step:research->workflow_step:write_answer'),
       `expected the second command route in ${edges.join(', ')}`,
     );
   });
@@ -1848,7 +1865,7 @@ graph = builder.compile()
       false,
       `a sentinel became a relation in ${edges.join(', ')}`,
     );
-    assert.equal(ids.includes('agent:__end__'), false);
+    assert.equal(ids.includes('workflow_step:__end__'), false);
   });
 });
 
@@ -1882,14 +1899,14 @@ export const graph = new StateGraph({ channels: {} })
     );
   };
 
-  it('records the node a command names as a handoff, as it does in the other ecosystem', async () => {
+  it('records the node a command names as a transition, as it does in the other ecosystem', async () => {
     const { edges } = await scan(build);
     assert.ok(
-      edges.includes('hands_off_to:agent:plan->agent:research'),
+      edges.includes('transitions_to:workflow_step:plan->workflow_step:research'),
       `expected the command route in ${edges.join(', ')}`,
     );
     assert.ok(
-      edges.includes('hands_off_to:agent:research->agent:writer'),
+      edges.includes('transitions_to:workflow_step:research->workflow_step:writer'),
       `expected the second command route in ${edges.join(', ')}`,
     );
   });

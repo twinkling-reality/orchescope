@@ -10,6 +10,7 @@ import type { Component } from '@orchescope/schema';
  */
 export const AGENT_SYSTEM_KINDS: ReadonlySet<string> = new Set([
   'agent',
+  'workflow',
   'model',
   'tool',
   'mcp_server',

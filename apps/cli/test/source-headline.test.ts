@@ -34,7 +34,14 @@ describe('the headline', () => {
     );
   });
 
-  it('falls back to a part count when none of the three kinds were found', () => {
+  it('names a LangGraph application as a workflow and steps without inventing agents', () => {
+    assert.equal(
+      lines(auditResult({ componentKinds: { workflow: 1, workflow_step: 4, model: 1 } }), 80)[0],
+      'demo            this scan found 1 workflow, 4 workflow steps and 1 model',
+    );
+  });
+
+  it('falls back to a part count when none of the headline kinds were found', () => {
     assert.equal(
       lines(auditResult({ componentKinds: {}, componentCount: 12 }), 80)[0],
       'demo            this scan found 12 parts',

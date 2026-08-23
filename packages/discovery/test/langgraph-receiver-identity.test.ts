@@ -56,9 +56,9 @@ const scanTypeScript = (source: string) => {
   return scanWorkspace(workspace);
 };
 
-const agentNames = (result: Awaited<ReturnType<typeof scanPython>>) =>
+const workflowStepNames = (result: Awaited<ReturnType<typeof scanPython>>) =>
   result.graph.components
-    .filter((component) => component.kind === 'agent')
+    .filter((component) => component.kind === 'workflow_step')
     .map((component) => component.identity.localName)
     .sort();
 
@@ -74,7 +74,7 @@ builder.add_node("first", first)
 builder.add_edge(START, "first")
 builder.add_edge("first", END)
 `);
-    assert.deepEqual(agentNames(renamed), ['first']);
+    assert.deepEqual(workflowStepNames(renamed), ['first']);
     assert.equal(renamed.graph.coverage.topology?.status, 'complete');
 
     const namespaced = await scanTypeScript(`import * as lg from '@langchain/langgraph';
@@ -83,7 +83,7 @@ builder.addNode('first', first);
 builder.addEdge(lg.START, 'first');
 builder.addEdge('first', lg.END);
 `);
-    assert.deepEqual(agentNames(namespaced), ['first']);
+    assert.deepEqual(workflowStepNames(namespaced), ['first']);
     assert.equal(namespaced.graph.coverage.topology?.status, 'complete');
   });
 
@@ -94,19 +94,19 @@ const builder = new StateGraph();
 builder.addNode('fake', fake);
 void START;
 `);
-    assert.deepEqual(agentNames(local), []);
+    assert.deepEqual(workflowStepNames(local), []);
     assert.equal(local.graph.coverage.topology?.status, 'incomplete');
 
     const typeOnly = await scanTypeScript(`import type { StateGraph } from '@langchain/langgraph';
 const builder = new StateGraph({ channels: {} });
 builder.addNode('fake', fake);
 `);
-    assert.deepEqual(agentNames(typeOnly), []);
+    assert.deepEqual(workflowStepNames(typeOnly), []);
 
     const missing = await scanTypeScript(`const builder = new StateGraph({ channels: {} });
 builder.addNode('fake', fake);
 `);
-    assert.deepEqual(agentNames(missing), []);
+    assert.deepEqual(workflowStepNames(missing), []);
   });
 
   it('refuses a verified constructor that is returned without a receiver variable', async () => {
@@ -115,9 +115,9 @@ export function makeGraph() {
   return consume(new StateGraph({ channels: {} }));
 }
 `);
-    assert.deepEqual(agentNames(result), []);
+    assert.deepEqual(workflowStepNames(result), []);
     assert.equal(
-      result.graph.components.some((component) => component.kind === 'agent_group'),
+      result.graph.components.some((component) => component.kind === 'workflow'),
       false,
     );
     assert.equal(result.graph.coverage.topology?.status, 'incomplete');
@@ -142,7 +142,7 @@ builder.add_edge("real", END)
 imported_graph.add_node("fake", real)
 imported_graph.add_edge("fake", "real")
 `);
-    assert.deepEqual(agentNames(result), ['real']);
+    assert.deepEqual(workflowStepNames(result), ['real']);
     assert.equal(
       result.graph.edges.some((edge) => edge.from.includes('fake') || edge.to.includes('fake')),
       false,
@@ -208,12 +208,12 @@ beta.add_node("second", second)
 beta.add_edge("second", "second")
 `);
     assert.equal(
-      result.graph.components.filter((component) => component.kind === 'agent_group').length,
+      result.graph.components.filter((component) => component.kind === 'workflow').length,
       2,
     );
-    assert.deepEqual(agentNames(result), []);
+    assert.deepEqual(workflowStepNames(result), []);
     assert.equal(
-      result.graph.edges.some((edge) => edge.kind === 'hands_off_to'),
+      result.graph.edges.some((edge) => edge.kind === 'transitions_to'),
       false,
     );
     assert.equal(result.graph.coverage.topology?.status, 'incomplete');
@@ -230,7 +230,7 @@ let graph = new StateGraph({ channels: {} });
 graph = replacement;
 graph.addNode('fake', fake);
 `);
-    assert.deepEqual(agentNames(result), []);
+    assert.deepEqual(workflowStepNames(result), []);
     assert.equal(result.graph.coverage.topology?.status, 'incomplete');
     assert.ok(
       result.graph.coverage.topology?.unresolved.some((entry) =>
@@ -252,7 +252,7 @@ function configureOther(graph: { addNode: Function }) {
 }
 void configureOther;
 `);
-    assert.deepEqual(agentNames(result), ['real']);
+    assert.deepEqual(workflowStepNames(result), ['real']);
     assert.equal(result.graph.coverage.topology?.status, 'incomplete');
     assert.equal(
       result.graph.components.some((component) => component.identity.localName === 'fake'),

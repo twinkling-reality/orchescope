@@ -43,6 +43,11 @@ The [blocked a38ed43f evaluation](../research/a38ed43f-blocked-blind-evaluation.
 targets, runtime boundary, and blocking decision from a completed gate. Its selected repositories and source lineages
 remain permanent regression inputs and cannot be reused as unseen holdouts for any candidate.
 
+The [blocked 604fce75 evaluation](../research/604fce75-blocked-blind-evaluation.md) records a second completed block:
+LangGraph workflow registration was presented as agent identity and workflow control flow as agent handoff. Its
+positive is a permanent regression input, its negative contributed no distinct precision invariant, and neither source
+lineage can be reused as an unseen holdout.
+
 The [passed 95c7756c evaluation](../research/95c7756c-passed-blind-evaluation.md) records the same boundary for a
 completed passing gate. Its selected positive becomes a regression input, its negative adds no duplicate corpus entry,
 and neither source lineage can be reused as an unseen holdout.

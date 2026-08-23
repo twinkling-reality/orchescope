@@ -285,7 +285,7 @@ export const classifyOperation = (name: string, attributes: Attributes): AgentOp
 const KIND_BY_OPERATION: Readonly<Record<AgentOperation, ComponentKind | undefined>> = {
   invoke_agent: 'agent',
   create_agent: 'agent',
-  invoke_workflow: 'agent_group',
+  invoke_workflow: 'workflow',
   plan: 'agent',
   handoff: 'agent',
   chat: 'model',

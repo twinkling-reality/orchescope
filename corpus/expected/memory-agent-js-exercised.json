@@ -18,6 +18,12 @@
       "filesInspected": 0,
       "status": "not_applicable"
     },
+    "adapter:langchain-v1-create-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
     "adapter:langgraph": {
       "componentsFound": 3,
       "edgesFound": 4,
@@ -49,10 +55,10 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 1,
+      "componentsFound": 0,
       "edgesFound": 0,
-      "filesInspected": 1,
-      "status": "completed"
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:pydantic-ai": {
       "componentsFound": 0,
@@ -82,14 +88,13 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 2,
-      "agent_group": 1,
       "model": 1,
-      "prompt": 1,
-      "tool": 1
+      "tool": 1,
+      "workflow": 1,
+      "workflow_step": 2
     },
     "declaredInTest": 0,
-    "total": 6
+    "total": 5
   },
   "discardedRelations": [],
   "files": {
@@ -101,18 +106,20 @@
   },
   "findings": {
     "byRule": {
-      "exercised-not-declared": 2,
+      "declared-not-exercised": 1,
+      "exercised-not-declared": 1,
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
       "topology-shape": 1
     },
     "componentsByRule": {
+      "declared-not-exercised": 1,
       "exercised-not-declared": 2,
       "model-call-without-timeout": 2,
-      "observability-coverage": 2,
+      "observability-coverage": 1,
       "topology-shape": 2
     },
-    "strengths": 1,
+    "strengths": 0,
     "total": 5
   },
   "foundNothing": [],
@@ -123,15 +130,15 @@
     "byKind": {
       "calls_tool": 1,
       "contains": 2,
-      "hands_off_to": 2,
-      "invokes_model": 1
+      "invokes_model": 1,
+      "transitions_to": 2
     },
     "total": 6
   },
   "runtime": {
     "ambiguousNames": [],
     "contradictions": 0,
-    "declaredComponents": 2,
+    "declaredComponents": 3,
     "declaredEdges": 2,
     "duplicateSideEffects": 0,
     "exercisedComponents": 2,
@@ -141,12 +148,51 @@
       "tool:upsertmemory"
     ],
     "joined": [
-      "agent:call_model",
-      "agent:store_memory"
+      "workflow_step:call_model",
+      "workflow_step:store_memory"
     ],
     "joinedOnNameAlone": [
-      "agent:call_model",
-      "agent:store_memory"
+      "workflow_step:call_model",
+      "workflow_step:store_memory"
+    ],
+    "joins": {
+      "byCodeLocation": 0,
+      "byKindAndName": 2,
+      "byRuntimeName": 0
+    },
+    "missingSpanAttributes": [
+      {
+        "attribute": "code.file.path",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 4,
+        "observedComponents": 4,
+        "purpose": "code_location",
+        "reason": "missing"
+      },
+      {
+        "attribute": "orchescope.code.repository.path",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 4,
+        "observedComponents": 4,
+        "purpose": "source_identity",
+        "reason": "missing"
+      },
+      {
+        "attribute": "vcs.ref.head.revision",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 4,
+        "observedComponents": 4,
+        "purpose": "source_identity",
+        "reason": "missing"
+      },
+      {
+        "attribute": "vcs.repository.url.full",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 4,
+        "observedComponents": 4,
+        "purpose": "source_identity",
+        "reason": "missing"
+      }
     ],
     "runs": 1,
     "spans": 16

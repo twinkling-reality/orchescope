@@ -290,26 +290,27 @@ const componentsOf = (spans: readonly SpanInput[], run: Run = PYTHON_RUN): reado
 describe('a chain span that names a node of the application graph', () => {
   it('reports the node the metadata names, which the chain kind alone could not', () => {
     assert.deepEqual(componentsOf(RECORDED_RUN), [
-      'agent:clarify_with_user',
-      'agent:write_research_brief',
+      'workflow_step:clarify_with_user',
+      'workflow_step:write_research_brief',
       'model:openai/gpt-4.1-mini-2025-04-14',
-      'agent:research_supervisor',
-      'agent:supervisor',
-      'agent:supervisor_tools',
-      'agent:researcher_tools',
+      'workflow_step:research_supervisor',
+      'workflow_step:supervisor',
+      'workflow_step:supervisor_tools',
+      'workflow_step:researcher_tools',
       'tool:think_tool',
     ]);
   });
 
-  it('reads the node as an agent, which is what the adapter reading add_node declares', () => {
-    // The chain kind decides an operation of `invoke_workflow`, and a workflow is an agent group. Both
+  it('reads the node as a workflow step, which is what the adapter reading add_node declares', () => {
+    // The chain kind decides an operation of `invoke_workflow`, and a named LangGraph node is a workflow
+    // step. Both
     // ends of the join have to be named by the same authority for the join to happen at all, and the
     // authority here is the application's own graph: `langgraph_node` and `add_node` carry one name.
     const topology = deriveTopology(bundleOf(RECORDED_RUN)).topology;
     const node = topology.components.find(
       (component) => component.observedName === 'research_supervisor',
     );
-    assert.equal(node?.kind, 'agent');
+    assert.equal(node?.kind, 'workflow_step');
   });
 
   it('counts the node once however many runnables it built inside itself', () => {
@@ -328,35 +329,30 @@ describe('a chain span that names a node of the application graph', () => {
     // Three chain spans stand between the node and its model call, and two between a node and its tool.
     assert.ok(
       edges.includes(
-        'invokes_model agent:write_research_brief -> model:openai/gpt-4.1-mini-2025-04-14',
+        'invokes_model workflow_step:write_research_brief -> model:openai/gpt-4.1-mini-2025-04-14',
       ),
       edges.join('\n'),
     );
     assert.ok(
-      edges.includes('calls_tool agent:researcher_tools -> tool:think_tool'),
+      edges.includes('calls_tool workflow_step:researcher_tools -> tool:think_tool'),
       edges.join('\n'),
     );
     assert.ok(
-      edges.includes('hands_off_to agent:research_supervisor -> agent:supervisor'),
+      edges.includes('contains workflow_step:research_supervisor -> workflow_step:supervisor'),
       edges.join('\n'),
     );
   });
 
-  it('calls a subgraph nested in the node that runs it a handoff, which is the decision', () => {
-    // A node whose implementation is a subgraph nests that subgraph's nodes inside itself, so an agent
-    // span contains another agent span, and a nesting between two agents is a handoff. That reading is
-    // kept here rather than narrowed to containment: the declared `contains` runs from a graph to its
-    // nodes, so a relation between two nodes joins neither way, and calling it containment would trade
-    // five relations a reader can question for five a reader cannot see. What the trace shows is that
-    // one node's work happened inside another's, and this dialect cannot show whether that is a node
-    // delegating to a peer or a node built out of one.
+  it('keeps subgraph steps as containment rather than inventing an agent handoff', () => {
+    // A node whose implementation is a subgraph nests that subgraph's steps inside itself. The span
+    // hierarchy establishes containment, not a model-driven delegation or a transition between siblings.
     const edges = deriveTopology(bundleOf(RECORDED_RUN)).topology.edges.map(describeEdge);
     assert.deepEqual(
-      edges.filter((edge) => edge.startsWith('hands_off_to')),
+      edges.filter((edge) => edge.startsWith('contains')),
       [
-        'hands_off_to agent:research_supervisor -> agent:supervisor',
-        'hands_off_to agent:research_supervisor -> agent:supervisor_tools',
-        'hands_off_to agent:supervisor_tools -> agent:researcher_tools',
+        'contains workflow_step:research_supervisor -> workflow_step:supervisor',
+        'contains workflow_step:research_supervisor -> workflow_step:supervisor_tools',
+        'contains workflow_step:supervisor_tools -> workflow_step:researcher_tools',
       ],
     );
   });
@@ -405,7 +401,7 @@ describe('a chain span that names no node', () => {
         'gen_ai.workflow.name': 'deep researcher',
       },
     };
-    assert.deepEqual(componentsOf([named]), ['agent_group:deep researcher']);
+    assert.deepEqual(componentsOf([named]), ['workflow:deep researcher']);
   });
 });
 
@@ -645,9 +641,9 @@ describe('the same dialect from the JavaScript instrumentor', () => {
     // makes it generalise is that this one writes the same document under the same attribute and names a
     // node's span after the node, so both declared nodes of the application join.
     assert.deepEqual(componentsOf(RECORDED_JAVASCRIPT_RUN, JAVASCRIPT_RUN), [
-      'agent:call_model',
+      'workflow_step:call_model',
       'model:gpt-4o-mini',
-      'agent:store_memory',
+      'workflow_step:store_memory',
       'tool:upsertMemory',
     ]);
   });
@@ -657,7 +653,9 @@ describe('the same dialect from the JavaScript instrumentor', () => {
     // exact shape. It is LangGraph's own entry rather than a node of the application: `addNode` rejects the
     // name, so nothing in a repository can ever declare it, and reported as a component it arrives as a
     // part of the system that ran undeclared with nothing a reader could do about it.
-    assert.ok(!componentsOf(RECORDED_JAVASCRIPT_RUN, JAVASCRIPT_RUN).includes('agent:__start__'));
+    assert.ok(
+      !componentsOf(RECORDED_JAVASCRIPT_RUN, JAVASCRIPT_RUN).includes('workflow_step:__start__'),
+    );
   });
 
   it('declines the exit sentinel on the same ground', () => {
@@ -689,8 +687,8 @@ describe('the same dialect from the JavaScript instrumentor', () => {
       bundleOf(RECORDED_JAVASCRIPT_RUN, JAVASCRIPT_RUN),
     ).topology.edges.map(describeEdge);
     assert.deepEqual(edges, [
-      'invokes_model agent:call_model -> model:gpt-4o-mini',
-      'calls_tool agent:store_memory -> tool:upsertMemory',
+      'invokes_model workflow_step:call_model -> model:gpt-4o-mini',
+      'calls_tool workflow_step:store_memory -> tool:upsertMemory',
     ]);
   });
 

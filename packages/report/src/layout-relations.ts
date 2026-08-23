@@ -19,6 +19,7 @@ export const LAYOUT_EDGE_KINDS = new Set([
   'invokes_model',
   'calls_tool',
   'hands_off_to',
+  'transitions_to',
   'queries_retrieval',
   'reads_memory',
   'writes_memory',

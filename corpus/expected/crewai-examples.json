@@ -88,13 +88,15 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 81,
-      "agent_group": 29,
+      "agent": 78,
+      "agent_group": 28,
       "entrypoint": 9,
       "external_service": 9,
       "model": 3,
       "prompt": 188,
-      "provider": 1
+      "provider": 1,
+      "workflow": 1,
+      "workflow_step": 3
     },
     "declaredInTest": 0,
     "total": 320
@@ -118,7 +120,7 @@
     },
     "componentsByRule": {
       "observability-coverage": 5,
-      "topology-shape": 3
+      "topology-shape": 2
     },
     "strengths": 0,
     "total": 2
@@ -131,8 +133,8 @@
     "byKind": {
       "calls_service": 9,
       "contains": 8,
-      "hands_off_to": 4,
       "served_by_provider": 3,
+      "transitions_to": 4,
       "uses_prompt": 188
     },
     "total": 212

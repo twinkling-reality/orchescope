@@ -106,9 +106,9 @@ class Configuration(BaseModel):
     );
 
     const edges = edgeNames(result);
-    assert.ok(edges.includes('hands_off_to:agent:reflect->agent:research'));
-    assert.ok(edges.includes('hands_off_to:agent:reflect->agent:finish'));
-    assert.ok(edges.includes('hands_off_to:agent:research->agent:reflect'));
+    assert.ok(edges.includes('transitions_to:workflow_step:reflect->workflow_step:research'));
+    assert.ok(edges.includes('transitions_to:workflow_step:reflect->workflow_step:finish'));
+    assert.ok(edges.includes('transitions_to:workflow_step:research->workflow_step:reflect'));
     assert.equal(
       result.graph.components.some((component) => /START|END/.test(component.id)),
       false,
@@ -146,7 +146,7 @@ class Configuration(BaseModel):
     ]);
 
     const conditional = result.graph.edges.find(
-      (edge) => edge.from === 'agent:reflect' && edge.to === 'agent:research',
+      (edge) => edge.from === 'workflow_step:reflect' && edge.to === 'workflow_step:research',
     );
     assert.equal(conditional?.metadata['conditionalBoundDefault'], 3);
     assert.ok(
@@ -182,8 +182,12 @@ builder.add_edge("second", END)
       result.graph.coverage.topology?.unresolved[0]?.reason ?? '',
       /disagreeing Literal annotation and literal return destinations/,
     );
-    assert.ok(edgeNames(result).includes('hands_off_to:agent:first->agent:second'));
-    assert.ok(edgeNames(result).includes('hands_off_to:agent:first->agent:first'));
+    assert.ok(
+      edgeNames(result).includes('transitions_to:workflow_step:first->workflow_step:second'),
+    );
+    assert.ok(
+      edgeNames(result).includes('transitions_to:workflow_step:first->workflow_step:first'),
+    );
   });
 
   it('reports a dynamic router without guessing an edge', async () => {
@@ -213,7 +217,9 @@ builder.add_edge("second", END)
       topology?.unresolved.every((entry) => entry.location?.file === 'src/router_app/graph.py'),
     );
     assert.equal(
-      result.graph.edges.some((edge) => edge.from === 'agent:first' && edge.to === 'agent:second'),
+      result.graph.edges.some(
+        (edge) => edge.from === 'workflow_step:first' && edge.to === 'workflow_step:second',
+      ),
       false,
     );
     assert.match(result.graph.coverage.unsupported.at(-1)?.area ?? '', /topology: 2 unresolved/);
@@ -240,7 +246,9 @@ builder.add_edge("second", END)
 `);
     assert.equal(result.graph.coverage.topology?.status, 'complete');
     assert.equal(result.graph.coverage.topology?.conditionalDestinations, 2);
-    assert.ok(edgeNames(result).includes('hands_off_to:agent:first->agent:second'));
+    assert.ok(
+      edgeNames(result).includes('transitions_to:workflow_step:first->workflow_step:second'),
+    );
   });
 
   it('qualifies aliased LangGraph boundaries through their imports', async () => {
@@ -262,7 +270,7 @@ builder.add_edge("second", FINISH)
     assert.equal(result.graph.coverage.topology?.status, 'complete');
     assert.equal(result.graph.coverage.topology?.entryBoundaries, 1);
     assert.deepEqual(result.graph.coverage.topology?.entryTargets, [
-      result.graph.components.find((component) => component.id === 'agent:first')?.identity,
+      result.graph.components.find((component) => component.id === 'workflow_step:first')?.identity,
     ]);
     assert.equal(result.graph.coverage.topology?.terminalBoundaries, 1);
   });
@@ -328,7 +336,7 @@ builder.add_edge(START, "first")
     assert.equal(result.graph.coverage.topology?.entryBoundaries, 1);
     assert.equal(result.graph.coverage.topology?.terminalBoundaries, 1);
     assert.equal(
-      result.graph.edges.some((edge) => edge.from === 'agent:first'),
+      result.graph.edges.some((edge) => edge.from === 'workflow_step:first'),
       false,
     );
   });
@@ -347,11 +355,11 @@ builder.add_edge(START, "actual")
 builder.add_edge("actual", END)
 `);
     assert.equal(
-      result.graph.components.some((component) => component.id === 'agent:actual'),
+      result.graph.components.some((component) => component.id === 'workflow_step:actual'),
       true,
     );
     assert.equal(
-      result.graph.components.some((component) => component.id === 'agent:name'),
+      result.graph.components.some((component) => component.id === 'workflow_step:name'),
       false,
     );
     assert.equal(result.graph.coverage.topology?.status, 'incomplete');
@@ -381,7 +389,9 @@ builder.add_edge("second", END)
 `);
     assert.equal(result.graph.coverage.topology?.status, 'incomplete');
     assert.equal(
-      result.graph.edges.some((edge) => edge.from === 'agent:first' && edge.to === 'agent:second'),
+      result.graph.edges.some(
+        (edge) => edge.from === 'workflow_step:first' && edge.to === 'workflow_step:second',
+      ),
       false,
     );
     assert.match(
@@ -427,8 +437,9 @@ class Configuration(BaseModel):
     );
     assert.equal(result.graph.coverage.topology?.configurationBoundFacts[0]?.defaultValue, -1);
     assert.equal(
-      result.graph.edges.find((edge) => edge.from === 'agent:first' && edge.to === 'agent:first')
-        ?.metadata['conditionalBoundDefault'],
+      result.graph.edges.find(
+        (edge) => edge.from === 'workflow_step:first' && edge.to === 'workflow_step:first',
+      )?.metadata['conditionalBoundDefault'],
       -1,
     );
   });

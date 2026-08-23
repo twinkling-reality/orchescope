@@ -13,6 +13,8 @@ const protocol = readFileSync(
 const releaseGuide = readFileSync(join(repositoryRoot, 'docs/guides/release.md'), 'utf8');
 const blockedRecordPath = 'docs/research/a38ed43f-blocked-blind-evaluation.md';
 const blockedRecord = readFileSync(join(repositoryRoot, blockedRecordPath), 'utf8');
+const blocked091RecordPath = 'docs/research/604fce75-blocked-blind-evaluation.md';
+const blocked091Record = readFileSync(join(repositoryRoot, blocked091RecordPath), 'utf8');
 const passedRecordPath = 'docs/research/95c7756c-passed-blind-evaluation.md';
 const passedRecord = readFileSync(join(repositoryRoot, passedRecordPath), 'utf8');
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
@@ -20,6 +22,11 @@ const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), '
 };
 
 const witnesses = [
+  {
+    property: 'Workflow registration does not establish agent identity or an agent handoff.',
+    file: 'packages/discovery/test/adapters.test.ts',
+    title: 'discovers the graph as a workflow and every registered node as a workflow step',
+  },
   {
     property: 'Unrelated findings do not change semantic identifiers.',
     file: 'packages/findings/test/semantic-identity.test.ts',
@@ -214,6 +221,42 @@ describe('the frozen pre-release blind evaluation protocol', () => {
     assert.match(protocol, /requires\s+a different unseen positive and negative pair/);
     assert.ok(protocol.includes('../research/a38ed43f-blocked-blind-evaluation.md'));
     assert.ok(releaseGuide.includes('../research/a38ed43f-blocked-blind-evaluation.md'));
+  });
+
+  it('preserves the exact blocked 0.9.1 candidate and its workflow-identity decision', () => {
+    for (const fact of [
+      '604fce7516e47cd8971bedbb6da27b138e485fe0',
+      '6210cafc465c56aa2b8ed6d6328499799bd4e6c553327708d1b1141fd522a274',
+      'https://github.com/gaurav-oberoi/support-agent-hitl',
+      '66df5851249aa23ece37609ee1c856580fa2dcbd',
+      'c11d6cf0f52527fbb6dc4af3b60cd2d1ae1a8eeeecc4a8bcc76fe67fd7899b43',
+      'https://github.com/mylesndavid/argus',
+      '34fc9d0195392e9ac0011d23045f30c2291d33c0',
+      'f012de7997bd037c087c29263f3ad7ea7135eb60bd6ddf9b88d13f2fd39b1830',
+    ]) {
+      assert.ok(blocked091Record.includes(fact), `0.9.1 blocked record omitted ${fact}`);
+    }
+    assert.match(blocked091Record, /decision was \*\*BLOCK\*\*/);
+    assert.match(blocked091Record, /workflow nodes as four `agent` components/);
+    assert.match(blocked091Record, /`hands_off_to` relations/);
+    assert.match(blocked091Record, /No runtime audit was executed/);
+    assert.match(blocked091Record, /different unseen positive and negative pair/);
+    assert.doesNotMatch(
+      blocked091Record,
+      /\/Users\/|\/tmp\/|\brun_[0-9a-f]{8}\b|\bev_[0-9a-f]{8}\b|traceId|spanId/,
+    );
+    assert.ok(protocol.includes('../research/604fce75-blocked-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/604fce75-blocked-blind-evaluation.md'));
+
+    const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
+    assert.equal(entries.filter((entry) => entry.name === 'support-agent-hitl').length, 1);
+    assert.equal(
+      entries.some(
+        (entry) =>
+          entry.name === 'argus' || entry.url === 'https://github.com/mylesndavid/argus.git',
+      ),
+      false,
+    );
   });
 
   it('preserves the exact passed candidate, targets, decision and bounded runtime refusal', () => {

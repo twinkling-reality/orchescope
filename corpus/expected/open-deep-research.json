@@ -88,12 +88,12 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent_group": 7,
       "entrypoint": 4,
       "external_service": 2,
       "model": 2,
       "provider": 2,
-      "retrieval": 3
+      "retrieval": 3,
+      "workflow": 7
     },
     "declaredInTest": 2,
     "total": 20

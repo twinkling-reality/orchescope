@@ -405,6 +405,14 @@
                     "type": "string"
                   },
                   {
+                    "const": "workflow",
+                    "type": "string"
+                  },
+                  {
+                    "const": "workflow_step",
+                    "type": "string"
+                  },
+                  {
                     "const": "model",
                     "type": "string"
                   },
@@ -1085,6 +1093,14 @@
                     "type": "string"
                   },
                   {
+                    "const": "workflow",
+                    "type": "string"
+                  },
+                  {
+                    "const": "workflow_step",
+                    "type": "string"
+                  },
+                  {
                     "const": "model",
                     "type": "string"
                   },
@@ -1400,6 +1416,10 @@
               },
               {
                 "const": "hands_off_to",
+                "type": "string"
+              },
+              {
+                "const": "transitions_to",
                 "type": "string"
               },
               {

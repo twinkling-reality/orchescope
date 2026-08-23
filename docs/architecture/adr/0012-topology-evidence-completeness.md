@@ -82,7 +82,8 @@ Adapter completion and topology completion become separate answers. An adapter m
 applicable population and find zero declarations; it may also complete without relevant input. Only the first can support
 an absence claim, and it must state the population.
 
-The target remains a five-agent LangGraph system. Adding boundary evidence and conditional relations does not add agents.
+The target remains a five-step LangGraph workflow inside an agent system. Adding boundary evidence and conditional
+relations does not establish agent identity for a registered step.
 
 ## What would reverse this
 

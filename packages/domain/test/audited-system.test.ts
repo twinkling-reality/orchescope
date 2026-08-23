@@ -10,6 +10,13 @@ const server = (role?: McpServerDetails['role']): Component =>
   }) as Component;
 
 describe('an MCP server and the system its repository implements', () => {
+  it('lets an agent-framework workflow establish the system without calling its steps agents', () => {
+    const workflow = { kind: 'workflow' } as Component;
+    const step = { kind: 'workflow_step' } as Component;
+    assert.equal(establishesAgentSystem(workflow), true);
+    assert.equal(establishesAgentSystem(step), false);
+  });
+
   it('keeps a consumed server in the audited topology without letting it establish detection', () => {
     const consumed = server('consumed');
     assert.equal(partOfAuditedSystem(consumed), true);

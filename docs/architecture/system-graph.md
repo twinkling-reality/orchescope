@@ -8,9 +8,15 @@ components, goals name them, comparisons diff them, and the browser map draws th
 A component is one thing the system is made of. The kinds are fixed, because a taxonomy that grows per repository cannot
 be compared across repositories:
 
-`project`, `entrypoint`, `agent`, `agent_group`, `model`, `provider`, `prompt`, `tool`, `mcp_server`, `memory`,
-`retrieval`, `queue`, `worker`, `database`, `external_service`, `approval_boundary`, `side_effect`, `guardrail`,
+`entrypoint`, `agent`, `agent_group`, `workflow`, `workflow_step`, `model`, `provider`, `prompt`, `tool`,
+`mcp_server`, `memory`, `retrieval`, `queue`, `database`, `external_service`, `approval_boundary`, `side_effect`,
 `evaluator`.
+
+An `agent` requires evidence of an agent construction or an equivalent model-delegating runtime identity. A
+`workflow` is an orchestration container, and a `workflow_step` is one registered unit of its control flow.
+Registering a function as a graph node does not establish that the function is an agent: it may be deterministic
+routing, approval, formatting or a side effect. The distinction keeps application topology visible without turning
+ordinary workflow code into a positive agent claim.
 
 Each component carries:
 
@@ -56,7 +62,7 @@ model is the same model however many files mention it.
 
 An edge is a relation between two components, with a fixed kind:
 
-`contains`, `invokes_model`, `calls_tool`, `hands_off_to`, `uses_prompt`, `reads_memory`, `writes_memory`,
+`contains`, `invokes_model`, `calls_tool`, `hands_off_to`, `transitions_to`, `uses_prompt`, `reads_memory`, `writes_memory`,
 `queries_retrieval`, `publishes_to_queue`, `consumes_from_queue`, `calls_service`, `queries_database`, `provides_tool`,
 `served_by_provider`, `falls_back_to`, `guarded_by`, `performs_side_effect`, `validated_by`, `observed_after`.
 
@@ -68,12 +74,15 @@ operation whose repeat cannot be ruled out is the finding this model exists to s
 `observed_after` is the only kind that carries no design meaning. It records that one component ran after another in a
 trace, which is sequence, not structure.
 
+`hands_off_to` is reserved for evidence that one agent transfers work to another agent. `transitions_to` records
+declared workflow control flow. A graph edge between registered steps establishes the latter, not the former.
+
 ## Invariants
 
 Asserted at build time, before a graph is ever stored:
 
 - Every edge endpoint exists in the graph.
-- A self edge is only meaningful for `observed_after` and `hands_off_to`. A graph node routing back to itself is a real
+- A self edge is only meaningful for `observed_after`, `hands_off_to` and `transitions_to`. A workflow step routing back to itself is a real
   retry loop; a component containing itself is a construction error.
 - Every component has at least one piece of evidence.
 - A component present at runtime carries at least one runtime evidence record.

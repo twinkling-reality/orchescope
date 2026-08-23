@@ -124,6 +124,7 @@ const withCompleteTopology = (graph: SystemGraph): SystemGraph => {
         entryTargets: (graph.components.filter(
           (component) =>
             component.kind === 'entrypoint' ||
+            component.kind === 'workflow' ||
             component.kind === 'agent_group' ||
             component.kind === 'agent',
         )[0] === undefined
@@ -131,6 +132,7 @@ const withCompleteTopology = (graph: SystemGraph): SystemGraph => {
           : graph.components.filter(
               (component) =>
                 component.kind === 'entrypoint' ||
+                component.kind === 'workflow' ||
                 component.kind === 'agent_group' ||
                 component.kind === 'agent',
             )
@@ -167,6 +169,71 @@ describe('topology-shape', () => {
     );
     assert.equal(found.length, 1);
     assert.match(found[0]?.title ?? '', /reachable, acyclic and narrow/);
+  });
+
+  it('reports a good shape for a complete workflow without calling its steps agents', () => {
+    const workflow = componentDraft({ kind: 'workflow', name: 'support', file: 'src/graph.py' });
+    const triage = componentDraft({
+      kind: 'workflow_step',
+      name: 'triage',
+      file: 'src/graph.py',
+      line: 2,
+    });
+    const respond = componentDraft({
+      kind: 'workflow_step',
+      name: 'respond',
+      file: 'src/graph.py',
+      line: 3,
+    });
+    const found = strengths(
+      withCompleteTopology(
+        buildGraph(
+          [workflow, triage, respond],
+          [
+            edgeDraft('contains', workflow, triage),
+            edgeDraft('contains', workflow, respond),
+            edgeDraft('transitions_to', triage, respond),
+          ],
+        ),
+      ),
+    );
+    assert.equal(found.length, 1);
+    assert.match(found[0]?.explanation ?? '', /no agent or workflow step coordinates/);
+  });
+
+  it('reports wide workflow branching without turning the step into an agent', () => {
+    const workflow = componentDraft({ kind: 'workflow', name: 'support', file: 'src/graph.py' });
+    const router = componentDraft({
+      kind: 'workflow_step',
+      name: 'router',
+      file: 'src/graph.py',
+      line: 2,
+    });
+    const destinations = Array.from({ length: 8 }, (_, index) =>
+      componentDraft({
+        kind: 'workflow_step',
+        name: `destination-${index}`,
+        file: 'src/graph.py',
+        line: index + 3,
+      }),
+    );
+    const outcome = architectureShapeRule.evaluate(
+      contextFor(
+        withCompleteTopology(
+          buildGraph(
+            [workflow, router, ...destinations],
+            destinations.map((destination) => edgeDraft('transitions_to', router, destination)),
+          ),
+        ),
+      ),
+    );
+    assert.equal(outcome.status, 'fired');
+    const risk = outcome.drafts.find(
+      (draft) => draft.situation === 'workflow-step-wide-control-flow-fanout',
+    );
+    assert.ok(risk);
+    assert.deepEqual(risk.components, ['workflow_step:router']);
+    assert.match(risk.explanation, /This workflow step has 8 outgoing control flow paths/);
   });
 
   /**

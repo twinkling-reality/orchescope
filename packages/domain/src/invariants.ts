@@ -58,7 +58,7 @@ export /**
  * it is exactly the looping behaviour the finding rules exist to report, so it is recorded rather than dropped. A
  * component containing itself, or invoking itself as a model, would be a construction error.
  */
-const SELF_EDGE_KINDS = new Set(['observed_after', 'hands_off_to']);
+const SELF_EDGE_KINDS = new Set(['observed_after', 'hands_off_to', 'transitions_to']);
 
 export const edgeViolations = (
   edge: Edge,
