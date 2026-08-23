@@ -7,6 +7,8 @@
  * deserves to be read as one.
  */
 
+import { missingAttributeAccounts } from './missing-attribute-accounting.mjs';
+
 const sortedCounts = (values) => {
   const counts = new Map();
   for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
@@ -53,13 +55,14 @@ const runtimeOf = (exercise, bundle) => {
     // How each join was made. A join on kind and name alone is the one that can match the wrong module.
     joinedOnNameAlone: [...delta.joins.onNameAlone].sort(),
     ambiguousNames: [...delta.joins.ambiguous].sort(),
-    missingSpanAttributes: [...(delta.coverage.missingSpanAttributes ?? [])]
-      .map((entry) => ({ ...entry }))
-      .sort((left, right) => {
-        const leftKey = `${left.purpose}|${left.attribute}|${left.reason ?? ''}`;
-        const rightKey = `${right.purpose}|${right.attribute}|${right.reason ?? ''}`;
-        return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
-      }),
+    missingSpanAttributes: missingAttributeAccounts(
+      delta.coverage.missingSpanAttributes ?? [],
+      bundle.evidence,
+    ).sort((left, right) => {
+      const leftKey = `${left.purpose}|${left.attribute}|${left.reason ?? ''}`;
+      const rightKey = `${right.purpose}|${right.attribute}|${right.reason ?? ''}`;
+      return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+    }),
     exercisedNotDeclared: [...delta.exercisedNotDeclared.components].sort(),
     contradictions: delta.contradictions.length,
     duplicateSideEffects: delta.duplicateSideEffects.length,

@@ -7,8 +7,8 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 5,
-      "edgesFound": 4,
+      "componentsFound": 6,
+      "edgesFound": 6,
       "filesInspected": 1,
       "status": "completed"
     },
@@ -19,8 +19,8 @@
       "status": "not_applicable"
     },
     "adapter:langgraph": {
-      "componentsFound": 30,
-      "edgesFound": 43,
+      "componentsFound": 7,
+      "edgesFound": 0,
       "filesInspected": 8,
       "status": "completed"
     },
@@ -40,7 +40,7 @@
       "componentsFound": 0,
       "edgesFound": 0,
       "filesInspected": 0,
-      "status": "completed"
+      "status": "not_applicable"
     },
     "adapter:openai-agents": {
       "componentsFound": 0,
@@ -50,7 +50,7 @@
     },
     "adapter:prompts": {
       "componentsFound": 29,
-      "edgesFound": 3,
+      "edgesFound": 2,
       "filesInspected": 7,
       "status": "completed"
     },
@@ -61,7 +61,7 @@
       "status": "not_applicable"
     },
     "adapter:search-index": {
-      "componentsFound": 4,
+      "componentsFound": 5,
       "edgesFound": 2,
       "filesInspected": 1,
       "status": "completed"
@@ -82,17 +82,16 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 23,
-      "agent_group": 3,
+      "agent_group": 7,
       "entrypoint": 4,
-      "external_service": 1,
+      "external_service": 2,
       "model": 1,
       "prompt": 29,
       "provider": 1,
-      "retrieval": 1
+      "retrieval": 3
     },
     "declaredInTest": 0,
-    "total": 63
+    "total": 47
   },
   "discardedRelations": [],
   "files": {
@@ -105,21 +104,18 @@
   "findings": {
     "byRule": {
       "model-call-without-timeout": 1,
-      "observability-coverage": 1,
-      "topology-shape": 1
+      "observability-coverage": 1
     },
     "bySeverity": {
       "info": 1,
-      "low": 1,
       "medium": 1
     },
     "componentsByRule": {
       "model-call-without-timeout": 2,
-      "observability-coverage": 5,
-      "topology-shape": 8
+      "observability-coverage": 5
     },
     "strengths": 0,
-    "total": 3
+    "total": 2
   },
   "foundNothing": [
     "mcp is imported here and its adapter found nothing"
@@ -129,14 +125,12 @@
   "name": "open-deep-research",
   "relations": {
     "byKind": {
-      "calls_service": 1,
-      "contains": 23,
-      "hands_off_to": 18,
+      "calls_service": 2,
       "invokes_model": 1,
       "queries_retrieval": 2,
       "served_by_provider": 1,
-      "uses_prompt": 3
+      "uses_prompt": 2
     },
-    "total": 49
+    "total": 8
   }
 }

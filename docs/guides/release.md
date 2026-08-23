@@ -16,9 +16,13 @@ workspace range survived staging, or if the declared binary is missing.
 
 ## Before publishing
 
+Freeze the exact release-candidate commit first, then run these commands from that clean revision:
+
 ```
 pnpm verify                  # check, unit and integration, end to end
+pnpm test:metamorphic        # defect-family invariants independent of one repository
 pnpm corpus:required         # archive acquisition and selected real-repository gate
+pnpm corpus                  # every pinned repository without running it
 pnpm corpus --exercise       # every pinned repository, including entries that measure runs
 pnpm package                 # builds the bundle, stages, packs, installs and audits
 ```
@@ -29,6 +33,11 @@ measure the declared against exercised join, which is the centre of this product
 before 0.2.0 until after 0.5.0. `pnpm verify` covers the local subset through the corpus end-to-end test,
 `pnpm corpus:required` proves the selected digest-pinned archive path, and `pnpm corpus` covers every entry
 that needs no run. The exercise line adds the runtime populations nothing else looks at.
+
+The [pre-release blind evaluation](pre-release-blind-evaluation.md) must pass before publication. An independent
+evaluator selects one unseen positive and one unseen agent-adjacent negative only after the commit is frozen, then uses
+the installed tarball and checksum produced by `pnpm package`. A product fix invalidates that measurement and requires a
+new candidate and different holdouts. Known corpus repositories cannot clear this gate.
 
 `pnpm package` writes `release/release-summary.json`. Read it rather than trusting the exit code:
 

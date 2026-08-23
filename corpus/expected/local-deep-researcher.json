@@ -7,22 +7,22 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 10,
-      "edgesFound": 5,
-      "filesInspected": 3,
+      "componentsFound": 4,
+      "edgesFound": 3,
+      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:implementation-reach": {
       "componentsFound": 0,
       "edgesFound": 0,
       "filesInspected": 0,
-      "status": "completed"
+      "status": "not_applicable"
     },
     "adapter:langgraph": {
-      "componentsFound": 0,
-      "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "componentsFound": 6,
+      "edgesFound": 10,
+      "filesInspected": 1,
+      "status": "completed"
     },
     "adapter:manifest": {
       "componentsFound": 0,
@@ -31,15 +31,15 @@
       "status": "not_applicable"
     },
     "adapter:mcp": {
-      "componentsFound": 2,
-      "edgesFound": 1,
-      "filesInspected": 1,
-      "status": "completed"
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:model-sdk": {
-      "componentsFound": 22,
-      "edgesFound": 8,
-      "filesInspected": 11,
+      "componentsFound": 12,
+      "edgesFound": 6,
+      "filesInspected": 3,
       "status": "completed"
     },
     "adapter:openai-agents": {
@@ -49,9 +49,9 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 37,
+      "componentsFound": 4,
       "edgesFound": 0,
-      "filesInspected": 20,
+      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:pydantic-ai": {
@@ -61,10 +61,10 @@
       "status": "not_applicable"
     },
     "adapter:search-index": {
-      "componentsFound": 0,
-      "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "componentsFound": 8,
+      "edgesFound": 4,
+      "filesInspected": 3,
+      "status": "completed"
     },
     "adapter:vercel-ai-sdk": {
       "componentsFound": 0,
@@ -82,23 +82,23 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 4,
+      "agent": 5,
+      "agent_group": 1,
       "entrypoint": 5,
-      "external_service": 5,
-      "mcp_server": 1,
-      "model": 2,
-      "prompt": 35,
-      "provider": 1,
-      "tool": 1
+      "external_service": 1,
+      "model": 3,
+      "prompt": 4,
+      "provider": 3,
+      "retrieval": 4
     },
     "declaredInTest": 0,
-    "total": 54
+    "total": 26
   },
   "discardedRelations": [],
   "files": {
-    "discovered": 196,
-    "inSupportedLanguages": 167,
-    "parsed": 167,
+    "discovered": 13,
+    "inSupportedLanguages": 7,
+    "parsed": 7,
     "skipped": 0,
     "truncated": false
   },
@@ -106,16 +106,17 @@
     "byRule": {
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
-      "prompt-injection-boundary": 1
+      "topology-shape": 1
     },
     "bySeverity": {
       "info": 1,
-      "medium": 2
+      "low": 1,
+      "medium": 1
     },
     "componentsByRule": {
-      "model-call-without-timeout": 6,
+      "model-call-without-timeout": 2,
       "observability-coverage": 5,
-      "prompt-injection-boundary": 7
+      "topology-shape": 3
     },
     "strengths": 0,
     "total": 3
@@ -123,14 +124,16 @@
   "foundNothing": [],
   "kind": "agent_system",
   "languagesNotAnalysed": [],
-  "name": "anthropic-quickstarts",
+  "name": "local-deep-researcher",
   "relations": {
     "byKind": {
-      "calls_service": 5,
-      "invokes_model": 4,
-      "provides_tool": 1,
-      "served_by_provider": 2
+      "calls_service": 1,
+      "contains": 5,
+      "hands_off_to": 5,
+      "invokes_model": 1,
+      "queries_retrieval": 4,
+      "served_by_provider": 3
     },
-    "total": 12
+    "total": 19
   }
 }

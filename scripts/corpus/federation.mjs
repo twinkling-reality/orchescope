@@ -8,6 +8,7 @@
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { exerciseRepository } from './exercise.mjs';
+import { missingAttributeAccounts } from './missing-attribute-accounting.mjs';
 
 const MAX_OUTPUT_BYTES = 256 * 1024 * 1024;
 
@@ -88,7 +89,7 @@ const observationOf = (system, exercise, data) => ({
     observedRelations: data.coverage.observedRelations,
     withinRepositoryRelations: data.coverage.withinRepositoryRelations,
     joinedCrossRepositoryRelations: data.coverage.joinedCrossRepositoryRelations,
-    sourceIdentity: data.coverage.sourceIdentity,
+    sourceIdentity: missingAttributeAccounts(data.coverage.sourceIdentity),
     refusals: data.coverage.refusals.map(stableRefusal),
   },
 });

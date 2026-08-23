@@ -7,9 +7,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 121,
-      "edgesFound": 67,
-      "filesInspected": 56,
+      "componentsFound": 55,
+      "edgesFound": 33,
+      "filesInspected": 25,
       "status": "completed"
     },
     "adapter:implementation-reach": {
@@ -19,9 +19,9 @@
       "status": "not_applicable"
     },
     "adapter:langgraph": {
-      "componentsFound": 1240,
-      "edgesFound": 1014,
-      "filesInspected": 400,
+      "componentsFound": 195,
+      "edgesFound": 94,
+      "filesInspected": 333,
       "status": "completed"
     },
     "adapter:manifest": {
@@ -40,7 +40,7 @@
       "componentsFound": 0,
       "edgesFound": 0,
       "filesInspected": 0,
-      "status": "completed"
+      "status": "not_applicable"
     },
     "adapter:openai-agents": {
       "componentsFound": 0,
@@ -50,7 +50,7 @@
     },
     "adapter:prompts": {
       "componentsFound": 77,
-      "edgesFound": 2,
+      "edgesFound": 0,
       "filesInspected": 44,
       "status": "completed"
     },
@@ -70,7 +70,7 @@
       "componentsFound": 0,
       "edgesFound": 0,
       "filesInspected": 0,
-      "status": "completed"
+      "status": "not_applicable"
     },
     "adapter:workers-bindings": {
       "componentsFound": 0,
@@ -82,16 +82,15 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 414,
-      "agent_group": 91,
-      "database": 3,
-      "entrypoint": 58,
+      "agent": 69,
+      "agent_group": 125,
+      "database": 2,
+      "entrypoint": 26,
       "external_service": 22,
-      "prompt": 61,
-      "queue": 1
+      "prompt": 61
     },
-    "declaredInTest": 410,
-    "total": 650
+    "declaredInTest": 128,
+    "total": 305
   },
   "discardedRelations": [],
   "files": {
@@ -115,7 +114,7 @@
     "componentsByRule": {
       "observability-coverage": 5,
       "retry-around-non-idempotent-operation": 8,
-      "topology-shape": 10
+      "topology-shape": 12
     },
     "strengths": 0,
     "total": 3
@@ -127,13 +126,10 @@
   "relations": {
     "byKind": {
       "calls_service": 22,
-      "consumes_from_queue": 1,
-      "contains": 415,
-      "hands_off_to": 165,
-      "publishes_to_queue": 1,
-      "queries_database": 35,
-      "uses_prompt": 2
+      "contains": 70,
+      "hands_off_to": 24,
+      "queries_database": 4
     },
-    "total": 641
+    "total": 120
   }
 }

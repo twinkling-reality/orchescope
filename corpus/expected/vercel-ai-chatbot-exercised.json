@@ -104,28 +104,25 @@
   "findings": {
     "byRule": {
       "declared-not-exercised": 2,
-      "exercised-not-declared": 2,
+      "exercised-not-declared": 1,
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
-      "prompt-injection-boundary": 1,
-      "topology-shape": 1
+      "prompt-injection-boundary": 1
     },
     "bySeverity": {
       "high": 1,
-      "info": 1,
       "low": 1,
-      "medium": 5
+      "medium": 4
     },
     "componentsByRule": {
       "declared-not-exercised": 27,
       "exercised-not-declared": 2,
       "model-call-without-timeout": 10,
       "observability-coverage": 10,
-      "prompt-injection-boundary": 6,
-      "topology-shape": 5
+      "prompt-injection-boundary": 6
     },
-    "strengths": 1,
-    "total": 8
+    "strengths": 0,
+    "total": 6
   },
   "foundNothing": [],
   "kind": "agent_system",
@@ -165,24 +162,32 @@
     "missingSpanAttributes": [
       {
         "attribute": "code.file.path",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 3,
         "observedComponents": 3,
         "purpose": "code_location",
         "reason": "missing"
       },
       {
         "attribute": "orchescope.code.repository.path",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 3,
         "observedComponents": 3,
         "purpose": "source_identity",
         "reason": "missing"
       },
       {
         "attribute": "vcs.ref.head.revision",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 3,
         "observedComponents": 3,
         "purpose": "source_identity",
         "reason": "missing"
       },
       {
         "attribute": "vcs.repository.url.full",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 3,
         "observedComponents": 3,
         "purpose": "source_identity",
         "reason": "missing"

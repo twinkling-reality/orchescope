@@ -7,15 +7,15 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 33,
-      "edgesFound": 18,
-      "filesInspected": 13,
+      "componentsFound": 26,
+      "edgesFound": 15,
+      "filesInspected": 10,
       "status": "completed"
     },
     "adapter:implementation-reach": {
       "componentsFound": 0,
-      "edgesFound": 2,
-      "filesInspected": 2,
+      "edgesFound": 1,
+      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:langgraph": {
@@ -37,9 +37,9 @@
       "status": "completed"
     },
     "adapter:model-sdk": {
-      "componentsFound": 105,
-      "edgesFound": 24,
-      "filesInspected": 55,
+      "componentsFound": 82,
+      "edgesFound": 2,
+      "filesInspected": 66,
       "status": "completed"
     },
     "adapter:openai-agents": {
@@ -55,16 +55,16 @@
       "status": "completed"
     },
     "adapter:pydantic-ai": {
-      "componentsFound": 2517,
-      "edgesFound": 626,
+      "componentsFound": 2678,
+      "edgesFound": 655,
       "filesInspected": 201,
       "status": "completed"
     },
     "adapter:search-index": {
-      "componentsFound": 0,
+      "componentsFound": 1,
       "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "filesInspected": 1,
+      "status": "completed"
     },
     "adapter:vercel-ai-sdk": {
       "componentsFound": 0,
@@ -82,18 +82,19 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 427,
-      "database": 2,
-      "entrypoint": 15,
-      "external_service": 6,
+      "agent": 485,
+      "database": 1,
+      "entrypoint": 11,
+      "external_service": 9,
       "mcp_server": 5,
-      "model": 16,
+      "model": 21,
       "prompt": 367,
       "provider": 6,
-      "tool": 502
+      "retrieval": 1,
+      "tool": 501
     },
-    "declaredInTest": 873,
-    "total": 1346
+    "declaredInTest": 948,
+    "total": 1407
   },
   "discardedRelations": [],
   "files": {
@@ -117,8 +118,8 @@
       "medium": 5
     },
     "componentsByRule": {
-      "declared-not-exercised": 85,
-      "model-call-without-timeout": 39,
+      "declared-not-exercised": 75,
+      "model-call-without-timeout": 25,
       "observability-coverage": 10,
       "observed-name-carries-no-identity": 1,
       "prompt-injection-boundary": 9,
@@ -133,23 +134,23 @@
   "name": "pydantic-ai-exercised",
   "relations": {
     "byKind": {
-      "calls_service": 6,
-      "calls_tool": 473,
-      "invokes_model": 67,
+      "calls_service": 9,
+      "calls_tool": 472,
+      "invokes_model": 73,
       "provides_tool": 31,
-      "queries_database": 9,
-      "served_by_provider": 12,
+      "queries_database": 2,
+      "served_by_provider": 8,
       "uses_prompt": 1
     },
-    "total": 599
+    "total": 596
   },
   "runtime": {
     "ambiguousNames": [
       "agent"
     ],
     "contradictions": 0,
-    "declaredComponents": 86,
-    "declaredEdges": 597,
+    "declaredComponents": 76,
+    "declaredEdges": 594,
     "duplicateSideEffects": 0,
     "exercisedComponents": 1,
     "exercisedEdges": 0,
@@ -172,24 +173,32 @@
     "missingSpanAttributes": [
       {
         "attribute": "code.file.path",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 3,
         "observedComponents": 3,
         "purpose": "code_location",
         "reason": "missing"
       },
       {
         "attribute": "orchescope.code.repository.path",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 3,
         "observedComponents": 3,
         "purpose": "source_identity",
         "reason": "missing"
       },
       {
         "attribute": "vcs.ref.head.revision",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 3,
         "observedComponents": 3,
         "purpose": "source_identity",
         "reason": "missing"
       },
       {
         "attribute": "vcs.repository.url.full",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 3,
         "observedComponents": 3,
         "purpose": "source_identity",
         "reason": "missing"

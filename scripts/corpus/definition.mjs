@@ -9,6 +9,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
+import { checkAcceptanceDefinition } from './acceptance-definition.mjs';
 
 const SUPPORTED_SCHEMA_VERSION = 2;
 const NAME = /^[a-z][a-z0-9-]*$/;
@@ -17,6 +18,13 @@ const SHA256 = /^[0-9a-f]{64}$/;
 const KINDS = ['agent_system', 'not_agent_system'];
 
 const isRecord = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+const isRelativePath = (value) =>
+  typeof value === 'string' &&
+  value.length > 0 &&
+  !value.startsWith('/') &&
+  !value.endsWith('/') &&
+  !value.includes('\\') &&
+  !value.split('/').some((segment) => segment.length === 0 || segment === '.' || segment === '..');
 
 const checkIdentity = (entry, names, problem) => {
   if (typeof entry.name !== 'string' || !NAME.test(entry.name)) {
@@ -81,16 +89,7 @@ const checkRequiredArchive = (entry, problem) => {
   if (typeof archive.treeSha256 !== 'string' || !SHA256.test(archive.treeSha256)) {
     problem('requiredArchive.treeSha256 has to be a lowercase SHA-256');
   }
-  if (
-    typeof archive.licensePath !== 'string' ||
-    archive.licensePath.length === 0 ||
-    archive.licensePath.startsWith('/') ||
-    archive.licensePath.endsWith('/') ||
-    archive.licensePath.includes('\\') ||
-    archive.licensePath
-      .split('/')
-      .some((segment) => segment.length === 0 || segment === '.' || segment === '..')
-  ) {
+  if (!isRelativePath(archive.licensePath)) {
     problem('requiredArchive.licensePath has to name a normalized repository-relative file');
   }
   if (typeof archive.licenseSha256 !== 'string' || !SHA256.test(archive.licenseSha256)) {
@@ -266,6 +265,7 @@ const checkEntry = (entry, index, names, problems) => {
   }
   checkIdentity(entry, names, problem);
   checkExercise(entry.exercise, problem);
+  checkAcceptanceDefinition(entry, problem);
   if (entry.source === 'git') {
     checkGitSource(entry, problem);
     checkRequiredArchive(entry, problem);

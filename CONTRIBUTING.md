@@ -25,6 +25,7 @@ That runs `check`, `test` and `test:e2e`, and it is the gate. Run it before you 
 | `pnpm check` | Format, lint, types, dependency direction, unused code, schema drift |
 | `pnpm test` | Unit and integration tests |
 | `pnpm test:e2e` | The command line contract and the improvement loop, through the real binary |
+| `pnpm test:metamorphic` | The blind-evaluation defect-family invariants used at the release boundary |
 | `pnpm test:coverage` | Coverage, for looking at rather than for a threshold |
 | `pnpm orchescope <args>` | Run the CLI from source |
 | `pnpm --silent orchescope <args>` | The same, with pnpm's own banner off, which is what `--json` capture needs |

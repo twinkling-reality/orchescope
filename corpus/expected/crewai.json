@@ -1,15 +1,15 @@
 {
   "adapters": {
     "adapter:crewai": {
-      "componentsFound": 998,
+      "componentsFound": 1015,
       "edgesFound": 432,
-      "filesInspected": 87,
+      "filesInspected": 91,
       "status": "completed"
     },
     "adapter:effects": {
-      "componentsFound": 169,
-      "edgesFound": 93,
-      "filesInspected": 56,
+      "componentsFound": 144,
+      "edgesFound": 78,
+      "filesInspected": 46,
       "status": "completed"
     },
     "adapter:implementation-reach": {
@@ -37,9 +37,9 @@
       "status": "completed"
     },
     "adapter:model-sdk": {
-      "componentsFound": 82,
-      "edgesFound": 64,
-      "filesInspected": 13,
+      "componentsFound": 17,
+      "edgesFound": 4,
+      "filesInspected": 9,
       "status": "completed"
     },
     "adapter:openai-agents": {
@@ -50,7 +50,7 @@
     },
     "adapter:prompts": {
       "componentsFound": 392,
-      "edgesFound": 4,
+      "edgesFound": 2,
       "filesInspected": 178,
       "status": "completed"
     },
@@ -61,10 +61,10 @@
       "status": "not_applicable"
     },
     "adapter:search-index": {
-      "componentsFound": 0,
+      "componentsFound": 4,
       "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "filesInspected": 4,
+      "status": "completed"
     },
     "adapter:vercel-ai-sdk": {
       "componentsFound": 0,
@@ -82,18 +82,18 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 265,
-      "agent_group": 90,
-      "database": 4,
-      "entrypoint": 80,
-      "external_service": 41,
-      "model": 6,
+      "agent": 250,
+      "agent_group": 94,
+      "database": 3,
+      "entrypoint": 70,
+      "external_service": 47,
+      "model": 2,
       "prompt": 360,
-      "provider": 3,
-      "queue": 1
+      "provider": 2,
+      "retrieval": 1
     },
-    "declaredInTest": 305,
-    "total": 850
+    "declaredInTest": 311,
+    "total": 829
   },
   "discardedRelations": [],
   "files": {
@@ -107,22 +107,22 @@
     "byRule": {
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
+      "prompt-injection-boundary": 1,
       "retry-around-non-idempotent-operation": 1,
-      "topology-shape": 1,
       "unbounded-retry": 1
     },
     "bySeverity": {
-      "info": 2,
-      "medium": 3
+      "info": 1,
+      "medium": 4
     },
     "componentsByRule": {
-      "model-call-without-timeout": 31,
+      "model-call-without-timeout": 4,
       "observability-coverage": 5,
+      "prompt-injection-boundary": 11,
       "retry-around-non-idempotent-operation": 2,
-      "topology-shape": 5,
       "unbounded-retry": 2
     },
-    "strengths": 1,
+    "strengths": 0,
     "total": 5
   },
   "foundNothing": [
@@ -133,14 +133,13 @@
   "name": "crewai",
   "relations": {
     "byKind": {
-      "calls_service": 42,
+      "calls_service": 48,
       "contains": 106,
-      "invokes_model": 25,
-      "publishes_to_queue": 2,
-      "queries_database": 37,
-      "served_by_provider": 6,
-      "uses_prompt": 4
+      "invokes_model": 2,
+      "queries_database": 22,
+      "served_by_provider": 2,
+      "uses_prompt": 2
     },
-    "total": 222
+    "total": 182
   }
 }

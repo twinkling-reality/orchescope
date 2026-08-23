@@ -1,6 +1,6 @@
 name: ci
 
-# Every job here runs without a credential. The corpus job reads three public GitHub commit archives under exact tree
+# Every job here runs without a credential. The corpus job reads four public GitHub commit archives under exact tree
 # and licence pins; nothing reaches a paid provider, private service or registry token, so a fork's pull request runs
 # the same checks as a maintainer's branch.
 
@@ -126,7 +126,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      # Two local entries plus three selected third party repositories. Their full commit archives are bounded and
+      # Two local entries plus four selected third party repositories. Their full commit archives are bounded and
       # pinned by normalized source tree and licence digests, so source remains outside this repository while real
       # positive and negative systems run on every change. The full clone-backed and exercised corpus remains in
       # optional-live.yml because it exceeds this selected acquisition boundary.

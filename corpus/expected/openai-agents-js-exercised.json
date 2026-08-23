@@ -7,9 +7,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 34,
-      "edgesFound": 18,
-      "filesInspected": 13,
+      "componentsFound": 28,
+      "edgesFound": 15,
+      "filesInspected": 12,
       "status": "completed"
     },
     "adapter:implementation-reach": {
@@ -37,14 +37,14 @@
       "status": "completed"
     },
     "adapter:model-sdk": {
-      "componentsFound": 36,
-      "edgesFound": 6,
-      "filesInspected": 26,
+      "componentsFound": 30,
+      "edgesFound": 0,
+      "filesInspected": 30,
       "status": "completed"
     },
     "adapter:openai-agents": {
-      "componentsFound": 516,
-      "edgesFound": 165,
+      "componentsFound": 515,
+      "edgesFound": 164,
       "filesInspected": 349,
       "status": "completed"
     },
@@ -67,9 +67,9 @@
       "status": "not_applicable"
     },
     "adapter:vercel-ai-sdk": {
-      "componentsFound": 10,
+      "componentsFound": 2,
       "edgesFound": 1,
-      "filesInspected": 9,
+      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:workers-bindings": {
@@ -82,18 +82,18 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 293,
-      "database": 2,
-      "entrypoint": 17,
+      "agent": 290,
+      "database": 1,
+      "entrypoint": 14,
       "external_service": 12,
-      "mcp_server": 15,
-      "model": 9,
+      "mcp_server": 16,
+      "model": 7,
       "prompt": 195,
       "provider": 1,
-      "tool": 125
+      "tool": 114
     },
-    "declaredInTest": 36,
-    "total": 669
+    "declaredInTest": 35,
+    "total": 650
   },
   "discardedRelations": [],
   "files": {
@@ -105,31 +105,29 @@
   },
   "findings": {
     "byRule": {
-      "configured-tool-has-no-caller": 1,
-      "declared-not-exercised": 2,
+      "declared-not-exercised": 1,
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
       "observed-name-matches-many-declarations": 1,
       "prompt-injection-boundary": 1,
       "retry-around-non-idempotent-operation": 1,
-      "topology-shape": 2
+      "topology-shape": 1
     },
     "bySeverity": {
-      "low": 4,
+      "low": 1,
       "medium": 6
     },
     "componentsByRule": {
-      "configured-tool-has-no-caller": 34,
-      "declared-not-exercised": 417,
-      "model-call-without-timeout": 50,
+      "declared-not-exercised": 92,
+      "model-call-without-timeout": 45,
       "observability-coverage": 10,
       "observed-name-matches-many-declarations": 1,
       "prompt-injection-boundary": 22,
       "retry-around-non-idempotent-operation": 2,
-      "topology-shape": 53
+      "topology-shape": 3
     },
     "strengths": 0,
-    "total": 10
+    "total": 7
   },
   "foundNothing": [],
   "kind": "agent_system",
@@ -138,23 +136,22 @@
   "relations": {
     "byKind": {
       "calls_service": 13,
-      "calls_tool": 79,
+      "calls_tool": 78,
       "hands_off_to": 29,
-      "invokes_model": 43,
+      "invokes_model": 40,
       "provides_tool": 8,
-      "queries_database": 4,
-      "served_by_provider": 2,
+      "queries_database": 1,
       "uses_prompt": 88
     },
-    "total": 266
+    "total": 257
   },
   "runtime": {
     "ambiguousNames": [
       "Triage Agent"
     ],
     "contradictions": 0,
-    "declaredComponents": 419,
-    "declaredEdges": 265,
+    "declaredComponents": 404,
+    "declaredEdges": 256,
     "duplicateSideEffects": 0,
     "exercisedComponents": 2,
     "exercisedEdges": 1,
@@ -177,24 +174,32 @@
     "missingSpanAttributes": [
       {
         "attribute": "code.file.path",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 3,
         "observedComponents": 3,
         "purpose": "code_location",
         "reason": "missing"
       },
       {
         "attribute": "orchescope.code.repository.path",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 3,
         "observedComponents": 3,
         "purpose": "source_identity",
         "reason": "missing"
       },
       {
         "attribute": "vcs.ref.head.revision",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 3,
         "observedComponents": 3,
         "purpose": "source_identity",
         "reason": "missing"
       },
       {
         "attribute": "vcs.repository.url.full",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 3,
         "observedComponents": 3,
         "purpose": "source_identity",
         "reason": "missing"

@@ -7,9 +7,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 116,
-      "edgesFound": 60,
-      "filesInspected": 36,
+      "componentsFound": 106,
+      "edgesFound": 55,
+      "filesInspected": 31,
       "status": "completed"
     },
     "adapter:implementation-reach": {
@@ -20,7 +20,7 @@
     },
     "adapter:langgraph": {
       "componentsFound": 13,
-      "edgesFound": 24,
+      "edgesFound": 14,
       "filesInspected": 2,
       "status": "completed"
     },
@@ -37,7 +37,7 @@
       "status": "completed"
     },
     "adapter:model-sdk": {
-      "componentsFound": 1,
+      "componentsFound": 0,
       "edgesFound": 0,
       "filesInspected": 1,
       "status": "completed"
@@ -61,10 +61,10 @@
       "status": "not_applicable"
     },
     "adapter:search-index": {
-      "componentsFound": 0,
+      "componentsFound": 4,
       "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "filesInspected": 4,
+      "status": "completed"
     },
     "adapter:vercel-ai-sdk": {
       "componentsFound": 0,
@@ -84,16 +84,14 @@
     "byKind": {
       "agent": 11,
       "agent_group": 2,
-      "database": 1,
-      "entrypoint": 56,
+      "entrypoint": 51,
       "external_service": 51,
       "mcp_server": 1,
       "prompt": 84,
-      "provider": 1,
-      "queue": 1
+      "retrieval": 1
     },
     "declaredInTest": 0,
-    "total": 208
+    "total": 201
   },
   "discardedRelations": [],
   "files": {
@@ -106,20 +104,25 @@
   "findings": {
     "byRule": {
       "observability-coverage": 1,
+      "prompt-injection-boundary": 1,
       "topology-shape": 1
     },
     "bySeverity": {
       "info": 1,
-      "low": 1
+      "low": 1,
+      "medium": 1
     },
     "componentsByRule": {
       "observability-coverage": 5,
-      "topology-shape": 6
+      "prompt-injection-boundary": 20,
+      "topology-shape": 2
     },
     "strengths": 0,
-    "total": 2
+    "total": 3
   },
-  "foundNothing": [],
+  "foundNothing": [
+    "1 exact relevant import(s) for adapter:model-sdk produced no component"
+  ],
   "kind": "agent_system",
   "languagesNotAnalysed": [],
   "name": "gpt-researcher",
@@ -127,10 +130,8 @@
     "byKind": {
       "calls_service": 51,
       "contains": 11,
-      "hands_off_to": 12,
-      "publishes_to_queue": 1,
-      "queries_database": 4
+      "hands_off_to": 3
     },
-    "total": 79
+    "total": 65
   }
 }

@@ -105,21 +105,19 @@
     "byRule": {
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
-      "prompt-injection-boundary": 1,
-      "topology-shape": 1
+      "prompt-injection-boundary": 1
     },
     "bySeverity": {
-      "info": 2,
+      "info": 1,
       "medium": 2
     },
     "componentsByRule": {
       "model-call-without-timeout": 8,
       "observability-coverage": 5,
-      "prompt-injection-boundary": 6,
-      "topology-shape": 5
+      "prompt-injection-boundary": 6
     },
-    "strengths": 1,
-    "total": 4
+    "strengths": 0,
+    "total": 3
   },
   "foundNothing": [],
   "kind": "agent_system",

@@ -7,9 +7,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 51,
-      "edgesFound": 30,
-      "filesInspected": 17,
+      "componentsFound": 17,
+      "edgesFound": 11,
+      "filesInspected": 5,
       "status": "completed"
     },
     "adapter:implementation-reach": {
@@ -31,26 +31,26 @@
       "status": "not_applicable"
     },
     "adapter:mcp": {
-      "componentsFound": 108,
+      "componentsFound": 17,
       "edgesFound": 11,
-      "filesInspected": 9,
+      "filesInspected": 6,
       "status": "completed"
     },
     "adapter:model-sdk": {
-      "componentsFound": 50,
-      "edgesFound": 12,
-      "filesInspected": 26,
+      "componentsFound": 44,
+      "edgesFound": 6,
+      "filesInspected": 35,
       "status": "completed"
     },
     "adapter:openai-agents": {
-      "componentsFound": 2058,
-      "edgesFound": 326,
+      "componentsFound": 1965,
+      "edgesFound": 296,
       "filesInspected": 315,
       "status": "completed"
     },
     "adapter:prompts": {
       "componentsFound": 338,
-      "edgesFound": 3,
+      "edgesFound": 2,
       "filesInspected": 161,
       "status": "completed"
     },
@@ -82,20 +82,19 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 617,
-      "database": 2,
-      "entrypoint": 22,
-      "evaluator": 48,
+      "agent": 616,
+      "database": 1,
+      "entrypoint": 7,
+      "evaluator": 4,
       "external_service": 4,
-      "mcp_server": 21,
+      "mcp_server": 6,
       "model": 18,
       "prompt": 277,
       "provider": 1,
-      "queue": 1,
-      "tool": 318
+      "tool": 237
     },
-    "declaredInTest": 762,
-    "total": 1329
+    "declaredInTest": 636,
+    "total": 1171
   },
   "discardedRelations": [],
   "files": {
@@ -107,28 +106,26 @@
   },
   "findings": {
     "byRule": {
-      "configured-tool-has-no-caller": 1,
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
       "prompt-injection-boundary": 1,
       "retry-around-non-idempotent-operation": 1,
-      "topology-shape": 2
+      "topology-shape": 1
     },
     "bySeverity": {
       "info": 1,
-      "low": 3,
+      "low": 1,
       "medium": 3
     },
     "componentsByRule": {
-      "configured-tool-has-no-caller": 14,
-      "model-call-without-timeout": 38,
+      "model-call-without-timeout": 36,
       "observability-coverage": 5,
       "prompt-injection-boundary": 17,
       "retry-around-non-idempotent-operation": 2,
-      "topology-shape": 53
+      "topology-shape": 8
     },
     "strengths": 0,
-    "total": 7
+    "total": 5
   },
   "foundNothing": [],
   "kind": "agent_system",
@@ -137,17 +134,15 @@
   "relations": {
     "byKind": {
       "calls_service": 4,
-      "calls_tool": 82,
-      "consumes_from_queue": 2,
+      "calls_tool": 66,
       "hands_off_to": 73,
-      "invokes_model": 38,
+      "invokes_model": 36,
       "provides_tool": 11,
-      "publishes_to_queue": 12,
-      "queries_database": 6,
+      "queries_database": 4,
       "served_by_provider": 1,
       "uses_prompt": 2,
       "validated_by": 2
     },
-    "total": 233
+    "total": 199
   }
 }

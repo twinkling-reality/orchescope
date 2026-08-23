@@ -7,9 +7,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 49,
-      "edgesFound": 31,
-      "filesInspected": 13,
+      "componentsFound": 18,
+      "edgesFound": 12,
+      "filesInspected": 4,
       "status": "completed"
     },
     "adapter:implementation-reach": {
@@ -21,7 +21,7 @@
     "adapter:langgraph": {
       "componentsFound": 0,
       "edgesFound": 0,
-      "filesInspected": 12,
+      "filesInspected": 8,
       "status": "completed"
     },
     "adapter:manifest": {
@@ -82,12 +82,11 @@
   "agentSystemDetected": false,
   "components": {
     "byKind": {
-      "database": 2,
-      "entrypoint": 18,
+      "entrypoint": 6,
       "external_service": 6
     },
     "declaredInTest": 0,
-    "total": 26
+    "total": 12
   },
   "discardedRelations": [],
   "files": {
@@ -119,9 +118,8 @@
   "name": "open-agent-platform",
   "relations": {
     "byKind": {
-      "calls_service": 6,
-      "queries_database": 12
+      "calls_service": 6
     },
-    "total": 18
+    "total": 6
   }
 }

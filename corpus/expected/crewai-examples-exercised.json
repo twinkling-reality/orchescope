@@ -101,21 +101,19 @@
   },
   "findings": {
     "byRule": {
-      "declared-not-exercised": 1,
       "observability-coverage": 1,
       "topology-shape": 1
     },
     "bySeverity": {
-      "low": 2,
+      "low": 1,
       "medium": 1
     },
     "componentsByRule": {
-      "declared-not-exercised": 87,
       "observability-coverage": 10,
       "topology-shape": 3
     },
     "strengths": 0,
-    "total": 3
+    "total": 2
   },
   "foundNothing": [],
   "kind": "agent_system",

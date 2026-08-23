@@ -7,9 +7,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 44,
-      "edgesFound": 25,
-      "filesInspected": 15,
+      "componentsFound": 14,
+      "edgesFound": 7,
+      "filesInspected": 7,
       "status": "completed"
     },
     "adapter:implementation-reach": {
@@ -19,8 +19,8 @@
       "status": "completed"
     },
     "adapter:langgraph": {
-      "componentsFound": 1278,
-      "edgesFound": 1083,
+      "componentsFound": 515,
+      "edgesFound": 94,
       "filesInspected": 230,
       "status": "completed"
     },
@@ -50,7 +50,7 @@
     },
     "adapter:prompts": {
       "componentsFound": 210,
-      "edgesFound": 2,
+      "edgesFound": 0,
       "filesInspected": 70,
       "status": "completed"
     },
@@ -82,17 +82,16 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 462,
-      "agent_group": 61,
-      "database": 2,
-      "entrypoint": 19,
+      "agent": 66,
+      "agent_group": 137,
+      "database": 1,
+      "entrypoint": 7,
       "external_service": 4,
       "prompt": 201,
-      "queue": 1,
       "tool": 3
     },
-    "declaredInTest": 448,
-    "total": 753
+    "declaredInTest": 147,
+    "total": 419
   },
   "discardedRelations": [],
   "files": {
@@ -126,12 +125,10 @@
     "byKind": {
       "calls_service": 4,
       "calls_tool": 3,
-      "contains": 450,
-      "hands_off_to": 197,
-      "publishes_to_queue": 9,
-      "queries_database": 6,
-      "uses_prompt": 2
+      "contains": 54,
+      "hands_off_to": 34,
+      "queries_database": 3
     },
-    "total": 671
+    "total": 98
   }
 }

@@ -7,9 +7,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 4,
-      "edgesFound": 2,
-      "filesInspected": 2,
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
       "status": "completed"
     },
     "adapter:implementation-reach": {
@@ -81,12 +81,9 @@
   },
   "agentSystemDetected": false,
   "components": {
-    "byKind": {
-      "database": 1,
-      "entrypoint": 2
-    },
+    "byKind": {},
     "declaredInTest": 0,
-    "total": 3
+    "total": 0
   },
   "discardedRelations": [],
   "files": {
@@ -97,26 +94,18 @@
     "truncated": false
   },
   "findings": {
-    "byRule": {
-      "observability-coverage": 1
-    },
-    "bySeverity": {
-      "info": 1
-    },
-    "componentsByRule": {
-      "observability-coverage": 3
-    },
+    "byRule": {},
+    "bySeverity": {},
+    "componentsByRule": {},
     "strengths": 0,
-    "total": 1
+    "total": 0
   },
   "foundNothing": [],
   "kind": "not_agent_system",
   "languagesNotAnalysed": [],
   "name": "express",
   "relations": {
-    "byKind": {
-      "queries_database": 2
-    },
-    "total": 2
+    "byKind": {},
+    "total": 0
   }
 }

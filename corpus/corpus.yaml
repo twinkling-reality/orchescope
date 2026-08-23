@@ -554,6 +554,398 @@ repositories:
       requiresEnvironment:
         - OPENAI_API_KEY
 
+  - name: local-deep-researcher
+    source: git
+    url: https://github.com/langchain-ai/local-deep-researcher.git
+    commit: a53b13c7022bb1352dc1ca994d07ade3cd3bd62e
+    requiredArchive:
+      url: https://api.github.com/repos/langchain-ai/local-deep-researcher/tarball/a53b13c7022bb1352dc1ca994d07ade3cd3bd62e
+      treeSha256: c5b3e4993be4f26d27335ce5c2087b6cd9682c2eec4eed7ea35195b143fe514f
+      licensePath: LICENSE
+      licenseSha256: ed165e58751856b6d12fdb6372402f7c04e3bd8ceea5f928e3da343ab27d1021
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed application used by the independent 0.9.0 blind evaluation, promoted only after its
+      defect families were generalized. Its five LangGraph nodes, named conditional router, entry and terminal
+      boundaries, configurable Ollama and LM Studio paths, and four search alternatives put topology completeness,
+      provider identity, applicability and claim evidence in one real repository that no adapter author selected.
+
+      The static regression must retain the deterministic router cycle without an acyclic strength, keep
+      httpx.Client out of the Postgres population, preserve the configuration-backed model and search possibilities
+      with their source evidence, and preserve structured producer applicability. The runtime-selected exact model is
+      deliberately absent from the source and belongs to the separate acceptance rerun rather than this static
+      expectation.
+
+      A fresh shallow checkout occupies 1,016 KiB including 380 KiB of Git data. The commit archive is 188,306
+      compressed bytes and 634,880 expanded archive bytes. Its normalized 606,447 source bytes span 18 files, the
+      largest file is 542,192 bytes, and the pinned LICENSE text grants the MIT permission. All four acquisition
+      ceilings remain unchanged.
+
+      No exercise block is declared. The local-model and live-search run takes about seven minutes, depends on a
+      separately running model and changing network results, and remains an external original-target release
+      measurement rather than a required or optional corpus execution.
+    # These claims run against the full bundle from this exact checkout. They are not part of the recordable
+    # aggregate expectation, so recording cannot accept a graph with the same totals and different semantics.
+    acceptance:
+      exactIdsByKind:
+        agent:
+          - agent:finalize_summary
+          - agent:generate_query
+          - agent:reflect_on_summary
+          - agent:summarize_sources
+          - agent:web_research
+        model:
+          - model:lmstudio/llama3.2
+          - model:ollama/llama3.2
+          - model:perplexity/sonar-pro
+        retrieval:
+          - retrieval:duckduckgo
+          - retrieval:perplexity
+          - retrieval:searxng
+          - retrieval:tavily
+      absentKinds:
+        - database
+      absentComponentTerms:
+        - postgres
+      requiredEdges:
+        - kind: hands_off_to
+          from: agent:generate_query
+          to: agent:web_research
+          sourceFile: src/ollama_deep_researcher/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_edge("generate_query", "web_research")'
+              sourceFile: src/ollama_deep_researcher/graph.py
+              startLine: 459
+              endLine: 459
+        - kind: hands_off_to
+          from: agent:web_research
+          to: agent:summarize_sources
+          sourceFile: src/ollama_deep_researcher/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_edge("web_research", "summarize_sources")'
+              sourceFile: src/ollama_deep_researcher/graph.py
+              startLine: 460
+              endLine: 460
+        - kind: hands_off_to
+          from: agent:summarize_sources
+          to: agent:reflect_on_summary
+          sourceFile: src/ollama_deep_researcher/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_edge("summarize_sources", "reflect_on_summary")'
+              sourceFile: src/ollama_deep_researcher/graph.py
+              startLine: 461
+              endLine: 461
+        - kind: hands_off_to
+          from: agent:reflect_on_summary
+          to: agent:web_research
+          sourceFile: src/ollama_deep_researcher/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_conditional_edges("reflect_on_summary") branch "web_research"'
+              sourceFile: src/ollama_deep_researcher/graph.py
+              startLine: 462
+              endLine: 462
+        - kind: hands_off_to
+          from: agent:reflect_on_summary
+          to: agent:finalize_summary
+          sourceFile: src/ollama_deep_researcher/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_conditional_edges("reflect_on_summary") branch "finalize_summary"'
+              sourceFile: src/ollama_deep_researcher/graph.py
+              startLine: 462
+              endLine: 462
+        - kind: queries_retrieval
+          from: entrypoint:duckduckgo_search
+          to: retrieval:duckduckgo
+          sourceFile: src/ollama_deep_researcher/utils.py
+          evidence:
+            - producer: adapter:search-index
+              symbol: ddgs.text
+              sourceFile: src/ollama_deep_researcher/utils.py
+              startLine: 191
+              endLine: 191
+        - kind: queries_retrieval
+          from: entrypoint:perplexity_search
+          to: retrieval:perplexity
+          sourceFile: src/ollama_deep_researcher/utils.py
+          evidence:
+            - producer: adapter:search-index
+              symbol: requests.post
+              sourceFile: src/ollama_deep_researcher/utils.py
+              startLine: 354
+              endLine: 356
+        - kind: queries_retrieval
+          from: entrypoint:searxng_search
+          to: retrieval:searxng
+          sourceFile: src/ollama_deep_researcher/utils.py
+          evidence:
+            - producer: adapter:search-index
+              symbol: s.results
+              sourceFile: src/ollama_deep_researcher/utils.py
+              startLine: 252
+              endLine: 252
+        - kind: queries_retrieval
+          from: entrypoint:tavily_search
+          to: retrieval:tavily
+          sourceFile: src/ollama_deep_researcher/utils.py
+          evidence:
+            - producer: adapter:search-index
+              symbol: tavily_client.search
+              sourceFile: src/ollama_deep_researcher/utils.py
+              startLine: 304
+              endLine: 306
+      componentMetadata:
+        model:ollama/llama3.2:
+          configurationDefault: true
+          configurationSelection: possible
+          modelValueBasis: static_default
+        model:lmstudio/llama3.2:
+          configurationDefault: false
+          configurationSelection: possible
+          modelValueBasis: static_default
+        retrieval:duckduckgo:
+          configurationDefault: true
+          configurationSelection: possible
+          service: duckduckgo
+        model:perplexity/sonar-pro:
+          operation: chat
+          reachedOver: http
+      componentEvidence:
+        model:ollama/llama3.2:
+          - producer: adapter:model-sdk
+            symbol: ChatOllama configuration path
+            sourceFile: src/ollama_deep_researcher/graph.py
+            startLine: 9
+            endLine: 9
+          - producer: adapter:model-sdk
+            symbol: ChatOllama
+            sourceFile: src/ollama_deep_researcher/graph.py
+            startLine: 124
+            endLine: 128
+          - producer: adapter:model-sdk
+            symbol: ChatOllama configuration path
+            sourceFile: src/ollama_deep_researcher/graph.py
+            startLine: 97
+            endLine: 97
+          - producer: adapter:model-sdk
+            symbol: ChatOllama configuration path
+            sourceFile: src/ollama_deep_researcher/configuration.py
+            startLine: 24
+            endLine: 28
+          - producer: adapter:model-sdk
+            symbol: ChatOllama configuration path
+            sourceFile: src/ollama_deep_researcher/configuration.py
+            startLine: 25
+            endLine: 25
+          - producer: adapter:model-sdk
+            symbol: ChatOllama configuration path
+            sourceFile: src/ollama_deep_researcher/configuration.py
+            startLine: 29
+            endLine: 33
+          - producer: adapter:model-sdk
+            symbol: ChatOllama configuration path
+            sourceFile: src/ollama_deep_researcher/configuration.py
+            startLine: 30
+            endLine: 30
+        model:lmstudio/llama3.2:
+          - producer: adapter:model-sdk
+            symbol: ChatLMStudio configuration path
+            sourceFile: src/ollama_deep_researcher/lmstudio.py
+            startLine: 12
+            endLine: 12
+          - producer: adapter:model-sdk
+            symbol: ChatLMStudio configuration path
+            sourceFile: src/ollama_deep_researcher/lmstudio.py
+            startLine: 19
+            endLine: 98
+          - producer: adapter:model-sdk
+            symbol: ChatLMStudio
+            sourceFile: src/ollama_deep_researcher/graph.py
+            startLine: 110
+            endLine: 114
+          - producer: adapter:model-sdk
+            symbol: ChatLMStudio configuration path
+            sourceFile: src/ollama_deep_researcher/graph.py
+            startLine: 97
+            endLine: 97
+          - producer: adapter:model-sdk
+            symbol: ChatLMStudio configuration path
+            sourceFile: src/ollama_deep_researcher/configuration.py
+            startLine: 24
+            endLine: 28
+          - producer: adapter:model-sdk
+            symbol: ChatLMStudio configuration path
+            sourceFile: src/ollama_deep_researcher/configuration.py
+            startLine: 25
+            endLine: 25
+          - producer: adapter:model-sdk
+            symbol: ChatLMStudio configuration path
+            sourceFile: src/ollama_deep_researcher/configuration.py
+            startLine: 29
+            endLine: 33
+          - producer: adapter:model-sdk
+            symbol: ChatLMStudio configuration path
+            sourceFile: src/ollama_deep_researcher/configuration.py
+            startLine: 30
+            endLine: 30
+        model:perplexity/sonar-pro:
+          - producer: adapter:effects
+            symbol: requests.post model request evidence
+            sourceFile: src/ollama_deep_researcher/utils.py
+            startLine: 3
+            endLine: 3
+          - producer: adapter:effects
+            symbol: requests.post model request evidence
+            sourceFile: src/ollama_deep_researcher/utils.py
+            startLine: 343
+            endLine: 352
+          - producer: adapter:effects
+            symbol: requests.post model request evidence
+            sourceFile: src/ollama_deep_researcher/utils.py
+            startLine: 344
+            endLine: 344
+          - producer: adapter:effects
+            symbol: requests.post
+            sourceFile: src/ollama_deep_researcher/utils.py
+            startLine: 354
+            endLine: 356
+        retrieval:duckduckgo:
+          - producer: adapter:search-index
+            symbol: duckduckgo_search.DDGS
+            sourceFile: src/ollama_deep_researcher/utils.py
+            startLine: 9
+            endLine: 9
+          - producer: adapter:search-index
+            symbol: DDGS
+            sourceFile: src/ollama_deep_researcher/utils.py
+            startLine: 189
+            endLine: 189
+          - producer: adapter:search-index
+            symbol: duckduckgo configuration default
+            sourceFile: src/ollama_deep_researcher/configuration.py
+            startLine: 34
+            endLine: 36
+          - producer: adapter:search-index
+            symbol: duckduckgo configuration default
+            sourceFile: src/ollama_deep_researcher/configuration.py
+            startLine: 35
+            endLine: 35
+          - producer: adapter:search-index
+            symbol: duckduckgo configuration default
+            sourceFile: src/ollama_deep_researcher/graph.py
+            startLine: 207
+            endLine: 207
+        retrieval:perplexity:
+          - producer: adapter:search-index
+            symbol: requests.*
+            sourceFile: src/ollama_deep_researcher/utils.py
+            startLine: 3
+            endLine: 3
+          - producer: adapter:search-index
+            symbol: requests.post
+            sourceFile: src/ollama_deep_researcher/utils.py
+            startLine: 354
+            endLine: 356
+        retrieval:searxng:
+          - producer: adapter:search-index
+            symbol: langchain_community.utilities.SearxSearchWrapper
+            sourceFile: src/ollama_deep_researcher/utils.py
+            startLine: 11
+            endLine: 11
+          - producer: adapter:search-index
+            symbol: SearxSearchWrapper
+            sourceFile: src/ollama_deep_researcher/utils.py
+            startLine: 249
+            endLine: 249
+        retrieval:tavily:
+          - producer: adapter:search-index
+            symbol: tavily.TavilyClient
+            sourceFile: src/ollama_deep_researcher/utils.py
+            startLine: 8
+            endLine: 8
+          - producer: adapter:search-index
+            symbol: TavilyClient
+            sourceFile: src/ollama_deep_researcher/utils.py
+            startLine: 303
+            endLine: 303
+      sourceCitations:
+        agent:finalize_summary:
+          - src/ollama_deep_researcher/graph.py
+        agent:generate_query:
+          - src/ollama_deep_researcher/graph.py
+        agent:reflect_on_summary:
+          - src/ollama_deep_researcher/graph.py
+        agent:summarize_sources:
+          - src/ollama_deep_researcher/graph.py
+        agent:web_research:
+          - src/ollama_deep_researcher/graph.py
+        model:lmstudio/llama3.2:
+          - src/ollama_deep_researcher/configuration.py
+          - src/ollama_deep_researcher/graph.py
+          - src/ollama_deep_researcher/lmstudio.py
+        model:ollama/llama3.2:
+          - src/ollama_deep_researcher/configuration.py
+          - src/ollama_deep_researcher/graph.py
+        model:perplexity/sonar-pro:
+          - src/ollama_deep_researcher/utils.py
+        retrieval:duckduckgo:
+          - src/ollama_deep_researcher/configuration.py
+          - src/ollama_deep_researcher/graph.py
+          - src/ollama_deep_researcher/utils.py
+        retrieval:perplexity:
+          - src/ollama_deep_researcher/utils.py
+        retrieval:searxng:
+          - src/ollama_deep_researcher/utils.py
+        retrieval:tavily:
+          - src/ollama_deep_researcher/utils.py
+      adapterApplicability:
+        adapter:model-sdk:
+          relevantImports: 2
+          distinctFiles: 1
+          omittedImports: 0
+          fileSample:
+            - module: ollama_deep_researcher.lmstudio
+              imported: ChatLMStudio
+              sourceFile: src/ollama_deep_researcher/graph.py
+              startLine: 38
+            - module: langchain_ollama
+              imported: ChatOllama
+              sourceFile: src/ollama_deep_researcher/graph.py
+              startLine: 9
+        adapter:search-index:
+          relevantImports: 4
+          distinctFiles: 1
+          omittedImports: 0
+          fileSample:
+            - module: langchain_community.utilities
+              imported: SearxSearchWrapper
+              sourceFile: src/ollama_deep_researcher/utils.py
+              startLine: 11
+            - module: requests
+              imported: post
+              sourceFile: src/ollama_deep_researcher/utils.py
+              startLine: 3
+            - module: tavily
+              imported: TavilyClient
+              sourceFile: src/ollama_deep_researcher/utils.py
+              startLine: 8
+            - module: duckduckgo_search
+              imported: DDGS
+              sourceFile: src/ollama_deep_researcher/utils.py
+              startLine: 9
+      topology:
+        status: incomplete
+        unresolvedCount: 3
+        conditionalDestinations: 2
+      findings:
+        strengths: 0
+        requiredRules:
+          - topology-shape
+
   - name: memory-agent-js
     source: git
     url: https://github.com/langchain-ai/memory-agent-js.git

@@ -21,7 +21,7 @@ node scripts/corpus.mjs --check --exercise openai-agents-js-filesystem-mcp
 The first full run clones the pinned repositories into `corpus/.cache`, which git ignores. Later runs reuse the clone and
 check out the pinned commit again, so a formatter pointed at the cache cannot change what is measured.
 
-The required run obtains three selected full-commit source archives. Each entry pins the normalized digest of every path,
+The required run obtains four selected full-commit source archives. Each entry pins the normalized digest of every path,
 executable bit and file byte plus the digest of its licence notice. The archive reader bounds the download, expanded data,
 entry count and file size and accepts no link or second root. Generated root names, timestamps and gzip bytes are not part
 of the digest because GitHub guarantees the extracted contents of a commit archive while allowing compression to change.
@@ -106,6 +106,16 @@ A static Git entry joins the required set only with a reviewed `requiredArchive`
 through GitHub's archive API and records `treeSha256`, `licensePath` and `licenseSha256`. Measure acquisition size, audit
 cost and distinct adapter or precision coverage before adding one. The required set is a bounded selection rather than a
 second name for the full corpus.
+
+Local Deep Researcher is a static required entry because an independent evaluation used it to expose conditional routing,
+provider identity, configurable model and search, applicability, semantic identity, and claim-evidence defects together.
+At its pinned revision the shallow clone occupies 1,016 KiB including 380 KiB of Git data. Its commit archive is 188,306
+compressed bytes and 634,880 expanded archive bytes; the normalized source is 606,447 bytes across 18 files, with a
+542,192-byte largest file. The archive and its MIT licence remain inside the existing bounds.
+
+The target's local-model and live-search exercise is not a corpus exercise. It takes about seven minutes, depends on a
+separately running local model and changing network results, and is retained as an external original-target release
+measurement. No `exercise` block or repository path points to that evaluation from this corpus.
 
 ## An entry that runs
 

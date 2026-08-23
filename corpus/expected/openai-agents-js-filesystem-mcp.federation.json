@@ -55,24 +55,32 @@
     "sourceIdentity": [
       {
         "attribute": "code.file.path",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 1,
         "observedComponents": 1,
         "purpose": "code_location",
         "reason": "missing"
       },
       {
         "attribute": "orchescope.code.repository.path",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 1,
         "observedComponents": 1,
         "purpose": "source_identity",
         "reason": "missing"
       },
       {
         "attribute": "vcs.ref.head.revision",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 1,
         "observedComponents": 1,
         "purpose": "source_identity",
         "reason": "missing"
       },
       {
         "attribute": "vcs.repository.url.full",
+        "evidenceOmitted": 0,
+        "evidenceSampled": 1,
         "observedComponents": 1,
         "purpose": "source_identity",
         "reason": "missing"
@@ -105,8 +113,8 @@
       "revision": "3e805376da81c063c2798410906b5fd134334a43"
     },
     {
-      "components": 668,
-      "relations": 265,
+      "components": 649,
+      "relations": 256,
       "repositoryUrl": "https://github.com/openai/openai-agents-js",
       "revision": "52b2702fc034fb47f79ec50fad173f0e9b068ca6"
     }

@@ -128,7 +128,7 @@ describe('the corpus', () => {
       'contributors need a network-free subset',
     );
     const requiredArchives = entries.filter((entry) => isRequired(entry) && !isOffline(entry));
-    assert.equal(requiredArchives.length, 3);
+    assert.equal(requiredArchives.length, 4);
     assert.ok(requiredArchives.some((entry) => entry.kind === 'agent_system'));
     assert.ok(requiredArchives.some((entry) => entry.kind === 'not_agent_system'));
     for (const entry of requiredArchives) {
@@ -143,6 +143,19 @@ describe('the corpus', () => {
       assert.match(entry.requiredArchive?.treeSha256 ?? '', /^[0-9a-f]{64}$/);
       assert.match(entry.requiredArchive?.licenseSha256 ?? '', /^[0-9a-f]{64}$/);
     }
+    const blindRegression = requiredArchives.find(
+      (entry) => entry.name === 'local-deep-researcher',
+    );
+    assert.equal(blindRegression?.commit, 'a53b13c7022bb1352dc1ca994d07ade3cd3bd62e');
+    assert.equal(
+      blindRegression?.requiredArchive?.treeSha256,
+      'c5b3e4993be4f26d27335ce5c2087b6cd9682c2eec4eed7ea35195b143fe514f',
+    );
+    assert.equal(blindRegression?.requiredArchive?.licensePath, 'LICENSE');
+    assert.equal(
+      blindRegression?.requiredArchive?.licenseSha256,
+      'ed165e58751856b6d12fdb6372402f7c04e3bd8ceea5f928e3da343ab27d1021',
+    );
   });
 
   it('pins every repository in a real multi-repository system by URL and revision', () => {

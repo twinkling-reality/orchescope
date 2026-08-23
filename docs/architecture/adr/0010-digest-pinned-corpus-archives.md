@@ -134,6 +134,23 @@ measured and 0 skipped. Two final runs took 17.09 and 16.05 seconds on the measu
 seconds. The three third-party entries account for 119 components and 91 relations under their existing
 expectation contracts. No expectation file moved.
 
+## Subsequent required regression adoption
+
+The blind-evaluation regression adds `langchain-ai/local-deep-researcher` at
+`a53b13c7022bb1352dc1ca994d07ade3cd3bd62e` as the fourth required archive. The exact checkout carries an MIT
+licence whose SHA-256 is `ed165e58751856b6d12fdb6372402f7c04e3bd8ceea5f928e3da343ab27d1021`.
+
+A fresh shallow checkout occupies 1,016 KiB including 380 KiB of Git data. The bounded archive is 188,306
+compressed bytes and 634,880 expanded archive bytes. Its 18 regular files contain 606,447 source bytes, the
+largest file is 542,192 bytes, and the normalized tree SHA-256 is
+`c5b3e4993be4f26d27335ce5c2087b6cd9682c2eec4eed7ea35195b143fe514f`. Fetch and parse measured 0.553 and
+0.004 seconds on the review machine. These values remain below the existing archive limits, so the acquisition
+mechanism and its refusal policy do not change.
+
+The entry is static. Its local-model and live-search exercise remains an external release acceptance measurement
+because it takes about seven minutes and depends on a separately running local model and changing network results.
+Required and optional corpus execution do not run it.
+
 ## Consequences
 
 **The required gate depends on bounded public network reads.** A GitHub outage can fail it. The gate already

@@ -17,13 +17,14 @@
 import { mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { acceptanceVerdict } from './corpus/acceptance.mjs';
 import { auditRepository, clearStoredState } from './corpus/audit.mjs';
 import { cacheDirectory, checkout } from './corpus/checkout.mjs';
 import { claimDifference, differences } from './corpus/comparison.mjs';
 import { isOffline, isRequired, readCorpusDocument } from './corpus/definition.mjs';
-import { injectionVerdicts } from './corpus/negatives.mjs';
 import { exerciseRepository, missingInterpreter, prepareEnvironment } from './corpus/exercise.mjs';
 import { describeFederation, exerciseFederatedSystem } from './corpus/federation.mjs';
+import { injectionVerdicts } from './corpus/negatives.mjs';
 import { observationOf } from './corpus/observation.mjs';
 import { describe } from './corpus/summary.mjs';
 
@@ -174,6 +175,7 @@ for (const entry of entries) {
         : exerciseRepository(root, entry, directory, prepareEnvironment(root, entry, directory));
     const { audit, bundle } = auditRepository(root, entry.name, directory);
     const observation = observationOf(entry, audit, bundle, exercised);
+    const acceptance = acceptanceVerdict(entry, bundle);
     const expected = readExpectationAt(expectationPath(entry.name));
     const found = [
       ...(expected === undefined
@@ -191,7 +193,7 @@ for (const entry of entries) {
       entry.kind === 'not_agent_system'
         ? injectionVerdicts(root, entry, directory, observation)
         : [];
-    results.push({ entry, observation, differences: found, injections });
+    results.push({ entry, observation, differences: found, injections, acceptance });
   } catch (error) {
     results.push({ entry, error: error instanceof Error ? error.message : String(error) });
   }
@@ -258,6 +260,7 @@ let differing = 0;
 let failed = 0;
 let skipped = 0;
 let broken = 0;
+let acceptanceBroken = 0;
 
 /**
  * An injection that broke an invariant is printed with the shape, the file and the sentence, and one that
@@ -294,6 +297,13 @@ for (const result of results) {
   if (result.injections.length > 0) {
     for (const line of describeInjections(result.injections)) console.log(line);
     if (result.injections.some((injection) => injection.broken.length > 0)) broken += 1;
+  }
+  if (result.acceptance.total > 0) {
+    console.log(
+      `  acceptance    ${result.acceptance.held}/${result.acceptance.total} semantic assertions held`,
+    );
+    for (const sentence of result.acceptance.broken) console.log(`    ${sentence}`);
+    if (result.acceptance.broken.length > 0) acceptanceBroken += 1;
   }
   if (record) {
     mkdirSync(dirname(expectationPath(result.entry.name)), { recursive: true });
@@ -367,6 +377,7 @@ writeFileSync(
             observation: result.observation,
             differences: result.differences ?? [],
             injections: result.injections ?? [],
+            acceptance: result.acceptance,
           }
         : {}),
       ...(result.error === undefined ? {} : { error: result.error }),
@@ -390,6 +401,16 @@ console.log(
     `${results.length - differing - failed - skipped} ${record ? 'recorded' : 'matched'}, ${differing} differing, ` +
     `${failed} not measured, ${skipped} skipped`,
 );
+const accepted = results.reduce((total, result) => total + (result.acceptance?.total ?? 0), 0);
+if (accepted > 0) {
+  const acceptanceFailures = results.reduce(
+    (total, result) => total + (result.acceptance?.broken.length ?? 0),
+    0,
+  );
+  console.log(
+    `${accepted} semantic acceptance assertion(s): ${accepted - acceptanceFailures} held, ${acceptanceFailures} broke`,
+  );
+}
 const injected = results.reduce((total, result) => total + (result.injections?.length ?? 0), 0);
 console.log(
   `${injected} injected shape(s) across the repositories that are not agent systems: ${injected - results.reduce((total, result) => total + (result.injections ?? []).filter((injection) => injection.broken.length > 0).length, 0)} held, ${broken} repositor${broken === 1 ? 'y' : 'ies'} broke one`,
@@ -415,4 +436,6 @@ if (record) {
  */
 const measurementFailed = failed > 0 || federationFailed > 0;
 const expectationMoved = differing > 0 || federationDiffering > 0;
-process.exit(broken > 0 || measurementFailed ? 1 : expectationMoved && !record ? 1 : 0);
+process.exit(
+  broken > 0 || acceptanceBroken > 0 || measurementFailed ? 1 : expectationMoved && !record ? 1 : 0,
+);
