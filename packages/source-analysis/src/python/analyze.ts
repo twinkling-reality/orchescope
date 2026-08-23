@@ -751,13 +751,8 @@ const loopForm = (node: Node): { repeats: 'same_work' | 'each_item'; passesBound
 /** Enough of a condition to recognise a counter by the name its author gave it. */
 const MAX_HEADER_NAMES = 8;
 
-/**
- * The identifiers a `while` names in its condition, which is where a retry counts its attempts.
- *
- * The condition is the child before the body, and every identifier under it is collected: `while attempt <
- * MAX_ATTEMPTS` names both, and either is the author saying what the loop is doing.
- */
-const conditionNames = (node: Node): readonly string[] => {
+/** The identifiers a loop names in its condition or counted-range header. */
+const loopHeaderNames = (node: Node): readonly string[] => {
   const names = new Set<string>();
   const walk = (candidate: Node | null): void => {
     if (candidate === null || names.size >= MAX_HEADER_NAMES) return;
@@ -767,7 +762,12 @@ const conditionNames = (node: Node): readonly string[] => {
     }
     for (const child of namedChildren(candidate)) walk(child);
   };
-  walk(node.childForFieldName('condition'));
+  if (node.type === 'for_statement') {
+    walk(node.childForFieldName('left'));
+    walk(node.childForFieldName('right'));
+  } else {
+    walk(node.childForFieldName('condition'));
+  }
   return [...names];
 };
 
@@ -824,11 +824,40 @@ const endsTheWork = (node: Node | null): boolean => {
   return node.namedChildren.some((child) => endsTheWork(child));
 };
 
+/** Whether every path through this handler ends the work instead of allowing another pass. */
+const alwaysEndsTheWork = (node: Node | null): boolean => {
+  if (node === null) return false;
+  if (
+    node.type === 'return_statement' ||
+    node.type === 'break_statement' ||
+    node.type === 'raise_statement'
+  ) {
+    return true;
+  }
+  if (FUNCTION_TYPES.has(node.type)) return false;
+  if (node.type === 'if_statement') {
+    const body = node.childForFieldName('consequence') ?? node.childForFieldName('body');
+    const alternative = node.childForFieldName('alternative');
+    return alwaysEndsTheWork(body) && alwaysEndsTheWork(alternative);
+  }
+  if (
+    node.type === 'block' ||
+    node.type === 'except_clause' ||
+    node.type === 'else_clause' ||
+    node.type === 'finally_clause'
+  ) {
+    return node.namedChildren.some((child) => alwaysEndsTheWork(child));
+  }
+  return false;
+};
+
 /** Whether a pass succeeds out of this `try` and fails through it, which is one attempt of a retry. */
 const exitsOnSuccessIn = (node: Node): boolean => {
   const body = node.childForFieldName('body');
   if (!endsTheWork(body)) return false;
-  return !node.namedChildren.some((child) => child.type === 'except_clause' && endsTheWork(child));
+  return !node.namedChildren.some(
+    (child) => child.type === 'except_clause' && alwaysEndsTheWork(child),
+  );
 };
 
 const decoratorFacts = (node: Node, context: Context): readonly DecoratorFact[] => {
@@ -1011,7 +1040,11 @@ const traverse = (
       ...(form === undefined ? {} : form),
       ...(controlKind === 'try_catch' ? { exitsOnSuccess: exitsOnSuccessIn(node) } : {}),
       ...(form?.repeats === 'same_work'
-        ? { headerNames: conditionNames(node), growingNames: growingNamesOf(node) }
+        ? {
+            headerNames: loopHeaderNames(node),
+            growingNames: growingNamesOf(node),
+            countsPasses: node.type === 'for_statement',
+          }
         : {}),
     });
     return;

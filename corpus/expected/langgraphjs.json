@@ -8,7 +8,7 @@
     },
     "adapter:effects": {
       "componentsFound": 55,
-      "edgesFound": 33,
+      "edgesFound": 30,
       "filesInspected": 25,
       "status": "completed"
     },
@@ -108,21 +108,18 @@
   "findings": {
     "byRule": {
       "observability-coverage": 1,
-      "retry-around-non-idempotent-operation": 1,
       "topology-shape": 1
     },
     "bySeverity": {
       "info": 1,
-      "low": 1,
-      "medium": 1
+      "low": 1
     },
     "componentsByRule": {
       "observability-coverage": 5,
-      "retry-around-non-idempotent-operation": 8,
       "topology-shape": 12
     },
     "strengths": 0,
-    "total": 3
+    "total": 2
   },
   "foundNothing": [],
   "kind": "agent_system",

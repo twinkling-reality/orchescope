@@ -3991,7 +3991,7 @@ export const eachOf = (items: readonly string[]): void => {
     );
   });
 
-  it('is a retry when the loop waits before the next pass', async () => {
+  it('is a retry when the guarded pass exits the loop on success', async () => {
     const { result } = await scan((workspace) => {
       writeNodeProject(workspace, { name: 'waits' });
       workspace.write(
@@ -4003,11 +4003,10 @@ export const charge = async (): Promise<void> => {
 };
 
 export const chargeWithRetry = async (): Promise<void> => {
-  let done = false;
-  while (!done) {
+  while (true) {
     try {
       await charge();
-      done = true;
+      return;
     } catch {
       await sleep(1000);
     }
@@ -4018,7 +4017,10 @@ export const chargeWithRetry = async (): Promise<void> => {
     });
     const retried = result.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
     assert.ok(retried.length > 0, 'a loop that waits before trying again is a retry');
-    assert.match(String(retried[0]?.metadata['reattemptEvidence'] ?? ''), /waits with sleep/);
+    assert.match(
+      String(retried[0]?.metadata['reattemptEvidence'] ?? ''),
+      /caught failure can fall through to another pass/,
+    );
   });
 
   /*

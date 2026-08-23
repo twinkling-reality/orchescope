@@ -48,6 +48,12 @@ LangGraph workflow registration was presented as agent identity and workflow con
 positive is a permanent regression input, its negative contributed no distinct precision invariant, and neither source
 lineage can be reused as an unseen holdout.
 
+The [blocked 48828a1d evaluation](../research/48828a1d-blocked-blind-evaluation.md) records a third completed block:
+polling and explicit non-success loops were presented as retries that duplicate non-idempotent effects, and a demo
+scenario path was presented as verification for a repository with no scenario. Its positive is a permanent regression
+input, its negative contributed no distinct precision invariant, and neither source lineage can be reused as an unseen
+holdout.
+
 The [passed 95c7756c evaluation](../research/95c7756c-passed-blind-evaluation.md) records the same boundary for a
 completed passing gate. Its selected positive becomes a regression input, its negative adds no duplicate corpus entry,
 and neither source lineage can be reused as an unseen holdout.

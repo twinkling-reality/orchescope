@@ -35,20 +35,20 @@ This is the output of `orchescope audit --json` against the demonstration system
     "steps": [
       "Derive a key from the request fields that define the operation, not from a timestamp.",
       "Send the key on every attempt including the first.",
-      "Run the chaos scenario that injects a tool timeout and confirm a single effect."
+      "Run scenario support-desk-duplicate and confirm a single effect."
     ],
     "effort": "small",
     "risk": "medium"
   },
   "suggestedExperiment": {
-    "description": "Inject a tool timeout on the first attempt and count the resulting effects.",
-    "command": ["orchescope", "chaos", "--scenario", "scenarios/support-desk.yaml"],
+    "description": "Run the repository's support-desk-duplicate scenario and count the resulting effects.",
+    "command": ["orchescope", "chaos", "--scenario", "support-desk-duplicate"],
     "expectedSignal": "one effect instead of two, with task success unchanged"
   },
   "goalReadiness": {
     "eligible": true,
-    "reason": "The change is local to one call site and is verified by a deterministic chaos run.",
-    "requiresRuntimeEvidence": false,
+    "reason": "Repository scenario support-desk-duplicate faults this operation and checks for duplicate effects.",
+    "requiresRuntimeEvidence": true,
     "requiresHumanReview": false
   },
   "taxonomy": ["owasp-asi:ASI06"],

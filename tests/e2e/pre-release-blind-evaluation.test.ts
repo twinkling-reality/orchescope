@@ -15,6 +15,8 @@ const blockedRecordPath = 'docs/research/a38ed43f-blocked-blind-evaluation.md';
 const blockedRecord = readFileSync(join(repositoryRoot, blockedRecordPath), 'utf8');
 const blocked091RecordPath = 'docs/research/604fce75-blocked-blind-evaluation.md';
 const blocked091Record = readFileSync(join(repositoryRoot, blocked091RecordPath), 'utf8');
+const blockedRetryRecordPath = 'docs/research/48828a1d-blocked-blind-evaluation.md';
+const blockedRetryRecord = readFileSync(join(repositoryRoot, blockedRetryRecordPath), 'utf8');
 const passedRecordPath = 'docs/research/95c7756c-passed-blind-evaluation.md';
 const passedRecord = readFileSync(join(repositoryRoot, passedRecordPath), 'utf8');
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
@@ -26,6 +28,28 @@ const witnesses = [
     property: 'Workflow registration does not establish agent identity or an agent handoff.',
     file: 'packages/discovery/test/adapters.test.ts',
     title: 'discovers the graph as a workflow and every registered node as a workflow step',
+  },
+  {
+    property: 'Polling and explicit non-success loops do not establish an ambiguous-failure retry.',
+    file: 'packages/discovery/test/retry-reading.test.ts',
+    title: 'does not attach retry policy to offset commits, OAuth polling, or bounded pairing',
+  },
+  {
+    property:
+      'Unknown or aggregate operation identity cannot support a definite duplicate-effect claim.',
+    file: 'packages/findings/test/static-rules.test.ts',
+    title: 'stays quiet when the effect class itself is unknown',
+  },
+  {
+    property:
+      'Unknown or aggregate operation identity cannot support a definite duplicate-effect claim.',
+    file: 'packages/findings/test/static-rules.test.ts',
+    title: 'does not transfer an aggregate provider effect through a generic helper',
+  },
+  {
+    property: 'A retry experiment names only a matching repository scenario.',
+    file: 'packages/findings/test/static-rules.test.ts',
+    title: 'names a repository scenario only when it faults this operation and checks duplicates',
   },
   {
     property: 'Unrelated findings do not change semantic identifiers.',
@@ -254,6 +278,44 @@ describe('the frozen pre-release blind evaluation protocol', () => {
       entries.some(
         (entry) =>
           entry.name === 'argus' || entry.url === 'https://github.com/mylesndavid/argus.git',
+      ),
+      false,
+    );
+  });
+
+  it('preserves the exact retry-causality block and promotes only its positive', () => {
+    for (const fact of [
+      '48828a1d2f3d8aa479124987a04eb8d672fc63a3',
+      '61603179f78bca84aa21e71d4060aa3b8a500b4a372784be86fe441c62f8ac2b',
+      'https://github.com/Roozbeh-Sdtz/jarvis-home-commander',
+      '740d23097b6525feb1ef8de740a18e16598db8de',
+      'b9b7a0bd8894a4c5124e1509a6f849c44e38ddda1b182e3bab6dbdc201dfed29',
+      'https://github.com/shiki-yusuke/agent-cost',
+      'd170ea301ed0c46351749214bd299e75ae8a7786',
+      '6aa9203532be4d8d905482f69e8bba71f4948cce00a620ccd9eab10950e87a93',
+      'dab33c4f106103182512ad235a186b55c335faee4bc0f4979718f08b1be599a8',
+    ]) {
+      assert.ok(blockedRetryRecord.includes(fact), `retry block record omitted ${fact}`);
+    }
+    assert.match(blockedRetryRecord, /decision was \*\*BLOCK\*\*/);
+    assert.match(blockedRetryRecord, /commits the update offset before handling/);
+    assert.match(blockedRetryRecord, /effect semantics were recorded as unknown/);
+    assert.match(blockedRetryRecord, /contained no scenario file/);
+    assert.match(blockedRetryRecord, /different unseen positive and negative pair/);
+    assert.doesNotMatch(
+      blockedRetryRecord,
+      /\/Users\/|\/tmp\/|\brun_[0-9a-f]{8}\b|\bev_[0-9a-f]{8}\b|traceId|spanId/,
+    );
+    assert.ok(protocol.includes('../research/48828a1d-blocked-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/48828a1d-blocked-blind-evaluation.md'));
+
+    const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
+    assert.equal(entries.filter((entry) => entry.name === 'jarvis-home-commander').length, 1);
+    assert.equal(
+      entries.some(
+        (entry) =>
+          entry.name === 'agent-cost' ||
+          entry.url === 'https://github.com/shiki-yusuke/agent-cost.git',
       ),
       false,
     );

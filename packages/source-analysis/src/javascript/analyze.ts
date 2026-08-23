@@ -626,9 +626,33 @@ const FUNCTION_TYPES = new Set([
   'ArrowFunctionExpression',
 ]);
 
+/** Whether every path through this handler ends the work instead of allowing another pass. */
+const alwaysEndsTheWork = (node: Node | undefined): boolean => {
+  if (node === undefined) return false;
+  if (
+    node.type === 'ReturnStatement' ||
+    node.type === 'BreakStatement' ||
+    node.type === 'ThrowStatement'
+  ) {
+    return true;
+  }
+  if (FUNCTION_TYPES.has(node.type)) return false;
+  if (node.type === 'IfStatement') {
+    return (
+      alwaysEndsTheWork(asNode(field(node, 'consequent'))) &&
+      alwaysEndsTheWork(asNode(field(node, 'alternate')))
+    );
+  }
+  if (node.type === 'BlockStatement') {
+    return nodeArray(field(node, 'body')).some((statement) => alwaysEndsTheWork(statement));
+  }
+  if (node.type === 'CatchClause') return alwaysEndsTheWork(asNode(field(node, 'body')));
+  return false;
+};
+
 /** Whether a pass succeeds out of this `try` and fails through it, which is one attempt of a retry. */
 const exitsOnSuccessIn = (node: Node): boolean =>
-  endsTheWork(asNode(field(node, 'block'))) && !endsTheWork(asNode(field(node, 'handler')));
+  endsTheWork(asNode(field(node, 'block'))) && !alwaysEndsTheWork(asNode(field(node, 'handler')));
 
 /**
  * Ways a value is made to grow by a factor rather than by a step.
@@ -711,7 +735,11 @@ const traverse = (
       contains,
       ...(repeats === undefined ? {} : { repeats, passesBounded: passesBoundedIn(node) }),
       ...(repeats === 'same_work'
-        ? { headerNames: headerNamesOf(node), growingNames: growingNamesOf(node) }
+        ? {
+            headerNames: headerNamesOf(node),
+            growingNames: growingNamesOf(node),
+            countsPasses: node.type === 'ForStatement',
+          }
         : {}),
       ...(kind === 'try_catch' ? { exitsOnSuccess: exitsOnSuccessIn(node) } : {}),
     });

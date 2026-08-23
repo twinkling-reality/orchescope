@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { INFERRED_ENTRY_POINT_TAG } from '@orchescope/domain';
 import type { EdgeDraft } from '@orchescope/graph';
 import { indexGraph } from '@orchescope/graph';
-import type { EdgePolicy, SystemGraph } from '@orchescope/schema';
+import type { EdgePolicy, Scenario, SystemGraph } from '@orchescope/schema';
 import { buildGraph, componentDraft, edgeDraft, evidenceForGraph } from '@orchescope/testkit';
 import { evaluateRules } from '../src/engine.ts';
 import type { Rule, RuleContext } from '../src/rule.ts';
@@ -89,14 +89,14 @@ const retryThroughFrame = (operation: ReturnType<typeof componentDraft>): System
   );
 };
 
-const contextFor = (graph: SystemGraph): RuleContext => ({
+const contextFor = (graph: SystemGraph, scenarios: readonly Scenario[] = []): RuleContext => ({
   graph: indexGraph(graph),
   delta: undefined,
   observedRuns: [],
   silentRuns: [],
   benchmarks: [],
   chaosReports: [],
-  scenarios: [],
+  scenarios,
   evidenceById: evidenceForGraph(graph),
 });
 
@@ -265,10 +265,12 @@ describe('retry-around-non-idempotent-operation', () => {
     assert.equal(draft?.severity, 'high');
     assert.equal(draft?.basis, 'discovered');
     assert.ok(draft?.components.includes('tool:issue_refund'));
-    assert.equal(draft?.goalEligible, true);
+    assert.equal(draft?.goalEligible, false);
+    assert.equal(draft?.suggestedExperiment, undefined);
+    assert.match(draft?.goalReason ?? '', /No repository scenario/);
   });
 
-  it('fires at a lower severity when the effect class itself is unknown', () => {
+  it('stays quiet when the effect class itself is unknown', () => {
     /*
      * Classified and undecided, which the draft has to state: a component with no class at all was never
      * looked at, and the rule now keeps the two apart.
@@ -289,8 +291,78 @@ describe('retry-around-non-idempotent-operation', () => {
         ),
       ),
     );
-    assert.equal(outcome.status, 'fired');
-    assert.equal(outcome.drafts[0]?.severity, 'medium');
+    assert.equal(outcome.drafts.length, 0);
+  });
+
+  it('names a repository scenario only when it faults this operation and checks duplicates', () => {
+    const scenario: Scenario = {
+      schemaVersion: 1,
+      id: 'refund-ambiguous-result',
+      name: 'Refund ambiguous result',
+      target: {
+        command: ['node', 'src/main.ts'],
+        resultSource: 'result_file',
+        timeoutMs: 10_000,
+      },
+      evaluators: [{ kind: 'no_duplicate_effects' }],
+      budgets: {},
+      faults: [
+        {
+          kind: 'tool_timeout',
+          target: 'issue_refund',
+          delivery: 'cooperative',
+          probability: 1,
+          attempts: [1],
+          maxApplications: 1,
+        },
+      ],
+      requiredPermissions: [],
+      tags: [],
+      metadata: {},
+    };
+    const outcome = unsafeRetryRule.evaluate(
+      contextFor(
+        graphWith({
+          retry: { maxAttempts: 3, bounded: true, backoff: 'fixed', idempotency: 'absent' },
+        }),
+        [scenario],
+      ),
+    );
+    const draft = outcome.drafts[0];
+    assert.equal(draft?.goalEligible, true);
+    assert.deepEqual(draft?.suggestedExperiment?.command, [
+      'orchescope',
+      'chaos',
+      '--scenario',
+      'refund-ambiguous-result',
+    ]);
+    assert.doesNotMatch(JSON.stringify(draft), /scenarios\/support-desk\.yaml/);
+
+    const responseSubstitution: Scenario = {
+      ...scenario,
+      id: 'refund-duplicate-response',
+      faults: [{ ...scenario.faults[0]!, kind: 'duplicate_response' }],
+    };
+    const unsupported = unsafeRetryRule.evaluate(
+      contextFor(
+        graphWith({
+          retry: { maxAttempts: 3, bounded: true, backoff: 'fixed', idempotency: 'absent' },
+        }),
+        [responseSubstitution],
+      ),
+    );
+    assert.equal(unsupported.drafts[0]?.goalEligible, false);
+    assert.equal(unsupported.drafts[0]?.suggestedExperiment, undefined);
+  });
+
+  it('does not transfer an aggregate provider effect through a generic helper', () => {
+    const location = post.sourceLocations?.[0] ?? { file: 'src/pay.ts', startLine: 1 };
+    const aggregated = {
+      ...post,
+      sourceLocations: [location, { ...location, file: 'src/notify.ts', startLine: 9, endLine: 9 }],
+    };
+    const outcome = unsafeRetryRule.evaluate(contextFor(retryThroughFrame(aggregated)));
+    assert.equal(outcome.drafts.length, 0);
   });
 
   it('stays quiet when the operation declares a key', () => {
@@ -1215,6 +1287,42 @@ describe('what a rule says when it had nothing to look at', () => {
     );
     assert.equal(outcome.status, 'fired');
     assert.equal(outcome.drafts[0]?.polarity, 'risk');
+    assert.equal(outcome.drafts[0]?.goalEligible, false);
+    assert.equal(outcome.drafts[0]?.suggestedExperiment, undefined);
+    assert.match(outcome.drafts[0]?.goalReason ?? '', /No repository scenario/);
+  });
+
+  it('does not attach an unrelated prompt-injection scenario', () => {
+    const unrelated: Scenario = {
+      schemaVersion: 1,
+      id: 'unrelated-injection',
+      name: 'Unrelated injection',
+      target: {
+        command: ['node', 'src/main.ts'],
+        resultSource: 'result_file',
+        timeoutMs: 10_000,
+      },
+      expect: { prohibitedEffects: [{ kind: 'refund', maxCount: 1 }] },
+      evaluators: [{ kind: 'no_duplicate_effects' }],
+      budgets: {},
+      faults: [
+        {
+          kind: 'prompt_injection_in_content',
+          target: 'different-retrieval-source',
+          delivery: 'cooperative',
+          probability: 1,
+        },
+      ],
+      requiredPermissions: [],
+      tags: [],
+      metadata: {},
+    };
+    const outcome = promptInjectionBoundaryRule.evaluate(
+      contextFor(buildGraph([orchestrator, promptDraft(true), lookup], []), [unrelated]),
+    );
+    assert.equal(outcome.status, 'fired');
+    assert.equal(outcome.drafts[0]?.goalEligible, false);
+    assert.equal(outcome.drafts[0]?.suggestedExperiment, undefined);
   });
 
   it('prompt-injection-boundary stays quiet about a prompt that interpolates nothing', () => {

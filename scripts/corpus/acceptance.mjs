@@ -108,13 +108,43 @@ const holdOutcome = (acceptance, bundle, hold) => {
   }
 };
 
+const holdAdapters = (acceptance, bundle, hold) => {
+  const adapters = new Map(
+    bundle.graph.coverage.adapters.map((adapter) => [adapter.adapterId, adapter]),
+  );
+  for (const [adapterId, expected] of Object.entries(acceptance.adapterApplicability ?? {})) {
+    const applicability = adapters.get(adapterId)?.applicability;
+    hold(applicability !== undefined, `${adapterId} reported no applicability population`);
+    for (const key of ['relevantImports', 'distinctFiles', 'omittedImports']) {
+      const value = expected[key];
+      hold(
+        applicability?.[key] === value,
+        `${adapterId} applicability.${key} was ${JSON.stringify(applicability?.[key])}, expected ${value}`,
+      );
+    }
+    const observedSample = applicability?.sample ?? [];
+    hold(
+      JSON.stringify(sortedRows(observedSample)) ===
+        JSON.stringify(sortedRows(expected.fileSample)),
+      `${adapterId} applicability file sample was ${JSON.stringify(sortedRows(observedSample))}, expected ${JSON.stringify(sortedRows(expected.fileSample))}`,
+    );
+  }
+  for (const [adapterId, expected] of Object.entries(acceptance.adapterOutcomes ?? {})) {
+    const observed = adapters.get(adapterId);
+    hold(observed !== undefined, `${adapterId} reported no adapter outcome`);
+    for (const key of ['status', 'componentsFound', 'edgesFound', 'filesInspected']) {
+      hold(
+        observed?.[key] === expected[key],
+        `${adapterId}.${key} was ${JSON.stringify(observed?.[key])}, expected ${JSON.stringify(expected[key])}`,
+      );
+    }
+  }
+};
+
 const graphAcceptanceVerdict = (acceptance, bundle) => {
   const components = bundle.graph.components;
   const componentById = new Map(components.map((component) => [component.id, component]));
   const evidenceById = new Map(bundle.evidence.map((evidence) => [evidence.id, evidence]));
-  const adapters = new Map(
-    bundle.graph.coverage.adapters.map((adapter) => [adapter.adapterId, adapter]),
-  );
   const broken = [];
   let total = 0;
   const hold = (condition, sentence) => {
@@ -200,23 +230,7 @@ const graphAcceptanceVerdict = (acceptance, bundle) => {
       `${id} source citations were ${JSON.stringify(sorted(observed))}, expected ${JSON.stringify(sorted(files))}`,
     );
   }
-  for (const [adapterId, expected] of Object.entries(acceptance.adapterApplicability)) {
-    const applicability = adapters.get(adapterId)?.applicability;
-    hold(applicability !== undefined, `${adapterId} reported no applicability population`);
-    for (const key of ['relevantImports', 'distinctFiles', 'omittedImports']) {
-      const value = expected[key];
-      hold(
-        applicability?.[key] === value,
-        `${adapterId} applicability.${key} was ${JSON.stringify(applicability?.[key])}, expected ${value}`,
-      );
-    }
-    const observedSample = applicability?.sample ?? [];
-    hold(
-      JSON.stringify(sortedRows(observedSample)) ===
-        JSON.stringify(sortedRows(expected.fileSample)),
-      `${adapterId} applicability file sample was ${JSON.stringify(sortedRows(observedSample))}, expected ${JSON.stringify(sortedRows(expected.fileSample))}`,
-    );
-  }
+  holdAdapters(acceptance, bundle, hold);
   holdOutcome(acceptance, bundle, hold);
 
   return { held: total - broken.length, total, broken };

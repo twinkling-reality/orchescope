@@ -6,9 +6,11 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 Unreleased. `orchescope@0.9.1` is not on the registry and carries no registry attestation. The first frozen candidate,
 commit `604fce7516e47cd8971bedbb6da27b138e485fe0` with archive SHA-256
-`6210cafc465c56aa2b8ed6d6328499799bd4e6c553327708d1b1141fd522a274`, was independently evaluated and blocked. It
-was not published, tagged, pushed or attached to a release. A corrected candidate cannot be published until a different
-unseen positive and negative pair clears the blind gate.
+`6210cafc465c56aa2b8ed6d6328499799bd4e6c553327708d1b1141fd522a274`, was independently evaluated and blocked. The
+second candidate, commit `48828a1d2f3d8aa479124987a04eb8d672fc63a3` with archive SHA-256
+`61603179f78bca84aa21e71d4060aa3b8a500b4a372784be86fe441c62f8ac2b`, was also independently evaluated and blocked.
+Neither was published, tagged, pushed or attached to a release. A corrected candidate cannot be published until a
+different unseen positive and negative pair clears the blind gate.
 
 ### Workflow topology is no longer presented as agent identity
 
@@ -34,6 +36,27 @@ lineages are permanently ineligible as future blind holdouts.
 
 Mermaid exports label a static component with no run population as `no runtime evidence`, not `not exercised`. The
 former states the evidence boundary; the latter asserted an execution absence that a static-only audit could not know.
+
+### Retry findings require call-specific causality and repository verification evidence
+
+A pause inside a loop establishes backoff only after the source proves that the same failed work is attempted again.
+Polling reads, device pairing after an explicit non-success response, and durable consumers that commit their offset
+before a notification no longer acquire retry policy merely because they wait. Explicit retry helpers, attempt counters,
+and guarded passes that exit on success remain supported.
+
+The duplicate-effect rule fires only for a call-specific known non-idempotent effect. It no longer borrows an aggregate
+provider effect through a generic wrapper or converts unknown effect semantics into a definite duplicate impact. A true
+positive that catches an ambiguous failure and reissues the same known non-idempotent operation remains covered.
+
+Suggested experiments and goal readiness are derived from the repository's own scenarios. The rule names a scenario
+only when it targets the affected operation with an ambiguous-result fault and checks duplicate effects; otherwise it
+states that the verification scenario is absent and emits no command or prior-verification claim. This changes retry
+relation and reliability-finding counts for polling-heavy repositories.
+
+The defect was found by the independently selected `jarvis-home-commander` holdout. Its Telegram offset consumer, OAuth
+authorization polling, and bounded HomeWizard pairing are pinned as one source-reviewed regression input. The selected
+negative contributed no distinct precision invariant and is not duplicated in the corpus. Both selected source
+lineages are permanently ineligible as future blind holdouts.
 
 ### Finding identity and evidence populations are stable and reviewable
 

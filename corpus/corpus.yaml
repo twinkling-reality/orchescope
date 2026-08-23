@@ -822,6 +822,108 @@ repositories:
           - ruleId: observability-coverage
             severity: info
 
+  - name: jarvis-home-commander
+    source: git
+    url: https://github.com/Roozbeh-Sdtz/jarvis-home-commander.git
+    commit: 740d23097b6525feb1ef8de740a18e16598db8de
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive application selected independently for the blind evaluation of candidate
+      48828a1d. Its voice agent is operated through the Codex desktop application and household device scripts, an
+      external runtime boundary the static adapters decline explicitly. The regression invariant comes from the
+      device source the frozen candidate misread: a Telegram consumer commits its update offset before sending a
+      receipt, OAuth device authorization polls only while the server reports pending, and HomeWizard pairing repeats
+      only after an explicit non-success response. None proves that the same non-idempotent operation is reissued
+      after an ambiguous failure.
+
+      The corrected scan therefore reports no retry relation or duplicate-effect finding for those loops. It also
+      reports no repository scenario and cannot claim deterministic chaos verification or prescribe a scenario path.
+      A separate generalized fixture preserves the true positive: a caught ambiguous failure that reissues a known
+      non-idempotent operation still carries retry policy and fires the reliability rule.
+
+      The pinned repository has 42 tree entries and 185,911 blob bytes. Its MIT LICENSE has SHA-256
+      b9b7a0bd8894a4c5124e1509a6f849c44e38ddda1b182e3bab6dbdc201dfed29. No runtime is attempted: a representative
+      run needs the real Codex voice session, Accessibility permission, paired HomeKit state, household devices, LAN
+      addresses and credentials, and the repository supplies no bounded substitute path.
+    acceptance:
+      expectedAgentSystemDetected: false
+      graphPopulation:
+        components: 19
+        edges: 10
+      exactIdsByKind:
+        entrypoint:
+          - entrypoint:_get
+          - entrypoint:_get_lights
+          - entrypoint:_put
+          - entrypoint:_refresh
+          - entrypoint:_send
+          - entrypoint:api
+          - entrypoint:auth
+          - entrypoint:download
+          - entrypoint:measurement
+          - entrypoint:pair
+        external_service:
+          - external_service:api.telegram.org
+          - external_service:unresolved-host-_get
+          - external_service:unresolved-host-_get_lights
+          - external_service:unresolved-host-_put
+          - external_service:unresolved-host-_refresh
+          - external_service:unresolved-host-auth
+          - external_service:unresolved-host-download
+          - external_service:unresolved-host-measurement
+          - external_service:unresolved-host-pair
+      absentKinds:
+        - agent
+        - model
+        - tool
+        - workflow
+      absentComponentTerms:
+        - retry
+      requiredEdges:
+        - kind: calls_service
+          from: entrypoint:api
+          to: external_service:api.telegram.org
+          sourceFile: src/devices/telegram_bot.py
+          evidence:
+            - producer: adapter:effects
+              symbol: requests.post
+              sourceFile: src/devices/telegram_bot.py
+              startLine: 45
+              endLine: 48
+      componentMetadata:
+        entrypoint:api:
+          inferredFrom: enclosing scope of an external effect
+      componentEvidence:
+        entrypoint:api:
+          - producer: adapter:effects
+            symbol: api
+            sourceFile: src/devices/telegram_bot.py
+            startLine: 45
+            endLine: 48
+      sourceCitations:
+        entrypoint:api:
+          - src/devices/telegram_bot.py
+        external_service:api.telegram.org:
+          - src/devices/notify.py
+          - src/devices/telegram_bot.py
+      adapterOutcomes:
+        adapter:effects:
+          status: completed
+          componentsFound: 22
+          edgesFound: 12
+          filesInspected: 5
+      topology:
+        status: incomplete
+        unresolvedCount: 1
+        conditionalDestinations: 0
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+        exactRisks:
+          - ruleId: observability-coverage
+            severity: info
+
   - name: langchain-langgraph-agents
     source: git
     url: https://github.com/Chaitanya-Keyal/langchain-langgraph-agents.git

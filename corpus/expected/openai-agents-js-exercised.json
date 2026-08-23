@@ -116,12 +116,11 @@
       "observability-coverage": 1,
       "observed-name-matches-many-declarations": 1,
       "prompt-injection-boundary": 1,
-      "retry-around-non-idempotent-operation": 1,
       "topology-shape": 1
     },
     "bySeverity": {
       "low": 1,
-      "medium": 6
+      "medium": 5
     },
     "componentsByRule": {
       "declared-not-exercised": 92,
@@ -129,11 +128,10 @@
       "observability-coverage": 10,
       "observed-name-matches-many-declarations": 1,
       "prompt-injection-boundary": 19,
-      "retry-around-non-idempotent-operation": 2,
       "topology-shape": 3
     },
     "strengths": 0,
-    "total": 7
+    "total": 6
   },
   "foundNothing": [],
   "kind": "agent_system",

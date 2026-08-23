@@ -185,6 +185,24 @@ export async function testsAFlag(body) {
     }
   }
 }
+
+export async function nestedCleanup(body) {
+  let attempts = 0;
+  while (attempts < maxAttempts) {
+    try {
+      const response = await fetch('https://nested-cleanup.example.com/v1/traces', { method: 'POST', body });
+      if (response.ok) break;
+      if (response.status === 400) {
+        try {
+          cleanupResponse();
+        } catch {}
+        break;
+      }
+    } catch {}
+    attempts += 1;
+    await sleep(100);
+  }
+}
 `,
     );
   };
@@ -214,6 +232,8 @@ export async function testsAFlag(body) {
     'advances.example.com bounded=true backoff=fixed',
     // A flag states no ceiling, which was always right and stays right.
     'flagged.example.com bounded=false backoff=fixed',
+    // An inner cleanup try cannot hide the outer guarded attempt that exits on success.
+    'nested-cleanup.example.com bounded=true backoff=fixed',
   ].sort();
 
   it('classifies every one of them as the source states, with no row missing', async () => {
@@ -284,6 +304,53 @@ def counter_advances(body):
         except Exception:
             attempt += 1
             time.sleep(1)
+
+
+def retryable_response():
+    for attempt in range(MAX_ATTEMPTS):
+        response = httpx.get("https://retryable-response.example.com/v1/search")
+        if response.status_code >= 500 and attempt < MAX_ATTEMPTS - 1:
+            time.sleep(1)
+            continue
+        return response
+
+
+def oauth_pending(payload):
+    attempts = 0
+    while attempts < MAX_ATTEMPTS:
+        response = httpx.post("https://oauth-pending.example.com/token", data=payload)
+        if response.status_code == 200:
+            return response
+        if response.json()["error"] not in ("authorization_pending", "slow_down"):
+            raise RuntimeError("authorization failed")
+        time.sleep(1)
+        attempts += 1
+
+
+def conditional_failure_exit():
+    retry_count = 0
+    while retry_count <= MAX_ATTEMPTS:
+        try:
+            return httpx.get("https://conditional-failure.example.com/v1/search")
+        except Exception as error:
+            retry_count += 1
+            if "Ratelimit" not in str(error):
+                break
+            time.sleep(1)
+
+
+def status_poll_with_error_retry():
+    for pass_number in range(MAX_ATTEMPTS):
+        try:
+            response = httpx.get("https://mixed-status.example.com/v1/status")
+            if response.json()["state"] == "success":
+                return response
+            if response.json()["state"] == "failed":
+                return response
+        except Exception:
+            if pass_number == MAX_ATTEMPTS - 1:
+                return None
+        time.sleep(1)
 `,
     );
   };
@@ -295,10 +362,21 @@ def counter_advances(body):
     'joined-head.example.com bounded=true backoff=fixed',
     'mutated.example.com bounded=true backoff=exponential',
     'advances.example.com bounded=true backoff=fixed',
+    // A counted range names attempts and branches explicitly on a retryable response.
+    'retryable-response.example.com bounded=true backoff=fixed',
+    // One failure class exits, while the rate-limit branch still re-attempts the guarded request.
+    'conditional-failure.example.com bounded=true backoff=fixed',
+    // Expected-state polling also retries a caught request failure until the bounded final pass.
+    'mixed-status.example.com bounded=true backoff=fixed',
   ].sort();
 
   it('classifies every one of them as the source states, with no row missing', async () => {
-    assert.deepEqual(retriesIn(await scan(build)), expected);
+    const retries = retriesIn(await scan(build));
+    assert.deepEqual(retries, expected);
+    assert.ok(
+      !retries.some((retry) => retry.startsWith('oauth-pending.example.com ')),
+      'an expected-pending OAuth poll is not an ambiguous-failure retry',
+    );
   });
 });
 
@@ -550,7 +628,7 @@ export async function unboundedCharge(body) {
 });
 
 /**
- * A component can stand for more than one call.
+ * A component can stand for more than one call, and a poll is not an ambiguous-failure retry.
  *
  * A function that posts a job and then polls its status builds both addresses at run time, so both are
  * one component named for that function. Asking that component whether the polled read is safe to repeat
@@ -578,15 +656,10 @@ def parse_document(base_url, file_path):
     );
   };
 
-  it('records the class of the call the loop actually repeats', async () => {
+  it('does not attach retry semantics to status polling', async () => {
     const result = await scan(build);
     const retried = result.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
-    assert.equal(retried.length, 1, 'the poll was not discovered');
-    assert.equal(
-      retried[0]?.metadata['retriedEffect'],
-      'read_only',
-      'the poll was described with the class of the POST beside it',
-    );
+    assert.deepEqual(retried, []);
   });
 
   /*
@@ -692,5 +765,62 @@ export async function chargeWithKey(amount, key) {
     const retried = result.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
     assert.ok(retried.length > 0, 'the retry was not discovered at all');
     for (const edge of retried) assert.notEqual(edge.policy?.retry?.idempotency, 'declared');
+  });
+});
+
+describe('polling and explicit non-success loops are not ambiguous-failure retries', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writePythonProject(workspace, { name: 'polling-boundaries', dependencies: ['requests'] });
+    workspace.write(
+      'src/polling.py',
+      `import time
+
+import requests
+
+
+def telegram(api, load_offset, save_offset):
+    offset = load_offset()
+    while True:
+        try:
+            updates = api("getUpdates", {"offset": offset})
+            for update in updates:
+                offset = update["update_id"] + 1
+                save_offset(offset)
+                api("sendMessage", {"chat_id": update["chat_id"], "text": "received"})
+        except Exception:
+            time.sleep(2)
+
+
+def oauth(device_code):
+    while True:
+        response = requests.post(
+            "https://auth.example.com/oauth/token",
+            data={"device_code": device_code},
+        )
+        if response.status_code == 200:
+            return response.json()
+        if response.json().get("error") != "authorization_pending":
+            raise RuntimeError("authorization failed")
+        time.sleep(5)
+
+
+def pair():
+    for _ in range(30):
+        response = requests.post("https://device.example.com/api/user", json={"name": "home"})
+        if response.status_code == 200:
+            return response.json()
+        time.sleep(1)
+    raise RuntimeError("pairing window expired")
+`,
+    );
+  };
+
+  it('does not attach retry policy to offset commits, OAuth polling, or bounded pairing', async () => {
+    const result = await scan(build);
+    const retries = result.graph.edges.filter((edge) => edge.policy?.retry !== undefined);
+    assert.deepEqual(
+      retries.map((edge) => ({ to: edge.to, locations: edge.sourceLocations })),
+      [],
+    );
   });
 });

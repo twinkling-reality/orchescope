@@ -289,6 +289,15 @@ export type ControlFlowFact = {
    */
   readonly headerNames?: readonly string[];
   /**
+   * For a loop, whether the header itself advances a bounded/counting pass variable.
+   *
+   * `for (let attempt = 0; ...; attempt += 1)` and `for attempt in range(...)` make each pass an
+   * explicitly counted attempt. A `while` condition can mention `attempts` while polling an expected
+   * pending state; the name alone does not turn that protocol loop into a retry. Keeping the loop form
+   * beside the names prevents those two statements from being collapsed later.
+   */
+  readonly countsPasses?: boolean;
+  /**
    * For a loop, names it multiplies or exponentiates on each pass.
    *
    * A wait that grows is usually written at the call, `sleep(100 * 2 ** attempt)`, and is sometimes

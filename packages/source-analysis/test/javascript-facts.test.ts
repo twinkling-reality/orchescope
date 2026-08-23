@@ -120,6 +120,8 @@ describe('javascript fact extraction', () => {
     const loop = facts.controlFlow.find((entry) => entry.kind === 'loop');
     const tryCatch = facts.controlFlow.find((entry) => entry.kind === 'try_catch');
     assert.ok(loop, 'expected a loop');
+    assert.equal(loop.countsPasses, true);
+    assert.ok(loop.headerNames?.includes('attempt'));
     assert.ok(tryCatch, 'expected a try construct');
     assert.deepEqual(
       tryCatch.contains.map((path) => dotted(path)),

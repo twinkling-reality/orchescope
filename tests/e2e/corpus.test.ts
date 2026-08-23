@@ -95,7 +95,7 @@ describe('the corpus', () => {
       assert.equal(expectation.name, entry.name);
       assert.equal(expectation.kind, entry.kind);
       const expectedDetection =
-        entry.acceptance?.type === 'completed_zero'
+        entry.acceptance?.expectedAgentSystemDetected !== undefined
           ? entry.acceptance.expectedAgentSystemDetected
           : entry.kind === 'agent_system';
       assert.equal(
@@ -267,6 +267,55 @@ describe('the corpus check', () => {
     const difference = claimDifference(entry, { agentSystemDetected: true }, verdict);
     assert.equal(difference?.path, 'agentSystemDetected');
     assert.match(difference?.expected ?? '', /not_agent_system/);
+  });
+
+  it('waives an unsupported positive only while its exact graph and adapter populations hold', () => {
+    const entry = {
+      name: 'unsupported-positive',
+      kind: 'agent_system',
+      acceptance: {
+        expectedAgentSystemDetected: false,
+        graphPopulation: { components: 19, edges: 10 },
+        adapterOutcomes: {
+          'adapter:effects': {
+            status: 'completed',
+            componentsFound: 19,
+            edgesFound: 10,
+            filesInspected: 5,
+          },
+        },
+      },
+    };
+    const held = { held: 8, total: 8, broken: [] };
+    assert.equal(claimDifference(entry, { agentSystemDetected: false }, held), undefined);
+    assert.equal(
+      claimDifference(
+        { ...entry, acceptance: { ...entry.acceptance, graphPopulation: undefined } },
+        { agentSystemDetected: false },
+        held,
+      )?.path,
+      'agentSystemDetected',
+    );
+    assert.equal(
+      claimDifference(
+        { ...entry, acceptance: { ...entry.acceptance, adapterOutcomes: undefined } },
+        { agentSystemDetected: false },
+        held,
+      )?.path,
+      'agentSystemDetected',
+    );
+    assert.equal(
+      claimDifference(
+        entry,
+        { agentSystemDetected: false },
+        {
+          held: 7,
+          total: 8,
+          broken: ['adapter:effects.componentsFound changed'],
+        },
+      )?.path,
+      'agentSystemDetected',
+    );
   });
 
   it('passes over the offline subset', async () => {

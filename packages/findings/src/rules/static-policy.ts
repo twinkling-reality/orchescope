@@ -53,7 +53,6 @@ const RETRY_UNSAFE_EFFECTS: readonly SideEffectClass[] = [
   'financial',
   'destructive',
   'external_notification',
-  'unknown',
 ];
 
 /**
@@ -66,12 +65,15 @@ const RETRY_UNSAFE_EFFECTS: readonly SideEffectClass[] = [
  */
 const retriedOperationOf = (context: RuleContext, edge: Edge): Component | undefined => {
   const operations = operationsPerformedBy(context.graph, edge.to);
-  return (
-    operations.find(
-      (operation) =>
-        operation.sideEffect !== undefined && RETRY_UNSAFE_EFFECTS.includes(operation.sideEffect),
-    ) ?? operations[0]
-  );
+  if (operations.length !== 1) return undefined;
+  const operation = operations[0];
+  /*
+   * A provider component is shared by every call to that provider. Its aggregate class cannot answer
+   * which operation a generic helper repeats: one Telegram host can serve polling reads and notification
+   * writes, for example. A single source location is the bounded proof that the component names only the
+   * call reached through this frame. Call-site classification on the retry relation still takes priority.
+   */
+  return operation?.sourceLocations.length === 1 ? operation : undefined;
 };
 
 /**
@@ -135,17 +137,33 @@ const sinkShowed = (
 
 /** What makes an operation safe to repeat, which is the only thing that makes the retry in front of it safe. */
 export const UNSAFE_RETRY_REMEDIATIONS = {
-  'no-idempotency-key': (subject: string) => ({
+  'no-idempotency-key': (subject: string, scenarioId?: string) => ({
     summary: `Attach an idempotency key to ${subject}, or remove the retry.`,
     steps: [
       'Derive a key from the request fields that define the operation, not from a timestamp.',
       'Send the key on every attempt including the first.',
-      'Run the chaos scenario that injects a tool timeout and confirm a single effect.',
+      scenarioId === undefined
+        ? 'Add a bounded scenario that injects an ambiguous failure at this operation and counts effects.'
+        : `Run scenario ${scenarioId} and confirm a single effect.`,
     ],
     effort: 'small' as const,
     risk: 'medium' as const,
   }),
 } satisfies RemediationVariants;
+
+const duplicateRetryScenario = (
+  context: RuleContext,
+  target: Component,
+): RuleContext['scenarios'][number] | undefined =>
+  context.scenarios.find(
+    (scenario) =>
+      scenario.evaluators.some((evaluator) => evaluator.kind === 'no_duplicate_effects') &&
+      scenario.faults.some(
+        (fault) =>
+          (fault.target === target.identity.localName || fault.target === target.displayName) &&
+          (fault.kind === 'tool_timeout' || fault.kind === 'side_effect_partial_success'),
+      ),
+  );
 
 export const unsafeRetryRule: Rule = {
   id: 'retry-around-non-idempotent-operation',
@@ -172,6 +190,7 @@ export const unsafeRetryRule: Rule = {
       const effect = retriedEffectOf(context, edge) ?? 'unknown';
 
       const source = context.graph.component(edge.from);
+      const scenario = duplicateRetryScenario(context, target);
       const record = derivedEvidence({
         producer: PRODUCER,
         rule: 'retry-around-non-idempotent-operation',
@@ -187,9 +206,8 @@ export const unsafeRetryRule: Rule = {
         },
         category: 'reliability',
         polarity: 'risk',
-        severity: effect === 'unknown' ? 'medium' : 'high',
-        confidence:
-          effect === 'unknown' ? CONFIDENCE_BANDS.structural : CONFIDENCE_BANDS.strongStructural,
+        severity: 'high',
+        confidence: CONFIDENCE_BANDS.strongStructural,
         basis: 'discovered',
         /*
          * "Idempotent" is the precise word and it is a word a reader has to already know. The
@@ -209,17 +227,26 @@ export const unsafeRetryRule: Rule = {
           conclusion: [record.id],
         },
         taxonomy: ['owasp-asi:ASI06'],
-        recommendation: UNSAFE_RETRY_REMEDIATIONS['no-idempotency-key'](target.displayName),
+        recommendation: UNSAFE_RETRY_REMEDIATIONS['no-idempotency-key'](
+          target.displayName,
+          scenario?.id,
+        ),
         remediationVariant: 'no-idempotency-key',
-        suggestedExperiment: {
-          description:
-            'Inject a tool timeout on the first attempt and count the resulting effects.',
-          command: ['orchescope', 'chaos', '--scenario', 'scenarios/support-desk.yaml'],
-          expectedSignal: 'one effect instead of two, with task success unchanged',
-        },
-        goalEligible: true,
+        ...(scenario === undefined
+          ? {}
+          : {
+              suggestedExperiment: {
+                description: `Run the repository's ${scenario.id} scenario and count the resulting effects.`,
+                command: ['orchescope', 'chaos', '--scenario', scenario.id],
+                expectedSignal: 'one effect instead of two, with task success unchanged',
+              },
+            }),
+        goalEligible: scenario !== undefined,
         goalReason:
-          'The change is local to one call site and is verified by a deterministic chaos run.',
+          scenario === undefined
+            ? 'No repository scenario both faults this operation after an ambiguous result and checks for duplicate effects.'
+            : `Repository scenario ${scenario.id} faults this operation and checks for duplicate effects.`,
+        requiresRuntimeEvidence: true,
         tags: ['retry', 'idempotency'],
       });
     }
@@ -918,6 +945,23 @@ export const promptInjectionBoundaryRule: Rule = {
     }
 
     const drafts: FindingDraft[] = prompts.map((prompt) => {
+      const sourceNames = new Set(
+        untrustedSources.flatMap((source) => [
+          source.id,
+          source.identity.localName,
+          source.displayName,
+        ]),
+      );
+      const scenario = context.scenarios.find(
+        (candidate) =>
+          candidate.faults.some(
+            (fault) =>
+              fault.kind === 'prompt_injection_in_content' &&
+              (fault.target === '*' || sourceNames.has(fault.target)),
+          ) &&
+          candidate.evaluators.some((evaluator) => evaluator.kind === 'no_duplicate_effects') &&
+          (candidate.expect?.prohibitedEffects?.length ?? 0) > 0,
+      );
       const record = derivedEvidence({
         producer: PRODUCER,
         rule: 'prompt-injection-boundary',
@@ -953,16 +997,23 @@ export const promptInjectionBoundaryRule: Rule = {
         taxonomy: ['owasp-llm:LLM01', 'owasp-asi:ASI01'],
         recommendation: PROMPT_INJECTION_REMEDIATIONS['interpolated-prompt'](),
         remediationVariant: 'interpolated-prompt',
-        suggestedExperiment: {
-          description:
-            'Inject an instruction into retrieved content and assert the system ignores it.',
-          command: ['orchescope', 'chaos', '--scenario', 'scenarios/support-desk.yaml'],
-          expectedSignal:
-            'no policy violation and no prohibited effect while the injected content is present',
-        },
-        goalEligible: true,
+        ...(scenario === undefined
+          ? {}
+          : {
+              suggestedExperiment: {
+                description:
+                  'Inject an instruction into retrieved content and assert the system ignores it.',
+                command: ['orchescope', 'chaos', '--scenario', scenario.id],
+                expectedSignal:
+                  'no duplicate or prohibited effect while the injected content is present',
+              },
+            }),
+        goalEligible: scenario !== undefined,
         goalReason:
-          'The change is local to prompt assembly and is checked by an injection scenario.',
+          scenario === undefined
+            ? 'No repository scenario injects an instruction into this untrusted source and checks duplicate and prohibited effects.'
+            : `Repository scenario ${scenario.id} injects an instruction into this untrusted source and checks duplicate and prohibited effects.`,
+        requiresRuntimeEvidence: true,
         requiresHumanReview: true,
         tags: ['prompt-injection'],
       };

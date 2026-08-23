@@ -18,7 +18,8 @@ research notes, implementation work, and development discussion before the freez
 other repository already named by this repository are regression inputs, never holdouts.
 
 The [blocked a38ed43f evaluation](../research/a38ed43f-blocked-blind-evaluation.md), the
-[blocked 604fce75 evaluation](../research/604fce75-blocked-blind-evaluation.md), and the
+[blocked 604fce75 evaluation](../research/604fce75-blocked-blind-evaluation.md), the
+[blocked 48828a1d evaluation](../research/48828a1d-blocked-blind-evaluation.md), and the
 [passed 95c7756c evaluation](../research/95c7756c-passed-blind-evaluation.md) are durable records of completed
 applications of this protocol. Every repository selected in a completed evaluation, and its source lineage, is
 part of a used population. Those repositories and their source lineages are permanently ineligible as blind holdouts
@@ -110,6 +111,9 @@ inside `pnpm verify`; the named command makes the release boundary reviewable wi
 | Input order does not change semantic identity or selected evidence. | `packages/findings/test/semantic-identity.test.ts`, `ignores component, edge and evidence order as well as prose, severity and time`; `packages/report/test/evidence-selection.test.ts`, `is invariant to evidence and citation permutations` |
 | Every strength names the evidence population supporting its scope. | `packages/findings/test/static-rules.test.ts`, `binds a complete caller-population absence to a universal approval strength`; `packages/findings/test/runtime-rules.test.ts`, `binds the aggregate component population to the subject of a coverage claim`; `packages/findings/test/experiment-evidence.test.ts`, `does not invent absent cost or retry ratios for a complete strength` |
 | Workflow registration does not establish agent identity or an agent handoff. | `packages/discovery/test/adapters.test.ts`, `discovers the graph as a workflow and every registered node as a workflow step` |
+| Polling and explicit non-success loops do not establish an ambiguous-failure retry. | `packages/discovery/test/retry-reading.test.ts`, `does not attach retry policy to offset commits, OAuth polling, or bounded pairing` |
+| Unknown or aggregate operation identity cannot support a definite duplicate-effect claim. | `packages/findings/test/static-rules.test.ts`, `stays quiet when the effect class itself is unknown`; `does not transfer an aggregate provider effect through a generic helper` |
+| A retry experiment names only a matching repository scenario. | `packages/findings/test/static-rules.test.ts`, `names a repository scenario only when it faults this operation and checks duplicates` |
 
 The deterministic fixtures falsify one assumption at a time. The independently selected positive and negative prevent
 those author-controlled fixtures from becoming the evidence that a candidate generalizes.

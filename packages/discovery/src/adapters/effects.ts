@@ -1264,6 +1264,7 @@ const guardedPassIn = (module: ModuleFacts, loop: ControlFlowFact): ControlFlowF
     (candidate) =>
       candidate.kind === 'try_catch' &&
       candidate.contains.length > 0 &&
+      candidate.exitsOnSuccess === true &&
       candidate.enclosing === loop.enclosing &&
       candidate.location.startLine >= loop.location.startLine &&
       (candidate.location.endLine ?? candidate.location.startLine) <=
@@ -1271,10 +1272,11 @@ const guardedPassIn = (module: ModuleFacts, loop: ControlFlowFact): ControlFlowF
   );
 
 /**
- * Calls that pause before the next pass. A retry waits; a work loop has no reason to.
+ * Calls that pause before the next pass.
  *
  * Matched on the last segment of the callee path, so `timers.setTimeout` and a locally defined `sleep`
- * both count. Waiting is one of the two things a loop can do that only a re-attempt needs.
+ * both count. These names describe backoff after a retry has been established; they do not establish
+ * the retry by themselves.
  */
 const DELAY_CALLS = new Set([
   'sleep',
@@ -1297,7 +1299,7 @@ const DELAY_CALLS = new Set([
 const ATTEMPT_NAME = /attempt|retr|tries/i;
 
 /**
- * Whether anything in this loop says it re-attempts, rather than merely being a loop with a `try` in it.
+ * Whether anything in this loop says the same failed work is attempted again.
  *
  * This is the whole of the change the field report asked for. A loop with a `try` and an `await` in it was
  * classified as a retry on the strength of that shape alone, and across thirty six repositories the two
@@ -1305,25 +1307,23 @@ const ATTEMPT_NAME = /attempt|retr|tries/i;
  * isolation, and minified bundles where every shape is present somewhere. So a re-attempt now has to be
  * stated by the code rather than inferred from its silhouette.
  *
- * The known cost is a retry loop that neither waits nor names its counter, which this will not see. That
- * is a loop that hammers its dependency as fast as it can fail, and it is rarer than the loops this used
- * to misread. An explicit retry helper is recognised separately and is unaffected.
+ * A wait does not answer that question. Polling loops wait between reads, device pairing loops wait after
+ * an explicit non-success response, and durable consumers wait after committing their offset. Treating
+ * the pause as retry evidence attaches every effect in those loops to an ambiguous-failure claim the
+ * source does not make. A counted `for` loop can state attempts in its own header; a `while` condition
+ * that merely mentions an attempts variable cannot, because expected-pending protocols use the same
+ * shape. Otherwise the guarded pass has to be able to end the work while a caught failure can fall
+ * through to another pass. Explicit retry helpers are recognised separately.
  */
 const reattemptEvidence = (
   loop: ControlFlowFact,
   attempted: ControlFlowFact | undefined,
 ): string | undefined => {
   if (loop.repeats !== 'same_work') return undefined;
-  /*
-   * Both constructs, because a wait before the next pass is written in the catch as often as in the loop
-   * body, and a call belongs to the innermost construct that holds it.
-   */
-  const delay = [...loop.contains, ...(attempted?.contains ?? [])]
-    .map((path) => path[path.length - 1])
-    .find((name) => name !== undefined && DELAY_CALLS.has(name));
-  if (delay !== undefined) return `it waits with ${delay} before the next pass`;
   const counter = (loop.headerNames ?? []).find((name) => ATTEMPT_NAME.test(name));
-  if (counter !== undefined) return `its header counts ${counter}`;
+  if (counter !== undefined && loop.countsPasses === true) {
+    return `its counted-pass header counts ${counter}`;
+  }
   /*
    * The third form, and the one that needs no vocabulary from the author. A pass that returns when it
    * works and falls through when it throws is an attempt, and a loop that repeats it is a retry whatever
@@ -1331,7 +1331,7 @@ const reattemptEvidence = (
    * is not a word this recognises and nothing in the loop waits.
    */
   return attempted?.exitsOnSuccess === true
-    ? 'a pass returns when it succeeds and falls through when it fails'
+    ? 'the guarded pass can end the work while a caught failure can fall through to another pass'
     : undefined;
 };
 

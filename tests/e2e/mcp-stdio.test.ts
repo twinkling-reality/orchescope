@@ -137,6 +137,55 @@ const callTool = async (name: string, args: Message = {}): Promise<Message> => {
 const textOf = (result: Message): string =>
   (result['content'] as readonly { text: string }[]).map((block) => block.text).join('\n');
 
+/**
+ * Eligibility and baseline requirements are separate contracts. Read every bounded page and the
+ * full readiness detail instead of treating list order or the eligibility bit as a baseline.
+ */
+const findingWithRuntimeRequirement = async (
+  requiresRuntimeEvidence: boolean,
+): Promise<{ id: string }> => {
+  const limit = 20;
+  let offset = 0;
+  for (let pageNumber = 0; pageNumber < 100; pageNumber += 1) {
+    const eligible = await callTool('get_findings', {
+      limit,
+      offset,
+      goalEligibleOnly: true,
+    });
+    const page = eligible['structuredContent'] as {
+      total: number;
+      truncated: boolean;
+      findings: readonly { id: string }[];
+    };
+    for (const summary of page.findings) {
+      const detail = await callTool('get_finding', { findingId: summary.id });
+      const finding = (
+        detail['structuredContent'] as {
+          finding: {
+            id: string;
+            goalReadiness: { eligible: boolean; requiresRuntimeEvidence: boolean };
+          };
+        }
+      ).finding;
+      if (
+        finding.goalReadiness.eligible &&
+        finding.goalReadiness.requiresRuntimeEvidence === requiresRuntimeEvidence
+      ) {
+        return { id: finding.id };
+      }
+    }
+    if (!page.truncated) break;
+    assert.ok(page.findings.length > 0, 'a truncated findings page made no pagination progress');
+    offset += page.findings.length;
+    assert.ok(offset < page.total, 'the findings page claimed truncation after its total');
+  }
+  assert.fail(
+    requiresRuntimeEvidence
+      ? 'the demonstration reported no goal eligible finding that requires a runtime baseline'
+      : 'the demonstration reported no goal eligible finding with a complete static baseline',
+  );
+};
+
 describe('the agent interface over stdio', () => {
   it('completes the handshake as orchescope, naming the version it advertises tools for', () => {
     const info = handshake['serverInfo'] as { name: string; version: string } | undefined;
@@ -231,11 +280,23 @@ describe('the agent interface over stdio', () => {
     }
   });
 
+  it('refuses a runtime-required finding until a baseline run exists', async () => {
+    const finding = await findingWithRuntimeRequirement(true);
+    const refused = await callTool('create_improvement_goal', { findingId: finding.id });
+
+    assert.equal(
+      refused['isError'],
+      true,
+      'a runtime-required goal was created without a baseline',
+    );
+    const text = textOf(refused);
+    assert.match(text, /needs runtime evidence/i);
+    assert.match(text, /no baseline run/i);
+    assert.match(text, /record a run with orchescope trace/i);
+  });
+
   it('turns an eligible finding into a goal with a prompt an implementer can follow', async () => {
-    const eligible = await callTool('get_findings', { limit: 1, goalEligibleOnly: true });
-    const [first] = (eligible['structuredContent'] as { findings: readonly { id: string }[] })
-      .findings;
-    assert.ok(first !== undefined, 'the demonstration reported no goal eligible finding');
+    const first = await findingWithRuntimeRequirement(false);
 
     const created = await callTool('create_improvement_goal', { findingId: first.id });
     assert.equal(created['isError'], false, JSON.stringify(created['content']));
@@ -299,10 +360,7 @@ describe('the agent interface over stdio', () => {
    * claim being held rather than a preference.
    */
   it('returns the goal a finding already has instead of a second copy of it', async () => {
-    const eligible = await callTool('get_findings', { limit: 1, goalEligibleOnly: true });
-    const [first] = (eligible['structuredContent'] as { findings: readonly { id: string }[] })
-      .findings;
-    assert.ok(first !== undefined, 'the demonstration reported no goal eligible finding');
+    const first = await findingWithRuntimeRequirement(false);
 
     const goalIdOf = (result: Message): { id: string; created: boolean } => {
       const data = result['structuredContent'] as { goal: { id: string }; created: boolean };

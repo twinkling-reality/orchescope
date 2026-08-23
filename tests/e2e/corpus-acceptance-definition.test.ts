@@ -276,4 +276,40 @@ describe('corpus acceptance definitions', () => {
     };
     assert.throws(() => readTemporary(exercisedEntry), /acceptance belongs to a static Git entry/);
   });
+
+  it('requires exact graph and adapter populations before a positive may record unsupported detection', () => {
+    const bounded = {
+      ...acceptance,
+      expectedAgentSystemDetected: false,
+      graphPopulation: { components: 1, edges: 1 },
+      adapterOutcomes: {
+        'adapter:example': {
+          status: 'completed',
+          componentsFound: 1,
+          edgesFound: 1,
+          filesInspected: 1,
+        },
+      },
+    };
+    assert.equal(
+      readTemporary({ ...validEntry, acceptance: bounded }).repositories[0]?.name,
+      'measured-repository',
+    );
+    assert.throws(
+      () =>
+        readTemporary({
+          ...validEntry,
+          acceptance: { ...bounded, graphPopulation: undefined },
+        }),
+      /requires an exact graphPopulation/,
+    );
+    assert.throws(
+      () =>
+        readTemporary({
+          ...validEntry,
+          acceptance: { ...bounded, adapterOutcomes: undefined },
+        }),
+      /requires non-empty exact adapterOutcomes/,
+    );
+  });
 });

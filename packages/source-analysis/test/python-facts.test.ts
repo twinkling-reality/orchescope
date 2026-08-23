@@ -258,6 +258,8 @@ def charge():
     const loop = facts.controlFlow.find((entry) => entry.kind === 'loop');
     assert.ok(loop, 'expected a loop');
     assert.equal(loop.enclosing, 'charge');
+    assert.equal(loop.countsPasses, true);
+    assert.ok(loop.headerNames?.includes('attempt'));
   });
 
   it('records long strings including triple quoted prompts', async () => {

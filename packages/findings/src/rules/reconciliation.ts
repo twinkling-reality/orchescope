@@ -332,6 +332,13 @@ export const duplicateSideEffectRule: Rule = {
           : context.graph.component(duplicate.componentId);
       const attempts = duplicate.retryAttempts.filter((attempt) => attempt > 1);
       const attributed = attempts.length > 0;
+      const scenarioIds = new Set(
+        context.observedRuns
+          .filter(({ run }) => duplicate.runIds.includes(run.id))
+          .map(({ run }) => run.scenarioId)
+          .filter((scenarioId): scenarioId is string => scenarioId !== undefined),
+      );
+      const scenario = context.scenarios.find((candidate) => scenarioIds.has(candidate.id));
       const record = derivedEvidence({
         producer: PRODUCER,
         rule: 'duplicate-side-effect',
@@ -380,20 +387,29 @@ export const duplicateSideEffectRule: Rule = {
           steps: [
             'Derive a stable key from the request fields that define the operation.',
             'Pass the key on every attempt, including the first.',
-            'Rerun the scenario with the same fault plan and confirm one effect instead of two.',
+            scenario === undefined
+              ? 'Add a bounded scenario that reproduces the ambiguous result and checks duplicate effects.'
+              : `Rerun scenario ${scenario.id} and confirm one effect instead of two.`,
           ],
           effort: 'small',
           risk: 'medium',
         },
-        suggestedExperiment: {
-          description:
-            'Rerun the scenario that produced the duplicate with the same seed and fault plan.',
-          command: ['orchescope', 'chaos', '--scenario', 'scenarios/support-desk.yaml'],
-          expectedSignal: 'duplicateSideEffects drops to zero while task success is unchanged',
-        },
-        goalEligible: true,
+        ...(scenario === undefined
+          ? {}
+          : {
+              suggestedExperiment: {
+                description: `Rerun repository scenario ${scenario.id}.`,
+                command: ['orchescope', 'test', '--scenario', scenario.id],
+                expectedSignal:
+                  'duplicateSideEffects drops to zero while task success is unchanged',
+              },
+            }),
+        goalEligible: scenario !== undefined,
         goalReason:
-          'The change is local to one operation and the check is a rerun with the same seed.',
+          scenario === undefined
+            ? 'No stored repository scenario is associated with the run that recorded this duplicate.'
+            : `Repository scenario ${scenario.id} is associated with the run that recorded this duplicate.`,
+        requiresRuntimeEvidence: true,
         tags: ['reconciliation', 'duplicate-effect'],
       };
     });

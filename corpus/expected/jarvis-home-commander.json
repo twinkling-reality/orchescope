@@ -7,16 +7,16 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 17,
-      "edgesFound": 11,
+      "componentsFound": 22,
+      "edgesFound": 12,
       "filesInspected": 5,
       "status": "completed"
     },
     "adapter:implementation-reach": {
       "componentsFound": 0,
-      "edgesFound": 1,
-      "filesInspected": 1,
-      "status": "completed"
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:langchain-v1-create-agent": {
       "componentsFound": 0,
@@ -37,28 +37,28 @@
       "status": "not_applicable"
     },
     "adapter:mcp": {
-      "componentsFound": 17,
-      "edgesFound": 11,
-      "filesInspected": 6,
-      "status": "completed"
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:model-sdk": {
-      "componentsFound": 3,
-      "edgesFound": 2,
-      "filesInspected": 35,
-      "status": "completed"
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:openai-agents": {
-      "componentsFound": 1965,
-      "edgesFound": 296,
-      "filesInspected": 315,
-      "status": "completed"
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 180,
-      "edgesFound": 181,
-      "filesInspected": 115,
-      "status": "completed"
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:pydantic-ai": {
       "componentsFound": 0,
@@ -85,68 +85,44 @@
       "status": "not_applicable"
     }
   },
-  "agentSystemDetected": true,
+  "agentSystemDetected": false,
   "components": {
     "byKind": {
-      "agent": 616,
-      "database": 1,
-      "entrypoint": 7,
-      "evaluator": 4,
-      "external_service": 4,
-      "mcp_server": 6,
-      "model": 18,
-      "prompt": 180,
-      "provider": 1,
-      "tool": 237
+      "entrypoint": 10,
+      "external_service": 9
     },
-    "declaredInTest": 636,
-    "total": 1074
+    "declaredInTest": 0,
+    "total": 19
   },
   "discardedRelations": [],
   "files": {
-    "discovered": 876,
-    "inSupportedLanguages": 843,
-    "parsed": 843,
-    "skipped": 1,
+    "discovered": 17,
+    "inSupportedLanguages": 17,
+    "parsed": 17,
+    "skipped": 0,
     "truncated": false
   },
   "findings": {
     "byRule": {
-      "model-call-without-timeout": 1,
-      "observability-coverage": 1,
-      "prompt-injection-boundary": 1,
-      "topology-shape": 1
+      "observability-coverage": 1
     },
     "bySeverity": {
-      "info": 1,
-      "low": 1,
-      "medium": 2
+      "info": 1
     },
     "componentsByRule": {
-      "model-call-without-timeout": 36,
-      "observability-coverage": 5,
-      "prompt-injection-boundary": 16,
-      "topology-shape": 8
+      "observability-coverage": 5
     },
     "strengths": 0,
-    "total": 4
+    "total": 1
   },
   "foundNothing": [],
   "kind": "agent_system",
   "languagesNotAnalysed": [],
-  "name": "openai-agents-python",
+  "name": "jarvis-home-commander",
   "relations": {
     "byKind": {
-      "calls_service": 4,
-      "calls_tool": 66,
-      "hands_off_to": 73,
-      "invokes_model": 36,
-      "provides_tool": 11,
-      "queries_database": 4,
-      "served_by_provider": 1,
-      "uses_prompt": 181,
-      "validated_by": 2
+      "calls_service": 10
     },
-    "total": 378
+    "total": 10
   }
 }

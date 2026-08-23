@@ -166,6 +166,12 @@ const checkComponents = (acceptance, problem) => {
 };
 
 const checkApplicability = (acceptance, problem) => {
+  if (acceptance.adapterApplicability === undefined) {
+    if (acceptance.adapterOutcomes === undefined) {
+      problem('acceptance has to hold adapterApplicability or adapterOutcomes');
+    }
+    return;
+  }
   if (
     !isRecord(acceptance.adapterApplicability) ||
     Object.keys(acceptance.adapterApplicability).length === 0 ||
@@ -201,6 +207,33 @@ const checkApplicability = (acceptance, problem) => {
     if (invalid) {
       problem(
         `acceptance.adapterApplicability.${adapterId} has to count imports and list the exact file sample`,
+      );
+    }
+  }
+};
+
+const checkAdapterOutcomes = (acceptance, problem) => {
+  if (acceptance.adapterOutcomes === undefined) return;
+  if (
+    !isRecord(acceptance.adapterOutcomes) ||
+    Object.keys(acceptance.adapterOutcomes).length === 0 ||
+    Object.keys(acceptance.adapterOutcomes).length > MAX_ITEMS
+  ) {
+    problem('acceptance.adapterOutcomes has to hold exact contributing adapter populations');
+    return;
+  }
+  for (const [adapterId, outcome] of Object.entries(acceptance.adapterOutcomes)) {
+    if (
+      !isBoundedString(adapterId) ||
+      !adapterId.startsWith('adapter:') ||
+      !hasExactFields(outcome, ['status', 'componentsFound', 'edgesFound', 'filesInspected']) ||
+      !['completed', 'completed_zero'].includes(outcome.status) ||
+      !['componentsFound', 'edgesFound', 'filesInspected'].every((field) =>
+        isNonNegativeInteger(outcome[field]),
+      )
+    ) {
+      problem(
+        `acceptance.adapterOutcomes.${adapterId} has to state an exact completed adapter population`,
       );
     }
   }
@@ -286,6 +319,9 @@ export const checkAcceptanceDefinition = (entry, problem) => {
     return;
   }
   const fields = [
+    ...(acceptance.expectedAgentSystemDetected === undefined
+      ? []
+      : ['expectedAgentSystemDetected']),
     ...(acceptance.graphPopulation === undefined ? [] : ['graphPopulation']),
     'exactIdsByKind',
     'absentKinds',
@@ -294,7 +330,8 @@ export const checkAcceptanceDefinition = (entry, problem) => {
     'componentMetadata',
     'componentEvidence',
     'sourceCitations',
-    'adapterApplicability',
+    ...(acceptance.adapterApplicability === undefined ? [] : ['adapterApplicability']),
+    ...(acceptance.adapterOutcomes === undefined ? [] : ['adapterOutcomes']),
     'topology',
     'findings',
   ];
@@ -304,9 +341,34 @@ export const checkAcceptanceDefinition = (entry, problem) => {
   if (entry.source !== 'git' || entry.exercise !== undefined) {
     problem('acceptance belongs to a static Git entry');
   }
+  if (
+    acceptance.expectedAgentSystemDetected !== undefined &&
+    (entry.kind !== 'agent_system' || acceptance.expectedAgentSystemDetected !== false)
+  ) {
+    problem(
+      'acceptance.expectedAgentSystemDetected may be false only for a static Git agent_system with a bounded unsupported detection contract',
+    );
+  }
+  if (
+    acceptance.expectedAgentSystemDetected !== undefined &&
+    acceptance.graphPopulation === undefined
+  ) {
+    problem(
+      'acceptance.expectedAgentSystemDetected requires an exact graphPopulation for the bounded unsupported detection contract',
+    );
+  }
+  if (
+    acceptance.expectedAgentSystemDetected !== undefined &&
+    (!isRecord(acceptance.adapterOutcomes) || Object.keys(acceptance.adapterOutcomes).length === 0)
+  ) {
+    problem(
+      'acceptance.expectedAgentSystemDetected requires non-empty exact adapterOutcomes for the bounded unsupported detection contract',
+    );
+  }
   checkIdentities(acceptance, problem);
   checkRelations(acceptance, problem);
   checkComponents(acceptance, problem);
   checkApplicability(acceptance, problem);
+  checkAdapterOutcomes(acceptance, problem);
   checkOutcome(acceptance, problem);
 };

@@ -70,13 +70,17 @@ export const differences = (expected, observed) => {
 export const claimDifference = (entry, observation, acceptanceVerdict) => {
   const expected = entry.kind === 'agent_system';
   if (observation.agentSystemDetected === expected) return undefined;
-  const completedZeroHeld =
-    entry.acceptance?.type === 'completed_zero' &&
-    entry.acceptance.expectedAgentSystemDetected === observation.agentSystemDetected &&
+  const hasExactUnsupportedBoundary =
+    isRecord(entry.acceptance?.graphPopulation) &&
+    isRecord(entry.acceptance?.adapterOutcomes) &&
+    Object.keys(entry.acceptance.adapterOutcomes).length > 0;
+  const boundedUnsupportedHeld =
+    hasExactUnsupportedBoundary &&
+    entry.acceptance?.expectedAgentSystemDetected === observation.agentSystemDetected &&
     acceptanceVerdict?.total > 0 &&
     acceptanceVerdict.held === acceptanceVerdict.total &&
     acceptanceVerdict.broken.length === 0;
-  if (completedZeroHeld) return undefined;
+  if (boundedUnsupportedHeld) return undefined;
   return {
     path: 'agentSystemDetected',
     expected: `${expected} (corpus.yaml says ${entry.kind})`,

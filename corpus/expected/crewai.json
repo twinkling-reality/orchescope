@@ -8,7 +8,7 @@
     },
     "adapter:effects": {
       "componentsFound": 144,
-      "edgesFound": 78,
+      "edgesFound": 76,
       "filesInspected": 46,
       "status": "completed"
     },
@@ -113,23 +113,19 @@
     "byRule": {
       "model-call-without-timeout": 1,
       "observability-coverage": 1,
-      "prompt-injection-boundary": 1,
-      "retry-around-non-idempotent-operation": 1,
-      "unbounded-retry": 1
+      "prompt-injection-boundary": 1
     },
     "bySeverity": {
       "info": 1,
-      "medium": 4
+      "medium": 2
     },
     "componentsByRule": {
       "model-call-without-timeout": 4,
       "observability-coverage": 5,
-      "prompt-injection-boundary": 9,
-      "retry-around-non-idempotent-operation": 2,
-      "unbounded-retry": 2
+      "prompt-injection-boundary": 9
     },
     "strengths": 0,
-    "total": 5
+    "total": 3
   },
   "foundNothing": [
     "mcp is imported here and its adapter found nothing"
