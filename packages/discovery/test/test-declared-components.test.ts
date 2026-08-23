@@ -122,6 +122,16 @@ export const app = graph.compile();
 `,
   },
   {
+    adapterId: 'adapter:langchain-v1-create-agent',
+    fixed: { 'pyproject.toml': PYPROJECT('langchain-app', ['langchain>=1.0']) },
+    sourcePath: 'src/support.py',
+    testPath: 'tests/test_support.py',
+    code: `from langchain.agents import create_agent
+
+support_agent = create_agent(model="openai:gpt-4.1-mini", tools=[], name="support")
+`,
+  },
+  {
     adapterId: 'adapter:crewai',
     fixed: { 'pyproject.toml': PYPROJECT('crew-app', ['crewai']) },
     sourcePath: 'src/team.py',

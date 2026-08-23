@@ -554,6 +554,28 @@ repositories:
       requiresEnvironment:
         - OPENAI_API_KEY
 
+  - name: langchain-langgraph-agents
+    source: git
+    url: https://github.com/Chaitanya-Keyal/langchain-langgraph-agents.git
+    commit: 25813f9ec571316cbd02be3749cccc71da9368ba
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive application selected by the independent frozen holdout at candidate a38ed43f.
+      Its formal Python module, class, function and method documentation strings contain prompt-like and sink-like
+      vocabulary, while its agent is created through the LangChain v1 create_agent factory inside Agents.assistant
+      and its control flow is declared with LangGraph. It catches documentation strings re-entering prompt or sink
+      evidence and the exact create_agent origin and enclosing-method identity going quiet.
+
+      The static regression must retain agent:assistant and the LangGraph group, classify the repository as an agent
+      system, keep formal documentation strings out of prompt components, report bounded dynamic model and tool
+      refusals with incomplete topology, and award no strengths.
+
+      The pinned Git tree contains 28 files and 213,153 blob bytes; uv.lock is the largest file at 171,979 bytes. The
+      source scan discovers 17 files and parses all 14 files in supported languages, covering 29,378 source bytes.
+      LICENSE is a 1,072-byte MIT notice with SHA-256
+      ab91b49cf77b5ba58260a6d871759824c81e5d0e25336b2fa940acdaaabf78dc. This is a full-static corpus entry with
+      no required archive or exercise environment.
+
   - name: local-deep-researcher
     source: git
     url: https://github.com/langchain-ai/local-deep-researcher.git

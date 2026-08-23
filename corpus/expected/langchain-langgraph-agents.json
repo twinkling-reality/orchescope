@@ -16,19 +16,19 @@
       "componentsFound": 0,
       "edgesFound": 0,
       "filesInspected": 0,
-      "status": "not_applicable"
+      "status": "completed"
     },
     "adapter:langchain-v1-create-agent": {
-      "componentsFound": 0,
+      "componentsFound": 1,
       "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "filesInspected": 1,
+      "status": "completed"
     },
     "adapter:langgraph": {
-      "componentsFound": 0,
+      "componentsFound": 1,
       "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "filesInspected": 4,
+      "status": "completed"
     },
     "adapter:manifest": {
       "componentsFound": 0,
@@ -85,31 +85,40 @@
       "status": "not_applicable"
     }
   },
-  "agentSystemDetected": false,
+  "agentSystemDetected": true,
   "components": {
-    "byKind": {},
+    "byKind": {
+      "agent": 1,
+      "agent_group": 1
+    },
     "declaredInTest": 0,
-    "total": 0
+    "total": 2
   },
   "discardedRelations": [],
   "files": {
-    "discovered": 56,
-    "inSupportedLanguages": 55,
-    "parsed": 55,
+    "discovered": 17,
+    "inSupportedLanguages": 14,
+    "parsed": 14,
     "skipped": 0,
     "truncated": false
   },
   "findings": {
-    "byRule": {},
-    "bySeverity": {},
-    "componentsByRule": {},
+    "byRule": {
+      "observability-coverage": 1
+    },
+    "bySeverity": {
+      "info": 1
+    },
+    "componentsByRule": {
+      "observability-coverage": 2
+    },
     "strengths": 0,
-    "total": 0
+    "total": 1
   },
   "foundNothing": [],
-  "kind": "not_agent_system",
+  "kind": "agent_system",
   "languagesNotAnalysed": [],
-  "name": "orchescope-discovery",
+  "name": "langchain-langgraph-agents",
   "relations": {
     "byKind": {},
     "total": 0

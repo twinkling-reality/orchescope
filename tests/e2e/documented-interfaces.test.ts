@@ -80,7 +80,9 @@ describe('the adapter guide', () => {
 
   it('names the adapters in the order they run, all of them', () => {
     const document = readFileSync(lifecycle, 'utf8');
-    const arrows = /```\n((?:[a-z-]+ *(?:\n *)?→ *(?:\n *)?)+[a-z-]+)\n```/.exec(document)?.[1];
+    const arrows = /```\n((?:[a-z0-9-]+ *(?:\n *)?→ *(?:\n *)?)+[a-z0-9-]+)\n```/.exec(
+      document,
+    )?.[1];
     assert.ok(arrows !== undefined, 'the lifecycle document no longer shows the adapter order');
     assert.deepEqual(
       arrows

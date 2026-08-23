@@ -2,6 +2,7 @@ import type { AgentSystemAdapter } from './adapter.ts';
 import { crewAiAdapter } from './adapters/crewai.ts';
 import { effectsAdapter } from './adapters/effects.ts';
 import { implementationReachAdapter } from './adapters/implementation-reach.ts';
+import { langChainV1CreateAgentAdapter } from './adapters/langchain-v1-create-agent.ts';
 import { langGraphAdapter } from './adapters/langgraph.ts';
 import { manifestAdapter } from './adapters/manifest.ts';
 import { mcpAdapter } from './adapters/mcp.ts';
@@ -30,6 +31,7 @@ export const DEFAULT_ADAPTERS: readonly AgentSystemAdapter[] = [
   manifestAdapter,
   workersBindingsAdapter,
   openAiAgentsAdapter,
+  langChainV1CreateAgentAdapter,
   langGraphAdapter,
   crewAiAdapter,
   pydanticAiAdapter,

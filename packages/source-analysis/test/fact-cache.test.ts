@@ -64,8 +64,8 @@ const projectOf = (count: number): string => {
 };
 
 describe('the fact cache', () => {
-  it('invalidates facts produced before documentation strings were excluded from runtime texts', () => {
-    assert.equal(ANALYZER_VERSION, '5');
+  it('invalidates facts produced before type-checking imports were distinguished from runtime imports', () => {
+    assert.equal(ANALYZER_VERSION, '6');
     assert.match(
       cacheKey(
         {
@@ -76,7 +76,7 @@ describe('the fact cache', () => {
         },
         'a'.repeat(64),
       ),
-      /^5:python:src\/graph\.py:/,
+      /^6:python:src\/graph\.py:/,
     );
   });
 

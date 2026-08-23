@@ -347,7 +347,7 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
   }
 };
 
-const recordImport = (node: Node, context: Context): void => {
+const recordImport = (node: Node, context: Context, isType: boolean): void => {
   if (node.type === 'import_statement') {
     for (const child of namedChildren(node)) {
       if (child.type === 'dotted_name') {
@@ -357,10 +357,10 @@ const recordImport = (node: Node, context: Context): void => {
           module: moduleName,
           imported: '*',
           local,
-          isType: false,
+          isType,
           location: location(context.file, child),
         });
-        context.bindings.set(local, { module: moduleName, imported: '*', isType: false });
+        context.bindings.set(local, { module: moduleName, imported: '*', isType });
         continue;
       }
       if (child.type === 'aliased_import') {
@@ -371,13 +371,13 @@ const recordImport = (node: Node, context: Context): void => {
           module: nameNode.text,
           imported: '*',
           local: aliasNode.text,
-          isType: false,
+          isType,
           location: location(context.file, child),
         });
         context.bindings.set(aliasNode.text, {
           module: nameNode.text,
           imported: '*',
-          isType: false,
+          isType,
         });
       }
     }
@@ -392,7 +392,7 @@ const recordImport = (node: Node, context: Context): void => {
       module: moduleName,
       imported: '*',
       local: '*',
-      isType: false,
+      isType,
       location: location(context.file, node),
     });
     return;
@@ -405,10 +405,10 @@ const recordImport = (node: Node, context: Context): void => {
         module: moduleName,
         imported,
         local: imported,
-        isType: false,
+        isType,
         location: location(context.file, child),
       });
-      context.bindings.set(imported, { module: moduleName, imported, isType: false });
+      context.bindings.set(imported, { module: moduleName, imported, isType });
       continue;
     }
     if (child.type === 'aliased_import') {
@@ -419,13 +419,13 @@ const recordImport = (node: Node, context: Context): void => {
         module: moduleName,
         imported: nameNode.text,
         local: aliasNode.text,
-        isType: false,
+        isType,
         location: location(context.file, child),
       });
       context.bindings.set(aliasNode.text, {
         module: moduleName,
         imported: nameNode.text,
-        isType: false,
+        isType,
       });
     }
   }
@@ -454,7 +454,70 @@ const subscriptEnvironment = (node: Node): string | undefined => {
     : undefined;
 };
 
-type Frame = { readonly name: string | undefined; readonly awaited: boolean };
+type Frame = {
+  readonly name: string | undefined;
+  readonly awaited: boolean;
+  /** Imports inside an exact TYPE_CHECKING consequence do not establish runtime bindings. */
+  readonly typeOnly: boolean;
+};
+
+const TYPING_MODULES = new Set(['typing', 'typing_extensions']);
+
+const typeCheckingRootShadowed = (context: Context, frame: Frame, root: string): boolean => {
+  const scope = context.definitions.find(
+    (definition) =>
+      (definition.kind === 'function' || definition.kind === 'method') &&
+      (definition.name === frame.name || definition.name.endsWith(`.${frame.name}`)),
+  );
+  return (
+    scope?.parameters?.some((parameter) => parameter.name === root) === true ||
+    context.definitions.some(
+      (definition) =>
+        definition.name === root &&
+        (definition.enclosing === undefined || definition.enclosing === frame.name),
+    ) ||
+    context.assignments.some(
+      (assignment) =>
+        assignment.target.length === 1 &&
+        assignment.target[0] === root &&
+        (assignment.enclosing === undefined || assignment.enclosing === frame.name),
+    )
+  );
+};
+
+/**
+ * Whether a Python condition makes its consequence unavailable at runtime through `TYPE_CHECKING`.
+ *
+ * Aliases are accepted only through an exact runtime import from `typing` or `typing_extensions`.
+ * A conjunction is unavailable when one operand is an exact `TYPE_CHECKING` reference. Disjunction,
+ * negation, calls and lookalike modules do not establish that the whole condition is false at runtime.
+ */
+const isTypeCheckingGuard = (condition: Node, context: Context, frame: Frame): boolean => {
+  if (condition.type === 'parenthesized_expression') {
+    const inner = namedChildren(condition)[0];
+    return inner !== undefined && isTypeCheckingGuard(inner, context, frame);
+  }
+  if (condition.type === 'boolean_operator') {
+    const operators = condition.children.filter((child) => !child.isNamed);
+    if (operators.length === 0 || operators.some((operator) => operator.type !== 'and')) {
+      return false;
+    }
+    return namedChildren(condition).some((operand) => isTypeCheckingGuard(operand, context, frame));
+  }
+  const path = attributePath(condition);
+  if (path.length !== 1 && path.length !== 2) return false;
+  const root = path[0];
+  if (root === undefined || typeCheckingRootShadowed(context, frame, root)) return false;
+  const binding = context.bindings.get(root);
+  if (binding === undefined || binding.isType || !TYPING_MODULES.has(binding.module)) return false;
+  if (path.length === 1) return binding.imported === 'TYPE_CHECKING';
+  return binding.imported === '*' && path[1] === 'TYPE_CHECKING';
+};
+
+const restoreBindings = (context: Context, saved: ReadonlyMap<string, CalleeOrigin>): void => {
+  context.bindings.clear();
+  for (const [name, origin] of saved) context.bindings.set(name, origin);
+};
 
 const CONTROL_FLOW_TYPES: Readonly<Record<string, ControlFlowFact['kind']>> = {
   try_statement: 'try_catch',
@@ -732,6 +795,65 @@ const splitArguments = (
   return { positional, keywords };
 };
 
+/** Traverses one conditional consequence with a scoped type-only binding set when it cannot run. */
+function traverseConditionalConsequence(
+  node: Node,
+  context: Context,
+  frame: Frame,
+  collecting: (readonly string[])[][],
+): void {
+  const condition = childField(node, 'condition');
+  const consequence = childField(node, 'consequence');
+  const typeOnlyConsequence =
+    frame.typeOnly || (condition !== undefined && isTypeCheckingGuard(condition, context, frame));
+  for (const child of namedChildren(node)) {
+    const isConsequence =
+      consequence !== undefined &&
+      child.startIndex === consequence.startIndex &&
+      child.endIndex === consequence.endIndex;
+    if (!isConsequence || !typeOnlyConsequence) {
+      traverse(child, context, frame, collecting);
+      continue;
+    }
+    const savedBindings = new Map(context.bindings);
+    traverse(child, context, { ...frame, typeOnly: true }, collecting);
+    restoreBindings(context, savedBindings);
+  }
+}
+
+/** Traverses every branch of an if, including each independently guarded `elif` consequence. */
+function traverseIfStatement(
+  node: Node,
+  context: Context,
+  frame: Frame,
+  collecting: (readonly string[])[][],
+): void {
+  for (const child of namedChildren(node)) {
+    if (child.type === 'elif_clause') {
+      traverseConditionalConsequence(child, context, frame, collecting);
+    } else {
+      const consequence = childField(node, 'consequence');
+      const isTopLevelConsequence =
+        consequence !== undefined &&
+        child.startIndex === consequence.startIndex &&
+        child.endIndex === consequence.endIndex;
+      if (isTopLevelConsequence) {
+        const condition = childField(node, 'condition');
+        const typeOnly =
+          frame.typeOnly ||
+          (condition !== undefined && isTypeCheckingGuard(condition, context, frame));
+        if (typeOnly) {
+          const savedBindings = new Map(context.bindings);
+          traverse(child, context, { ...frame, typeOnly: true }, collecting);
+          restoreBindings(context, savedBindings);
+          continue;
+        }
+      }
+      traverse(child, context, frame, collecting);
+    }
+  }
+}
+
 const traverse = (
   node: Node,
   context: Context,
@@ -762,8 +884,12 @@ const traverse = (
   switch (node.type) {
     case 'import_statement':
     case 'import_from_statement':
-      recordImport(node, context);
+      recordImport(node, context, frame.typeOnly);
       return;
+    case 'if_statement': {
+      traverseIfStatement(node, context, frame, collecting);
+      return;
+    }
     case 'decorated_definition': {
       recordDecoratedDefinition(node, context, frame, collecting);
       return;
@@ -891,8 +1017,6 @@ const recordDecoratedDefinition = (
   }
   traverse(definition, context, frame, collecting);
 };
-
-const TYPING_MODULES = new Set(['typing', 'typing_extensions']);
 
 /** Whether the annotation head resolves to the standard bounded `Literal` type. */
 const isLiteralAnnotationHead = (head: Node | undefined, context: Context): boolean => {
@@ -1113,7 +1237,7 @@ const recordFunction = (
   const body = childField(node, 'body');
   if (body !== undefined) {
     recordDocumentationStrings(body, context);
-    traverse(body, context, { name, awaited: false }, collecting);
+    traverse(body, context, { name, awaited: false, typeOnly: frame.typeOnly }, collecting);
   }
 };
 
@@ -1146,7 +1270,7 @@ const recordClass = (
   const body = childField(node, 'body');
   if (body !== undefined) {
     recordDocumentationStrings(body, context);
-    traverse(body, context, { name, awaited: false }, collecting);
+    traverse(body, context, { name, awaited: false, typeOnly: frame.typeOnly }, collecting);
   }
 };
 
@@ -1304,7 +1428,7 @@ export const analyzePython = async (input: {
     const root = tree.rootNode;
     recordDocumentationStrings(root, context);
     for (const child of namedChildren(root)) {
-      traverse(child, context, { name: undefined, awaited: false }, []);
+      traverse(child, context, { name: undefined, awaited: false, typeOnly: false }, []);
     }
     return {
       file: input.file,
