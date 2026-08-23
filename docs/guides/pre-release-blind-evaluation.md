@@ -17,10 +17,12 @@ A holdout is unseen only when its URL, revision, source, and expected answer wer
 research notes, implementation work, and development discussion before the freeze. Local Deep Researcher and every
 other repository already named by this repository are regression inputs, never holdouts.
 
-The [blocked a38ed43f evaluation](../research/a38ed43f-blocked-blind-evaluation.md) is the durable record for one
-completed application of this protocol. Both repositories selected in a completed evaluation, and their source
-lineages, are permanently ineligible as blind holdouts at any revision. A blocked candidate can be refrozen only after
-a generalized correction, and that candidate requires a different unseen positive and negative pair.
+The [blocked a38ed43f evaluation](../research/a38ed43f-blocked-blind-evaluation.md) and the
+[passed 95c7756c evaluation](../research/95c7756c-passed-blind-evaluation.md) are durable records of completed
+applications of this protocol. Every repository selected in a completed evaluation, and its source lineage, is
+part of a used population. Those repositories and their source lineages are permanently ineligible as blind holdouts
+at any revision. A blocked candidate can be refrozen only after a generalized correction, and every candidate requires
+a different unseen positive and negative pair.
 
 ## Freeze and independent selection
 

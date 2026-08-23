@@ -1,5 +1,10 @@
 /** Validates the bounded, non-recordable semantic acceptance contract on a corpus entry. */
 
+import {
+  checkCompletedZeroAcceptanceDefinition,
+  isCompletedZeroAcceptance,
+} from './completed-zero-acceptance-definition.mjs';
+
 const MAX_ITEMS = 64;
 const MAX_TEXT = 256;
 
@@ -274,6 +279,10 @@ export const checkAcceptanceDefinition = (entry, problem) => {
   if (acceptance === undefined) return;
   if (!isRecord(acceptance)) {
     problem('acceptance has to be a mapping');
+    return;
+  }
+  if (isCompletedZeroAcceptance(acceptance)) {
+    checkCompletedZeroAcceptanceDefinition(entry, acceptance, problem);
     return;
   }
   const fields = [

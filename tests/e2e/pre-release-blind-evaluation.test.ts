@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { readCorpus } from '../../scripts/corpus/definition.mjs';
 
 const repositoryRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const protocol = readFileSync(
@@ -12,6 +13,8 @@ const protocol = readFileSync(
 const releaseGuide = readFileSync(join(repositoryRoot, 'docs/guides/release.md'), 'utf8');
 const blockedRecordPath = 'docs/research/a38ed43f-blocked-blind-evaluation.md';
 const blockedRecord = readFileSync(join(repositoryRoot, blockedRecordPath), 'utf8');
+const passedRecordPath = 'docs/research/95c7756c-passed-blind-evaluation.md';
+const passedRecord = readFileSync(join(repositoryRoot, passedRecordPath), 'utf8');
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
   readonly scripts: Readonly<Record<string, string>>;
 };
@@ -206,11 +209,62 @@ describe('the frozen pre-release blind evaluation protocol', () => {
     );
     assert.match(
       protocol,
-      /source\s+lineages, are permanently ineligible as blind holdouts at any revision/,
+      /source\s+lineages are permanently ineligible as blind holdouts\s+at any revision/,
     );
-    assert.match(protocol, /requires a different unseen positive and negative pair/);
+    assert.match(protocol, /requires\s+a different unseen positive and negative pair/);
     assert.ok(protocol.includes('../research/a38ed43f-blocked-blind-evaluation.md'));
     assert.ok(releaseGuide.includes('../research/a38ed43f-blocked-blind-evaluation.md'));
+  });
+
+  it('preserves the exact passed candidate, targets, decision and bounded runtime refusal', () => {
+    for (const fact of [
+      '95c7756c3aebf40b728c5ee5f476aab3633a6b85',
+      '59a98bbdb7c7e25565e2aa60ebce6da6bcbea8053a30ea5ff818ea89136a5533',
+      'https://github.com/box-community/openai-agents-sdk-v2-demo',
+      'daf811baacd06f6829d904f596b1125a5817be04',
+      '930aade4d7252572313cc91189846780eb4f06be9085a7de8976ebb48be5aa08',
+      'https://github.com/a2aproject/A2A',
+      '16ba52690519bf55b9388e34d4db356efa88aa51',
+      'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30',
+    ]) {
+      assert.ok(passedRecord.includes(fact), `passed record omitted ${fact}`);
+    }
+    assert.match(passedRecord, /release decision was \*\*PASS\*\*/);
+    assert.match(passedRecord, /`adapter:openai-agents` reported `completed`/);
+    assert.match(passedRecord, /`adapter_found_nothing` explanation/);
+    assert.match(passedRecord, /topology was `incomplete`/);
+    assert.match(passedRecord, /zero evidence records, zero findings, and zero strengths/);
+    assert.match(passedRecord, /No runtime audit was executed/);
+    for (const name of ['OPENAI_API_KEY', 'BOX_DEVELOPER_TOKEN', 'BOX_FOLDER_ID']) {
+      assert.ok(passedRecord.includes(`\`${name}\``), `passed record omitted ${name}`);
+    }
+    assert.match(
+      passedRecord,
+      /Credentials, side effects, and a substitute execution were not guessed/,
+    );
+    assert.doesNotMatch(
+      passedRecord,
+      /\/Users\/|\/tmp\/|orchescope-blind-|\brun_[0-9a-f]{8}|\bev_[0-9a-f]{8}|traceId|spanId/,
+    );
+  });
+
+  it('promotes only the passed positive and makes both passed lineages permanently ineligible', () => {
+    assert.match(
+      passedRecord,
+      /Both selected repositories and their source lineages are permanently ineligible as blind holdouts at any revision/,
+    );
+    assert.match(passedRecord, /different unseen positive and\s+negative pair/);
+    assert.ok(protocol.includes('../research/95c7756c-passed-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/95c7756c-passed-blind-evaluation.md'));
+
+    const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
+    assert.equal(entries.filter((entry) => entry.name === 'openai-agents-sdk-v2-demo').length, 1);
+    assert.equal(
+      entries.some(
+        (entry) => entry.name === 'a2a' || entry.url === 'https://github.com/a2aproject/A2A.git',
+      ),
+      false,
+    );
   });
 
   it('keeps every documented metamorphic witness executable through the named gate', () => {

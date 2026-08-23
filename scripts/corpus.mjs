@@ -181,7 +181,7 @@ for (const entry of entries) {
       ...(expected === undefined
         ? [{ path: '', expected: 'a recorded expectation', observed: 'no file' }]
         : differences(expected, observation)),
-      ...[claimDifference(entry, observation)].filter(Boolean),
+      ...[claimDifference(entry, observation, acceptance)].filter(Boolean),
     ];
     /*
      * The injection table runs on every entry pinned as not an agent system, in both modes. It holds an

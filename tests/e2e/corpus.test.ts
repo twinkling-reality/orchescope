@@ -69,6 +69,10 @@ const entries = readCorpus(repositoryRoot) as readonly {
     licensePath: string;
     licenseSha256: string;
   };
+  acceptance?: {
+    type?: string;
+    expectedAgentSystemDetected?: boolean;
+  };
 }[];
 
 const multiRepositorySystems = readMultiRepositorySystems(repositoryRoot) as readonly {
@@ -90,10 +94,14 @@ describe('the corpus', () => {
       const expectation = expectationOf(entry.name);
       assert.equal(expectation.name, entry.name);
       assert.equal(expectation.kind, entry.kind);
+      const expectedDetection =
+        entry.acceptance?.type === 'completed_zero'
+          ? entry.acceptance.expectedAgentSystemDetected
+          : entry.kind === 'agent_system';
       assert.equal(
         expectation.agentSystemDetected,
-        entry.kind === 'agent_system',
-        `${entry.name} is pinned as ${entry.kind} and its expectation disagrees`,
+        expectedDetection,
+        `${entry.name} has the wrong recorded classification`,
       );
     }
   });
@@ -254,8 +262,9 @@ describe('the corpus check', () => {
 
   it('holds the claim the corpus file makes, not only the recorded numbers', () => {
     const entry = { name: 'flask', kind: 'not_agent_system' };
-    assert.equal(claimDifference(entry, { agentSystemDetected: false }), undefined);
-    const difference = claimDifference(entry, { agentSystemDetected: true });
+    const verdict = { held: 0, total: 0, broken: [] };
+    assert.equal(claimDifference(entry, { agentSystemDetected: false }, verdict), undefined);
+    const difference = claimDifference(entry, { agentSystemDetected: true }, verdict);
     assert.equal(difference?.path, 'agentSystemDetected');
     assert.match(difference?.expected ?? '', /not_agent_system/);
   });

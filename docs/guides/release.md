@@ -43,6 +43,10 @@ The [blocked a38ed43f evaluation](../research/a38ed43f-blocked-blind-evaluation.
 targets, runtime boundary, and blocking decision from a completed gate. Its selected repositories and source lineages
 remain permanent regression inputs and cannot be reused as unseen holdouts for any candidate.
 
+The [passed 95c7756c evaluation](../research/95c7756c-passed-blind-evaluation.md) records the same boundary for a
+completed passing gate. Its selected positive becomes a regression input, its negative adds no duplicate corpus entry,
+and neither source lineage can be reused as an unseen holdout.
+
 `pnpm package` writes `release/release-summary.json`. Read it rather than trusting the exit code:
 
 | Field | What it has to say |

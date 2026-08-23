@@ -6,6 +6,8 @@
  * teach the harness to accept a lost cycle, a substituted provider or evidence-free component.
  */
 
+import { holdCompletedZeroAcceptance } from './completed-zero-acceptance.mjs';
+
 const sorted = (values) => [...values].sort();
 
 const sameValues = (left, right) => JSON.stringify(sorted(left)) === JSON.stringify(sorted(right));
@@ -106,11 +108,7 @@ const holdOutcome = (acceptance, bundle, hold) => {
   }
 };
 
-/** Returns the non-recordable acceptance assertions held and broken by one audit bundle. */
-export const acceptanceVerdict = (entry, bundle) => {
-  const acceptance = entry.acceptance;
-  if (acceptance === undefined) return { held: 0, total: 0, broken: [] };
-
+const graphAcceptanceVerdict = (acceptance, bundle) => {
   const components = bundle.graph.components;
   const componentById = new Map(components.map((component) => [component.id, component]));
   const evidenceById = new Map(bundle.evidence.map((evidence) => [evidence.id, evidence]));
@@ -222,4 +220,24 @@ export const acceptanceVerdict = (entry, bundle) => {
   holdOutcome(acceptance, bundle, hold);
 
   return { held: total - broken.length, total, broken };
+};
+
+const completedZeroVerdict = (acceptance, bundle) => {
+  const broken = [];
+  let total = 0;
+  const hold = (condition, sentence) => {
+    total += 1;
+    if (!condition) broken.push(sentence);
+  };
+  holdCompletedZeroAcceptance(acceptance, bundle, hold);
+  return { held: total - broken.length, total, broken };
+};
+
+/** Returns the non-recordable acceptance assertions held and broken by one audit bundle. */
+export const acceptanceVerdict = (entry, bundle) => {
+  const acceptance = entry.acceptance;
+  if (acceptance === undefined) return { held: 0, total: 0, broken: [] };
+  return acceptance.type === 'completed_zero'
+    ? completedZeroVerdict(acceptance, bundle)
+    : graphAcceptanceVerdict(acceptance, bundle);
 };

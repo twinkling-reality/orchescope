@@ -64,6 +64,90 @@ repositories:
       it never created and one unbuildable relation ended a scan of 843 files. It is also the repository that shows
       what findings do at scale, which is what milestone 2 has to fix.
 
+  - name: openai-agents-sdk-v2-demo
+    source: git
+    url: https://github.com/box-community/openai-agents-sdk-v2-demo.git
+    commit: daf811baacd06f6829d904f596b1125a5817be04
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive application selected by the independent blind evaluation of candidate
+      95c7756c. Its source imports agents.Runner, constructs a SandboxAgent and calls Runner.run_streamed, while this
+      build's OpenAI Agents reader contributes no component. The regression holds the honest boundary: the applicable
+      adapter and effects reader complete with zero output, adapter_found_nothing remains visible, topology is
+      incomplete at the exact import, and no absence claim, finding or strength is inferred from that silence.
+
+      The pinned Git tree contains 9 blobs and 153,089 blob bytes without truncation. The source scan discovers 2
+      files, parses its 1 supported Python file without a skip, and covers 10,944 source bytes. LICENSE is an MIT
+      notice with SHA-256 930aade4d7252572313cc91189846780eb4f06be9085a7de8976ebb48be5aa08. This is a
+      full-static corpus entry with no required archive or exercise environment.
+    # This explicit zero contract is definition-backed. Recording aggregate totals cannot teach the harness to hide
+    # a completed applicable adapter, topology refusal or unsupported-area explanation.
+    acceptance:
+      type: completed_zero
+      expectedAgentSystemDetected: false
+      graphPopulation:
+        components: 0
+        edges: 0
+      evidencePopulation:
+        records: 0
+      evidenceCoverage:
+        totalEligible: 0
+        included: 0
+        omitted: 0
+        requiredIncluded: 0
+        omissionReasons: []
+      componentMetricPopulation:
+        records: 0
+      runtimePopulation:
+        runs: 0
+        observed:
+          count: 0
+          runIds: []
+        silent:
+          count: 0
+          runIds: []
+      adapterOutcomes:
+        adapter:openai-agents:
+          status: completed
+          componentsFound: 0
+          edgesFound: 0
+          filesInspected: 1
+          languages:
+            - python
+        adapter:effects:
+          status: completed
+          componentsFound: 0
+          edgesFound: 0
+          filesInspected: 0
+          languages: []
+      unsupported:
+        - kind: adapter_found_nothing
+          area: agents is imported here and its adapter found nothing
+          reason: >-
+            adapter:openai-agents claims this framework, ran and found no component. Either this build does not read
+            the form this repository uses, or this repository imports the framework as a client and declares nothing
+            an adapter could read.
+      topology:
+        status: incomplete
+        unresolvedCount: 1
+        conditionalDestinations: 0
+        producers:
+          - adapterId: adapter:openai-agents
+            status: incomplete
+            scope: control_flow
+            inspectedInputs: 0
+            relationsFound: 0
+        requiredRefusals:
+          - kind: adapter_input
+            reason: >-
+              adapter:openai-agents did not state an inspected topology population for this applicable input.
+            sourceFile: main.py
+            startLine: 16
+            fileHash: 5a5026fe20e94206493025a8772dbfb3b03608959bbc90856c8ea5d5720a5ef7
+      findings:
+        total: 0
+        strengths: 0
+
   - name: openai-agents-js
     source: git
     url: https://github.com/openai/openai-agents-js.git
