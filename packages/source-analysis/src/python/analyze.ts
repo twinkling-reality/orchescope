@@ -452,7 +452,15 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
   }
 };
 
-const recordImport = (node: Node, context: Context, isType: boolean): void => {
+const importScope = (enclosing: string | undefined): { enclosing?: string } =>
+  enclosing === undefined ? {} : { enclosing };
+
+const recordImport = (
+  node: Node,
+  context: Context,
+  isType: boolean,
+  enclosing: string | undefined,
+): void => {
   if (node.type === 'import_statement') {
     for (const child of namedChildren(node)) {
       if (child.type === 'dotted_name') {
@@ -464,6 +472,7 @@ const recordImport = (node: Node, context: Context, isType: boolean): void => {
           local,
           isType,
           location: location(context.file, child),
+          ...importScope(enclosing),
         });
         context.bindings.set(local, { module: moduleName, imported: '*', isType });
         continue;
@@ -478,6 +487,7 @@ const recordImport = (node: Node, context: Context, isType: boolean): void => {
           local: aliasNode.text,
           isType,
           location: location(context.file, child),
+          ...importScope(enclosing),
         });
         context.bindings.set(aliasNode.text, {
           module: nameNode.text,
@@ -499,6 +509,7 @@ const recordImport = (node: Node, context: Context, isType: boolean): void => {
       local: '*',
       isType,
       location: location(context.file, node),
+      ...importScope(enclosing),
     });
     return;
   }
@@ -512,6 +523,7 @@ const recordImport = (node: Node, context: Context, isType: boolean): void => {
         local: imported,
         isType,
         location: location(context.file, child),
+        ...importScope(enclosing),
       });
       context.bindings.set(imported, { module: moduleName, imported, isType });
       continue;
@@ -526,6 +538,7 @@ const recordImport = (node: Node, context: Context, isType: boolean): void => {
         local: aliasNode.text,
         isType,
         location: location(context.file, child),
+        ...importScope(enclosing),
       });
       context.bindings.set(aliasNode.text, {
         module: moduleName,
@@ -564,6 +577,8 @@ type Frame = {
   readonly awaited: boolean;
   /** Imports inside an exact TYPE_CHECKING consequence do not establish runtime bindings. */
   readonly typeOnly: boolean;
+  /** Conditional branches owning the source being traversed, outermost first. */
+  readonly branches: readonly BranchPredicateFact[];
 };
 
 const TYPING_MODULES = new Set(['typing', 'typing_extensions']);
@@ -960,32 +975,6 @@ const splitArguments = (
   return { positional, keywords, keywordSpreads, keywordsComplete };
 };
 
-/** Traverses one conditional consequence with a scoped type-only binding set when it cannot run. */
-function traverseConditionalConsequence(
-  node: Node,
-  context: Context,
-  frame: Frame,
-  collecting: (readonly string[])[][],
-): void {
-  const condition = childField(node, 'condition');
-  const consequence = childField(node, 'consequence');
-  const typeOnlyConsequence =
-    frame.typeOnly || (condition !== undefined && isTypeCheckingGuard(condition, context, frame));
-  for (const child of namedChildren(node)) {
-    const isConsequence =
-      consequence !== undefined &&
-      child.startIndex === consequence.startIndex &&
-      child.endIndex === consequence.endIndex;
-    if (!isConsequence || !typeOnlyConsequence) {
-      traverse(child, context, frame, collecting);
-      continue;
-    }
-    const savedBindings = new Map(context.bindings);
-    traverse(child, context, { ...frame, typeOnly: true }, collecting);
-    restoreBindings(context, savedBindings);
-  }
-}
-
 /** Traverses every branch of an if, including each independently guarded `elif` consequence. */
 function traverseIfStatement(
   node: Node,
@@ -993,31 +982,142 @@ function traverseIfStatement(
   frame: Frame,
   collecting: (readonly string[])[][],
 ): void {
-  for (const child of namedChildren(node)) {
-    if (child.type === 'elif_clause') {
-      traverseConditionalConsequence(child, context, frame, collecting);
-    } else {
-      const consequence = childField(node, 'consequence');
-      const isTopLevelConsequence =
-        consequence !== undefined &&
-        child.startIndex === consequence.startIndex &&
-        child.endIndex === consequence.endIndex;
-      if (isTopLevelConsequence) {
-        const condition = childField(node, 'condition');
-        const typeOnly =
+  const condition = childField(node, 'condition');
+  if (condition !== undefined) traverse(condition, context, frame, collecting);
+
+  const consequence = childField(node, 'consequence');
+  if (consequence !== undefined) {
+    const predicate = branchPredicate(condition, 'consequence', context);
+    const savedBindings = new Map(context.bindings);
+    traverse(
+      consequence,
+      context,
+      {
+        ...frame,
+        typeOnly:
           frame.typeOnly ||
-          (condition !== undefined && isTypeCheckingGuard(condition, context, frame));
-        if (typeOnly) {
-          const savedBindings = new Map(context.bindings);
-          traverse(child, context, { ...frame, typeOnly: true }, collecting);
-          restoreBindings(context, savedBindings);
-          continue;
-        }
-      }
-      traverse(child, context, frame, collecting);
+          (condition !== undefined && isTypeCheckingGuard(condition, context, frame)),
+        branches: predicate === undefined ? frame.branches : [...frame.branches, predicate],
+      },
+      collecting,
+    );
+    restoreBindings(context, savedBindings);
+  }
+
+  const alternative = childField(node, 'alternative');
+  if (alternative !== undefined) {
+    const predicate = branchPredicate(condition, 'alternative', context);
+    const alternativeFrame = {
+      ...frame,
+      branches: predicate === undefined ? frame.branches : [...frame.branches, predicate],
+    };
+    const savedBindings = new Map(context.bindings);
+    if (alternative.type === 'elif_clause') {
+      traverseIfStatement(alternative, context, alternativeFrame, collecting);
+    } else {
+      traverse(alternative, context, alternativeFrame, collecting);
     }
+    restoreBindings(context, savedBindings);
+  }
+
+  for (const child of namedChildren(node)) {
+    const alreadyTraversed = [condition, consequence, alternative].some(
+      (candidate) =>
+        candidate !== undefined &&
+        candidate.startIndex === child.startIndex &&
+        candidate.endIndex === child.endIndex,
+    );
+    if (alreadyTraversed) continue;
+    const predicate: BranchPredicateFact = {
+      operator: `${node.type}:${child.type}`,
+      references: [],
+      location: location(context.file, child),
+      branch: 'alternative',
+    };
+    const savedBindings = new Map(context.bindings);
+    traverse(child, context, { ...frame, branches: [...frame.branches, predicate] }, collecting);
+    restoreBindings(context, savedBindings);
   }
 }
+
+const isConditionalControlBody = (kind: ControlFlowFact['kind'], child: Node): boolean =>
+  (kind === 'loop' && (child.type === 'block' || child.type === 'else_clause')) ||
+  (kind === 'try_catch' &&
+    (child.type === 'block' || child.type === 'except_clause' || child.type === 'else_clause'));
+
+const traverseControlFlow = (
+  node: Node,
+  controlKind: ControlFlowFact['kind'],
+  context: Context,
+  frame: Frame,
+  collecting: (readonly string[])[][],
+): void => {
+  const contains: (readonly string[])[] = [];
+  collecting.push(contains);
+  let conditionalBody = 0;
+  let successfulTryBody: BranchPredicateFact | undefined;
+  for (const child of namedChildren(node)) {
+    if (!isConditionalControlBody(controlKind, child)) {
+      traverse(child, context, frame, collecting);
+      continue;
+    }
+    conditionalBody += 1;
+    const predicate: BranchPredicateFact = {
+      operator: `${node.type}:${child.type}:${conditionalBody}`,
+      references: [],
+      location: location(context.file, child),
+      branch: 'consequence',
+    };
+    const inherited =
+      controlKind === 'try_catch' && child.type === 'else_clause' && successfulTryBody !== undefined
+        ? [...frame.branches, successfulTryBody]
+        : frame.branches;
+    traverse(child, context, { ...frame, branches: [...inherited, predicate] }, collecting);
+    if (controlKind === 'try_catch' && child.type === 'block') successfulTryBody = predicate;
+  }
+  collecting.pop();
+  const form = controlKind === 'loop' ? loopForm(node) : undefined;
+  context.controlFlow.push({
+    kind: controlKind,
+    location: location(context.file, node),
+    enclosing: frame.name,
+    contains,
+    ...(form === undefined ? {} : form),
+    ...(controlKind === 'try_catch' ? { exitsOnSuccess: exitsOnSuccessIn(node) } : {}),
+    ...(form?.repeats === 'same_work'
+      ? {
+          headerNames: loopHeaderNames(node),
+          growingNames: growingNamesOf(node),
+          countsPasses: node.type === 'for_statement',
+        }
+      : {}),
+  });
+};
+
+const traverseMatchStatement = (
+  node: Node,
+  context: Context,
+  frame: Frame,
+  collecting: (readonly string[])[][],
+): void => {
+  let matchedCase = 0;
+  for (const child of namedChildren(node)) {
+    if (child.type !== 'block') {
+      traverse(child, context, frame, collecting);
+      continue;
+    }
+    for (const clause of namedChildren(child)) {
+      matchedCase += 1;
+      const predicate: BranchPredicateFact = {
+        operator: `match_case:${matchedCase}`,
+        references: [],
+        location: location(context.file, clause),
+        branch: 'consequence',
+      };
+      traverse(clause, context, { ...frame, branches: [...frame.branches, predicate] }, collecting);
+    }
+  }
+};
 
 const traverse = (
   node: Node,
@@ -1027,36 +1127,21 @@ const traverse = (
 ): void => {
   const controlKind = CONTROL_FLOW_TYPES[node.type];
   if (controlKind !== undefined) {
-    const contains: (readonly string[])[] = [];
-    collecting.push(contains);
-    for (const child of namedChildren(node)) traverse(child, context, frame, collecting);
-    collecting.pop();
-    const form = controlKind === 'loop' ? loopForm(node) : undefined;
-    context.controlFlow.push({
-      kind: controlKind,
-      location: location(context.file, node),
-      enclosing: frame.name,
-      contains,
-      ...(form === undefined ? {} : form),
-      ...(controlKind === 'try_catch' ? { exitsOnSuccess: exitsOnSuccessIn(node) } : {}),
-      ...(form?.repeats === 'same_work'
-        ? {
-            headerNames: loopHeaderNames(node),
-            growingNames: growingNamesOf(node),
-            countsPasses: node.type === 'for_statement',
-          }
-        : {}),
-    });
+    traverseControlFlow(node, controlKind, context, frame, collecting);
     return;
   }
 
   switch (node.type) {
     case 'import_statement':
     case 'import_from_statement':
-      recordImport(node, context, frame.typeOnly);
+      recordImport(node, context, frame.typeOnly, frame.name);
       return;
     case 'if_statement': {
       traverseIfStatement(node, context, frame, collecting);
+      return;
+    }
+    case 'match_statement': {
+      traverseMatchStatement(node, context, frame, collecting);
       return;
     }
     case 'decorated_definition': {
@@ -1163,6 +1248,7 @@ const recordCall = (
     location: location(context.file, node),
     offset: node.startIndex,
     enclosing: frame.name,
+    ...(frame.branches.length === 0 ? {} : { branches: frame.branches }),
     awaited: frame.awaited,
   });
   const current = collecting[collecting.length - 1];
@@ -1411,11 +1497,19 @@ const recordFunction = (
     ...(returns.length === 0 ? {} : { returns }),
     ...(parameters.length === 0 ? {} : { parameters }),
     enclosing: frame.name,
+    ...(frame.branches.length === 0 ? {} : { branches: frame.branches }),
   });
   const body = childField(node, 'body');
   if (body !== undefined) {
+    const savedBindings = new Map(context.bindings);
     recordDocumentationStrings(body, context);
-    traverse(body, context, { name, awaited: false, typeOnly: frame.typeOnly }, collecting);
+    traverse(
+      body,
+      context,
+      { name, awaited: false, typeOnly: frame.typeOnly, branches: [] },
+      collecting,
+    );
+    restoreBindings(context, savedBindings);
   }
 };
 
@@ -1444,11 +1538,19 @@ const recordClass = (
     location: location(context.file, node),
     initializer: bases.length > 0 ? bases : undefined,
     enclosing: frame.name,
+    ...(frame.branches.length === 0 ? {} : { branches: frame.branches }),
   });
   const body = childField(node, 'body');
   if (body !== undefined) {
+    const savedBindings = new Map(context.bindings);
     recordDocumentationStrings(body, context);
-    traverse(body, context, { name, awaited: false, typeOnly: frame.typeOnly }, collecting);
+    traverse(
+      body,
+      context,
+      { name, awaited: false, typeOnly: frame.typeOnly, branches: frame.branches },
+      collecting,
+    );
+    restoreBindings(context, savedBindings);
   }
 };
 
@@ -1572,6 +1674,7 @@ const recordAssignmentDefinition = (
     ...(aliasedFrom.length === 0 ? {} : { aliasedFrom }),
     ...(literals.length === 0 ? {} : { literals }),
     enclosing: frame.name,
+    ...(frame.branches.length === 0 ? {} : { branches: frame.branches }),
   });
 };
 
@@ -1632,7 +1735,12 @@ export const analyzePython = async (input: {
     const root = tree.rootNode;
     recordDocumentationStrings(root, context);
     for (const child of namedChildren(root)) {
-      traverse(child, context, { name: undefined, awaited: false, typeOnly: false }, []);
+      traverse(
+        child,
+        context,
+        { name: undefined, awaited: false, typeOnly: false, branches: [] },
+        [],
+      );
     }
     return {
       file: input.file,

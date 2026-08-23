@@ -54,6 +54,12 @@ scenario path was presented as verification for a repository with no scenario. I
 input, its negative contributed no distinct precision invariant, and neither source lineage can be reused as an unseen
 holdout.
 
+The [blocked df99c97c evaluation](../research/df99c97c-blocked-blind-evaluation.md) records a fourth completed block:
+a function-scoped compatible-client import was silently classified not applicable and an implemented agent application
+was reported as having no agent system. Its proposed negative contained executable agent demonstrations and was not a
+valid negative control. The positive is a permanent regression input, the negative adds no corpus entry, and neither
+source lineage can be reused as an unseen holdout.
+
 The [passed 95c7756c evaluation](../research/95c7756c-passed-blind-evaluation.md) records the same boundary for a
 completed passing gate. Its selected positive becomes a regression input, its negative adds no duplicate corpus entry,
 and neither source lineage can be reused as an unseen holdout.

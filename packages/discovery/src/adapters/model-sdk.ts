@@ -96,7 +96,12 @@ const matchesMethod = (call: CallFact, methods: readonly string[]): string | und
   return undefined;
 };
 
-type Discovered = { componentKeys: Set<string>; edgeKeys: Set<string>; files: Set<string> };
+type Discovered = {
+  componentKeys: Set<string>;
+  edgeKeys: Set<string>;
+  files: Set<string>;
+  unresolved: TopologyDiscovery['unresolved'][number][];
+};
 
 const populationIdentityKey = (identity: ComponentIdentity): string =>
   `${identity.kind}:${identity.namespace}:${identity.localName}`;
@@ -124,6 +129,58 @@ type Wrapper = {
 const importForRoot = (module: ModuleFacts, root: string): ImportFact | undefined => {
   const matches = module.imports.filter((entry) => entry.local === root && !entry.isType);
   return matches.length === 1 ? matches[0] : undefined;
+};
+
+const locationEndsBefore = (declaration: SourceLocation, use: SourceLocation): boolean => {
+  const endLine = declaration.endLine ?? declaration.startLine;
+  if (endLine !== use.startLine) return endLine < use.startLine;
+  if (declaration.endColumn === undefined || use.startColumn === undefined) return false;
+  return declaration.endColumn <= use.startColumn;
+};
+
+const compareLocationStart = (left: SourceLocation, right: SourceLocation): number =>
+  left.startLine - right.startLine || (left.startColumn ?? -1) - (right.startColumn ?? -1);
+
+const callableImportOwnsUse = (
+  module: ModuleFacts,
+  entry: ImportFact,
+  use: SourceLocation,
+): boolean => {
+  if (entry.enclosing === undefined) return true;
+  return module.definitions.some(
+    (definition) =>
+      (definition.kind === 'function' || definition.kind === 'method') &&
+      (definition.name === entry.enclosing || definition.name.endsWith(`.${entry.enclosing}`)) &&
+      locationContains(definition.location, entry.location) &&
+      locationContains(definition.location, use),
+  );
+};
+
+/** The exact import binding that owns one provider construction at its lexical use. */
+const importForProviderCall = (module: ModuleFacts, call: CallFact): ImportFact | undefined => {
+  const root = call.calleePath[0];
+  if (root === undefined || call.origin === undefined) return undefined;
+  const sameBinding = module.imports.filter(
+    (entry) =>
+      entry.local === root &&
+      !entry.isType &&
+      entry.module === call.origin?.module &&
+      entry.imported === call.origin.imported,
+  );
+  const containingLocalImport = sameBinding.some(
+    (entry) => entry.enclosing !== undefined && callableImportOwnsUse(module, entry, call.location),
+  );
+  const candidates = sameBinding.filter(
+    (entry) =>
+      locationEndsBefore(entry.location, call.location) &&
+      callableImportOwnsUse(module, entry, call.location) &&
+      (entry.enclosing !== undefined || !containingLocalImport),
+  );
+  return candidates.sort((left, right) => {
+    if (left.enclosing === undefined && right.enclosing !== undefined) return 1;
+    if (left.enclosing !== undefined && right.enclosing === undefined) return -1;
+    return compareLocationStart(right.location, left.location);
+  })[0];
 };
 
 const applicabilityRow = (
@@ -286,8 +343,7 @@ const rawProviderImports = (context: DiscoveryContext): AdapterApplicability => 
             },
           ) !== undefined,
       );
-      const root = supported ? call.calleePath[0] : undefined;
-      const imported = root === undefined ? undefined : importForRoot(module, root);
+      const imported = supported ? importForProviderCall(module, call) : undefined;
       return imported === undefined
         ? []
         : [
@@ -320,9 +376,10 @@ const modelSdkTopology = (input: {
   readonly context: DiscoveryContext;
   readonly relations: number;
   readonly direct: ReturnType<typeof discoverLangChainOpenAiModels>['topology'];
+  readonly rawUnresolved: TopologyDiscovery['unresolved'];
 }): TopologyDiscovery => {
   const legacy = legacyModelSdkApplicability(input.context);
-  const unresolved = [...input.direct.unresolved];
+  const unresolved = [...input.direct.unresolved, ...input.rawUnresolved];
   for (const row of legacy) {
     if (unresolved.length >= 10) break;
     unresolved.push({
@@ -344,36 +401,53 @@ const modelSdkTopology = (input: {
     boundaryFacts: [],
     configurationBounds: 0,
     configurationBoundFacts: [],
-    unresolvedCount: input.direct.unresolvedCount + legacy.length,
+    unresolvedCount: input.direct.unresolvedCount + input.rawUnresolved.length + legacy.length,
     unresolved,
   };
 };
 
 /** The variable a construction was assigned to, which is the name every later call reaches it by. */
-const stableVariableHolding = (
+const variableHolding = (
   module: ModuleFacts,
   call: CallFact,
-): { readonly name: string; readonly enclosing: string | undefined } | undefined => {
+):
+  | {
+      readonly name: string;
+      readonly enclosing: string | undefined;
+      readonly location: SourceLocation;
+      readonly unique: boolean;
+      readonly branches: NonNullable<CallFact['branches']>;
+    }
+  | undefined => {
   const definition = definitionForCall(module, call);
-  if (definition?.kind !== 'variable') return undefined;
+  if (definition?.kind !== 'variable') {
+    const assignment = module.assignments.find(
+      (candidate) =>
+        candidate.target.length === 1 && locationContains(candidate.location, call.location),
+    );
+    const name = assignment?.target[0];
+    if (assignment === undefined || name === undefined) return undefined;
+    return {
+      name,
+      enclosing: assignment.enclosing,
+      location: assignment.location,
+      unique: false,
+      branches: call.branches ?? [],
+    };
+  }
   const definitions = module.definitions.filter(
     (candidate) =>
       candidate.kind === 'variable' &&
       candidate.name === definition.name &&
       candidate.enclosing === definition.enclosing,
   );
-  if (definitions.length !== 1) return undefined;
-  if (
-    module.assignments.some(
-      (assignment) =>
-        assignment.target.length === 1 &&
-        assignment.target[0] === definition.name &&
-        assignment.enclosing === definition.enclosing,
-    )
-  ) {
-    return undefined;
-  }
-  return { name: definition.name, enclosing: definition.enclosing };
+  return {
+    name: definition.name,
+    enclosing: definition.enclosing,
+    location: definition.location,
+    unique: definitions.length === 1,
+    branches: definition.branches ?? [],
+  };
 };
 
 const receiverKey = (enclosing: string | undefined, receiver: string): string =>
@@ -381,8 +455,32 @@ const receiverKey = (enclosing: string | undefined, receiver: string): string =>
 
 type ProviderClient = {
   readonly provider: (typeof PROVIDERS)[number];
+  readonly providerResolved: boolean;
   readonly deadline: number | undefined;
   readonly supportingLocations: readonly SourceLocation[];
+  readonly bindingLocation: SourceLocation;
+  readonly bindingBranches: NonNullable<CallFact['branches']>;
+};
+
+const sameBranch = (
+  left: NonNullable<CallFact['branches']>[number],
+  right: NonNullable<CallFact['branches']>[number],
+): boolean =>
+  left.branch === right.branch &&
+  left.location.file === right.location.file &&
+  left.location.startLine === right.location.startLine &&
+  left.location.startColumn === right.location.startColumn;
+
+/** A binding is authoritative only inside every conditional branch that created it. */
+const bindingOwnsUse = (
+  binding: NonNullable<CallFact['branches']>,
+  use: NonNullable<CallFact['branches']>,
+): boolean => {
+  if (binding.length > use.length) return false;
+  return binding.every((branch, index) => {
+    const usedBranch = use[index];
+    return usedBranch !== undefined && sameBranch(branch, usedBranch);
+  });
 };
 
 const registerProviderClientAt = (input: {
@@ -412,41 +510,26 @@ const registerProviderClientAt = (input: {
   if (matched === undefined) return undefined;
   const entries = objectArgument(call);
   const timeout = clientTimeoutMs(call, module.language);
+  const baseUrlEntry = findEntry(entries, 'baseURL') ?? findEntry(entries, 'base_url');
   const baseUrlFromConfig =
     stringValue(findEntry(entries, 'baseURL')?.value) ??
     stringValue(findEntry(entries, 'base_url')?.value);
+  const providerResolved = baseUrlEntry === undefined || baseUrlFromConfig !== undefined;
   const metadata = {
     client: dotted(call.calleePath),
     ...(baseUrlFromConfig === undefined ? {} : { baseUrl: baseUrlFromConfig }),
     ...(timeout === undefined ? {} : { timeoutMs: timeout }),
   };
-  builder.addComponent(
-    drafts.sourceComponent({
-      kind: 'provider',
-      identity: providerIdentity(provider.provider),
-      file: module.file,
-      name: provider.provider,
-      location: call.location,
-      symbol: dotted(call.calleePath),
-      confidence: CONFIDENCE_BANDS.deterministic,
-      permissions: [
-        { kind: 'network', scope: baseUrlFromConfig ?? provider.provider, mode: 'write' },
-      ],
-      metadata,
-      tags: ['model-sdk'],
-    }),
-  );
-  const root = call.calleePath[0];
-  const imported = root === undefined ? undefined : importForRoot(module, root);
-  if (imported !== undefined) {
+  const imported = importForProviderCall(module, call);
+  if (providerResolved) {
     builder.addComponent(
       drafts.sourceComponent({
         kind: 'provider',
         identity: providerIdentity(provider.provider),
-        file: imported.location.file,
+        file: module.file,
         name: provider.provider,
-        location: imported.location,
-        symbol: `${imported.module}.${imported.imported}`,
+        location: call.location,
+        symbol: dotted(call.calleePath),
         confidence: CONFIDENCE_BANDS.deterministic,
         permissions: [
           { kind: 'network', scope: baseUrlFromConfig ?? provider.provider, mode: 'write' },
@@ -455,18 +538,47 @@ const registerProviderClientAt = (input: {
         tags: ['model-sdk'],
       }),
     );
+    if (imported !== undefined) {
+      builder.addComponent(
+        drafts.sourceComponent({
+          kind: 'provider',
+          identity: providerIdentity(provider.provider),
+          file: imported.location.file,
+          name: provider.provider,
+          location: imported.location,
+          symbol: `${imported.module}.${imported.imported}`,
+          confidence: CONFIDENCE_BANDS.deterministic,
+          permissions: [
+            { kind: 'network', scope: baseUrlFromConfig ?? provider.provider, mode: 'write' },
+          ],
+          metadata,
+          tags: ['model-sdk'],
+        }),
+      );
+    }
+    recordComponent(found, providerIdentity(provider.provider));
+  } else {
+    found.unresolved.push({
+      kind: 'adapter_input',
+      reason: `${dotted(call.calleePath)} receives a base URL whose provider identity is selected at run time.`,
+      location: baseUrlEntry?.location ?? call.location,
+    });
   }
-  recordComponent(found, providerIdentity(provider.provider));
   found.files.add(module.file);
-  const definition = stableVariableHolding(module, call);
+  const definition = variableHolding(module, call);
   if (definition === undefined) return undefined;
-  context.bindings.register(module.file, definition.name, providerIdentity(provider.provider));
+  if (providerResolved && definition.unique) {
+    context.bindings.register(module.file, definition.name, providerIdentity(provider.provider));
+  }
   return {
     key: receiverKey(definition.enclosing, definition.name),
     client: {
       provider,
+      providerResolved,
       deadline: timeout,
       supportingLocations: [...(imported === undefined ? [] : [imported.location]), call.location],
+      bindingLocation: definition.location,
+      bindingBranches: definition.branches,
     },
   };
 };
@@ -485,8 +597,8 @@ const registerProviderClients = (
   builder: SystemGraphBuilder,
   context: DiscoveryContext,
   found: Discovered,
-): ReadonlyMap<string, ProviderClient> => {
-  const clients = new Map<string, ProviderClient>();
+): ReadonlyMap<string, readonly ProviderClient[]> => {
+  const clients = new Map<string, ProviderClient[]>();
   for (const provider of PROVIDERS) {
     for (const call of module.calls) {
       const registered = registerProviderClientAt({
@@ -497,7 +609,11 @@ const registerProviderClients = (
         context,
         found,
       });
-      if (registered !== undefined) clients.set(registered.key, registered.client);
+      if (registered !== undefined) {
+        const existing = clients.get(registered.key);
+        if (existing === undefined) clients.set(registered.key, [registered.client]);
+        else existing.push(registered.client);
+      }
     }
   }
   return clients;
@@ -510,40 +626,183 @@ const clientReceiver = (call: CallFact, method: string): string =>
 type ModelCall = {
   readonly call: CallFact;
   readonly provider: (typeof PROVIDERS)[number];
+  readonly providerResolved: boolean;
   readonly method: string;
   readonly model: string;
   readonly deadline: DeclaredDeadline | undefined;
   readonly supportingLocations: readonly SourceLocation[];
 };
 
+type ClientSettlement = {
+  readonly receiver: string;
+  readonly client?: ProviderClient;
+  readonly refusal?: string;
+  readonly agentBoundary?: boolean;
+};
+
+const sameLocationStart = (left: SourceLocation, right: SourceLocation): boolean =>
+  compareLocationStart(left, right) === 0;
+
+const everyReceiverBindingIsRecognized = (input: {
+  readonly module: ModuleFacts;
+  readonly receiver: string;
+  readonly enclosing: string | undefined;
+  readonly call: CallFact;
+  readonly candidates: readonly ProviderClient[];
+}): boolean => {
+  const { module, receiver, enclosing, call, candidates } = input;
+  // A conditional member assignment does not establish what the object held on
+  // paths that bypass it. The pre-existing member may be an arbitrary client.
+  if (receiver.includes('.')) return false;
+  const parameterBinding = module.definitions.some(
+    (definition) =>
+      (definition.kind === 'function' || definition.kind === 'method') &&
+      definition.parameters?.some((parameter) => parameter.name === receiver) === true &&
+      (definition.name === enclosing || definition.name.endsWith(`.${enclosing}`)) &&
+      locationContains(definition.location, call.location),
+  );
+  if (parameterBinding) return false;
+  const bindingLocations = [
+    ...module.definitions
+      .filter(
+        (definition) =>
+          definition.kind === 'variable' &&
+          definition.name === receiver &&
+          definition.enclosing === enclosing &&
+          locationEndsBefore(definition.location, call.location),
+      )
+      .map((definition) => definition.location),
+    ...module.assignments
+      .filter(
+        (assignment) =>
+          assignment.target.length === 1 &&
+          assignment.target[0] === receiver &&
+          assignment.enclosing === enclosing &&
+          locationEndsBefore(assignment.location, call.location),
+      )
+      .map((assignment) => assignment.location),
+  ];
+  return (
+    bindingLocations.length > 0 &&
+    bindingLocations.every((binding) =>
+      candidates.some((candidate) => sameLocationStart(candidate.bindingLocation, binding)),
+    )
+  );
+};
+
+const settleClientAt = (input: {
+  readonly module: ModuleFacts;
+  readonly clients: ReadonlyMap<string, readonly ProviderClient[]>;
+  readonly call: CallFact;
+  readonly method: string;
+  readonly provider: (typeof PROVIDERS)[number];
+}): ClientSettlement => {
+  const { module, clients, call, method, provider } = input;
+  const receiver = clientReceiver(call, method);
+  const callBranches = call.branches ?? [];
+  const enclosing = hasBindingAt(module, call.enclosing, receiver, call.location)
+    ? call.enclosing
+    : undefined;
+  const unsettledAssignment =
+    module.language !== 'python' &&
+    module.assignments.some(
+      (assignment) =>
+        assignment.target.length === 1 &&
+        assignment.target[0] === receiver &&
+        assignment.enclosing === enclosing &&
+        locationEndsBefore(assignment.location, call.location),
+    );
+  const nearestDefinition = module.definitions
+    .filter(
+      (definition) =>
+        definition.kind === 'variable' &&
+        definition.name === receiver &&
+        definition.enclosing === enclosing &&
+        locationEndsBefore(definition.location, call.location) &&
+        bindingOwnsUse(definition.branches ?? [], callBranches),
+    )
+    .sort((left, right) => compareLocationStart(right.location, left.location))[0];
+  const candidates = clients.get(receiverKey(enclosing, receiver)) ?? [];
+  const activeCandidates = candidates.filter(
+    (candidate) =>
+      locationEndsBefore(candidate.bindingLocation, call.location) &&
+      (nearestDefinition === undefined ||
+        !locationEndsBefore(candidate.bindingLocation, nearestDefinition.location)),
+  );
+  const eligible = candidates.filter(
+    (candidate) =>
+      bindingOwnsUse(candidate.bindingBranches, callBranches) &&
+      candidate.bindingLocation.startLine === nearestDefinition?.location.startLine &&
+      candidate.bindingLocation.startColumn === nearestDefinition.location.startColumn,
+  );
+  const client = eligible.length === 1 && !unsettledAssignment ? eligible[0] : undefined;
+  const competingBinding =
+    client !== undefined &&
+    candidates.some(
+      (candidate) =>
+        candidate !== client &&
+        locationEndsBefore(candidate.bindingLocation, call.location) &&
+        !locationEndsBefore(candidate.bindingLocation, client.bindingLocation),
+    );
+  if (client?.provider === provider && !competingBinding) return { receiver, client };
+  if (!activeCandidates.some((candidate) => candidate.provider === provider)) return { receiver };
+  const refusal = unsettledAssignment
+    ? `${receiver} is reassigned before this call, so its provider client is not settled.`
+    : activeCandidates.length > 1
+      ? `${receiver} may refer to more than one provider client at this control-flow join.`
+      : `${receiver} has no provider client settled on every path through this control-flow join.`;
+  return {
+    receiver,
+    refusal,
+    ...(everyReceiverBindingIsRecognized({ module, receiver, enclosing, call, candidates })
+      ? { agentBoundary: true }
+      : {}),
+  };
+};
+
 const modelCallsIn = (
   module: ModuleFacts,
-  clients: ReadonlyMap<string, ProviderClient>,
-): readonly ModelCall[] => {
+  clients: ReadonlyMap<string, readonly ProviderClient[]>,
+): {
+  readonly calls: readonly ModelCall[];
+  readonly unresolved: TopologyDiscovery['unresolved'];
+  readonly unsettledCallers: readonly CallFact[];
+} => {
   const calls: ModelCall[] = [];
+  const unresolved: TopologyDiscovery['unresolved'][number][] = [];
+  const unsettledCallers: CallFact[] = [];
+  const refusedOffsets = new Set<number>();
   for (const call of module.calls) {
     for (const provider of PROVIDERS) {
       const method = matchesMethod(call, provider.methods);
       if (method === undefined) continue;
-      const receiver = clientReceiver(call, method);
-      const scoped = clients.get(receiverKey(call.enclosing, receiver));
-      const client =
-        scoped ??
-        (hasBindingAt(module, call.enclosing, receiver, call.location)
-          ? undefined
-          : clients.get(receiverKey(undefined, receiver)));
-      if (client?.provider !== provider) continue;
+      const settlement = settleClientAt({ module, clients, call, method, provider });
+      if (settlement.client === undefined) {
+        if (settlement.agentBoundary === true && call.enclosing !== undefined) {
+          unsettledCallers.push(call);
+        }
+        if (settlement.refusal !== undefined && !refusedOffsets.has(call.offset)) {
+          unresolved.push({
+            kind: 'conditional_destination',
+            reason: settlement.refusal,
+            location: call.location,
+          });
+          refusedOffsets.add(call.offset);
+        }
+        continue;
+      }
       calls.push({
         call,
         provider,
+        providerResolved: settlement.client.providerResolved,
         method,
         model: stringValue(findEntry(objectArgument(call), 'model')?.value) ?? 'unspecified',
-        deadline: modelCallDeadline(call, module.language, client.deadline),
-        supportingLocations: client.supportingLocations,
+        deadline: modelCallDeadline(call, module.language, settlement.client.deadline),
+        supportingLocations: settlement.client.supportingLocations,
       });
     }
   }
-  return calls;
+  return { calls, unresolved, unsettledCallers };
 };
 
 /**
@@ -623,16 +882,77 @@ const registerModelPromptInput = (input: {
   }
 };
 
+/** A supported model call whose runtime endpoint cannot justify a provider or model identity. */
+const registerUnresolvedModelCaller = (input: {
+  readonly module: ModuleFacts;
+  readonly builder: SystemGraphBuilder;
+  readonly found: Discovered;
+  readonly call: CallFact;
+  readonly boundary?: string;
+}): void => {
+  const { module, builder, found, call, boundary } = input;
+  const enclosing = call.enclosing;
+  if (enclosing === undefined) return;
+  const callerIdentity = sourceIdentity('agent', module.file, enclosing);
+  builder.addComponent(
+    drafts.sourceComponent({
+      kind: 'agent',
+      file: module.file,
+      name: enclosing,
+      location: call.location,
+      symbol: enclosing,
+      confidence: CONFIDENCE_BANDS.heuristic,
+      details: { for: 'agent', role: 'unspecified', framework: 'hand-written' },
+      metadata: {
+        inferredFrom: 'model call site',
+        modelBoundary: boundary ?? 'provider and model selected at run time',
+      },
+      tags: ['hand-written-loop'],
+    }),
+  );
+  recordComponent(found, callerIdentity);
+  found.files.add(module.file);
+};
+
+const registerUnsettledModelCallers = (input: {
+  readonly module: ModuleFacts;
+  readonly builder: SystemGraphBuilder;
+  readonly found: Discovered;
+  readonly calls: readonly CallFact[];
+}): void => {
+  for (const call of input.calls) {
+    registerUnresolvedModelCaller({
+      module: input.module,
+      builder: input.builder,
+      found: input.found,
+      call,
+      boundary: 'provider identity unsettled across client control flow',
+    });
+  }
+};
+
 const registerModelCalls = (
   module: ModuleFacts,
   builder: SystemGraphBuilder,
   context: DiscoveryContext,
   found: Discovered,
-  clients: ReadonlyMap<string, ProviderClient>,
+  clients: ReadonlyMap<string, readonly ProviderClient[]>,
 ): void => {
-  const modelCalls = modelCallsIn(module, clients);
+  const discovered = modelCallsIn(module, clients);
+  const modelCalls = discovered.calls;
+  found.unresolved.push(
+    ...discovered.unresolved.slice(0, Math.max(0, 10 - found.unresolved.length)),
+  );
+  registerUnsettledModelCallers({ module, builder, found, calls: discovered.unsettledCallers });
   const declared = relationDeadlines(modelCalls);
-  for (const { call, provider, method, model, supportingLocations } of modelCalls) {
+  for (const {
+    call,
+    provider,
+    providerResolved,
+    method,
+    model,
+    supportingLocations,
+  } of modelCalls) {
     const entries = objectArgument(call);
     const maxTokens =
       numberValue(findEntry(entries, 'max_tokens')?.value) ??
@@ -640,16 +960,22 @@ const registerModelCalls = (
       numberValue(findEntry(entries, 'max_output_tokens')?.value);
     const temperature = numberValue(findEntry(entries, 'temperature')?.value);
     const streaming = method.includes('stream') || findEntry(entries, 'stream') !== undefined;
-    registerModelPromptInput({
-      module,
-      context,
-      call,
-      provider,
-      method,
-      model,
-      entries,
-      supportingLocations,
-    });
+    if (providerResolved || call.enclosing !== undefined) {
+      registerModelPromptInput({
+        module,
+        context,
+        call,
+        provider,
+        method,
+        model,
+        entries,
+        supportingLocations,
+      });
+    }
+    if (!providerResolved) {
+      registerUnresolvedModelCaller({ module, builder, found, call });
+      continue;
+    }
 
     builder.addComponent(
       drafts.sourceComponent({
@@ -987,7 +1313,12 @@ export const modelSdkAdapter: AgentSystemAdapter = {
   applicability: modelSdkApplicability,
   appliesTo: (context) => modelSdkApplicability(context).length > 0,
   discover: (context, builder): AdapterFindings => {
-    const found: Discovered = { componentKeys: new Set(), edgeKeys: new Set(), files: new Set() };
+    const found: Discovered = {
+      componentKeys: new Set(),
+      edgeKeys: new Set(),
+      files: new Set(),
+      unresolved: [],
+    };
     for (const module of context.modules) {
       const clientDeadlines = registerProviderClients(module, builder, context, found);
       registerModelCalls(module, builder, context, found, clientDeadlines);
@@ -1005,6 +1336,7 @@ export const modelSdkAdapter: AgentSystemAdapter = {
         context,
         relations: found.edgeKeys.size,
         direct: direct.topology,
+        rawUnresolved: found.unresolved,
       }),
     };
   },

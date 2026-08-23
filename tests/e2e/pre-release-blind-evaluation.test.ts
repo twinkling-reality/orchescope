@@ -17,6 +17,8 @@ const blocked091RecordPath = 'docs/research/604fce75-blocked-blind-evaluation.md
 const blocked091Record = readFileSync(join(repositoryRoot, blocked091RecordPath), 'utf8');
 const blockedRetryRecordPath = 'docs/research/48828a1d-blocked-blind-evaluation.md';
 const blockedRetryRecord = readFileSync(join(repositoryRoot, blockedRetryRecordPath), 'utf8');
+const blockedLexicalRecordPath = 'docs/research/df99c97c-blocked-blind-evaluation.md';
+const blockedLexicalRecord = readFileSync(join(repositoryRoot, blockedLexicalRecordPath), 'utf8');
 const passedRecordPath = 'docs/research/95c7756c-passed-blind-evaluation.md';
 const passedRecord = readFileSync(join(repositoryRoot, passedRecordPath), 'utf8');
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
@@ -124,6 +126,47 @@ const witnesses = [
     property: 'Every strength names the evidence population supporting its scope.',
     file: 'packages/findings/test/experiment-evidence.test.ts',
     title: 'does not invent absent cost or retry ratios for a complete strength',
+  },
+  {
+    property:
+      'A function-scoped provider import cannot authorize a sibling scope or invent a dynamic compatible provider.',
+    file: 'packages/discovery/test/nested-module-binding.test.ts',
+    title:
+      'discovers function-scoped namespace clients without inventing a dynamic compatible provider',
+  },
+  {
+    property:
+      'A function-scoped provider import cannot authorize a sibling scope or invent a dynamic compatible provider.',
+    file: 'packages/discovery/test/nested-module-binding.test.ts',
+    title: 'does not grant one function-scoped namespace import to another lexical scope',
+  },
+  {
+    property: 'A branch-local provider client cannot authorize an ambiguous post-join call.',
+    file: 'packages/discovery/test/nested-module-binding.test.ts',
+    title: 'refuses a provider identity after competing branch-local clients join',
+  },
+  {
+    property: 'A branch-local provider client cannot authorize an ambiguous post-join call.',
+    file: 'packages/discovery/test/nested-module-binding.test.ts',
+    title: 'keeps calls inside their own client branch while refusing its dynamic provider',
+  },
+  {
+    property:
+      'An unsettled model-client binding preserves an enclosing agent boundary only when every reachable receiver binding is a recognized model client.',
+    file: 'packages/discovery/test/nested-module-binding.test.ts',
+    title: 'explains an unsettled call when only one branch has a recognized client',
+  },
+  {
+    property:
+      'An unsettled model-client binding preserves an enclosing agent boundary only when every reachable receiver binding is a recognized model client.',
+    file: 'packages/discovery/test/nested-module-binding.test.ts',
+    title: 'refuses alternate control-flow clients while keeping straight-line settlement',
+  },
+  {
+    property:
+      'An unsettled model-client binding preserves an enclosing agent boundary only when every reachable receiver binding is a recognized model client.',
+    file: 'packages/discovery/test/nested-module-binding.test.ts',
+    title: 'refuses a JavaScript client whose later assignment is not source-settled',
   },
 ] as const;
 
@@ -316,6 +359,46 @@ describe('the frozen pre-release blind evaluation protocol', () => {
         (entry) =>
           entry.name === 'agent-cost' ||
           entry.url === 'https://github.com/shiki-yusuke/agent-cost.git',
+      ),
+      false,
+    );
+  });
+
+  it('preserves the lexical-import block and rejects its contaminated negative', () => {
+    for (const fact of [
+      'df99c97c192e12177a7aa78dee012e0dec10bab5',
+      '0670c1ace229159a3bcd6a63ccfa53a7832db58b376272612225b2a7177a4709',
+      'https://github.com/BBridgeers/tubemind',
+      '9ec1cd53c6e3f837563f6f80771b9270287621fb',
+      'c8189af9e333334c5adcfc05e245b625a1d39c15330b43b9ff806780066a35ab',
+      'https://github.com/Cyrax321/SNAGLINE',
+      '7df6fdfedd1929975d45abfb0c8e8574f78cd04b',
+      '6f935eee3d2ce15ae2156fb3c8a15bf70cf4b78a96f791412e32b1e6fa4822b1',
+      'df4bf8256123793624635ebe3a73d2bcbf892d9d91fe8ae1f4f5b62f9575b82e',
+    ]) {
+      assert.ok(blockedLexicalRecord.includes(fact), `lexical block record omitted ${fact}`);
+    }
+    assert.match(blockedLexicalRecord, /decision was \*\*BLOCK\*\*/);
+    assert.match(blockedLexicalRecord, /function-scoped\s+`import openai as openai_lib`/);
+    assert.match(blockedLexicalRecord, /marked `adapter:model-sdk` not applicable/);
+    assert.match(blockedLexicalRecord, /misleading applicability false\s+negative/);
+    assert.match(blockedLexicalRecord, /executable agent demonstrations/);
+    assert.match(blockedLexicalRecord, /holdout-selection failure, not a product defect/);
+    assert.match(blockedLexicalRecord, /different unseen positive and negative pair/);
+    assert.doesNotMatch(
+      blockedLexicalRecord,
+      /\/Users\/|\/tmp\/|\brun_[0-9a-f]{8}\b|\bev_[0-9a-f]{8}\b|traceId|spanId/,
+    );
+    assert.ok(protocol.includes('../research/df99c97c-blocked-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/df99c97c-blocked-blind-evaluation.md'));
+
+    const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
+    assert.equal(entries.filter((entry) => entry.name === 'tubemind').length, 1);
+    assert.equal(
+      entries.some(
+        (entry) =>
+          entry.name.toLowerCase() === 'snagline' ||
+          entry.url === 'https://github.com/Cyrax321/SNAGLINE.git',
       ),
       false,
     );

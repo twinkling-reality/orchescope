@@ -324,15 +324,17 @@ export const definitionForCall = (
   const candidates = module.definitions.filter(
     (definition) =>
       (definition.kind === 'variable' || definition.kind === 'function') &&
-      definition.location.startLine <= call.location.startLine &&
-      (definition.location.endLine ?? definition.location.startLine) >= call.location.startLine,
+      containsLocation(definition.location, call.location),
   );
-  return candidates.sort(
-    (left, right) =>
-      (left.location.endLine ?? left.location.startLine) -
-      left.location.startLine -
-      ((right.location.endLine ?? right.location.startLine) - right.location.startLine),
-  )[0];
+  return candidates.sort((left, right) => {
+    const leftLines = (left.location.endLine ?? left.location.startLine) - left.location.startLine;
+    const rightLines =
+      (right.location.endLine ?? right.location.startLine) - right.location.startLine;
+    if (leftLines !== rightLines) return leftLines - rightLines;
+    const leftColumns = (left.location.endColumn ?? 0) - (left.location.startColumn ?? 0);
+    const rightColumns = (right.location.endColumn ?? 0) - (right.location.startColumn ?? 0);
+    return leftColumns - rightColumns;
+  })[0];
 };
 
 export const decoratedDefinitions = (

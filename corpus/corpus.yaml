@@ -924,6 +924,103 @@ repositories:
           - ruleId: observability-coverage
             severity: info
 
+  - name: tubemind
+    source: git
+    url: https://github.com/BBridgeers/tubemind.git
+    commit: 9ec1cd53c6e3f837563f6f80771b9270287621fb
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive application selected independently for the blind evaluation of candidate
+      df99c97c. Its shared model helper imports the OpenAI SDK under a namespace alias inside two functions,
+      constructs compatible clients with runtime-selected base URLs, and calls chat completions. The frozen candidate
+      lost both function-scoped imports, marked the model SDK adapter not applicable and reported no agent system.
+
+      This regression holds the lexical boundary rather than an endpoint guess. The two enclosing callables are
+      detected as hand-written agents, while the runtime-selected compatible endpoints establish neither an OpenAI
+      provider nor a model identity. Both client constructions remain source-located unresolved topology inputs.
+      Sibling scopes, uses before an import, parameters, rebindings and unrelated modules are covered by generalized
+      negative fixtures rather than taught from this repository.
+
+      The pinned repository has 34 tracked files. Its MIT LICENSE has SHA-256
+      c8189af9e333334c5adcfc05e245b625a1d39c15330b43b9ff806780066a35ab. No runtime is attempted: the repository
+      supplies no bounded offline or fake population for its video ingestion, vector memory, embedding and provider
+      paths, and no dependency, credential or substitute endpoint is invented.
+    acceptance:
+      graphPopulation:
+        components: 8
+        edges: 4
+      exactIdsByKind:
+        agent:
+          - agent:llm_call
+          - agent:vision_call
+      absentKinds:
+        - model
+        - provider
+      absentComponentTerms:
+        - openai
+      requiredEdges:
+        - kind: calls_service
+          from: entrypoint:to_notion
+          to: external_service:unresolved-host-to_notion
+          sourceFile: skills/watch/scripts/export.py
+          evidence:
+            - producer: adapter:effects
+              symbol: urllib.request.urlopen
+              sourceFile: skills/watch/scripts/export.py
+              startLine: 99
+              endLine: 99
+      componentMetadata:
+        agent:llm_call:
+          inferredFrom: model call site
+          modelBoundary: provider and model selected at run time
+        agent:vision_call:
+          inferredFrom: model call site
+          modelBoundary: provider and model selected at run time
+      componentEvidence:
+        agent:llm_call:
+          - producer: adapter:model-sdk
+            symbol: llm_call
+            sourceFile: skills/watch/scripts/utils.py
+            startLine: 123
+            endLine: 126
+        agent:vision_call:
+          - producer: adapter:model-sdk
+            symbol: vision_call
+            sourceFile: skills/watch/scripts/utils.py
+            startLine: 174
+            endLine: 177
+      sourceCitations:
+        agent:llm_call:
+          - skills/watch/scripts/utils.py
+        agent:vision_call:
+          - skills/watch/scripts/utils.py
+      adapterOutcomes:
+        adapter:model-sdk:
+          status: completed
+          componentsFound: 2
+          edgesFound: 0
+          filesInspected: 1
+      topology:
+        status: incomplete
+        unresolvedCount: 6
+        conditionalDestinations: 0
+        requiredRefusals:
+          - kind: adapter_input
+            sourceFile: skills/watch/scripts/utils.py
+            startLine: 122
+            reason: openai_lib.OpenAI receives a base URL whose provider identity is selected at run time.
+          - kind: adapter_input
+            sourceFile: skills/watch/scripts/utils.py
+            startLine: 173
+            reason: openai_lib.OpenAI receives a base URL whose provider identity is selected at run time.
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+        exactRisks:
+          - ruleId: observability-coverage
+            severity: info
+
   - name: langchain-langgraph-agents
     source: git
     url: https://github.com/Chaitanya-Keyal/langchain-langgraph-agents.git

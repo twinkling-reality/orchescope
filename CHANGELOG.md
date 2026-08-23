@@ -9,7 +9,9 @@ commit `604fce7516e47cd8971bedbb6da27b138e485fe0` with archive SHA-256
 `6210cafc465c56aa2b8ed6d6328499799bd4e6c553327708d1b1141fd522a274`, was independently evaluated and blocked. The
 second candidate, commit `48828a1d2f3d8aa479124987a04eb8d672fc63a3` with archive SHA-256
 `61603179f78bca84aa21e71d4060aa3b8a500b4a372784be86fe441c62f8ac2b`, was also independently evaluated and blocked.
-Neither was published, tagged, pushed or attached to a release. A corrected candidate cannot be published until a
+The third candidate, commit `df99c97c192e12177a7aa78dee012e0dec10bab5` with archive SHA-256
+`0670c1ace229159a3bcd6a63ccfa53a7832db58b376272612225b2a7177a4709`, was independently evaluated and blocked as
+well. None was published, tagged, pushed or attached to a release. A corrected candidate cannot be published until a
 different unseen positive and negative pair clears the blind gate.
 
 ### Workflow topology is no longer presented as agent identity
@@ -57,6 +59,35 @@ The defect was found by the independently selected `jarvis-home-commander` holdo
 authorization polling, and bounded HomeWizard pairing are pinned as one source-reviewed regression input. The selected
 negative contributed no distinct precision invariant and is not duplicated in the corpus. Both selected source
 lineages are permanently ineligible as future blind holdouts.
+
+### Function-scoped compatible clients retain lexical authority
+
+Python imports now carry the function or method that owns their runtime binding. A guarded
+`import openai as openai_lib` authorizes `openai_lib.OpenAI(...)` and calls through that client in the same lexical
+scope; it does not leak into a sibling function or authorize a use before the import. Parameters, local rebindings,
+unrelated packages and imports after a call remain quiet. Repeated assignments to the same client name are resolved
+against the nearest source definition inside the control-flow path that owns both construction and use. Conditional,
+loop, loop-else, try, try-else, handler and match alternatives cannot lend identity across a join; an unconditional
+finally assignment and an ordinary straight-line reassignment can. A call whose receiver remains unsettled is an
+explicit unresolved topology input rather than borrowing the provider or model identity of whichever assignment
+appears last in the file. It preserves the enclosing agent boundary only when every reachable receiver binding is a
+recognized model client; a caller parameter, custom alternative or pre-existing object member prevents that claim.
+
+An OpenAI-compatible client whose base URL is selected at runtime establishes a hand-written agent's model boundary,
+but not the service provider or model identity. The scan now reports the enclosing agent and a source-located unresolved
+provider boundary instead of either labeling the endpoint OpenAI or silently classifying the adapter not applicable.
+
+The defect was found by the independently selected `tubemind` holdout, whose shared model helper contains two
+function-scoped compatible-client imports and runtime-selected endpoints. The exact positive is pinned as a
+source-cited regression. The proposed negative, `SNAGLINE`, contained executable offline agent demonstrations and was
+therefore not a valid negative control; Orchescope correctly detected that source, and it is not added to the corpus.
+Both exposed source lineages are permanently ineligible as future blind holdouts.
+
+The full pinned corpus exposed the same identity boundary in CrewAI. Its AI-Mind tool sends an OpenAI-compatible call
+to the literal `https://mdb.ai/` endpoint with a runtime-selected model, so the scan retains the enclosing agent but no
+longer labels the provider OpenAI. Its release-note helper accepts a caller-supplied client on one path, so the scan
+does not derive an exact agent, provider, model, prompt relation or timeout finding from the other path's local OpenAI
+construction. The committed expectation records those source-reviewed removals and retains the unresolved inputs.
 
 ### Finding identity and evidence populations are stable and reviewable
 

@@ -32,6 +32,72 @@ from .tools import refund as issue_refund
     assert.equal(byLocal.get('issue_refund')?.imported, 'refund');
   });
 
+  it('keeps function imports inside their lexical runtime scope', async () => {
+    const facts = await analyze(`
+def owner():
+    import openai as sdk
+    return sdk.OpenAI()
+
+def sibling():
+    return sdk.OpenAI()
+
+def imported_after_use():
+    client = sdk.OpenAI()
+    import openai as sdk
+    return client
+
+def outer():
+    import openai as nested_sdk
+    def nested():
+        return nested_sdk.OpenAI()
+    return nested()
+`);
+    const scoped = facts.imports.filter((entry) => entry.module === 'openai');
+    assert.deepEqual(
+      scoped.map((entry) => [entry.local, entry.enclosing]),
+      [
+        ['sdk', 'owner'],
+        ['sdk', 'imported_after_use'],
+        ['nested_sdk', 'outer'],
+      ],
+    );
+    const calls = facts.calls.filter((candidate) =>
+      dotted(candidate.calleePath).endsWith('OpenAI'),
+    );
+    assert.equal(calls.length, 4);
+    assert.equal(calls[0]?.origin?.module, 'openai');
+    assert.equal(calls[1]?.origin, undefined);
+    assert.equal(calls[2]?.origin, undefined);
+    assert.equal(calls[3]?.origin?.module, 'openai');
+  });
+
+  it('retains branch ownership on client definitions and their uses', async () => {
+    const facts = await analyze(`
+from openai import OpenAI
+
+def choose(flag, endpoint):
+    if flag:
+        client = OpenAI(base_url=endpoint)
+        client.responses.create(model="dynamic")
+    else:
+        client = OpenAI()
+        client.responses.create(model="default")
+    client.responses.create(model="joined")
+`);
+    const clients = facts.definitions.filter(
+      (definition) => definition.kind === 'variable' && definition.name === 'client',
+    );
+    assert.deepEqual(
+      clients.map((definition) => definition.branches?.map((branch) => branch.branch)),
+      [['consequence'], ['alternative']],
+    );
+    const uses = facts.calls.filter((call) => dotted(call.calleePath).endsWith('responses.create'));
+    assert.deepEqual(
+      uses.map((call) => call.branches?.map((branch) => branch.branch) ?? []),
+      [['consequence'], ['alternative'], []],
+    );
+  });
+
   it('folds keyword arguments into an object argument', async () => {
     const facts = await analyze(`
 from agents import Agent

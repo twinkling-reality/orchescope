@@ -1,15 +1,15 @@
 {
   "adapters": {
     "adapter:crewai": {
-      "componentsFound": 1015,
-      "edgesFound": 432,
-      "filesInspected": 91,
-      "status": "completed"
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 144,
-      "edgesFound": 76,
-      "filesInspected": 46,
+      "componentsFound": 8,
+      "edgesFound": 4,
+      "filesInspected": 4,
       "status": "completed"
     },
     "adapter:implementation-reach": {
@@ -40,12 +40,12 @@
       "componentsFound": 0,
       "edgesFound": 0,
       "filesInspected": 0,
-      "status": "completed"
+      "status": "not_applicable"
     },
     "adapter:model-sdk": {
-      "componentsFound": 3,
+      "componentsFound": 2,
       "edgesFound": 0,
-      "filesInspected": 9,
+      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:openai-agents": {
@@ -55,9 +55,9 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 33,
-      "edgesFound": 33,
-      "filesInspected": 11,
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:pydantic-ai": {
@@ -67,10 +67,10 @@
       "status": "not_applicable"
     },
     "adapter:search-index": {
-      "componentsFound": 4,
+      "componentsFound": 0,
       "edgesFound": 0,
-      "filesInspected": 4,
-      "status": "completed"
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:vercel-ai-sdk": {
       "componentsFound": 0,
@@ -88,55 +88,44 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 249,
-      "agent_group": 94,
-      "database": 3,
-      "entrypoint": 70,
-      "external_service": 47,
-      "prompt": 33,
-      "provider": 2,
-      "retrieval": 1
+      "agent": 2,
+      "database": 1,
+      "entrypoint": 4,
+      "external_service": 1
     },
-    "declaredInTest": 311,
-    "total": 499
+    "declaredInTest": 0,
+    "total": 8
   },
   "discardedRelations": [],
   "files": {
-    "discovered": 2027,
-    "inSupportedLanguages": 1272,
-    "parsed": 1272,
-    "skipped": 7,
+    "discovered": 19,
+    "inSupportedLanguages": 18,
+    "parsed": 18,
+    "skipped": 0,
     "truncated": false
   },
   "findings": {
     "byRule": {
-      "observability-coverage": 1,
-      "prompt-injection-boundary": 1
+      "observability-coverage": 1
     },
     "bySeverity": {
-      "info": 1,
-      "medium": 1
+      "info": 1
     },
     "componentsByRule": {
-      "observability-coverage": 5,
-      "prompt-injection-boundary": 9
+      "observability-coverage": 5
     },
     "strengths": 0,
-    "total": 2
+    "total": 1
   },
-  "foundNothing": [
-    "mcp is imported here and its adapter found nothing"
-  ],
+  "foundNothing": [],
   "kind": "agent_system",
   "languagesNotAnalysed": [],
-  "name": "crewai",
+  "name": "tubemind",
   "relations": {
     "byKind": {
-      "calls_service": 48,
-      "contains": 106,
-      "queries_database": 22,
-      "uses_prompt": 33
+      "calls_service": 1,
+      "queries_database": 3
     },
-    "total": 209
+    "total": 4
   }
 }

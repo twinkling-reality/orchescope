@@ -116,6 +116,8 @@ export type CallFact = {
   readonly offset: number;
   /** Nearest named function, class or method the call sits inside. */
   readonly enclosing: string | undefined;
+  /** Conditional branches that must run for this call to be reached, outermost first. */
+  readonly branches?: readonly BranchPredicateFact[];
   /** True when the call is awaited, which distinguishes a scheduled call from a fired one. */
   readonly awaited: boolean;
 };
@@ -126,6 +128,8 @@ export type ImportFact = {
   readonly local: string;
   readonly isType: boolean;
   readonly location: SourceLocation;
+  /** Nearest function, class or method whose runtime scope owns this import. */
+  readonly enclosing?: string;
 };
 
 export type DecoratorFact = {
@@ -199,6 +203,8 @@ export type DefinitionFact = {
   /** Direct parameters declared by a callable definition. An annotation is retained when it is written. */
   readonly parameters?: readonly ParameterFact[];
   readonly enclosing: string | undefined;
+  /** Conditional branches that must run for this definition to be reached, outermost first. */
+  readonly branches?: readonly BranchPredicateFact[];
 };
 
 export type ParameterFact = {
