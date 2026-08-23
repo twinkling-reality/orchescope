@@ -19,6 +19,11 @@ const blockedRetryRecordPath = 'docs/research/48828a1d-blocked-blind-evaluation.
 const blockedRetryRecord = readFileSync(join(repositoryRoot, blockedRetryRecordPath), 'utf8');
 const blockedLexicalRecordPath = 'docs/research/df99c97c-blocked-blind-evaluation.md';
 const blockedLexicalRecord = readFileSync(join(repositoryRoot, blockedLexicalRecordPath), 'utf8');
+const blockedObjectMethodRecordPath = 'docs/research/d00a06b5-blocked-blind-evaluation.md';
+const blockedObjectMethodRecord = readFileSync(
+  join(repositoryRoot, blockedObjectMethodRecordPath),
+  'utf8',
+);
 const passedRecordPath = 'docs/research/95c7756c-passed-blind-evaluation.md';
 const passedRecord = readFileSync(join(repositoryRoot, passedRecordPath), 'utf8');
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
@@ -167,6 +172,24 @@ const witnesses = [
       'An unsettled model-client binding preserves an enclosing agent boundary only when every reachable receiver binding is a recognized model client.',
     file: 'packages/discovery/test/nested-module-binding.test.ts',
     title: 'refuses a JavaScript client whose later assignment is not source-settled',
+  },
+  {
+    property:
+      'An external effect belongs to the smallest authoritative callable, never a borrowed module or surrounding scope.',
+    file: 'packages/discovery/test/adapters.test.ts',
+    title: 'attributes every request to the smallest named object callable',
+  },
+  {
+    property:
+      'An external effect belongs to the smallest authoritative callable, never a borrowed module or surrounding scope.',
+    file: 'packages/discovery/test/adapters.test.ts',
+    title: 'refuses to invent module ownership for a request inside an unnamed callback',
+  },
+  {
+    property:
+      'An external effect belongs to the smallest authoritative callable, never a borrowed module or surrounding scope.',
+    file: 'tests/e2e/object-method-effects.test.ts',
+    title: 'keeps the caller, service, finding, citation and Mermaid label on the method',
   },
 ] as const;
 
@@ -402,6 +425,44 @@ describe('the frozen pre-release blind evaluation protocol', () => {
       ),
       false,
     );
+  });
+
+  it('preserves the object-method ownership block and promotes both distinct boundaries', () => {
+    for (const fact of [
+      'd00a06b5c8c45ebfcd1ca75cb2bbdb0951c1e8a7',
+      '9b2834897befd6a6f5288c973bea25a81f4389cff5de17a090545d421c12cfc6',
+      'https://github.com/jmdonbaba/CrossDiscipline-Research-Agent',
+      '5aa22a6afbe76dfd0fe67690b64cec1e12a57c86',
+      'b19a425d8d00566072df98eef18bd5f132a503b331298bff818c313da23948a5',
+      'https://github.com/synrouter/agentgauge',
+      'b109ef0f7f726cb16b9c5c77276694dfd19cfa57',
+      '7f938135f347074ddbbfdc9f11949055fb6b6ee44f95fefa10c95fa8dadc7a60',
+      '3ad9dcd8c38465b0e3b689d8b1e8a0dd81cc64444404dd170205c68eba7eeadc',
+    ]) {
+      assert.ok(
+        blockedObjectMethodRecord.includes(fact),
+        `object-method block record omitted ${fact}`,
+      );
+    }
+    assert.match(blockedObjectMethodRecord, /decision was \*\*BLOCK\*\*/);
+    assert.match(blockedObjectMethodRecord, /inside the `async run\(\{ args \}\)` object method/);
+    assert.match(blockedObjectMethodRecord, /created `entrypoint:module-scope`/);
+    assert.match(blockedObjectMethodRecord, /publication-blocking wrong\s+component identity/);
+    assert.match(blockedObjectMethodRecord, /No runtime audit was executed/);
+    assert.match(blockedObjectMethodRecord, /different unseen positive and negative pair/);
+    assert.doesNotMatch(
+      blockedObjectMethodRecord,
+      /\/Users\/|\/tmp\/|\brun_[0-9a-f]{8}\b|\bev_[0-9a-f]{8}\b|traceId|spanId/,
+    );
+    assert.ok(protocol.includes('../research/d00a06b5-blocked-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/d00a06b5-blocked-blind-evaluation.md'));
+
+    const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
+    assert.equal(
+      entries.filter((entry) => entry.name === 'crossdiscipline-research-agent').length,
+      1,
+    );
+    assert.equal(entries.filter((entry) => entry.name === 'agentgauge').length, 1);
   });
 
   it('preserves the exact passed candidate, targets, decision and bounded runtime refusal', () => {

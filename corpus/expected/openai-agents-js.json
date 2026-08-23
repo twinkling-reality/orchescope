@@ -7,8 +7,8 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 28,
-      "edgesFound": 15,
+      "componentsFound": 24,
+      "edgesFound": 13,
       "filesInspected": 12,
       "status": "completed"
     },
@@ -49,15 +49,15 @@
       "status": "completed"
     },
     "adapter:openai-agents": {
-      "componentsFound": 515,
-      "edgesFound": 164,
+      "componentsFound": 488,
+      "edgesFound": 161,
       "filesInspected": 349,
       "status": "completed"
     },
     "adapter:prompts": {
-      "componentsFound": 401,
-      "edgesFound": 404,
-      "filesInspected": 193,
+      "componentsFound": 399,
+      "edgesFound": 412,
+      "filesInspected": 192,
       "status": "completed"
     },
     "adapter:pydantic-ai": {
@@ -88,17 +88,17 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 289,
+      "agent": 294,
       "database": 1,
-      "entrypoint": 14,
-      "external_service": 12,
+      "entrypoint": 12,
+      "external_service": 10,
       "mcp_server": 16,
       "model": 7,
-      "prompt": 401,
+      "prompt": 399,
       "provider": 1,
-      "tool": 114
+      "tool": 115
     },
-    "declaredInTest": 35,
+    "declaredInTest": 31,
     "total": 855
   },
   "discardedRelations": [],
@@ -122,7 +122,7 @@
       "medium": 2
     },
     "componentsByRule": {
-      "model-call-without-timeout": 45,
+      "model-call-without-timeout": 47,
       "observability-coverage": 5,
       "prompt-injection-boundary": 19,
       "topology-shape": 3
@@ -136,14 +136,14 @@
   "name": "openai-agents-js",
   "relations": {
     "byKind": {
-      "calls_service": 13,
-      "calls_tool": 78,
+      "calls_service": 11,
+      "calls_tool": 85,
       "hands_off_to": 28,
-      "invokes_model": 40,
+      "invokes_model": 42,
       "provides_tool": 8,
       "queries_database": 1,
-      "uses_prompt": 404
+      "uses_prompt": 412
     },
-    "total": 572
+    "total": 587
   }
 }

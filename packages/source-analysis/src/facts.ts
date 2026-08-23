@@ -48,7 +48,7 @@ export type ArgumentFact =
       readonly path: readonly string[];
       readonly args: readonly ArgumentFact[];
     }
-  | { readonly kind: 'function' }
+  | { readonly kind: 'function'; readonly location: SourceLocation }
   | {
       readonly kind: 'template';
       readonly value: string;
@@ -116,10 +116,26 @@ export type CallFact = {
   readonly offset: number;
   /** Nearest named function, class or method the call sits inside. */
   readonly enclosing: string | undefined;
+  /** Exact nearest callable range, used only to prove lexical containment and never as graph identity. */
+  readonly enclosingLocation?: SourceLocation;
+  /** True when a callable boundary exists but source gives it no authoritative name. */
+  readonly enclosingUnresolved?: true;
+  /** Named outer lexical scope retained for binding lookup when the immediate callable is unresolved. */
+  readonly lexicalEnclosing?: string;
+  /** Exact callable scopes containing this call, outermost first. Never used in graph identity. */
+  readonly lexicalScopes?: readonly LexicalScopeFact[];
+  /** Bindings declared by that unresolved callable which prevent fallback to the outer lexical scope. */
+  readonly lexicalShadows?: readonly string[];
   /** Conditional branches that must run for this call to be reached, outermost first. */
   readonly branches?: readonly BranchPredicateFact[];
   /** True when the call is awaited, which distinguishes a scheduled call from a fired one. */
   readonly awaited: boolean;
+};
+
+export type LexicalScopeFact = {
+  readonly location: SourceLocation;
+  /** Parameters, declarations and writes that stop lookup from falling through this scope. */
+  readonly bindings: readonly string[];
 };
 
 export type ImportFact = {
@@ -203,6 +219,10 @@ export type DefinitionFact = {
   /** Direct parameters declared by a callable definition. An annotation is retained when it is written. */
   readonly parameters?: readonly ParameterFact[];
   readonly enclosing: string | undefined;
+  /** Exact containing callable range when its semantic name is unavailable or insufficient for lexical scope. */
+  readonly enclosingLocation?: SourceLocation;
+  /** True when the containing callable exists but has no authoritative semantic name. */
+  readonly enclosingUnresolved?: true;
   /** Conditional branches that must run for this definition to be reached, outermost first. */
   readonly branches?: readonly BranchPredicateFact[];
 };
@@ -273,6 +293,10 @@ export type ControlFlowFact = {
   readonly kind: 'try_catch' | 'loop' | 'promise_all' | 'sequential_await';
   readonly location: SourceLocation;
   readonly enclosing: string | undefined;
+  /** Exact nearest callable range, used only for lexical ambiguity settlement. */
+  readonly enclosingLocation?: SourceLocation;
+  /** True when the construct sits inside a callable whose source name cannot be settled. */
+  readonly enclosingUnresolved?: true;
   /** Callee paths that appear inside this construct, in source order. */
   readonly contains: readonly (readonly string[])[];
   /**
@@ -354,6 +378,10 @@ export type AssignmentFact = {
   readonly location: SourceLocation;
   /** Nearest named lexical scope, absent for a module-level write. */
   readonly enclosing?: string;
+  /** Exact containing callable range, retained only for lexical binding settlement. */
+  readonly enclosingLocation?: SourceLocation;
+  /** True when the containing callable exists but has no authoritative semantic name. */
+  readonly enclosingUnresolved?: true;
 };
 
 export type ModuleFacts = {

@@ -1,5 +1,5 @@
 import type { SourceLocation } from '@orchescope/schema';
-import type { DefinitionFact, ModuleFacts } from '@orchescope/source-analysis';
+import type { DefinitionFact, LexicalScopeFact, ModuleFacts } from '@orchescope/source-analysis';
 
 import type { DiscoveryContext } from './adapter.ts';
 import { hasBindingAt } from './matching.ts';
@@ -56,6 +56,38 @@ const sameRange = (left: SourceLocation, right: SourceLocation): boolean =>
   left.startColumn === right.startColumn &&
   left.endLine === right.endLine &&
   left.endColumn === right.endColumn;
+
+const exactLexicalDefinition = (
+  module: ModuleFacts,
+  name: string,
+  scopes: readonly LexicalScopeFact[],
+  before: SourceLocation,
+): { readonly definition?: DefinitionFact; readonly blocked: boolean } => {
+  for (const scope of [...scopes].reverse()) {
+    const candidates = module.definitions.filter(
+      (definition) =>
+        definition.kind === 'variable' &&
+        definition.name === name &&
+        definition.enclosingLocation !== undefined &&
+        sameRange(definition.enclosingLocation, scope.location) &&
+        beforeUse(definition, before),
+    );
+    if (candidates.length > 1) return { blocked: true };
+    const candidate = candidates[0];
+    if (candidate !== undefined) {
+      const changed = module.assignments.some(
+        (assignment) =>
+          assignment.target.length === 1 &&
+          assignment.target[0] === name &&
+          assignment.enclosingLocation !== undefined &&
+          sameRange(assignment.enclosingLocation, scope.location),
+      );
+      return changed ? { blocked: true } : { definition: candidate, blocked: false };
+    }
+    if (scope.bindings.includes(name)) return { blocked: true };
+  }
+  return { blocked: false };
+};
 
 export const lexicalPromptOwner = (
   module: ModuleFacts,
@@ -154,6 +186,7 @@ const stableDefinition = (
       definition.kind === 'variable' &&
       definition.name === name &&
       definition.enclosing === enclosing &&
+      (enclosing !== undefined || definition.enclosingLocation === undefined) &&
       withinScope(scope, definition.location) &&
       beforeUse(definition, before),
   );
@@ -163,6 +196,7 @@ const stableDefinition = (
       assignment.target.length === 1 &&
       assignment.target[0] === name &&
       assignment.enclosing === enclosing &&
+      (enclosing !== undefined || assignment.enclosingLocation === undefined) &&
       withinScope(scope, assignment.location),
   );
   return changed ? undefined : candidates[0];
@@ -174,7 +208,13 @@ export const resolvePromptDefinition = (
   name: string,
   enclosing: string | undefined,
   before: SourceLocation,
+  lexicalScopes: readonly LexicalScopeFact[] = [],
+  lexicalShadows: readonly string[] = [],
 ): { readonly module: ModuleFacts; readonly definition: DefinitionFact } | undefined => {
+  const lexical = exactLexicalDefinition(module, name, lexicalScopes, before);
+  if (lexical.definition !== undefined) return { module, definition: lexical.definition };
+  if (lexical.blocked) return undefined;
+  if (lexicalShadows.includes(name)) return undefined;
   const scoped = stableDefinition(module, name, enclosing, before);
   if (scoped !== undefined) return { module, definition: scoped };
   const scope = lexicalScopeAt(module, before);
@@ -193,7 +233,8 @@ export const resolvePromptDefinition = (
     (definition) =>
       definition.kind === 'variable' &&
       definition.name === resolved.definition?.name &&
-      definition.enclosing === resolved.definition?.enclosing,
+      definition.enclosing === resolved.definition?.enclosing &&
+      definition.enclosingLocation === undefined,
   );
   const changed = target.assignments.some(
     (assignment) =>

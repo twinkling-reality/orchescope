@@ -844,6 +844,72 @@ describe('side-effect-approval-boundary reachability', () => {
     );
   });
 
+  it('keeps a known consequential call actionable beneath a mixed aggregate effect', () => {
+    const syncTool = componentDraft({
+      kind: 'tool',
+      name: 'sync_account',
+      file: 'src/sync.ts',
+    });
+    const calls = [1, 2, 3, 4, 5].map((line) =>
+      componentDraft({
+        kind: 'external_service',
+        name: 'api.example.com',
+        file: 'src/sync.ts',
+        line,
+        sideEffect: line === 5 ? 'non_idempotent_write' : 'read_only',
+      }),
+    );
+    const firstCall = calls[0];
+    assert.ok(firstCall);
+    const graph = withCompleteTopology(
+      buildGraph(
+        [syncTool, ...calls],
+        [
+          edgeDraft('calls_service', syncTool, firstCall, {
+            metadata: { httpMethod: 'mixed', sideEffect: 'unknown' },
+          }),
+        ],
+      ),
+    );
+    const outcome = outcomeFor(graph);
+    assert.equal(outcome.status, 'fired');
+    const risk = outcome.drafts.find((draft) =>
+      draft.components.includes('external_service:api.example.com'),
+    );
+    assert.equal(risk?.polarity, 'risk');
+    assert.match(risk?.title ?? '', /non_idempotent_write effect/);
+    assert.doesNotMatch(outcome.detail ?? '', /no operation with a risky effect class/);
+    const subjectLines = (risk?.claimEvidence.subject ?? []).flatMap((id) => {
+      const evidence = evidenceForGraph(graph).get(id);
+      return evidence?.kind === 'source_span' ? [evidence.location.startLine] : [];
+    });
+    assert.deepEqual(subjectLines, [5]);
+  });
+
+  it('does not trust a free-form effect aggregate supplied by an adapter', () => {
+    const caller = componentDraft({
+      kind: 'tool',
+      name: 'sync_account',
+      file: 'src/sync.ts',
+    });
+    const spoofedService = componentDraft({
+      kind: 'external_service',
+      name: 'api.example.com',
+      file: '.orchescope/manifest.yaml',
+      sideEffect: 'read_only',
+      metadata: {
+        effectClasses: ['financial'],
+        'effectEvidence:financial': [`evd_${'a'.repeat(16)}`],
+      },
+    });
+    const graph = withCompleteTopology(
+      buildGraph([caller, spoofedService], [edgeDraft('calls_service', caller, spoofedService)]),
+    );
+    const outcome = outcomeFor(graph);
+    assert.equal(outcome.status, 'not_applicable');
+    assert.match(outcome.detail ?? '', /no operation with a risky effect class/);
+  });
+
   it('binds a complete caller-population absence to a universal approval strength', () => {
     const approvedTool = componentDraft({
       kind: 'tool',

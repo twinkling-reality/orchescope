@@ -1,3 +1,4 @@
+import type { SourceLocation } from '@orchescope/schema';
 import { parseSync } from 'oxc-parser';
 import {
   type ArgumentFact,
@@ -11,6 +12,7 @@ import {
   type EnvironmentFact,
   type ImportFact,
   isLiteralFact,
+  type LexicalScopeFact,
   type ModuleFacts,
   type ObjectEntryFact,
   type ParameterFact,
@@ -181,6 +183,14 @@ type Context = {
   readonly texts: TextFact[];
   readonly controlFlow: ControlFlowFact[];
   readonly exportedNames: Set<string>;
+  /** Authoritative callable bodies grouped by semantic name; source offsets never leave analysis. */
+  readonly callableLocations: Map<string, Set<string>>;
+};
+
+const recordCallableLocation = (context: Context, name: string, node: Node): void => {
+  const locations = context.callableLocations.get(name) ?? new Set<string>();
+  locations.add(`${node.start}:${node.end}`);
+  context.callableLocations.set(name, locations);
 };
 
 const argumentFact = (node: Node, context: Context): ArgumentFact => {
@@ -265,7 +275,10 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
     }
     case 'ArrowFunctionExpression':
     case 'FunctionExpression':
-      return { kind: 'function' };
+      return {
+        kind: 'function',
+        location: context.index.location(context.file, node.start, node.end),
+      };
     case 'AwaitExpression':
     case 'TSAsExpression':
     case 'TSSatisfiesExpression':
@@ -430,6 +443,331 @@ type Frame = {
   readonly name: string | undefined;
   readonly declaredName: string | undefined;
   readonly exported: boolean;
+  readonly enclosingUnresolved?: true;
+  readonly declaredPathUnresolved?: true;
+  readonly callableLocation?: SourceLocation;
+  readonly lexicalEnclosing?: string;
+  readonly lexicalScopes?: readonly LexicalScopeFact[];
+  readonly lexicalShadows?: readonly string[];
+};
+
+const nestedLexicalScopes = (
+  frame: Frame,
+  location: SourceLocation,
+  bindings: readonly string[],
+): readonly LexicalScopeFact[] => [...(frame.lexicalScopes ?? []), { location, bindings }];
+
+const definitionEnclosing = (
+  frame: Frame,
+): Pick<DefinitionFact, 'enclosing' | 'enclosingLocation' | 'enclosingUnresolved'> => ({
+  enclosing: frame.name,
+  ...(frame.callableLocation === undefined ? {} : { enclosingLocation: frame.callableLocation }),
+  ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
+});
+
+const transparentExpression = (node: Node | undefined): Node | undefined => {
+  let current = node;
+  while (
+    current !== undefined &&
+    (current.type === 'ParenthesizedExpression' ||
+      current.type === 'TSAsExpression' ||
+      current.type === 'TSSatisfiesExpression' ||
+      current.type === 'TSNonNullExpression')
+  ) {
+    current = asNode(field(current, 'expression')) ?? asNode(field(current, 'argument'));
+  }
+  return current;
+};
+
+const structuralDeclaredName = (
+  node: Node | undefined,
+  declaredName: string | undefined,
+): string | undefined => {
+  const value = transparentExpression(node);
+  if (value === undefined || declaredName === undefined) return undefined;
+  if (
+    value.type === 'ObjectExpression' ||
+    value.type === 'ArrayExpression' ||
+    value.type === 'ClassExpression' ||
+    value.type === 'FunctionExpression' ||
+    value.type === 'ArrowFunctionExpression'
+  ) {
+    return declaredName;
+  }
+  return undefined;
+};
+
+const isFunctionValue = (node: Node | undefined): node is Node => {
+  const value = transparentExpression(node);
+  return value?.type === 'FunctionExpression' || value?.type === 'ArrowFunctionExpression';
+};
+
+/** A property name source settles, including a computed literal but never a computed expression. */
+const staticPropertyName = (node: Node): string | undefined => {
+  const key = asNode(field(node, 'key'));
+  return field(node, 'computed') === true
+    ? literalString(key)
+    : (identifierName(key) ?? literalString(key));
+};
+
+/** A dynamic computed key executes in its surrounding scope even when the callable value cannot be named. */
+const traverseDynamicPropertyKey = (
+  node: Node,
+  context: Context,
+  frame: Frame,
+  collecting: (readonly string[])[][],
+): void => {
+  if (field(node, 'computed') !== true) return;
+  const key = asNode(field(node, 'key'));
+  if (key === undefined || literalString(key) !== undefined) return;
+  traverse(key, context, frame, false, collecting);
+};
+
+/** Accessor and static qualifiers are part of callable identity because their bodies may perform different effects. */
+const callablePropertySegment = (node: Node, propertyName: string): string => {
+  const kind = field(node, 'kind');
+  const accessor = kind === 'get' || kind === 'set' ? `.${kind}` : '';
+  const staticPrefix = field(node, 'static') === true ? 'static.' : '';
+  return `${staticPrefix}${propertyName}${accessor}`;
+};
+
+const collectBindingPatternNames = (node: Node | undefined, into: Set<string>): void => {
+  if (node === undefined) return;
+  const direct = identifierName(node);
+  if (direct !== undefined) {
+    into.add(direct);
+    return;
+  }
+  if (node.type === 'RestElement') {
+    collectBindingPatternNames(asNode(field(node, 'argument')), into);
+    return;
+  }
+  if (node.type === 'AssignmentPattern') {
+    collectBindingPatternNames(asNode(field(node, 'left')), into);
+    return;
+  }
+  if (node.type === 'Property') {
+    collectBindingPatternNames(asNode(field(node, 'value')), into);
+    return;
+  }
+  for (const key of ['properties', 'elements']) {
+    for (const entry of nodeArray(field(node, key))) collectBindingPatternNames(entry, into);
+  }
+};
+
+/** Bindings inside an unresolved callable that make an outer binding with the same name unavailable. */
+const unresolvedCallableBindings = (value: Node): readonly string[] => {
+  const names = new Set<string>();
+  for (const parameter of nodeArray(field(value, 'params'))) {
+    collectBindingPatternNames(parameter, names);
+  }
+  const collect = (node: Node | undefined, root: boolean): void => {
+    if (node === undefined) return;
+    if (
+      !root &&
+      (node.type === 'FunctionExpression' ||
+        node.type === 'ArrowFunctionExpression' ||
+        node.type === 'ClassExpression')
+    ) {
+      return;
+    }
+    if (node.type === 'FunctionDeclaration' || node.type === 'ClassDeclaration') {
+      collectBindingPatternNames(asNode(field(node, 'id')), names);
+      return;
+    }
+    if (node.type === 'VariableDeclarator') {
+      collectBindingPatternNames(asNode(field(node, 'id')), names);
+    }
+    if (node.type === 'AssignmentExpression') {
+      collectBindingPatternNames(asNode(field(node, 'left')), names);
+    }
+    if (node.type === 'UpdateExpression') {
+      collectBindingPatternNames(asNode(field(node, 'argument')), names);
+    }
+    if (node.type === 'ForInStatement' || node.type === 'ForOfStatement') {
+      collectBindingPatternNames(asNode(field(node, 'left')), names);
+    }
+    if (node.type === 'CatchClause') {
+      collectBindingPatternNames(asNode(field(node, 'param')), names);
+    }
+    for (const key of Object.keys(node as Record<string, unknown>)) {
+      const child = field(node, key);
+      if (Array.isArray(child)) {
+        for (const entry of child) collect(asNode(entry), false);
+      } else {
+        collect(asNode(child), false);
+      }
+    }
+  };
+  collect(asNode(field(value, 'body')), true);
+  return [...names].sort();
+};
+
+const traverseUnsettledFunctionBody = (value: Node, context: Context, frame: Frame): void => {
+  const body = asNode(field(value, 'body'));
+  if (body === undefined) return;
+  const callableLocation = context.index.location(context.file, value.start, value.end);
+  const bindings = unresolvedCallableBindings(value);
+  traverse(
+    body,
+    context,
+    {
+      name: undefined,
+      declaredName: undefined,
+      exported: false,
+      enclosingUnresolved: true,
+      callableLocation,
+      lexicalScopes: nestedLexicalScopes(frame, callableLocation, bindings),
+      ...(frame.name === undefined && frame.lexicalEnclosing === undefined
+        ? {}
+        : { lexicalEnclosing: frame.name ?? frame.lexicalEnclosing }),
+      lexicalShadows: [...new Set([...(frame.lexicalShadows ?? []), ...bindings])].sort(),
+    },
+    false,
+    [],
+  );
+};
+
+/**
+ * An object-literal method owns the calls in its value even when the object is an argument to a call.
+ *
+ * ESTree represents both `async run() {}` and `run: async () => {}` as a Property whose value is a
+ * function. Walking that value as an ordinary child leaves the surrounding frame in place, which turns
+ * a fetch inside a command callback into a module-scope effect. The property key is the callable name;
+ * a variable holding the object is retained when one exists so two independently named objects do not
+ * collapse merely because both expose `run`.
+ */
+const recordObjectMethod = (
+  node: Node,
+  context: Context,
+  frame: Frame,
+  collecting: (readonly string[])[][],
+): boolean => {
+  if (node.type !== 'Property') return false;
+  const value = transparentExpression(asNode(field(node, 'value')));
+  if (!isFunctionValue(value)) return false;
+  const propertyName = staticPropertyName(node);
+  if (propertyName === undefined || frame.declaredPathUnresolved === true) {
+    traverseDynamicPropertyKey(node, context, frame, collecting);
+    traverseUnsettledFunctionBody(value, context, frame);
+    return true;
+  }
+  const owner = frame.declaredName ?? frame.name;
+  const segment = callablePropertySegment(node, propertyName);
+  const name = owner === undefined ? segment : `${owner}.${segment}`;
+  const callableLocation = context.index.location(context.file, value.start, value.end);
+  recordCallableLocation(context, name, value);
+  context.definitions.push({
+    kind: 'method',
+    name,
+    exported: frame.exported,
+    async: field(value, 'async') === true,
+    decorators: [],
+    location: context.index.location(context.file, node.start, node.end),
+    initializer: undefined,
+    ...(directParameters(value, context).length === 0
+      ? {}
+      : { parameters: directParameters(value, context) }),
+    enclosing: owner,
+    ...(frame.callableLocation === undefined ? {} : { enclosingLocation: frame.callableLocation }),
+    ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
+  });
+  const body = asNode(field(value, 'body'));
+  if (body !== undefined) {
+    traverse(
+      body,
+      context,
+      {
+        name,
+        declaredName: undefined,
+        exported: false,
+        callableLocation,
+        lexicalScopes: nestedLexicalScopes(
+          frame,
+          callableLocation,
+          unresolvedCallableBindings(value),
+        ),
+        ...(frame.lexicalShadows === undefined ? {} : { lexicalShadows: frame.lexicalShadows }),
+      },
+      false,
+      [],
+    );
+  }
+  return true;
+};
+
+/** Carries a static property path through value and call wrappers without confusing it for evaluation scope. */
+const recordObjectContainer = (
+  node: Node,
+  context: Context,
+  frame: Frame,
+  collecting: (readonly string[])[][],
+): boolean => {
+  if (node.type !== 'Property') return false;
+  const value = asNode(field(node, 'value'));
+  if (value === undefined || isFunctionValue(value)) return false;
+  const propertyName = staticPropertyName(node);
+  if (propertyName === undefined || frame.declaredPathUnresolved === true) {
+    traverseDynamicPropertyKey(node, context, frame, collecting);
+    traverse(
+      value,
+      context,
+      {
+        ...frame,
+        declaredName: undefined,
+        declaredPathUnresolved: true,
+      },
+      false,
+      collecting,
+    );
+    return true;
+  }
+  const owner = frame.declaredName ?? frame.name;
+  const propertyPath = owner === undefined ? propertyName : `${owner}.${propertyName}`;
+  const declaredName = structuralDeclaredName(value, propertyPath);
+  traverse(value, context, { ...frame, declaredName }, false, collecting);
+  return true;
+};
+
+/** Array positions are not semantic identities: inserting a sibling must not rename a callable. */
+const recordArrayContainer = (
+  node: Node,
+  context: Context,
+  frame: Frame,
+  collecting: (readonly string[])[][],
+): boolean => {
+  if (node.type !== 'ArrayExpression') return false;
+  const values = field(node, 'elements');
+  if (!Array.isArray(values)) return true;
+  for (const raw of values) {
+    const value = asNode(raw);
+    if (value === undefined) continue;
+    if (value.type === 'SpreadElement') {
+      const argument = asNode(field(value, 'argument'));
+      if (argument !== undefined) {
+        traverse(
+          argument,
+          context,
+          {
+            ...frame,
+            declaredName: undefined,
+            declaredPathUnresolved: true,
+          },
+          false,
+          collecting,
+        );
+      }
+      continue;
+    }
+    traverse(
+      value,
+      context,
+      { ...frame, declaredName: undefined, declaredPathUnresolved: true },
+      false,
+      collecting,
+    );
+  }
+  return true;
 };
 
 const ENV_ROOTS = ['process', 'env'];
@@ -710,6 +1048,105 @@ const headerNamesOf = (node: Node): readonly string[] => {
   return [...names];
 };
 
+/** Traverses a function value that is neither an object method nor a declaration. */
+const recordFunctionValueBody = (node: Node, context: Context, frame: Frame): void => {
+  const body = asNode(field(node, 'body'));
+  if (body === undefined) return;
+  const callableLocation = context.index.location(context.file, node.start, node.end);
+  const bindings = unresolvedCallableBindings(node);
+  const expressionName = identifierName(asNode(field(node, 'id')));
+  const name =
+    frame.declaredName ??
+    (expressionName === undefined
+      ? undefined
+      : frame.name === undefined
+        ? expressionName
+        : `${frame.name}.${expressionName}`);
+  if (name !== undefined) {
+    recordCallableLocation(context, name, node);
+    traverse(
+      body,
+      context,
+      {
+        name,
+        declaredName: undefined,
+        exported: false,
+        callableLocation,
+        lexicalScopes: nestedLexicalScopes(frame, callableLocation, bindings),
+        ...(frame.lexicalShadows === undefined ? {} : { lexicalShadows: frame.lexicalShadows }),
+      },
+      false,
+      [],
+    );
+    return;
+  }
+  traverse(
+    body,
+    context,
+    {
+      name: undefined,
+      declaredName: undefined,
+      exported: false,
+      enclosingUnresolved: true,
+      callableLocation,
+      lexicalScopes: nestedLexicalScopes(frame, callableLocation, bindings),
+      ...(frame.name === undefined && frame.lexicalEnclosing === undefined
+        ? {}
+        : { lexicalEnclosing: frame.name ?? frame.lexicalEnclosing }),
+      lexicalShadows: [...new Set([...(frame.lexicalShadows ?? []), ...bindings])].sort(),
+    },
+    false,
+    [],
+  );
+};
+
+const recordCallableBoundary = (
+  node: Node,
+  context: Context,
+  frame: Frame,
+  collecting: (readonly string[])[][],
+): boolean => {
+  if (recordObjectMethod(node, context, frame, collecting)) return true;
+  if (recordObjectContainer(node, context, frame, collecting)) return true;
+  if (recordArrayContainer(node, context, frame, collecting)) return true;
+  if (!isFunctionValue(node)) return false;
+  recordFunctionValueBody(node, context, frame);
+  return true;
+};
+
+const recordControlFlow = (
+  node: Node,
+  context: Context,
+  frame: Frame,
+  collecting: (readonly string[])[][],
+): boolean => {
+  const kind = CONTROL_FLOW_TYPES[node.type];
+  if (kind === undefined) return false;
+  const contains: (readonly string[])[] = [];
+  collecting.push(contains);
+  visitChildren(node, context, frame, false, collecting);
+  collecting.pop();
+  const repeats = LOOP_REPETITION[node.type];
+  context.controlFlow.push({
+    kind,
+    location: context.index.location(context.file, node.start, node.end),
+    enclosing: frame.name,
+    ...(frame.callableLocation === undefined ? {} : { enclosingLocation: frame.callableLocation }),
+    ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
+    contains,
+    ...(repeats === undefined ? {} : { repeats, passesBounded: passesBoundedIn(node) }),
+    ...(repeats === 'same_work'
+      ? {
+          headerNames: headerNamesOf(node),
+          growingNames: growingNamesOf(node),
+          countsPasses: node.type === 'ForStatement',
+        }
+      : {}),
+    ...(kind === 'try_catch' ? { exitsOnSuccess: exitsOnSuccessIn(node) } : {}),
+  });
+  return true;
+};
+
 /**
  * Single traversal. `enclosing` is the nearest named scope, `awaited` marks a call that the caller
  * waits for, and `collecting` accumulates callee paths for the control flow construct being visited.
@@ -721,30 +1158,8 @@ const traverse = (
   awaited: boolean,
   collecting: (readonly string[])[][],
 ): void => {
-  const kind = CONTROL_FLOW_TYPES[node.type];
-  if (kind !== undefined) {
-    const contains: (readonly string[])[] = [];
-    collecting.push(contains);
-    visitChildren(node, context, frame, false, collecting);
-    collecting.pop();
-    const repeats = LOOP_REPETITION[node.type];
-    context.controlFlow.push({
-      kind,
-      location: context.index.location(context.file, node.start, node.end),
-      enclosing: frame.name,
-      contains,
-      ...(repeats === undefined ? {} : { repeats, passesBounded: passesBoundedIn(node) }),
-      ...(repeats === 'same_work'
-        ? {
-            headerNames: headerNamesOf(node),
-            growingNames: growingNamesOf(node),
-            countsPasses: node.type === 'ForStatement',
-          }
-        : {}),
-      ...(kind === 'try_catch' ? { exitsOnSuccess: exitsOnSuccessIn(node) } : {}),
-    });
-    return;
-  }
+  if (recordCallableBoundary(node, context, frame, collecting)) return;
+  if (recordControlFlow(node, context, frame, collecting)) return;
 
   switch (node.type) {
     case 'ImportDeclaration':
@@ -775,6 +1190,10 @@ const traverse = (
           value: argumentFact(value, context),
           location: context.index.location(context.file, node.start, node.end),
           ...(frame.name === undefined ? {} : { enclosing: frame.name }),
+          ...(frame.callableLocation === undefined
+            ? {}
+            : { enclosingLocation: frame.callableLocation }),
+          ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
         });
       }
       for (const child of [target, value]) {
@@ -789,10 +1208,11 @@ const traverse = (
     }
     case 'FunctionDeclaration':
     case 'TSDeclareFunction': {
-      recordFunction(node, context, frame, collecting);
+      recordFunction(node, context, frame);
       return;
     }
-    case 'ClassDeclaration': {
+    case 'ClassDeclaration':
+    case 'ClassExpression': {
       recordClass(node, context, frame, collecting);
       return;
     }
@@ -879,6 +1299,11 @@ const recordCall = (
     location: context.index.location(context.file, node.start, node.end),
     offset: node.start,
     enclosing: frame.name,
+    ...(frame.callableLocation === undefined ? {} : { enclosingLocation: frame.callableLocation }),
+    ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
+    ...(frame.lexicalEnclosing === undefined ? {} : { lexicalEnclosing: frame.lexicalEnclosing }),
+    ...(frame.lexicalScopes === undefined ? {} : { lexicalScopes: frame.lexicalScopes }),
+    ...(frame.lexicalShadows === undefined ? {} : { lexicalShadows: frame.lexicalShadows }),
     awaited,
   };
   context.calls.push(fact);
@@ -908,12 +1333,7 @@ const directParameters = (node: Node, context: Context): readonly ParameterFact[
         ];
   });
 
-const recordFunction = (
-  node: Node,
-  context: Context,
-  frame: Frame,
-  collecting: (readonly string[])[][],
-): void => {
+const recordFunction = (node: Node, context: Context, frame: Frame): void => {
   const name = identifierName(asNode(field(node, 'id')));
   const definition: DefinitionFact = {
     kind: 'function',
@@ -927,16 +1347,34 @@ const recordFunction = (
       ? {}
       : { parameters: directParameters(node, context) }),
     enclosing: frame.name,
+    ...(frame.callableLocation === undefined ? {} : { enclosingLocation: frame.callableLocation }),
+    ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
   };
   context.definitions.push(definition);
   const body = asNode(field(node, 'body'));
   if (body !== undefined) {
+    const enclosingName =
+      name === undefined ? frame.name : frame.name === undefined ? name : `${frame.name}.${name}`;
+    if (enclosingName !== undefined) recordCallableLocation(context, enclosingName, node);
+    const callableLocation = context.index.location(context.file, node.start, node.end);
     traverse(
       body,
       context,
-      { name: name ?? frame.name, declaredName: undefined, exported: false },
+      {
+        name: enclosingName,
+        declaredName: undefined,
+        exported: false,
+        callableLocation,
+        lexicalScopes: nestedLexicalScopes(
+          frame,
+          callableLocation,
+          unresolvedCallableBindings(node),
+        ),
+        ...(frame.lexicalShadows === undefined ? {} : { lexicalShadows: frame.lexicalShadows }),
+        ...(enclosingName === undefined ? { enclosingUnresolved: true } : {}),
+      },
       false,
-      collecting,
+      [],
     );
   }
 };
@@ -955,7 +1393,7 @@ const recordClassField = (
   frame: Frame,
   className: string | undefined,
 ): void => {
-  const fieldName = identifierName(asNode(field(member, 'key')));
+  const fieldName = staticPropertyName(member);
   if (fieldName === undefined) return;
   const value = asNode(field(member, 'value'));
   const literals = value === undefined ? [] : boundLiterals(value, context);
@@ -972,7 +1410,129 @@ const recordClassField = (
     ...(aliasedFrom.length === 0 ? {} : { aliasedFrom }),
     ...(literals.length === 0 ? {} : { literals }),
     enclosing: className ?? frame.name,
+    ...(frame.callableLocation === undefined ? {} : { enclosingLocation: frame.callableLocation }),
+    ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
   });
+};
+
+const recordClassMethod = (
+  member: Node,
+  className: string | undefined,
+  context: Context,
+  frame: Frame,
+  collecting: (readonly string[])[][],
+): boolean => {
+  if (member.type !== 'MethodDefinition') return false;
+  const methodName = staticPropertyName(member);
+  const value = asNode(field(member, 'value'));
+  if (methodName === undefined) {
+    traverseDynamicPropertyKey(member, context, frame, collecting);
+    if (value !== undefined) traverseUnsettledFunctionBody(value, context, frame);
+    return true;
+  }
+  const segment = callablePropertySegment(member, methodName);
+  const qualifiedName = className === undefined ? segment : `${className}.${segment}`;
+  const callableLocation = context.index.location(
+    context.file,
+    value?.start ?? member.start,
+    value?.end ?? member.end,
+  );
+  if (value !== undefined) recordCallableLocation(context, qualifiedName, value);
+  context.definitions.push({
+    kind: 'method',
+    name: qualifiedName,
+    exported: frame.exported,
+    async: value !== undefined && field(value, 'async') === true,
+    decorators: decoratorFacts(member, context),
+    location: context.index.location(context.file, member.start, member.end),
+    initializer: undefined,
+    ...(value === undefined || directParameters(value, context).length === 0
+      ? {}
+      : { parameters: directParameters(value, context) }),
+    enclosing: className ?? frame.name,
+    ...(frame.callableLocation === undefined ? {} : { enclosingLocation: frame.callableLocation }),
+    ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
+  });
+  const methodBody = value === undefined ? undefined : asNode(field(value, 'body'));
+  if (methodBody !== undefined) {
+    traverse(
+      methodBody,
+      context,
+      {
+        name: qualifiedName,
+        declaredName: undefined,
+        exported: false,
+        callableLocation,
+        lexicalScopes: nestedLexicalScopes(
+          frame,
+          callableLocation,
+          value === undefined ? [] : unresolvedCallableBindings(value),
+        ),
+        ...(frame.lexicalShadows === undefined ? {} : { lexicalShadows: frame.lexicalShadows }),
+      },
+      false,
+      [],
+    );
+  }
+  return true;
+};
+
+const traverseClassFieldValue = (
+  member: Node,
+  value: Node,
+  context: Context,
+  frame: Frame,
+  className: string | undefined,
+  collecting: (readonly string[])[][],
+): void => {
+  const fieldName = staticPropertyName(member);
+  const owner = className ?? frame.name;
+  const declaredName =
+    fieldName === undefined || owner === undefined ? undefined : `${owner}.${fieldName}`;
+  if (field(member, 'static') === true) {
+    traverse(
+      value,
+      context,
+      {
+        ...frame,
+        declaredName,
+        exported: false,
+      },
+      false,
+      collecting,
+    );
+    return;
+  }
+  traverse(
+    value,
+    context,
+    declaredName === undefined
+      ? {
+          name: undefined,
+          declaredName: undefined,
+          exported: false,
+          enclosingUnresolved: true,
+          declaredPathUnresolved: true,
+        }
+      : {
+          name: undefined,
+          declaredName,
+          exported: false,
+          enclosingUnresolved: true,
+        },
+    false,
+    collecting,
+  );
+};
+
+const classScopeName = (node: Node, frame: Frame): string | undefined => {
+  const declaredId = identifierName(asNode(field(node, 'id')));
+  if (node.type === 'ClassExpression' && frame.declaredName !== undefined) {
+    return frame.declaredName;
+  }
+  if (node.type === 'ClassExpression') return frame.declaredName ?? declaredId;
+  if (declaredId === undefined) return frame.declaredName;
+  return frame.name === undefined ? declaredId : `${frame.name}.${declaredId}`;
 };
 
 const recordClass = (
@@ -981,52 +1541,42 @@ const recordClass = (
   frame: Frame,
   collecting: (readonly string[])[][],
 ): void => {
-  const name = identifierName(asNode(field(node, 'id')));
+  const declaredId = identifierName(asNode(field(node, 'id')));
+  const settledName = classScopeName(node, frame);
+  const definitionName = node.type === 'ClassDeclaration' ? declaredId : settledName;
   context.definitions.push({
     kind: 'class',
-    name: name ?? '(anonymous)',
+    name: definitionName ?? '(anonymous)',
     exported: frame.exported,
     async: false,
     decorators: decoratorFacts(node, context),
     location: context.index.location(context.file, node.start, node.end),
     initializer: undefined,
     enclosing: frame.name,
+    ...(frame.callableLocation === undefined ? {} : { enclosingLocation: frame.callableLocation }),
+    ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
   });
   const body = asNode(field(node, 'body'));
   if (body === undefined) return;
   for (const member of nodeArray(field(body, 'body'))) {
-    if (member.type === 'MethodDefinition') {
-      const methodName = identifierName(asNode(field(member, 'key')));
+    if (recordClassMethod(member, settledName, context, frame, collecting)) continue;
+    if (member.type === 'PropertyDefinition') {
+      traverseDynamicPropertyKey(member, context, frame, collecting);
+      recordClassField(member, context, frame, settledName);
       const value = asNode(field(member, 'value'));
-      context.definitions.push({
-        kind: 'method',
-        name: methodName === undefined ? '(anonymous)' : `${name ?? ''}.${methodName}`,
-        exported: frame.exported,
-        async: value !== undefined && field(value, 'async') === true,
-        decorators: decoratorFacts(member, context),
-        location: context.index.location(context.file, member.start, member.end),
-        initializer: undefined,
-        ...(value === undefined || directParameters(value, context).length === 0
-          ? {}
-          : { parameters: directParameters(value, context) }),
-        enclosing: name ?? frame.name,
-      });
       if (value !== undefined) {
-        traverse(
-          value,
-          context,
-          { name: `${name ?? ''}.${methodName ?? ''}`, declaredName: undefined, exported: false },
-          false,
-          collecting,
-        );
+        traverseClassFieldValue(member, value, context, frame, settledName, collecting);
       }
       continue;
     }
-    if (member.type === 'PropertyDefinition') recordClassField(member, context, frame, name);
+    if (member.type === 'StaticBlock') {
+      traverse(member, context, frame, false, collecting);
+      continue;
+    }
     traverse(
       member,
       context,
-      { name: name ?? frame.name, declaredName: undefined, exported: false },
+      { name: settledName ?? frame.name, declaredName: undefined, exported: false },
       false,
       collecting,
     );
@@ -1042,7 +1592,6 @@ const recordClass = (
 const NAMING_INITIALIZERS = new Set([
   'ArrowFunctionExpression',
   'FunctionExpression',
-  'ClassExpression',
   'Literal',
   'TemplateLiteral',
   'TaggedTemplateExpression',
@@ -1115,6 +1664,11 @@ const boundLiterals = (init: Node, context: Context): readonly ArgumentFact[] =>
   return isLiteralFact(fact) ? [fact] : [];
 };
 
+const initializerDeclaredName = (name: string | undefined, frame: Frame): string | undefined => {
+  if (name === undefined) return frame.declaredName;
+  return frame.name === undefined ? name : `${frame.name}.${name}`;
+};
+
 const recordVariables = (
   node: Node,
   context: Context,
@@ -1142,19 +1696,21 @@ const recordVariables = (
           : { parameters: directParameters(init, context) }),
         ...(aliasedFrom.length === 0 ? {} : { aliasedFrom }),
         ...(literals.length === 0 ? {} : { literals }),
-        enclosing: frame.name,
+        ...definitionEnclosing(frame),
       });
     }
     if (init !== undefined) {
       // `const opened = new DatabaseSync()` must not rename the scope: doing so attributes every later call in the
       // function to whatever variable happened to be declared last, which is how a database handle became an entry
       // point named `opened`.
+      const declaredName = initializerDeclaredName(name, frame);
+      const structuralName = structuralDeclaredName(init, declaredName);
       const scopeName =
-        name !== undefined && NAMING_INITIALIZERS.has(init.type) ? name : frame.name;
+        name !== undefined && NAMING_INITIALIZERS.has(init.type) ? declaredName : frame.name;
       traverse(
         init,
         context,
-        { name: scopeName, declaredName: name ?? frame.declaredName, exported: frame.exported },
+        { ...frame, name: scopeName, declaredName: structuralName },
         false,
         collecting,
       );
@@ -1198,6 +1754,7 @@ export const analyzeJavaScript = (input: {
     texts: [],
     controlFlow: [],
     exportedNames: new Set(),
+    callableLocations: new Map(),
   };
 
   const result = parseSync(input.file, input.text);
@@ -1216,18 +1773,36 @@ export const analyzeJavaScript = (input: {
     return message ?? 'parse error';
   });
 
+  const ambiguousCallables = new Set(
+    [...context.callableLocations]
+      .filter(([, locations]) => locations.size > 1)
+      .map(([name]) => name),
+  );
+  const calls = context.calls.map(
+    (call): CallFact =>
+      call.enclosing !== undefined && ambiguousCallables.has(call.enclosing)
+        ? { ...call, enclosing: undefined, enclosingUnresolved: true }
+        : call,
+  );
+  const controlFlow = context.controlFlow.map(
+    (flow): ControlFlowFact =>
+      flow.enclosing !== undefined && ambiguousCallables.has(flow.enclosing)
+        ? { ...flow, enclosing: undefined, enclosingUnresolved: true }
+        : flow,
+  );
+
   return {
     file: input.file,
     language: input.language,
     contentHash: input.contentHash,
     imports: context.imports,
     exportedNames: [...context.exportedNames],
-    calls: context.calls,
+    calls,
     definitions: context.definitions,
     environmentRefs: context.environmentRefs,
     texts: context.texts,
     assignments: context.assignments,
-    controlFlow: context.controlFlow,
+    controlFlow,
     parseErrors,
   };
 };

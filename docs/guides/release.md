@@ -60,6 +60,11 @@ was reported as having no agent system. Its proposed negative contained executab
 valid negative control. The positive is a permanent regression input, the negative adds no corpus entry, and neither
 source lineage can be reused as an unseen holdout.
 
+The [blocked d00a06b5 evaluation](../research/d00a06b5-blocked-blind-evaluation.md) records a fifth completed block:
+an external call inside a named object method was attributed to module scope, and that unsupported caller identity
+propagated through the graph, finding and exports. Both targets contribute distinct regression boundaries, and neither
+source lineage can be reused as an unseen holdout.
+
 The [passed 95c7756c evaluation](../research/95c7756c-passed-blind-evaluation.md) records the same boundary for a
 completed passing gate. Its selected positive becomes a regression input, its negative adds no duplicate corpus entry,
 and neither source lineage can be reused as an unseen holdout.

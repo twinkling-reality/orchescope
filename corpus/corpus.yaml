@@ -1021,6 +1021,170 @@ repositories:
           - ruleId: observability-coverage
             severity: info
 
+  - name: crossdiscipline-research-agent
+    source: git
+    url: https://github.com/jmdonbaba/CrossDiscipline-Research-Agent.git
+    commit: 5aa22a6afbe76dfd0fe67690b64cec1e12a57c86
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive application selected independently for the blind evaluation of candidate
+      d00a06b5. Its orchestrator constructs and sequences five hand-written research stages that build prompts,
+      invoke one shared completion client and provide rule-based fallbacks. It uses no framework this build claims,
+      so the truthful static result is an explicitly bounded unsupported positive rather than an invented framework
+      identity or a false assertion that the source contains no agents.
+
+      The effects reader still holds the distinct source claim this target contributes: the shared HTTP completion
+      call belongs to complete, carries a dynamic service boundary and sits in a bounded three-pass retry. No runtime
+      is attempted because the repository supplies no scenario, fixture input, recorded run or offline fake path;
+      no research target, external scholarly population, credential or substitute endpoint is invented.
+
+      The pinned repository has 26 tracked files. Its MIT LICENSE has SHA-256
+      b19a425d8d00566072df98eef18bd5f132a503b331298bff818c313da23948a5.
+    acceptance:
+      expectedAgentSystemDetected: false
+      graphPopulation:
+        components: 2
+        edges: 1
+      exactIdsByKind:
+        entrypoint:
+          - entrypoint:complete
+        external_service:
+          - external_service:unresolved-host-complete
+      absentKinds:
+        - agent
+        - model
+        - tool
+        - workflow
+      absentComponentTerms:
+        - module-scope
+      requiredEdges:
+        - kind: calls_service
+          from: entrypoint:complete
+          to: external_service:unresolved-host-complete
+          sourceFile: core/llm.py
+          evidence:
+            - producer: adapter:effects
+              symbol: requests.post
+              sourceFile: core/llm.py
+              startLine: 63
+              endLine: 63
+            - producer: adapter:effects
+              symbol: retry loop around requests.post
+              sourceFile: core/llm.py
+              startLine: 61
+              endLine: 85
+      componentMetadata:
+        entrypoint:complete:
+          inferredFrom: enclosing scope of an external effect
+      componentEvidence:
+        entrypoint:complete:
+          - producer: adapter:effects
+            symbol: complete
+            sourceFile: core/llm.py
+            startLine: 63
+            endLine: 63
+      sourceCitations:
+        entrypoint:complete:
+          - core/llm.py
+        external_service:unresolved-host-complete:
+          - core/llm.py
+      adapterOutcomes:
+        adapter:effects:
+          status: completed
+          componentsFound: 2
+          edgesFound: 2
+          filesInspected: 1
+      topology:
+        status: incomplete
+        unresolvedCount: 1
+        conditionalDestinations: 0
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+        exactRisks:
+          - ruleId: observability-coverage
+            severity: info
+
+  - name: agentgauge
+    source: git
+    url: https://github.com/synrouter/agentgauge.git
+    commit: b109ef0f7f726cb16b9c5c77276694dfd19cfa57
+    kind: not_agent_system
+    why: >-
+      The exact MIT-licensed negative control selected independently for the blind evaluation of candidate d00a06b5.
+      It parses existing coding-agent session logs, attributes tokens and cost, identifies producer fingerprints and
+      renders reports; it does not select actions or invoke tools as an agent. Its optional pricing-update command
+      places fetch inside the async run method of an object passed to a command definition.
+
+      The frozen candidate attributed that request to module scope. This regression holds the generalized precision
+      boundary: a named object callable owns the effects in its body, including when its object is nested in a call
+      argument. The graph caller, dynamic-service scope, relation, citation, finding subject and Mermaid label must
+      agree on the source-authoritative `run` method. The opaque command wrapper does not prove that it returns the
+      object under the variable's name, while the repository remains correctly negative.
+
+      The pinned repository has 99 tracked files. Its MIT LICENSE has SHA-256
+      7f938135f347074ddbbfdc9f11949055fb6b6ee44f95fefa10c95fa8dadc7a60. This is static-only and runs no target code.
+    acceptance:
+      graphPopulation:
+        components: 2
+        edges: 1
+      exactIdsByKind:
+        entrypoint:
+          - entrypoint:run
+        external_service:
+          - external_service:unresolved-host-run
+      absentKinds:
+        - agent
+        - model
+        - tool
+        - workflow
+      absentComponentTerms:
+        - module-scope
+      requiredEdges:
+        - kind: calls_service
+          from: entrypoint:run
+          to: external_service:unresolved-host-run
+          sourceFile: src/cli/commands/update-pricing.ts
+          evidence:
+            - producer: adapter:effects
+              symbol: fetch
+              sourceFile: src/cli/commands/update-pricing.ts
+              startLine: 18
+              endLine: 18
+      componentMetadata:
+        entrypoint:run:
+          inferredFrom: enclosing scope of an external effect
+      componentEvidence:
+        entrypoint:run:
+          - producer: adapter:effects
+            symbol: run
+            sourceFile: src/cli/commands/update-pricing.ts
+            startLine: 18
+            endLine: 18
+      sourceCitations:
+        entrypoint:run:
+          - src/cli/commands/update-pricing.ts
+        external_service:unresolved-host-run:
+          - src/cli/commands/update-pricing.ts
+      adapterOutcomes:
+        adapter:effects:
+          status: completed
+          componentsFound: 2
+          edgesFound: 1
+          filesInspected: 1
+      topology:
+        status: incomplete
+        unresolvedCount: 1
+        conditionalDestinations: 0
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+        exactRisks:
+          - ruleId: observability-coverage
+            severity: info
+
   - name: langchain-langgraph-agents
     source: git
     url: https://github.com/Chaitanya-Keyal/langchain-langgraph-agents.git

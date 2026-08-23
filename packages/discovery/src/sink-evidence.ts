@@ -63,7 +63,12 @@ const functionAround = (module: ModuleFacts, holder: string | undefined): string
     ...module.controlFlow.map((construct) => construct.enclosing),
   ]);
   if (scopes.has(holder)) return holder;
-  return module.definitions.find((definition) => definition.name === holder)?.enclosing;
+  return module.definitions.find(
+    (definition) =>
+      definition.name === holder ||
+      (definition.enclosing !== undefined &&
+        `${definition.enclosing}.${definition.name}` === holder),
+  )?.enclosing;
 };
 
 const scopeIn = (drafts: Map<string | undefined, Draft>, scope: string | undefined): Draft => {

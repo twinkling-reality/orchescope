@@ -11,7 +11,9 @@ second candidate, commit `48828a1d2f3d8aa479124987a04eb8d672fc63a3` with archive
 `61603179f78bca84aa21e71d4060aa3b8a500b4a372784be86fe441c62f8ac2b`, was also independently evaluated and blocked.
 The third candidate, commit `df99c97c192e12177a7aa78dee012e0dec10bab5` with archive SHA-256
 `0670c1ace229159a3bcd6a63ccfa53a7832db58b376272612225b2a7177a4709`, was independently evaluated and blocked as
-well. None was published, tagged, pushed or attached to a release. A corrected candidate cannot be published until a
+well. The fourth candidate, commit `d00a06b5c8c45ebfcd1ca75cb2bbdb0951c1e8a7` with archive SHA-256
+`9b2834897befd6a6f5288c973bea25a81f4389cff5de17a090545d421c12cfc6`, was independently evaluated and blocked too.
+None was published, tagged, pushed or attached to a release. A corrected candidate cannot be published until a
 different unseen positive and negative pair clears the blind gate.
 
 ### Workflow topology is no longer presented as agent identity
@@ -88,6 +90,58 @@ to the literal `https://mdb.ai/` endpoint with a runtime-selected model, so the 
 longer labels the provider OpenAI. Its release-note helper accepts a caller-supplied client on one path, so the scan
 does not derive an exact agent, provider, model, prompt relation or timeout finding from the other path's local OpenAI
 construction. The committed expectation records those source-reviewed removals and retains the unresolved inputs.
+
+### Object callables own the effects in their bodies
+
+JavaScript and TypeScript object shorthand methods and function-valued properties now retain the smallest callable
+name that owns their body, even when the object literal is nested inside another call. External services, caller
+relations, evidence, findings and exports therefore agree on the method that performs an effect. A genuine top-level
+call remains module scope. A call inside a callable with no authoritative source name receives an explicit refusal
+instead of borrowing module or surrounding-function ownership. An opaque wrapper does not lend its result variable to
+a callable argument; only the method name the source establishes is retained when it is otherwise unique.
+
+Callable paths distinguish nested object members, getters and setters, static and instance class methods, nested
+classes and lexically distinct local bindings. Array positions, repeated ownerless literals and duplicate body-local
+names are refused because line numbers, source order and generated labels are not semantic identity. Dynamic computed
+callable keys remain unsupported, while the key expression itself stays in the surrounding evaluation scope because
+that code executes when the object or class is created. Static class initializers retain that surrounding evaluation
+scope; instance initializers and anonymous callbacks do not borrow a class, surrounding function or module as a
+callable owner. The same refusal boundary applies to HTTP and model calls, datastores, queues, retry helpers and
+deployment bindings.
+
+Retry-loop analysis stays inside the loop's callable scope: a nested function or object method declared within a loop
+does not execute merely because its definition is constructed there. Conflicting calls summarized by one service or
+relation retain both read and write permissions while their effect becomes `unknown`; conflicting request methods
+become `mixed`. An unsettled method cannot inherit a definite POST or read-only polarity from a sibling call.
+
+The defect was found by the independently selected `agentgauge` negative control. Its pricing update request executes
+inside a command object's `run` method, while the frozen candidate created a module-scope component and propagated that
+unsupported identity through its graph, finding and Mermaid export. The independently selected positive,
+`CrossDiscipline-Research-Agent`, remained an honest unsupported hand-written application with no guessed runtime.
+Both exact targets contribute distinct source-cited regression inputs, and both source lineages are permanently
+ineligible as future blind holdouts.
+
+### Agent identities follow exact source bindings and lexical scope
+
+OpenAI Agents SDK components now use a stable source binding inside the function or method that constructs them.
+Explicit runtime names remain display and reconciliation facts; they no longer merge unrelated Agent instances from
+different functions, tests or local variables into one graph component. Tool, handoff, model, guardrail and prompt
+relations resolve inside that same lexical scope and require the referenced construction to precede the relation.
+Distinct instances that share a runtime name therefore remain distinct, while a proven assignment of an Agent to
+itself can still produce a self-handoff.
+
+A surrounding result variable authorizes Agent identity only when its direct initializer is the matched constructor.
+An Agent nested inside `Runner.run(...)`, an item wrapper or another Agent cannot borrow the outer result binding.
+Repeated ownerless constructions with no stable source distinction are explicit topology refusals. Python source facts
+that retain only a chained call such as `Agent(...).clone(...)` likewise produce a source-located refusal: clone
+arguments cannot be substituted for constructor arguments or used to invent an Agent name, tool population or
+relation. Direct `Agent(...)` and the separately established `Agent.create(...)` form remain supported.
+
+This materially changes the pinned OpenAI Agents Python projection. Previously 1,681 construction sites collapsed into
+615 source components; the corrected projection retains 1,638 one-construction Agent components, refuses 42 ambiguous
+ownerless or reassigned sites and one constructor chain, and preserves only source-scoped tool, handoff, model,
+guardrail and prompt relations. The merged high-fanout `inventory` and `sdk-root` topology claim disappears because
+those names belonged to many distinct constructions rather than two coordinators.
 
 ### Finding identity and evidence populations are stable and reviewable
 

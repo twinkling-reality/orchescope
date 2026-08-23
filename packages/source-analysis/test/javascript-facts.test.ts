@@ -93,6 +93,455 @@ describe('javascript fact extraction', () => {
     assert.equal(facts.environmentRefs[0]?.enclosing, 'makeClient');
   });
 
+  it('retains object method ownership for method, arrow and function property values', () => {
+    const facts = analyze(`
+      const command = defineCommand({
+        async run({ args }) { await fetch(args.url); },
+        arrow: async () => fetch('/arrow'),
+        expression: async function () { return fetch('/expression'); },
+      });
+      void command;
+    `);
+    const fetchCalls = facts.calls.filter((call) => dotted(call.calleePath) === 'fetch');
+    assert.deepEqual(
+      fetchCalls.map((call) => call.enclosing),
+      ['run', 'arrow', 'expression'],
+    );
+    assert.deepEqual(
+      facts.definitions
+        .filter((definition) => definition.kind === 'method')
+        .map((definition) => definition.name),
+      ['run', 'arrow', 'expression'],
+    );
+  });
+
+  it('uses the smallest object callable rather than its surrounding function', () => {
+    const facts = analyze(`
+      function register() {
+        return defineCommand({
+          run() { return fetch('/inside'); },
+        });
+      }
+      fetch('/module');
+    `);
+    const calls = facts.calls.filter((call) => dotted(call.calleePath) === 'fetch');
+    assert.equal(calls[0]?.enclosing, 'register.run');
+    assert.equal(calls[1]?.enclosing, undefined);
+  });
+
+  it('does not lend an opaque wrapper result to the callable inside its argument', () => {
+    const facts = analyze(`
+      const x = discard({ run() { return fetch('/inside'); } });
+      void x;
+    `);
+    const call = facts.calls.find((candidate) => dotted(candidate.calleePath) === 'fetch');
+    assert.equal(call?.enclosing, 'run');
+    assert.notEqual(call?.enclosing, 'x.run');
+  });
+
+  it('does not assume a callee spelled Object.freeze is the unshadowed global', () => {
+    const facts = analyze(`
+      const direct = Object.freeze({ run() { return fetch('/global'); } });
+      function parameter(Object) {
+        const wrapped = Object.freeze({ run() { return fetch('/parameter'); } });
+        return wrapped;
+      }
+      const Object = { freeze: (value) => value };
+      const shadowed = Object.freeze({ run() { return fetch('/module'); } });
+      void direct;
+      void shadowed;
+    `);
+    const calls = facts.calls.filter((candidate) => dotted(candidate.calleePath) === 'fetch');
+    assert.deepEqual(
+      calls.map((call) => call.enclosing),
+      [undefined, 'parameter.run', undefined],
+    );
+    assert.ok(calls.every((call) => !call.enclosing?.includes('wrapped')));
+    assert.ok(calls.every((call) => !call.enclosing?.includes('direct')));
+    assert.ok(calls.every((call) => !call.enclosing?.includes('shadowed')));
+  });
+
+  it('keeps semantic callable names stable across whitespace and sibling insertions', () => {
+    const compact = analyze(`const command={run(){return fetch('/inside')}};`);
+    const reformatted = analyze(`
+
+      const command = {
+        description: 'inserted sibling',
+        run() {
+          return fetch('/inside');
+        },
+      };
+    `);
+    const owner = (facts: ReturnType<typeof analyze>) =>
+      facts.calls.find((candidate) => dotted(candidate.calleePath) === 'fetch')?.enclosing;
+    assert.equal(owner(compact), 'command.run');
+    assert.equal(owner(reformatted), owner(compact));
+  });
+
+  it('refuses same-named callable bindings in sibling blocks, including their retry loops', () => {
+    const facts = analyze(`
+      function outer(flag) {
+        if (flag) {
+          const command = { run() { for (let attempt = 0; attempt < 3; attempt += 1) fetch('/read'); } };
+          void command;
+        } else {
+          const command = { run() { for (let attempt = 0; attempt < 3; attempt += 1) fetch('/write', { method: 'POST' }); } };
+          void command;
+        }
+      }
+    `);
+    const calls = facts.calls.filter((candidate) => dotted(candidate.calleePath) === 'fetch');
+    assert.ok(calls.every((call) => call.enclosing === undefined));
+    assert.ok(calls.every((call) => call.enclosingUnresolved === true));
+    assert.ok(facts.controlFlow.every((flow) => flow.enclosing === undefined));
+    assert.ok(facts.controlFlow.every((flow) => flow.enclosingUnresolved === true));
+  });
+
+  it('refuses a call-bearing semantic name when an inert duplicate makes it ambiguous', () => {
+    const facts = analyze(`
+      register({ run() { return fetch('/ownerless'); } });
+      register({ run() { return undefined; } });
+      register(function poll() { return fetch('/function'); });
+      register(function poll() { return undefined; });
+      function outer(flag) {
+        if (flag) {
+          const command = { run() { return fetch('/branch'); } };
+          void command;
+        } else {
+          const command = { run() { return undefined; } };
+          void command;
+        }
+      }
+    `);
+    const calls = facts.calls.filter((candidate) => dotted(candidate.calleePath) === 'fetch');
+    assert.equal(calls.length, 3);
+    assert.ok(calls.every((call) => call.enclosing === undefined));
+    assert.ok(calls.every((call) => call.enclosingUnresolved === true));
+  });
+
+  it('marks a call inside an unnamed callable instead of lending it an outer owner', () => {
+    const facts = analyze(`
+      function collect(urls) {
+        return urls.map(async (url) => fetch(url));
+      }
+    `);
+    const call = facts.calls.find((candidate) => dotted(candidate.calleePath) === 'fetch');
+    assert.equal(call?.enclosing, undefined);
+    assert.equal(call?.enclosingUnresolved, true);
+    assert.equal(call?.lexicalEnclosing, 'collect');
+    assert.deepEqual(call?.lexicalShadows, ['url']);
+    assert.equal(call?.lexicalScopes?.length, 2);
+    assert.deepEqual(call?.lexicalScopes?.at(-1)?.bindings, ['url']);
+    assert.ok(
+      call?.lexicalScopes?.every((scope) => scope.location.file === 'src/agents/triage.ts'),
+    );
+  });
+
+  it('retains ordered lexical scopes and inherited writes across nested unnamed callables', () => {
+    const facts = analyze(`
+      function collect(items) {
+        let agent = makeAgent();
+        return items.map(async (agent) => items.map(async () => {
+          agent = items[0];
+          return run(agent, 'input');
+        }));
+      }
+    `);
+    const call = facts.calls.find((candidate) => dotted(candidate.calleePath) === 'run');
+    assert.equal(call?.lexicalEnclosing, 'collect');
+    assert.equal(call?.lexicalScopes?.length, 3);
+    assert.deepEqual(
+      call?.lexicalScopes?.map((scope) => scope.bindings),
+      [['agent', 'items'], ['agent'], ['agent']],
+    );
+    assert.deepEqual(call?.lexicalShadows, ['agent']);
+    const assignment = facts.assignments.find((candidate) => candidate.target[0] === 'agent');
+    assert.equal(assignment?.enclosingUnresolved, true);
+    assert.deepEqual(assignment?.enclosingLocation, call?.lexicalScopes?.at(-1)?.location);
+  });
+
+  it('settles static computed and nested object paths while refusing dynamic keys', () => {
+    const facts = analyze(`
+      const command = defineCommand({
+        ['literal']: async () => fetch('/literal'),
+        [key]: async () => fetch('/dynamic'),
+        nested: { run() { return fetch('/nested'); } },
+      });
+    `);
+    const calls = facts.calls.filter((candidate) => dotted(candidate.calleePath) === 'fetch');
+    assert.deepEqual(
+      calls.map((call) => ({ enclosing: call.enclosing, unresolved: call.enclosingUnresolved })),
+      [
+        { enclosing: 'literal', unresolved: undefined },
+        { enclosing: undefined, unresolved: true },
+        { enclosing: 'nested.run', unresolved: undefined },
+      ],
+    );
+  });
+
+  it('evaluates dynamic property keys in the surrounding scope while refusing their callable bodies', () => {
+    const facts = analyze(`
+      const command = {
+        [fetch('/key')]: async () => fetch('/body'),
+      };
+      class Command { [fetch('/class-key')]() { return fetch('/class-body'); } }
+    `);
+    const calls = facts.calls.filter((candidate) => dotted(candidate.calleePath) === 'fetch');
+    assert.deepEqual(
+      calls.map((call) => ({ enclosing: call.enclosing, unresolved: call.enclosingUnresolved })),
+      [
+        { enclosing: undefined, unresolved: undefined },
+        { enclosing: undefined, unresolved: true },
+        { enclosing: undefined, unresolved: undefined },
+        { enclosing: undefined, unresolved: true },
+      ],
+    );
+  });
+
+  it('uses a directly passed named function and refuses an unnamed default function', () => {
+    const named = analyze(`register(async function poll() { await fetch('/poll'); });`);
+    assert.equal(
+      named.calls.find((call) => dotted(call.calleePath) === 'fetch')?.enclosing,
+      'poll',
+    );
+
+    const unnamed = analyze(`export default function () { return fetch('/default'); }`);
+    const call = unnamed.calls.find((candidate) => dotted(candidate.calleePath) === 'fetch');
+    assert.equal(call?.enclosing, undefined);
+    assert.equal(call?.enclosingUnresolved, true);
+  });
+
+  it('refuses duplicate direct function names while retaining distinct lexical names', () => {
+    const facts = analyze(`
+      register(function poll() { return fetch('/top-a'); });
+      register(function poll() { return fetch('/top-b'); });
+      function a() { register(function poll() { return fetch('/a'); }); }
+      function b() { register(function poll() { return fetch('/b'); }); }
+    `);
+    const owners = facts.calls
+      .filter((candidate) => dotted(candidate.calleePath) === 'fetch')
+      .map((call) => call.enclosing);
+    assert.deepEqual(owners, [undefined, undefined, 'a.poll', 'b.poll']);
+    assert.ok(
+      facts.calls
+        .filter((candidate) => dotted(candidate.calleePath) === 'fetch')
+        .slice(0, 2)
+        .every((call) => call.enclosingUnresolved === true),
+    );
+  });
+
+  it('settles a computed literal class method and refuses a dynamic one', () => {
+    const facts = analyze(`
+      class Command {
+        ['run']() { return fetch('/run'); }
+        [key]() { return fetch('/dynamic'); }
+      }
+    `);
+    const calls = facts.calls.filter((candidate) => dotted(candidate.calleePath) === 'fetch');
+    assert.deepEqual(
+      calls.map((call) => ({ enclosing: call.enclosing, unresolved: call.enclosingUnresolved })),
+      [
+        { enclosing: 'Command.run', unresolved: undefined },
+        { enclosing: undefined, unresolved: true },
+      ],
+    );
+  });
+
+  it('retains class-expression and field paths while refusing their dynamic methods', () => {
+    const facts = analyze(`
+      const Command = class {
+        run() { return fetch('/run'); }
+        [key]() { return fetch('/dynamic'); }
+        command = { run() { return fetch('/field'); } };
+        static nested = { command: { run() { return fetch('/nested'); } } };
+        workers = { Worker: class { run() { return fetch('/field-class'); } } };
+      };
+    `);
+    const calls = facts.calls.filter((candidate) => dotted(candidate.calleePath) === 'fetch');
+    assert.deepEqual(
+      calls.map((call) => ({ enclosing: call.enclosing, unresolved: call.enclosingUnresolved })),
+      [
+        { enclosing: 'Command.run', unresolved: undefined },
+        { enclosing: undefined, unresolved: true },
+        { enclosing: 'Command.command.run', unresolved: undefined },
+        { enclosing: 'Command.nested.command.run', unresolved: undefined },
+        { enclosing: 'Command.workers.Worker.run', unresolved: undefined },
+      ],
+    );
+  });
+
+  it('qualifies nested class declarations and prefers a class expression binding over its local id', () => {
+    const facts = analyze(`
+      function a() {
+        class C { run() { return fetch('/a-declaration'); } }
+        const X = class C { run() { return fetch('/a-expression'); } };
+        return { C, X };
+      }
+      function b() {
+        class C { run() { return fetch('/b-declaration'); } }
+        const X = class C { run() { return fetch('/b-expression'); } };
+        return { C, X };
+      }
+    `);
+    assert.deepEqual(
+      facts.calls
+        .filter((candidate) => dotted(candidate.calleePath) === 'fetch')
+        .map((call) => call.enclosing),
+      ['a.C.run', 'a.X.run', 'b.C.run', 'b.X.run'],
+    );
+  });
+
+  it('refuses duplicate body-local class names without minting source-position identities', () => {
+    const facts = analyze(`
+      register(class Local { run() { return fetch('/direct-a'); } });
+      register(class Local { run() { return fetch('/direct-b'); } });
+      function outer(flag) {
+        if (flag) {
+          class C { run() { return fetch('/branch-a'); } }
+          void C;
+        } else {
+          class C { run() { return fetch('/branch-b'); } }
+          void C;
+        }
+      }
+    `);
+    const calls = facts.calls.filter((candidate) => dotted(candidate.calleePath) === 'fetch');
+    assert.ok(calls.every((call) => call.enclosing === undefined));
+    assert.ok(calls.every((call) => call.enclosingUnresolved === true));
+  });
+
+  it('keeps named bodies inside separate anonymous callbacks distinct by refusing collisions', () => {
+    const facts = analyze(`
+      items.map(() => {
+        function send() { return fetch('/function-a'); }
+        const command = { run() { return fetch('/object-a'); } };
+        class C { run() { return fetch('/class-a'); } }
+        return { send, command, C };
+      });
+      items.map(() => {
+        function send() { return fetch('/function-b'); }
+        const command = { run() { return fetch('/object-b'); } };
+        class C { run() { return fetch('/class-b'); } }
+        return { send, command, C };
+      });
+    `);
+    const calls = facts.calls.filter((candidate) => dotted(candidate.calleePath) === 'fetch');
+    assert.equal(calls.length, 6);
+    assert.ok(calls.every((call) => call.enclosing === undefined));
+    assert.ok(calls.every((call) => call.enclosingUnresolved === true));
+  });
+
+  it('carries property paths through classes and transparent syntax but not opaque calls', () => {
+    const facts = analyze(`
+      type Handler = { run(): Promise<Response> | Response };
+      const root = {
+        Worker: class { run() { return fetch('/class'); } },
+        nested: { Worker: (class { run() { return fetch('/nested-class'); } } as Handler) },
+        command: defineCommand({ run() { return fetch('/call-wrapper'); } }),
+        frozen: Object.freeze({ run() { return fetch('/frozen'); } }),
+        asserted: (({ run() { return fetch('/asserted'); } } as const) satisfies Handler),
+      };
+      void root;
+    `);
+    assert.deepEqual(
+      facts.calls
+        .filter((candidate) => dotted(candidate.calleePath) === 'fetch')
+        .map((call) => call.enclosing),
+      ['root.Worker.run', 'root.nested.Worker.run', undefined, undefined, 'root.asserted.run'],
+    );
+  });
+
+  it('keeps unsettled container evaluation in the outer scope and refuses only callable bodies', () => {
+    const facts = analyze(`
+      declare const key: string;
+      const root = {
+        [key]: {
+          response: fetch('/init'),
+          run() { return fetch('/body'); },
+        },
+      };
+      function outer() {
+        const values = [...makeList(fetch('/spread-init'))];
+        return values;
+      }
+      void root;
+    `);
+    const calls = facts.calls.filter((candidate) => dotted(candidate.calleePath) === 'fetch');
+    assert.deepEqual(
+      calls.map((call) => ({ enclosing: call.enclosing, unresolved: call.enclosingUnresolved })),
+      [
+        { enclosing: undefined, unresolved: undefined },
+        { enclosing: undefined, unresolved: true },
+        { enclosing: 'outer', unresolved: undefined },
+      ],
+    );
+  });
+
+  it('refuses array-position callable identity so sibling edits cannot rename it', () => {
+    const facts = analyze(`
+      const commands = [
+        { run() { return fetch('/a'); } },
+        { run() { return fetch('/b'); } },
+      ];
+      const root = { commands: [{ run() { return fetch('/nested'); } }] };
+      register([{ run() { return fetch('/direct'); } }]);
+    `);
+    const calls = facts.calls.filter((candidate) => dotted(candidate.calleePath) === 'fetch');
+    assert.ok(calls.every((call) => call.enclosing === undefined));
+    assert.ok(calls.every((call) => call.enclosingUnresolved === true));
+  });
+
+  it('refuses colliding ownerless literals and keeps lexical bindings distinct', () => {
+    const facts = analyze(`
+      register({ run() { return fetch('/first'); } });
+      register({ run() { return fetch('/second'); } });
+      register([{ run() { return fetch('/array-first'); } }]);
+      register([{ run() { return fetch('/array-second'); } }]);
+      function a() { const command = { run() { return fetch('/a'); } }; return command; }
+      function b() { const command = { run() { return fetch('/b'); } }; return command; }
+    `);
+    const owners = facts.calls
+      .filter((candidate) => dotted(candidate.calleePath) === 'fetch')
+      .map((call) => call.enclosing);
+    assert.deepEqual(owners.slice(0, 4), [undefined, undefined, undefined, undefined]);
+    assert.deepEqual(owners.slice(4), ['a.command.run', 'b.command.run']);
+  });
+
+  it('distinguishes accessors and static methods and does not call a class initializer a callable', () => {
+    const facts = analyze(`
+      const command = {
+        get value() { return fetch('/read'); },
+        set value(input) { fetch('/write', { method: 'POST', body: input }); },
+      };
+      class C {
+        run() { return fetch('/instance'); }
+        static run() { return fetch('/static'); }
+        response = fetch('/field');
+        static cached = fetch('/static-field');
+        static { fetch('/static-block'); }
+      }
+      const Expression = class {
+        static { fetch('/expression-static-block'); }
+        [fetch('/expression-key')]() { return undefined; }
+      };
+    `);
+    const calls = facts.calls.filter((candidate) => dotted(candidate.calleePath) === 'fetch');
+    assert.deepEqual(
+      calls.map((call) => ({ enclosing: call.enclosing, unresolved: call.enclosingUnresolved })),
+      [
+        { enclosing: 'command.value.get', unresolved: undefined },
+        { enclosing: 'command.value.set', unresolved: undefined },
+        { enclosing: 'C.run', unresolved: undefined },
+        { enclosing: 'C.static.run', unresolved: undefined },
+        { enclosing: undefined, unresolved: true },
+        { enclosing: undefined, unresolved: undefined },
+        { enclosing: undefined, unresolved: undefined },
+        { enclosing: undefined, unresolved: undefined },
+        { enclosing: undefined, unresolved: undefined },
+      ],
+    );
+  });
+
   it('records long strings and template literals as candidate prompts', () => {
     const facts = analyze(
       // biome-ignore lint/suspicious/noTemplateCurlyInString: the fixture is source text and the placeholder is the subject

@@ -16,8 +16,14 @@ import {
   objectArgument,
   stringValue,
 } from '@orchescope/source-analysis';
-import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
+import type {
+  AdapterFindings,
+  AgentSystemAdapter,
+  DiscoveryContext,
+  TopologyDiscovery,
+} from '../adapter.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
+import { implementationBody } from '../implementation-span.ts';
 import {
   decoratedDefinitions,
   definitionForCall,
@@ -41,6 +47,46 @@ const PACKAGES = ['@openai/agents', '@openai/agents-core', 'agents', 'openai-age
 const ADAPTER_ID = 'adapter:openai-agents';
 const drafts = createDrafts(ADAPTER_ID);
 
+type ScopedBinding = {
+  readonly file: string;
+  readonly name: string;
+  readonly identity: ComponentIdentity;
+  readonly enclosing: string | undefined;
+  readonly enclosingLocation: SourceLocation | undefined;
+  readonly location: SourceLocation;
+};
+
+const registerScopedBinding = (
+  context: DiscoveryContext,
+  bindings: ScopedBinding[],
+  binding: ScopedBinding,
+): void => {
+  bindings.push(binding);
+  if (binding.enclosing === undefined && binding.enclosingLocation === undefined) {
+    context.bindings.register(binding.file, binding.name, binding.identity);
+  }
+};
+
+const registerDefinitionAliases = (
+  context: DiscoveryContext,
+  bindings: ScopedBinding[],
+  file: string,
+  definition: DefinitionFact,
+  identity: ComponentIdentity,
+  names: readonly string[],
+): void => {
+  for (const name of new Set(names)) {
+    registerScopedBinding(context, bindings, {
+      file,
+      name,
+      identity,
+      enclosing: definition.enclosing,
+      enclosingLocation: definition.enclosingLocation,
+      location: definition.location,
+    });
+  }
+};
+
 const modelIdentity = (model: string): ComponentIdentity =>
   globalIdentity('model', GLOBAL_NAMESPACES.model, model);
 
@@ -48,6 +94,10 @@ const toolNameFrom = (entries: readonly ObjectEntryFact[], fallback: string): st
   stringValue(findEntry(entries, 'name')?.value) ??
   stringValue(findEntry(entries, 'name_override')?.value) ??
   fallback;
+
+const explicitToolName = (entries: readonly ObjectEntryFact[]): string | undefined =>
+  stringValue(findEntry(entries, 'name')?.value) ??
+  stringValue(findEntry(entries, 'name_override')?.value);
 
 /** Both spellings, because the two SDKs differ only in the case convention of the option. */
 const approvalFrom = (entries: readonly ObjectEntryFact[]): boolean | undefined =>
@@ -64,13 +114,25 @@ const decoratorName = (decorator: DefinitionFact['decorators'][number]): string 
 const registerTools = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
-): { components: number } => {
+  unresolved: TopologyDiscovery['unresolved'][number][],
+): { components: number; bindings: readonly ScopedBinding[] } => {
   let components = 0;
+  const bindings: ScopedBinding[] = [];
 
   for (const match of matchCalls(context.modules, { names: ['tool'], packages: PACKAGES })) {
     const entries = objectArgument(match.call);
     const definition = definitionForCall(match.module, match.call);
-    const declaredName = toolNameFrom(entries, definition?.name ?? 'tool');
+    const explicitName = explicitToolName(entries);
+    if (match.call.enclosingUnresolved === true && explicitName === undefined) {
+      unresolved.push({
+        kind: 'adapter_input',
+        reason:
+          'a tool inside a callable without an authoritative source name declares no distinct runtime name',
+        location: match.call.location,
+      });
+      continue;
+    }
+    const declaredName = explicitName ?? definition?.name ?? 'tool';
     const identity = sourceIdentity('tool', match.module.file, declaredName);
     const needsApproval = approvalFrom(entries);
     builder.addComponent(
@@ -94,16 +156,33 @@ const registerTools = (
     );
     components += 1;
     if (definition !== undefined) {
-      context.bindings.register(match.module.file, definition.name, identity);
+      registerScopedBinding(context, bindings, {
+        file: match.module.file,
+        name: definition.name,
+        identity,
+        enclosing: definition.enclosing,
+        enclosingLocation: definition.enclosingLocation,
+        location: match.call.location,
+      });
     }
-    context.bindings.register(match.module.file, declaredName, identity);
-    // The call holds the tool's `execute`, so what runs when the tool is invoked is written inside it.
-    context.implementations.record({
-      identity,
+    registerScopedBinding(context, bindings, {
       file: match.module.file,
-      body: match.call.location,
-      symbol: `tool(${declaredName})`,
+      name: declaredName,
+      identity,
+      enclosing: definition?.enclosing ?? match.call.enclosing,
+      enclosingLocation: definition?.enclosingLocation,
+      location: match.call.location,
     });
+    // The call holds the tool's `execute`, so what runs when the tool is invoked is written inside it.
+    const body = implementationBody(match.module, match.call, findEntry(entries, 'execute')?.value);
+    if (body !== undefined) {
+      context.implementations.record({
+        identity,
+        file: match.module.file,
+        body,
+        symbol: `tool(${declaredName})`,
+      });
+    }
   }
 
   for (const decorated of decoratedDefinitions(context.modules, ['function_tool'], PACKAGES)) {
@@ -111,12 +190,28 @@ const registerTools = (
       (entry) => decoratorName(entry) === 'function_tool',
     );
     const entries = decorator?.args[0]?.kind === 'object' ? decorator.args[0].entries : [];
-    const declaredName = toolNameFrom(entries, decorated.definition.name);
-    const identity = sourceIdentity('tool', decorated.module.file, declaredName);
+    const sourceName = decorated.definition.name.split('.').at(-1) ?? decorated.definition.name;
+    const declaredName = toolNameFrom(entries, sourceName);
+    const explicitName = explicitToolName(entries);
+    if (decorated.definition.enclosingUnresolved === true && explicitName === undefined) {
+      unresolved.push({
+        kind: 'adapter_input',
+        reason:
+          'a decorated tool inside a callable without an authoritative source name declares no distinct runtime name',
+        location: decorated.definition.location,
+      });
+      continue;
+    }
+    const identity = sourceIdentity(
+      'tool',
+      decorated.module.file,
+      decorated.definition.enclosing === undefined ? declaredName : decorated.definition.name,
+    );
     const needsApproval = approvalFrom(entries);
     builder.addComponent(
       drafts.sourceComponent({
         kind: 'tool',
+        identity,
         file: decorated.module.file,
         name: declaredName,
         location: decorated.definition.location,
@@ -128,13 +223,23 @@ const registerTools = (
           for: 'tool',
           ...(needsApproval === undefined ? {} : { approvalRequired: needsApproval }),
         },
-        metadata: { framework: 'openai-agents', declaredName },
+        metadata: {
+          framework: 'openai-agents',
+          declaredName,
+          ...(decorated.definition.enclosing === undefined ? {} : { runtimeName: declaredName }),
+        },
         tags: ['openai-agents'],
       }),
     );
     components += 1;
-    context.bindings.register(decorated.module.file, decorated.definition.name, identity);
-    context.bindings.register(decorated.module.file, declaredName, identity);
+    registerDefinitionAliases(
+      context,
+      bindings,
+      decorated.module.file,
+      decorated.definition,
+      identity,
+      [decorated.definition.name, sourceName, declaredName],
+    );
     context.implementations.record({
       identity,
       file: decorated.module.file,
@@ -143,7 +248,7 @@ const registerTools = (
     });
   }
 
-  return { components };
+  return { components, bindings };
 };
 
 /**
@@ -162,8 +267,10 @@ const registerTools = (
 const registerGuardrails = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
-): { components: number } => {
+  unresolved: TopologyDiscovery['unresolved'][number][],
+): { components: number; bindings: readonly ScopedBinding[] } => {
   let components = 0;
+  const bindings: ScopedBinding[] = [];
   const decorators = ['input_guardrail', 'output_guardrail'];
   for (const decorated of decoratedDefinitions(context.modules, decorators, PACKAGES)) {
     const decorator = decorated.definition.decorators.find((entry) =>
@@ -171,16 +278,33 @@ const registerGuardrails = (
     );
     const entries = decorator?.args[0]?.kind === 'object' ? decorator.args[0].entries : [];
     // The decorator names the guardrail the way a run reports it; the function name is what the agent list cites.
-    const declaredName =
-      stringValue(findEntry(entries, 'name')?.value) ?? decorated.definition.name;
+    const sourceName = decorated.definition.name.split('.').at(-1) ?? decorated.definition.name;
+    const declaredName = stringValue(findEntry(entries, 'name')?.value) ?? sourceName;
+    if (
+      decorated.definition.enclosingUnresolved === true &&
+      stringValue(findEntry(entries, 'name')?.value) === undefined
+    ) {
+      unresolved.push({
+        kind: 'adapter_input',
+        reason:
+          'a guardrail inside a callable without an authoritative source name declares no distinct runtime name',
+        location: decorated.definition.location,
+      });
+      continue;
+    }
     const guards =
       decorator !== undefined && decoratorName(decorator) === 'output_guardrail'
         ? 'output'
         : 'input';
-    const identity = sourceIdentity('evaluator', decorated.module.file, declaredName);
+    const identity = sourceIdentity(
+      'evaluator',
+      decorated.module.file,
+      decorated.definition.enclosing === undefined ? declaredName : decorated.definition.name,
+    );
     builder.addComponent(
       drafts.sourceComponent({
         kind: 'evaluator',
+        identity,
         file: decorated.module.file,
         name: declaredName,
         location: decorated.definition.location,
@@ -188,13 +312,24 @@ const registerGuardrails = (
         confidence: decorated.resolved
           ? CONFIDENCE_BANDS.deterministic
           : CONFIDENCE_BANDS.heuristic,
-        metadata: { framework: 'openai-agents', declaredName, guards },
+        metadata: {
+          framework: 'openai-agents',
+          declaredName,
+          guards,
+          ...(decorated.definition.enclosing === undefined ? {} : { runtimeName: declaredName }),
+        },
         tags: ['openai-agents', 'guardrail'],
       }),
     );
     components += 1;
-    context.bindings.register(decorated.module.file, decorated.definition.name, identity);
-    context.bindings.register(decorated.module.file, declaredName, identity);
+    registerDefinitionAliases(
+      context,
+      bindings,
+      decorated.module.file,
+      decorated.definition,
+      identity,
+      [decorated.definition.name, sourceName, declaredName],
+    );
     context.implementations.record({
       identity,
       file: decorated.module.file,
@@ -202,7 +337,7 @@ const registerGuardrails = (
       symbol: `@${guards}_guardrail ${decorated.definition.name}`,
     });
   }
-  return { components };
+  return { components, bindings };
 };
 
 /**
@@ -232,14 +367,25 @@ const serverTransport = (
 const registerMcpServers = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
-): { components: number } => {
+  unresolved: TopologyDiscovery['unresolved'][number][],
+): { components: number; bindings: readonly ScopedBinding[] } => {
   let components = 0;
+  const bindings: ScopedBinding[] = [];
   const names = ['MCPServerStdio', 'MCPServerStreamableHttp', 'MCPServerSse', 'MCPServerSSE'];
   for (const match of matchCalls(context.modules, { names, packages: PACKAGES })) {
     const entries = objectArgument(match.call);
     const definition = definitionForCall(match.module, match.call);
-    const declared =
-      stringValue(findEntry(entries, 'name')?.value) ?? definition?.name ?? 'mcp-server';
+    const explicitName = stringValue(findEntry(entries, 'name')?.value);
+    if (match.call.enclosingUnresolved === true && explicitName === undefined) {
+      unresolved.push({
+        kind: 'adapter_input',
+        reason:
+          'an MCP server inside a callable without an authoritative source name declares no distinct runtime name',
+        location: match.call.location,
+      });
+      continue;
+    }
+    const declared = explicitName ?? definition?.name ?? 'mcp-server';
     const { command, url } = serverTransport(entries);
     const transport = url !== undefined ? 'http' : command !== undefined ? 'stdio' : 'unknown';
     const identity = sourceIdentity('mcp_server', match.module.file, declared);
@@ -269,10 +415,26 @@ const registerMcpServers = (
       }),
     );
     components += 1;
-    if (definition !== undefined)
-      context.bindings.register(match.module.file, definition.name, identity);
+    if (definition !== undefined) {
+      registerScopedBinding(context, bindings, {
+        file: match.module.file,
+        name: definition.name,
+        identity,
+        enclosing: definition.enclosing,
+        enclosingLocation: definition.enclosingLocation,
+        location: match.call.location,
+      });
+      registerScopedBinding(context, bindings, {
+        file: match.module.file,
+        name: declared,
+        identity,
+        enclosing: definition.enclosing,
+        enclosingLocation: definition.enclosingLocation,
+        location: match.call.location,
+      });
+    }
   }
-  return { components };
+  return { components, bindings };
 };
 
 const retryPolicyFor = (entries: readonly ObjectEntryFact[]): EdgePolicy | undefined => {
@@ -293,31 +455,327 @@ type PendingAgent = {
   readonly entries: readonly ObjectEntryFact[];
   readonly variable: string | undefined;
   readonly enclosing: string | undefined;
+  readonly enclosingLocation: SourceLocation | undefined;
   readonly supportingLocations: readonly SourceLocation[];
+};
+
+const sameRange = (left: SourceLocation, right: SourceLocation): boolean =>
+  left.startLine === right.startLine &&
+  left.startColumn === right.startColumn &&
+  left.endLine === right.endLine &&
+  left.endColumn === right.endColumn;
+
+const sameOptionalRange = (
+  left: SourceLocation | undefined,
+  right: SourceLocation | undefined,
+): boolean =>
+  left === undefined ? right === undefined : right !== undefined && sameRange(left, right);
+
+const endsBefore = (left: SourceLocation, right: SourceLocation): boolean => {
+  const endLine = left.endLine ?? left.startLine;
+  if (endLine !== right.startLine) return endLine < right.startLine;
+  if (left.endColumn === undefined || right.startColumn === undefined) return false;
+  return left.endColumn <= right.startColumn;
+};
+
+const bindingAtLocation = (
+  module: ModuleFacts,
+  name: string,
+  bindings: readonly ScopedBinding[],
+  enclosing: string | undefined,
+  enclosingLocation: SourceLocation | undefined,
+  useLocation: SourceLocation,
+  captured = false,
+): { readonly target?: ComponentIdentity; readonly blocked: boolean } => {
+  const candidates = bindings.filter(
+    (binding) =>
+      binding.file === module.file &&
+      binding.name === name &&
+      binding.enclosing === enclosing &&
+      sameOptionalRange(binding.enclosingLocation, enclosingLocation),
+  );
+  const preceding = candidates.filter((binding) => endsBefore(binding.location, useLocation));
+  const identities = new Map(
+    preceding.map((binding) => [identityKey(binding.identity), binding.identity]),
+  );
+  if (identities.size !== 1) {
+    return { blocked: candidates.length > 0 || identities.size > 1 };
+  }
+  const changed = preceding.some((binding) =>
+    module.assignments.some(
+      (assignment) =>
+        assignment.target.length === 1 &&
+        assignment.target[0] === name &&
+        assignment.enclosing === enclosing &&
+        sameOptionalRange(assignment.enclosingLocation, enclosingLocation) &&
+        endsBefore(binding.location, assignment.location) &&
+        (captured || endsBefore(assignment.location, useLocation)),
+    ),
+  );
+  const target = [...identities.values()][0];
+  return changed || target === undefined ? { blocked: true } : { target, blocked: false };
+};
+
+const namedOwnerOfScope = (module: ModuleFacts, location: SourceLocation): string | undefined =>
+  module.definitions.find(
+    (definition) =>
+      ((definition.kind === 'function' || definition.kind === 'method') &&
+        sameRange(definition.location, location)) ||
+      (definition.kind === 'variable' &&
+        definition.value?.kind === 'function' &&
+        sameRange(definition.value.location, location)),
+  )?.name;
+
+const resolveScopedBinding = (
+  context: DiscoveryContext,
+  agent: PendingAgent,
+  name: string,
+  bindings: readonly ScopedBinding[],
+): { readonly target?: ComponentIdentity; readonly blocked: boolean } => {
+  for (const scope of [...(agent.call.lexicalScopes ?? [])].reverse()) {
+    const local = bindingAtLocation(
+      agent.module,
+      name,
+      bindings,
+      agent.enclosing,
+      scope.location,
+      agent.call.location,
+    );
+    if (local.target !== undefined || local.blocked) return local;
+    const namedOwner = namedOwnerOfScope(agent.module, scope.location);
+    if (namedOwner !== undefined && namedOwner !== agent.enclosing) {
+      const namedOuter = bindingAtLocation(
+        agent.module,
+        name,
+        bindings,
+        namedOwner,
+        scope.location,
+        agent.call.location,
+        agent.enclosingLocation === undefined ||
+          !sameRange(scope.location, agent.enclosingLocation),
+      );
+      if (namedOuter.target !== undefined || namedOuter.blocked) return namedOuter;
+    }
+    if (scope.bindings.includes(name)) return { blocked: true };
+  }
+  if (agent.enclosingLocation === undefined && agent.enclosing !== undefined) {
+    const namedLocal = bindingAtLocation(
+      agent.module,
+      name,
+      bindings,
+      agent.enclosing,
+      undefined,
+      agent.call.location,
+    );
+    if (namedLocal.target !== undefined || namedLocal.blocked) return namedLocal;
+    const localNamedBinding =
+      agent.module.definitions.some(
+        (definition) =>
+          definition.name === name &&
+          definition.enclosing === agent.enclosing &&
+          definition.enclosingLocation === undefined,
+      ) ||
+      agent.module.assignments.some(
+        (assignment) =>
+          assignment.target.length === 1 &&
+          assignment.target[0] === name &&
+          assignment.enclosing === agent.enclosing &&
+          assignment.enclosingLocation === undefined,
+      );
+    if (localNamedBinding) return { blocked: true };
+  }
+  const moduleBinding = bindingAtLocation(
+    agent.module,
+    name,
+    bindings,
+    undefined,
+    undefined,
+    agent.call.location,
+    agent.enclosing !== undefined || agent.enclosingLocation !== undefined,
+  );
+  if (moduleBinding.target !== undefined || moduleBinding.blocked) return moduleBinding;
+  const localModuleBinding =
+    agent.module.definitions.some(
+      (definition) =>
+        definition.name === name &&
+        definition.enclosing === undefined &&
+        definition.enclosingLocation === undefined,
+    ) ||
+    agent.module.assignments.some(
+      (assignment) =>
+        assignment.target.length === 1 &&
+        assignment.target[0] === name &&
+        assignment.enclosing === undefined &&
+        assignment.enclosingLocation === undefined,
+    );
+  if (localModuleBinding) return { blocked: true };
+  const imported = context.bindings.lookup(agent.module.file, name);
+  return imported === undefined ? { blocked: false } : { target: imported, blocked: false };
+};
+
+const isDirectAgentCall = (call: CallFact): boolean =>
+  call.calleePath.at(-1) === 'Agent' ||
+  (call.calleePath.length === 1 && call.origin?.imported === 'Agent');
+
+const matchAgentReceiver = (
+  context: DiscoveryContext,
+  module: ModuleFacts,
+  call: CallFact,
+): ReturnType<typeof matchRuntimeSymbol> => {
+  if (call.calleePath.length < 2) return undefined;
+  return matchRuntimeSymbol(
+    context.modules,
+    module,
+    {
+      path: call.calleePath.slice(0, -1),
+      origin: call.origin,
+      enclosing: call.enclosing,
+      location: call.location,
+    },
+    { names: ['Agent'], packages: PACKAGES },
+  );
 };
 
 const agentConstructionCalls = (context: DiscoveryContext) => {
   const matches = matchCalls(context.modules, { names: ['Agent'], packages: PACKAGES }).filter(
-    (match) => match.call.calleePath[match.call.calleePath.length - 1] !== 'create',
+    (match) => isDirectAgentCall(match.call),
   );
   for (const module of context.modules) {
     for (const call of module.calls) {
-      if (call.calleePath.length !== 2 || call.calleePath[1] !== 'create') continue;
-      const matched = matchRuntimeSymbol(
-        context.modules,
-        module,
-        {
-          path: call.calleePath,
-          origin: call.origin,
-          enclosing: call.enclosing,
-          location: call.location,
-        },
-        { names: ['Agent'], packages: PACKAGES },
-      );
+      if (call.calleePath.at(-1) !== 'create') continue;
+      const matched = matchAgentReceiver(context, module, call);
       if (matched !== undefined) matches.push({ module, call, ...matched });
     }
   }
   return matches;
+};
+
+const unsettledAgentChains = (context: DiscoveryContext): readonly CallFact[] => {
+  const unsettled: CallFact[] = [];
+  for (const module of context.modules) {
+    for (const call of module.calls) {
+      if (
+        call.calleePath.length < 2 ||
+        call.calleePath.at(-1) === 'Agent' ||
+        call.calleePath.at(-1) === 'create'
+      ) {
+        continue;
+      }
+      const matched = matchAgentReceiver(context, module, call);
+      if (matched !== undefined) unsettled.push(call);
+    }
+  }
+  return unsettled;
+};
+
+const recordUnsettledAgentChains = (
+  context: DiscoveryContext,
+  unresolved: TopologyDiscovery['unresolved'][number][],
+): void => {
+  for (const call of unsettledAgentChains(context)) {
+    unresolved.push({
+      kind: 'adapter_input',
+      reason:
+        'a call chained from an Agent constructor does not retain the constructor arguments needed to identify that agent',
+      location: call.location,
+    });
+  }
+};
+
+const samePath = (left: readonly string[], right: readonly string[]): boolean =>
+  left.length === right.length && left.every((segment, index) => segment === right[index]);
+
+const startsAtOrBefore = (left: SourceLocation, right: SourceLocation): boolean =>
+  left.startLine < right.startLine ||
+  (left.startLine === right.startLine && (left.startColumn ?? 0) <= (right.startColumn ?? 0));
+
+const endsAtOrAfter = (left: SourceLocation, right: SourceLocation): boolean => {
+  const leftLine = left.endLine ?? left.startLine;
+  const rightLine = right.endLine ?? right.startLine;
+  return (
+    leftLine > rightLine ||
+    (leftLine === rightLine && (left.endColumn ?? left.startColumn ?? 0) >= (right.endColumn ?? 0))
+  );
+};
+
+const strictlyContains = (container: SourceLocation, contained: SourceLocation): boolean =>
+  !sameRange(container, contained) &&
+  startsAtOrBefore(container, contained) &&
+  endsAtOrAfter(container, contained);
+
+/**
+ * A containing variable is not necessarily the binding for an Agent construction. In
+ * `result = Runner.run(Agent(...))`, the variable binds Runner's result, not the nested Agent.
+ */
+const directAgentDefinition = (
+  module: ModuleFacts,
+  call: CallFact,
+): ReturnType<typeof definitionForCall> => {
+  const definition = definitionForCall(module, call);
+  return definition?.kind === 'variable' &&
+    definition.initializer !== undefined &&
+    samePath(definition.initializer, call.calleePath) &&
+    !module.calls.some(
+      (candidate) =>
+        strictlyContains(definition.location, candidate.location) &&
+        strictlyContains(candidate.location, call.location),
+    )
+    ? definition
+    : undefined;
+};
+
+const preparedAgentConstructions = (context: DiscoveryContext) => {
+  const constructions = agentConstructionCalls(context).map((match) => {
+    const entries = objectArgument(match.call);
+    const definition = directAgentDefinition(match.module, match.call);
+    const explicitName = stringValue(findEntry(entries, 'name')?.value);
+    const declared = explicitName ?? definition?.name ?? 'agent';
+    const owner = definition?.enclosing ?? match.call.lexicalEnclosing ?? match.call.enclosing;
+    const bindingName =
+      definition === undefined ? declared : (definition.name.split('.').at(-1) ?? definition.name);
+    return {
+      match,
+      entries,
+      definition,
+      explicitName,
+      declared,
+      scopedName: owner === undefined ? undefined : `${owner}.${bindingName}`,
+    };
+  });
+  const moduleRuntimeCounts = new Map<string, number>();
+  for (const construction of constructions) {
+    if (construction.scopedName !== undefined) continue;
+    const key = `${construction.match.module.file}\u0000${construction.declared}`;
+    moduleRuntimeCounts.set(key, (moduleRuntimeCounts.get(key) ?? 0) + 1);
+  }
+  const prepared = constructions.map((construction) => {
+    const moduleKey = `${construction.match.module.file}\u0000${construction.declared}`;
+    const count = moduleRuntimeCounts.get(moduleKey) ?? 0;
+    const sourceName =
+      construction.scopedName ??
+      (count > 1 && construction.definition?.kind === 'variable'
+        ? construction.definition.name
+        : count === 1
+          ? construction.declared
+          : undefined);
+    const identity =
+      sourceName === undefined
+        ? undefined
+        : sourceIdentity('agent', construction.match.module.file, sourceName);
+    return { ...construction, sourceName, identity };
+  });
+  const sourceCounts = new Map<string, number>();
+  for (const construction of prepared) {
+    if (construction.identity === undefined) continue;
+    const key = identityKey(construction.identity);
+    sourceCounts.set(key, (sourceCounts.get(key) ?? 0) + 1);
+  }
+  return prepared.map((construction) => ({
+    ...construction,
+    identitySettled:
+      construction.identity !== undefined &&
+      (sourceCounts.get(identityKey(construction.identity)) ?? 0) === 1,
+  }));
 };
 
 /**
@@ -326,15 +784,37 @@ const agentConstructionCalls = (context: DiscoveryContext) => {
 const addAgents = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
-): { readonly components: number; readonly pending: readonly PendingAgent[] } => {
+  unresolved: TopologyDiscovery['unresolved'][number][],
+): {
+  readonly components: number;
+  readonly pending: readonly PendingAgent[];
+  readonly bindings: readonly ScopedBinding[];
+} => {
   const pending: PendingAgent[] = [];
+  const bindings: ScopedBinding[] = [];
   let components = 0;
 
-  for (const match of agentConstructionCalls(context)) {
-    const entries = objectArgument(match.call);
-    const definition = definitionForCall(match.module, match.call);
-    const declared = stringValue(findEntry(entries, 'name')?.value) ?? definition?.name ?? 'agent';
-    const identity = sourceIdentity('agent', match.module.file, declared);
+  for (const construction of preparedAgentConstructions(context)) {
+    const { match, entries, definition, explicitName, declared, sourceName, identity } =
+      construction;
+    if (match.call.enclosingUnresolved === true && explicitName === undefined) {
+      unresolved.push({
+        kind: 'adapter_input',
+        reason:
+          'an agent inside a callable without an authoritative source name declares no distinct runtime name',
+        location: match.call.location,
+      });
+      continue;
+    }
+    if (identity === undefined || !construction.identitySettled) {
+      unresolved.push({
+        kind: 'adapter_input',
+        reason:
+          'multiple agent constructions share one stable source binding without a distinct source identity',
+        location: match.call.location,
+      });
+      continue;
+    }
     const instructions = stringValue(findEntry(entries, 'instructions')?.value);
     const model = stringValue(findEntry(entries, 'model')?.value);
     const toolNames = identifierItems(findEntry(entries, 'tools')?.value);
@@ -343,6 +823,7 @@ const addAgents = (
     builder.addComponent(
       drafts.sourceComponent({
         kind: 'agent',
+        identity,
         file: match.module.file,
         name: declared,
         location: match.call.location,
@@ -356,15 +837,33 @@ const addAgents = (
           role: handoffNames.length > 0 ? 'orchestrator' : 'worker',
           ...(instructions === undefined ? {} : { instructionsRef: `inline:${declared}` }),
         },
-        metadata: { framework: 'openai-agents', declaredName: declared },
+        metadata: {
+          framework: 'openai-agents',
+          declaredName: declared,
+          ...(sourceName === declared ? {} : { runtimeName: declared }),
+        },
         tags: ['openai-agents'],
       }),
     );
     components += 1;
     if (definition !== undefined) {
-      context.bindings.register(match.module.file, definition.name, identity);
+      registerScopedBinding(context, bindings, {
+        file: match.module.file,
+        name: definition.name,
+        identity,
+        enclosing: definition.enclosing,
+        enclosingLocation: definition.enclosingLocation,
+        location: match.call.location,
+      });
     }
-    context.bindings.register(match.module.file, declared, identity);
+    registerScopedBinding(context, bindings, {
+      file: match.module.file,
+      name: declared,
+      identity,
+      enclosing: definition?.enclosing ?? match.call.enclosing,
+      enclosingLocation: definition?.enclosingLocation,
+      location: match.call.location,
+    });
     const supportingLocations = [
       ...promptCallSupport(match.module, match.call),
       ...(definition === undefined ? [] : [definition.location]),
@@ -383,13 +882,16 @@ const addAgents = (
       definition?.kind === 'variable' &&
       match.module.definitions.filter(
         (candidate) =>
-          candidate.name === definition.name && candidate.enclosing === definition.enclosing,
+          candidate.name === definition.name &&
+          candidate.enclosing === definition.enclosing &&
+          sameOptionalRange(candidate.enclosingLocation, definition.enclosingLocation),
       ).length === 1 &&
       !match.module.assignments.some(
         (assignment) =>
           assignment.target.length === 1 &&
           assignment.target[0] === definition.name &&
-          assignment.enclosing === definition.enclosing,
+          assignment.enclosing === definition.enclosing &&
+          sameOptionalRange(assignment.enclosingLocation, definition.enclosingLocation),
       );
     pending.push({
       identity,
@@ -397,7 +899,8 @@ const addAgents = (
       call: match.call,
       entries,
       variable: stableVariable ? definition.name : undefined,
-      enclosing: definition?.enclosing,
+      enclosing: definition?.enclosing ?? match.call.enclosing,
+      enclosingLocation: definition?.enclosingLocation ?? match.call.enclosingLocation,
       supportingLocations,
     });
 
@@ -417,7 +920,7 @@ const addAgents = (
     );
     components += 1;
   }
-  return { components, pending };
+  return { components, pending, bindings };
 };
 
 /** Relations named by identifier, resolved through the bindings recorded while the agents were added. */
@@ -425,6 +928,8 @@ const addNamedRelations = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   agent: PendingAgent,
+  bindings: readonly ScopedBinding[],
+  unresolved: TopologyDiscovery['unresolved'][number][],
   named: {
     readonly key: readonly string[];
     readonly kind: (target: ComponentIdentity) => EdgeKind;
@@ -437,8 +942,28 @@ const addNamedRelations = (
     .find((candidate) => candidate !== undefined);
   let edges = 0;
   for (const name of identifierItems(value)) {
-    const target = context.bindings.lookup(agent.module.file, name);
+    const resolved = resolveScopedBinding(context, agent, name, bindings);
+    const target = resolved.target;
+    if (target === undefined && resolved.blocked) {
+      unresolved.push({
+        kind: 'explicit_relation',
+        reason: `${named.label} names ${name}, but that binding is not settled in the agent's exact lexical scope`,
+        location: agent.call.location,
+      });
+    }
     if (target === undefined) continue;
+    if (
+      named.label === 'handoffs' &&
+      identityKey(target) === identityKey(agent.identity) &&
+      name !== agent.variable
+    ) {
+      unresolved.push({
+        kind: 'explicit_relation',
+        reason: `handoffs names ${name}, but a distinct agent construction shares the source agent's graph identity`,
+        location: agent.call.location,
+      });
+      continue;
+    }
     builder.addEdge(
       drafts.edge({
         kind: named.kind(target),
@@ -457,6 +982,8 @@ const addAgentRelations = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   agent: PendingAgent,
+  bindings: readonly ScopedBinding[],
+  unresolved: TopologyDiscovery['unresolved'][number][],
 ): number => {
   let edges = 0;
   const policy = retryPolicyFor(agent.entries);
@@ -475,18 +1002,18 @@ const addAgentRelations = (
     edges += 1;
   }
 
-  edges += addNamedRelations(context, builder, agent, {
+  edges += addNamedRelations(context, builder, agent, bindings, unresolved, {
     key: ['tools'],
     kind: (target) => (target.kind === 'mcp_server' ? 'provides_tool' : 'calls_tool'),
     label: 'tools',
   });
-  edges += addNamedRelations(context, builder, agent, {
+  edges += addNamedRelations(context, builder, agent, bindings, unresolved, {
     key: ['mcpServers', 'mcp_servers'],
     kind: () => 'provides_tool',
     reversed: true,
     label: 'mcpServers',
   });
-  edges += addNamedRelations(context, builder, agent, {
+  edges += addNamedRelations(context, builder, agent, bindings, unresolved, {
     key: ['handoffs'],
     kind: () => 'hands_off_to',
     label: 'handoffs',
@@ -495,12 +1022,12 @@ const addAgentRelations = (
    * Read as two lists rather than one, because an agent may declare both and `addNamedRelations` takes the first key
    * that matches. What guards the input and what checks the output are different claims about the same agent.
    */
-  edges += addNamedRelations(context, builder, agent, {
+  edges += addNamedRelations(context, builder, agent, bindings, unresolved, {
     key: ['input_guardrails', 'inputGuardrails'],
     kind: () => 'validated_by',
     label: 'input_guardrails',
   });
-  edges += addNamedRelations(context, builder, agent, {
+  edges += addNamedRelations(context, builder, agent, bindings, unresolved, {
     key: ['output_guardrails', 'outputGuardrails'],
     kind: () => 'validated_by',
     label: 'output_guardrails',
@@ -537,20 +1064,69 @@ const handoffTargets = (value: ArgumentFact | undefined): readonly string[] => {
   return names;
 };
 
-const addAssignedHandoffs = (context: DiscoveryContext, builder: SystemGraphBuilder): number => {
+const addAssignedHandoffs = (
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+  bindings: readonly ScopedBinding[],
+  unresolved: TopologyDiscovery['unresolved'][number][],
+): number => {
   let edges = 0;
   const draw = (
-    file: string,
+    module: ModuleFacts,
     holder: string,
     value: ArgumentFact | undefined,
     location: SourceLocation,
     symbol: string,
+    enclosing: string | undefined,
+    enclosingLocation: SourceLocation | undefined,
   ): void => {
-    const from = context.bindings.lookup(file, holder);
-    if (from === undefined || from.kind !== 'agent') return;
+    const source = bindingAtLocation(
+      module,
+      holder,
+      bindings,
+      enclosing,
+      enclosingLocation,
+      location,
+    );
+    const from = source.target;
+    if (from === undefined || from.kind !== 'agent') {
+      if (source.blocked) {
+        unresolved.push({
+          kind: 'explicit_relation',
+          reason: `${symbol} names ${holder}, but that source agent binding is not settled in its exact lexical scope`,
+          location,
+        });
+      }
+      return;
+    }
     for (const name of handoffTargets(value)) {
-      const to = context.bindings.lookup(file, name);
-      if (to === undefined || to.kind !== 'agent') continue;
+      const destination = bindingAtLocation(
+        module,
+        name,
+        bindings,
+        enclosing,
+        enclosingLocation,
+        location,
+      );
+      const to = destination.target;
+      if (to === undefined || to.kind !== 'agent') {
+        if (destination.blocked) {
+          unresolved.push({
+            kind: 'explicit_relation',
+            reason: `${symbol} names ${name}, but that destination agent binding is not settled in its exact lexical scope`,
+            location,
+          });
+        }
+        continue;
+      }
+      if (identityKey(from) === identityKey(to) && holder !== name) {
+        unresolved.push({
+          kind: 'explicit_relation',
+          reason: `${symbol} names ${name}, but a distinct agent construction shares ${holder}'s graph identity`,
+          location,
+        });
+        continue;
+      }
       builder.addEdge(
         drafts.edge({ kind: 'hands_off_to', from, to, location, symbol: `${symbol}: ${name}` }),
       );
@@ -563,7 +1139,15 @@ const addAssignedHandoffs = (context: DiscoveryContext, builder: SystemGraphBuil
       if (assignment.target[assignment.target.length - 1] !== HANDOFF_MEMBER) continue;
       const holder = assignment.target[assignment.target.length - 2];
       if (holder === undefined) continue;
-      draw(module.file, holder, assignment.value, assignment.location, 'handoffs');
+      draw(
+        module,
+        holder,
+        assignment.value,
+        assignment.location,
+        'handoffs',
+        assignment.enclosing,
+        assignment.enclosingLocation,
+      );
     }
     for (const call of module.calls) {
       const path = call.calleePath;
@@ -572,7 +1156,15 @@ const addAssignedHandoffs = (context: DiscoveryContext, builder: SystemGraphBuil
       if (path[path.length - 2] !== HANDOFF_MEMBER) continue;
       const holder = path[path.length - 3];
       if (holder === undefined) continue;
-      draw(module.file, holder, call.args[0], call.location, `handoffs.${method}`);
+      draw(
+        module,
+        holder,
+        call.args[0],
+        call.location,
+        `handoffs.${method}`,
+        call.enclosing,
+        call.enclosingLocation,
+      );
     }
   }
   return edges;
@@ -581,14 +1173,17 @@ const addAssignedHandoffs = (context: DiscoveryContext, builder: SystemGraphBuil
 const registerAgents = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
+  unresolved: TopologyDiscovery['unresolved'][number][],
+  resourceBindings: readonly ScopedBinding[],
 ): { components: number; edges: number; pending: readonly PendingAgent[] } => {
-  const added = addAgents(context, builder);
+  const added = addAgents(context, builder, unresolved);
+  const bindings = [...resourceBindings, ...added.bindings];
   let edges = 0;
   for (const agent of added.pending) {
-    edges += addAgentRelations(context, builder, agent);
+    edges += addAgentRelations(context, builder, agent, bindings, unresolved);
   }
   // After the agents, because both ends of a handoff have to be registered before the relation can resolve.
-  edges += addAssignedHandoffs(context, builder);
+  edges += addAssignedHandoffs(context, builder, added.bindings, unresolved);
   return { components: added.components, edges, pending: added.pending };
 };
 
@@ -604,19 +1199,40 @@ const runInputConsumer = (
       readonly supportingLocations: readonly SourceLocation[];
     }
   | undefined => {
-  const local = agents.filter(
+  const lexicalEnclosing = call.lexicalEnclosing ?? call.enclosing;
+  for (const scope of [...(call.lexicalScopes ?? [])].reverse()) {
+    const local = agents.filter(
+      (agent) =>
+        agent.module.file === module.file &&
+        agent.variable === agentName &&
+        agent.enclosingLocation !== undefined &&
+        sameRange(agent.enclosingLocation, scope.location),
+    );
+    if (local.length === 1 && local[0] !== undefined) {
+      return {
+        identity: local[0].identity,
+        supportingLocations: local[0].supportingLocations,
+      };
+    }
+    if (local.length > 1 || scope.bindings.includes(agentName)) return undefined;
+  }
+  if ((call.lexicalScopes?.length ?? 0) === 0 && call.lexicalShadows?.includes(agentName)) {
+    return undefined;
+  }
+  const namedLocal = agents.filter(
     (agent) =>
       agent.module.file === module.file &&
       agent.variable === agentName &&
-      agent.enclosing === call.enclosing,
+      agent.enclosingLocation === undefined &&
+      agent.enclosing === lexicalEnclosing,
   );
-  if (local.length === 1) {
-    const agent = local[0];
-    return agent === undefined
-      ? undefined
-      : { identity: agent.identity, supportingLocations: agent.supportingLocations };
+  if (namedLocal.length === 1 && namedLocal[0] !== undefined) {
+    return {
+      identity: namedLocal[0].identity,
+      supportingLocations: namedLocal[0].supportingLocations,
+    };
   }
-  if (local.length > 1 || hasBindingAt(module, call.enclosing, agentName, call.location)) {
+  if (namedLocal.length > 1 || hasBindingAt(module, lexicalEnclosing, agentName, call.location)) {
     return undefined;
   }
   const consumer = context.bindings.lookup(module.file, agentName);
@@ -681,11 +1297,17 @@ export const openAiAgentsAdapter: AgentSystemAdapter = {
   packages: PACKAGES,
   appliesTo: (context) => projectUses(context, PACKAGES),
   discover: (context, builder): AdapterFindings => {
-    const tools = registerTools(context, builder);
+    const unresolved: TopologyDiscovery['unresolved'][number][] = [];
+    recordUnsettledAgentChains(context, unresolved);
+    const tools = registerTools(context, builder, unresolved);
     // Before the agents, because an agent's guardrail list is resolved through the bindings this registers.
-    const guardrails = registerGuardrails(context, builder);
-    const servers = registerMcpServers(context, builder);
-    const agents = registerAgents(context, builder);
+    const guardrails = registerGuardrails(context, builder, unresolved);
+    const servers = registerMcpServers(context, builder, unresolved);
+    const agents = registerAgents(context, builder, unresolved, [
+      ...tools.bindings,
+      ...guardrails.bindings,
+      ...servers.bindings,
+    ]);
     registerRunInputs(context, agents.pending);
     const filesInspected = context.modules
       .filter((module) => module.imports.some((entry) => PACKAGES.includes(entry.module)))
@@ -695,6 +1317,30 @@ export const openAiAgentsAdapter: AgentSystemAdapter = {
         tools.components + guardrails.components + servers.components + agents.components,
       edgesFound: agents.edges,
       filesInspected,
+      ...(unresolved.length === 0
+        ? {}
+        : {
+            topology: {
+              status: 'incomplete',
+              inspectedInputs:
+                tools.components +
+                guardrails.components +
+                servers.components +
+                agents.components +
+                unresolved.length,
+              explicitRelations: agents.edges,
+              conditionalConstructs: 0,
+              conditionalDestinations: 0,
+              entryBoundaries: 0,
+              entryTargets: [],
+              terminalBoundaries: 0,
+              boundaryFacts: [],
+              configurationBounds: 0,
+              configurationBoundFacts: [],
+              unresolvedCount: unresolved.length,
+              unresolved,
+            },
+          }),
     };
   },
 };

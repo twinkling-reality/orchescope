@@ -266,12 +266,16 @@ type Found = {
   /**
    * Requests whose address this build could not resolve to a host.
    *
-   * Counted so the adapter can say what it did not read. Every one of these is a component named for the
-   * function that built the address rather than for the service it reaches, and a reader looking at a
-   * list of those deserves to know it is looking at a limit of this build rather than at a system that
-   * talks to sixty eight different places.
+   * Counted so the adapter can say what it did not read. Every one of these has an authoritative caller
+   * and becomes a component named for that function rather than for the service it reaches.
    */
   unresolvedAddresses: number;
+  /** Unresolved addresses inside callables that have no authoritative source owner. */
+  unresolvedUnnamedAddresses: number;
+  /** Source locations whose nearest callable exists but has no authoritative source name. */
+  unresolvedCallers: Set<string>;
+  /** Source locations of retry loops whose callable owner has no authoritative source name. */
+  unresolvedRetryLoops: Set<string>;
 };
 
 const serviceIdentity = (host: string): ComponentIdentity =>
@@ -393,8 +397,15 @@ const ensureCaller = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   found: Found,
-): ComponentIdentity =>
-  ensureScope({
+): ComponentIdentity | undefined => {
+  if (call.enclosingUnresolved === true) {
+    found.unresolvedCallers.add(
+      `${module.file}:${call.location.startLine}:${call.location.startColumn ?? 0}`,
+    );
+    found.files.add(module.file);
+    return undefined;
+  }
+  return ensureScope({
     module,
     context,
     builder,
@@ -403,6 +414,7 @@ const ensureCaller = (
     location: call.location,
     inferredFrom: 'enclosing scope of an external effect',
   });
+};
 
 /**
  * Entries that hold the document a request sends, in the three ways the ecosystems write it.
@@ -759,18 +771,22 @@ const discoverModelEndpoint = (input: {
       symbol: input.client,
     }),
   );
-  builder.addEdge(
-    drafts.edge({
-      kind: 'invokes_model',
-      from: ensureCaller(module, call, context, builder, found),
-      to: modelIdentity,
-      location: call.location,
-      symbol: input.client,
-      confidence: CONFIDENCE_BANDS.structural,
-      ...deadlineOnRelation(input.deadline),
-    }),
-  );
-  found.edges += 2;
+  found.edges += 1;
+  const caller = ensureCaller(module, call, context, builder, found);
+  if (caller !== undefined) {
+    builder.addEdge(
+      drafts.edge({
+        kind: 'invokes_model',
+        from: caller,
+        to: modelIdentity,
+        location: call.location,
+        symbol: input.client,
+        confidence: CONFIDENCE_BANDS.structural,
+        ...deadlineOnRelation(input.deadline),
+      }),
+    );
+    found.edges += 1;
+  }
 };
 
 /** The method the call itself names, in the callee or in the options object. */
@@ -966,7 +982,16 @@ const requestMetadata = (
  * only when the request writes no address down.
  */
 const operationNamedBy = (call: CallFact, request: RequestCall): string => {
-  if (call.enclosing !== undefined) return call.enclosing;
+  const leaf = call.enclosing?.split('.').at(-1)?.toLowerCase();
+  if (
+    call.enclosing !== undefined &&
+    leaf !== 'run' &&
+    leaf !== 'execute' &&
+    leaf !== 'handler' &&
+    leaf !== 'callback'
+  ) {
+    return call.enclosing;
+  }
   const path = request.url === undefined ? '' : pathOf(request.url);
   return path === '' ? request.written : path;
 };
@@ -1007,6 +1032,11 @@ const discoverHttp = (
     }
     const method = methodOf(call, request);
     const effect = classifyEffect(operationNamedBy(call, request), method.value);
+    if (call.enclosingUnresolved === true && host === undefined) {
+      ensureCaller(module, call, context, builder, found);
+      found.unresolvedUnnamedAddresses += 1;
+      continue;
+    }
     const service = serviceCalledAt(module, call, request);
 
     builder.addComponent(
@@ -1043,21 +1073,24 @@ const discoverHttp = (
     if (service.unresolved) found.unresolvedAddresses += 1;
     context.callSiteEffects.record(module.file, call, service.identity, effect);
 
-    builder.addEdge(
-      drafts.edge({
-        kind: 'calls_service',
-        from: ensureCaller(module, call, context, builder, found),
-        to: service.identity,
-        location: call.location,
-        symbol: written,
-        confidence: CONFIDENCE_BANDS.structural,
-        metadata: {
-          ...(method.value === undefined ? {} : { httpMethod: method.value }),
-          sideEffect: effect,
-        },
-      }),
-    );
-    found.edges += 1;
+    const caller = ensureCaller(module, call, context, builder, found);
+    if (caller !== undefined) {
+      builder.addEdge(
+        drafts.edge({
+          kind: 'calls_service',
+          from: caller,
+          to: service.identity,
+          location: call.location,
+          symbol: written,
+          confidence: CONFIDENCE_BANDS.structural,
+          metadata: {
+            httpMethod: method.value ?? 'unknown',
+            sideEffect: effect,
+          },
+        }),
+      );
+      found.edges += 1;
+    }
   }
 };
 
@@ -1091,17 +1124,20 @@ const discoverStores = (
       found.components += 1;
       found.files.add(module.file);
       context.callSiteEffects.record(module.file, call, identity);
-      builder.addEdge(
-        drafts.edge({
-          kind: 'queries_database',
-          from: ensureCaller(module, call, context, builder, found),
-          to: identity,
-          location: call.location,
-          symbol: dotted(call.calleePath),
-          confidence: CONFIDENCE_BANDS.heuristic,
-        }),
-      );
-      found.edges += 1;
+      const caller = ensureCaller(module, call, context, builder, found);
+      if (caller !== undefined) {
+        builder.addEdge(
+          drafts.edge({
+            kind: 'queries_database',
+            from: caller,
+            to: identity,
+            location: call.location,
+            symbol: dotted(call.calleePath),
+            confidence: CONFIDENCE_BANDS.heuristic,
+          }),
+        );
+        found.edges += 1;
+      }
       continue;
     }
     const queue = QUEUE_CLIENTS.find(
@@ -1145,18 +1181,21 @@ const discoverStores = (
     found.components += 1;
     found.files.add(module.file);
     context.callSiteEffects.record(module.file, call, identity);
-    builder.addEdge(
-      drafts.edge({
-        kind: queue.relation,
-        from: ensureCaller(module, call, context, builder, found),
-        to: identity,
-        location: call.location,
-        symbol: dotted(call.calleePath),
-        confidence: CONFIDENCE_BANDS.structural,
-        ...(concurrency === undefined ? {} : { policy: { concurrency } }),
-      }),
-    );
-    found.edges += 1;
+    const caller = ensureCaller(module, call, context, builder, found);
+    if (caller !== undefined) {
+      builder.addEdge(
+        drafts.edge({
+          kind: queue.relation,
+          from: caller,
+          to: identity,
+          location: call.location,
+          symbol: dotted(call.calleePath),
+          confidence: CONFIDENCE_BANDS.structural,
+          ...(concurrency === undefined ? {} : { policy: { concurrency } }),
+        }),
+      );
+      found.edges += 1;
+    }
   }
 };
 
@@ -1231,10 +1270,12 @@ const discoverRetryHelpers = (
         idempotency: 'unknown',
       },
     };
+    const caller = ensureCaller(module, call, context, builder, found);
+    if (caller === undefined) continue;
     builder.addEdge(
       drafts.edge({
         kind: callRelationKind(target.kind),
-        from: ensureCaller(module, call, context, builder, found),
+        from: caller,
         to: target,
         location: call.location,
         symbol: `${calleeName(call)}(${wrappedName})`,
@@ -1379,7 +1420,7 @@ const backoffOfLoop = (
   module: ModuleFacts,
   loop: ControlFlowFact,
 ): 'none' | 'fixed' | 'exponential' | 'unknown' => {
-  const waits = callsWithin(module, loop.location).filter((call) =>
+  const waits = callsWithinScope(module, loop.location, loop.enclosing).filter((call) =>
     DELAY_CALLS.has(calleeName(call)),
   );
   if (waits.length === 0) return 'none';
@@ -1464,6 +1505,16 @@ const callsWithin = (module: ModuleFacts, span: SourceLocation): readonly CallFa
   );
 };
 
+/** Calls in a span that execute in the same settled callable rather than in a nested declaration. */
+const callsWithinScope = (
+  module: ModuleFacts,
+  span: SourceLocation,
+  scope: string | undefined,
+): readonly CallFact[] =>
+  callsWithin(module, span).filter(
+    (call) => call.enclosingUnresolved !== true && call.enclosing === scope,
+  );
+
 /**
  * The tenacity construction a loop iterates, when it iterates one.
  *
@@ -1478,7 +1529,7 @@ const iteratedRetryOf = (
   loop: ControlFlowFact,
 ): { readonly declared: DeclaredRetry; readonly call: CallFact } | undefined => {
   if (!loop.contains.some((path) => namesRetryConstructor(path))) return undefined;
-  for (const call of callsWithin(module, loop.location)) {
+  for (const call of callsWithinScope(module, loop.location, loop.enclosing)) {
     const declared = constructedRetry(modules, module, call);
     if (declared !== undefined) return { declared, call };
   }
@@ -1563,6 +1614,7 @@ const drawRetriedOperations = (input: {
   readonly found: Found;
   readonly sinks: SinkEvidenceIndex;
   readonly span: SourceLocation;
+  readonly callableScope: string | undefined;
   readonly scopeName: string;
   readonly inferredFrom: string;
   readonly symbolPrefix: string;
@@ -1572,7 +1624,7 @@ const drawRetriedOperations = (input: {
 }): void => {
   const { module, context, builder, found, sinks, span, reading } = input;
   const drawn = new Set<string>();
-  for (const call of callsWithin(module, span)) {
+  for (const call of callsWithinScope(module, span, input.callableScope)) {
     if (call === input.declaringCall) continue;
     const operation = retriedOperation(module, context, call);
     if (operation === undefined) continue;
@@ -1642,6 +1694,13 @@ const discoverRetryLoops = (
     if (loop.kind !== 'loop') continue;
     const read = loopRetryOf(context.modules, module, loop, declaresRetries);
     if (read === undefined) continue;
+    if (loop.enclosingUnresolved === true) {
+      found.unresolvedRetryLoops.add(
+        `${module.file}:${loop.location.startLine}:${loop.location.startColumn ?? 0}`,
+      );
+      found.files.add(module.file);
+      continue;
+    }
     drawRetriedOperations({
       module,
       context,
@@ -1649,6 +1708,7 @@ const discoverRetryLoops = (
       found,
       sinks,
       span: loop.location,
+      callableScope: loop.enclosing,
       scopeName: loop.enclosing ?? 'module-scope',
       inferredFrom: 'scope containing a retry loop',
       symbolPrefix: 'retry loop around ',
@@ -1696,6 +1756,7 @@ const discoverDecoratedRetries = (
       found,
       sinks,
       span: definition.location,
+      callableScope: definition.name,
       scopeName: definition.name,
       inferredFrom: 'function whose decorator declares a retry',
       symbolPrefix: 'retried ',
@@ -1715,7 +1776,7 @@ const discoverDecoratedRetries = (
 
 export const effectsAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '3',
+  version: '4',
   // A side effect is a convention, not a package.
   packages: [],
   appliesTo: (context) => context.modules.length > 0,
@@ -1725,6 +1786,9 @@ export const effectsAdapter: AgentSystemAdapter = {
       edges: 0,
       files: new Set(),
       unresolvedAddresses: 0,
+      unresolvedUnnamedAddresses: 0,
+      unresolvedCallers: new Set(),
+      unresolvedRetryLoops: new Set(),
     };
     const sinks = readSinkEvidence(context.modules);
     /*
@@ -1750,15 +1814,33 @@ export const effectsAdapter: AgentSystemAdapter = {
       discoverRetryLoops(module, context, builder, found, sinks);
       discoverDecoratedRetries(module, context, builder, found, sinks);
     }
+    const notes = [
+      ...(found.unresolvedAddresses === 0
+        ? []
+        : [
+            `${formatCount(found.unresolvedAddresses, 'request builds', 'requests build')} an address this build could not resolve to a host, so each is named for the function that builds it. A base address held in a constant is the common cause and following one is not something this build does.`,
+          ]),
+      ...(found.unresolvedUnnamedAddresses === 0
+        ? []
+        : [
+            `${formatCount(found.unresolvedUnnamedAddresses, 'request also builds', 'requests also build')} an address this build could not resolve to a host inside ${found.unresolvedUnnamedAddresses === 1 ? 'a callable whose owner' : 'callables whose owners'} this build cannot name, so no service component was inferred for ${found.unresolvedUnnamedAddresses === 1 ? 'it' : 'them'}.`,
+          ]),
+      ...(found.unresolvedCallers.size === 0
+        ? []
+        : [
+            `${formatCount(found.unresolvedCallers.size, 'external call sits', 'external calls sit')} inside ${found.unresolvedCallers.size === 1 ? 'a callable whose owner' : 'callables whose owners'} this build cannot name, so no caller component or relation was inferred for ${found.unresolvedCallers.size === 1 ? 'it' : 'them'}.`,
+          ]),
+      ...(found.unresolvedRetryLoops.size === 0
+        ? []
+        : [
+            `${formatCount(found.unresolvedRetryLoops.size, 'retry loop sits', 'retry loops sit')} inside ${found.unresolvedRetryLoops.size === 1 ? 'a callable whose owner' : 'callables whose owners'} this build cannot name, so no retry relation was inferred for ${found.unresolvedRetryLoops.size === 1 ? 'it' : 'them'}.`,
+          ]),
+    ];
     return {
       componentsFound: found.components,
       edgesFound: found.edges,
       filesInspected: [...found.files],
-      ...(found.unresolvedAddresses === 0
-        ? {}
-        : {
-            note: `${formatCount(found.unresolvedAddresses, 'request builds', 'requests build')} an address this build could not resolve to a host, so each is named for the function that builds it. A base address held in a constant is the common cause and following one is not something this build does.`,
-          }),
+      ...(notes.length === 0 ? {} : { note: notes.join(' ') }),
     };
   },
 };

@@ -5,15 +5,16 @@ import {
   buildGraph,
   componentDraft,
   edgeDraft,
+  evidenceForGraph,
   observedComponent,
   observedEdge,
   runtimeTopology,
   sideEffectRecord,
 } from '@orchescope/testkit';
 import { controlFlowCycles, degrees, entryPoints, unreachableComponents } from '../src/analysis.ts';
-import { SystemGraphBuilder } from '../src/graph-builder.ts';
 import { computeDelta } from '../src/delta.ts';
 import { diffGraphs } from '../src/diff.ts';
+import { SystemGraphBuilder } from '../src/graph-builder.ts';
 import { indexGraph } from '../src/indexed-graph.ts';
 import { reconcile } from '../src/reconcile.ts';
 
@@ -107,6 +108,87 @@ describe('identity', () => {
     const graph = buildGraph([refund, again]);
     assert.equal(graph.components.length, 1);
     assert.deepEqual(graph.components[0]?.discoveredBy.slice().sort(), ['fixture', 'manifest']);
+  });
+
+  it('turns conflicting component and relation effect claims into an explicit unknown aggregate', () => {
+    const readService = componentDraft({
+      kind: 'external_service',
+      name: 'api.example.com',
+      file: 'src/sync.ts',
+      line: 2,
+      sideEffect: 'read_only',
+    });
+    const writeService = componentDraft({
+      kind: 'external_service',
+      name: 'api.example.com',
+      file: 'src/sync.ts',
+      line: 3,
+      sideEffect: 'non_idempotent_write',
+    });
+    const graph = buildGraph(
+      [orchestrator, readService, writeService],
+      [
+        edgeDraft('calls_service', orchestrator, readService, {
+          metadata: { httpMethod: 'get', sideEffect: 'read_only' },
+        }),
+        edgeDraft('calls_service', orchestrator, writeService, {
+          metadata: { httpMethod: 'post', sideEffect: 'non_idempotent_write' },
+        }),
+      ],
+    );
+    const service = graph.components.find((component) => component.kind === 'external_service');
+    assert.equal(service?.sideEffect, 'unknown');
+    assert.deepEqual(service?.metadata['effectClasses'], ['non_idempotent_write', 'read_only']);
+    const relation = graph.edges.find((edge) => edge.kind === 'calls_service');
+    assert.equal(relation?.metadata['httpMethod'], 'mixed');
+    assert.equal(relation?.metadata['sideEffect'], 'unknown');
+    assert.deepEqual(relation?.metadata['effectClasses'], ['non_idempotent_write', 'read_only']);
+  });
+
+  it('unions nested effect aggregates in either discovery order', () => {
+    const effects = ['read_only', 'non_idempotent_write', 'financial', 'destructive'] as const;
+    const services = effects.map((sideEffect, index) =>
+      componentDraft({
+        kind: 'external_service',
+        name: 'api.example.com',
+        file: 'src/sync.ts',
+        line: index + 1,
+        sideEffect,
+      }),
+    );
+    const edges = services.map((service, index) =>
+      edgeDraft('calls_service', orchestrator, service, {
+        metadata: { sideEffect: effects[index] ?? 'unknown' },
+      }),
+    );
+    const forward = buildGraph([orchestrator, ...services], edges);
+    const backward = buildGraph([orchestrator, ...[...services].reverse()], [...edges].reverse());
+    const expected = ['destructive', 'financial', 'non_idempotent_write', 'read_only'];
+    for (const graph of [forward, backward]) {
+      const service = graph.components.find((component) => component.kind === 'external_service');
+      const relation = graph.edges.find((edge) => edge.kind === 'calls_service');
+      assert.deepEqual(service?.metadata['effectClasses'], expected);
+      assert.deepEqual(relation?.metadata['effectClasses'], expected);
+    }
+  });
+
+  it('does not accept adapter metadata as a builder-derived effect aggregate', () => {
+    const spoofed = componentDraft({
+      kind: 'external_service',
+      name: 'api.example.com',
+      file: 'manifest.yaml',
+      sideEffect: 'read_only',
+      metadata: {
+        effectClasses: ['financial'],
+        'effectEvidence:financial': [`evd_${'a'.repeat(16)}`],
+      },
+    });
+    const graph = buildGraph([spoofed]);
+    assert.equal(graph.components[0]?.metadata['effectClasses'], undefined);
+    assert.equal(graph.components[0]?.metadata['effectEvidence:financial'], undefined);
+    assert.deepEqual(graph.components[0]?.metadata['effectEvidence:read_only'], [
+      graph.components[0]?.evidence[0],
+    ]);
   });
 });
 
@@ -870,6 +952,34 @@ describe('a declaration contradicted by an observation', () => {
     assert.equal(result.delta.contradictions.length, 1);
     assert.equal(result.delta.contradictions[0]?.kind, 'destructive_hint');
     assert.equal(result.delta.contradictions[0]?.componentId, 'tool:purge_records');
+  });
+
+  it('keeps an exact discovered write contradiction beneath a mixed tool aggregate', () => {
+    const calls = [1, 2, 3, 4, 5].map((line) =>
+      componentDraft({
+        kind: 'tool',
+        name: 'sync_records',
+        file: 'src/tools/sync.ts',
+        line,
+        details: { for: 'tool', readOnlyHint: true },
+        sideEffect: line === 5 ? 'non_idempotent_write' : 'read_only',
+      }),
+    );
+    const graph = buildGraph([orchestrator, ...calls]);
+    const result = computeDelta({ graph, runs: [], spanToComponent: new Map() });
+    const contradiction = result.delta.contradictions.find(
+      (candidate) => candidate.kind === 'destructive_hint',
+    );
+    assert.equal(contradiction?.componentId, 'tool:sync_records');
+    const inputs = contradiction?.evidence.flatMap((id) => {
+      const record = result.evidence.find((candidate) => candidate.id === id);
+      return record?.kind === 'derived' ? record.inputs : [];
+    });
+    const inputLines = (inputs ?? []).flatMap((id) => {
+      const evidence = evidenceForGraph(graph).get(id);
+      return evidence?.kind === 'source_span' ? [evidence.location.startLine] : [];
+    });
+    assert.deepEqual(inputLines, [5]);
   });
 
   const exercisedCall = (policy: EdgePolicy, observation: Partial<ObservedEdge> = {}) =>

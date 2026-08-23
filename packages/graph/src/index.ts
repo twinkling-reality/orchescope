@@ -5,8 +5,8 @@
  */
 
 export {
-  controlFlowCycles,
   controlFlowCycleEdges,
+  controlFlowCycles,
   controlFlowTopologyComplete,
   type DegreeStats,
   declaredCallersOf,
@@ -16,8 +16,8 @@ export {
   isObservableKind,
   operationsPerformedBy,
   reachableFrom,
-  topologyRequirements,
   type TopologyRequirements,
+  topologyRequirements,
   unreachableComponents,
 } from './analysis.ts';
 export {
@@ -27,12 +27,12 @@ export {
   type RunSideEffects,
 } from './delta.ts';
 export { diffGraphs } from './diff.ts';
+export type { ComponentDraft, EdgeDraft } from './drafts.ts';
 export {
-  federate,
   type FederateInput,
   type FederationGraphInput,
+  federate,
 } from './federate.ts';
-export type { ComponentDraft, EdgeDraft } from './drafts.ts';
 export {
   type BuiltGraph,
   componentIdIndex,
@@ -40,14 +40,7 @@ export {
   SystemGraphBuilder,
 } from './graph-builder.ts';
 export { type IndexedGraph, indexGraph } from './indexed-graph.ts';
-export { sourceLocationKey } from './merge.ts';
-export {
-  createSourceMatcher,
-  type ObservedSourceEndpoint,
-  type SourceMatcher,
-  type SourceMatchRefusal,
-  type SourceMatchResult,
-} from './source-match.ts';
+export { effectEvidenceFor, sourceLocationKey } from './merge.ts';
 export {
   type AmbiguousMatch,
   type ComponentMatch,
@@ -55,3 +48,10 @@ export {
   type ReconcileResult,
   reconcile,
 } from './reconcile.ts';
+export {
+  createSourceMatcher,
+  type ObservedSourceEndpoint,
+  type SourceMatcher,
+  type SourceMatchRefusal,
+  type SourceMatchResult,
+} from './source-match.ts';

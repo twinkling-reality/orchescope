@@ -7,8 +7,8 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 37,
-      "edgesFound": 20,
+      "componentsFound": 17,
+      "edgesFound": 8,
       "filesInspected": 11,
       "status": "completed"
     },
@@ -88,15 +88,15 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 6,
+      "agent": 9,
       "database": 1,
-      "entrypoint": 17,
-      "external_service": 14,
+      "entrypoint": 8,
+      "external_service": 6,
       "model": 2,
       "tool": 5
     },
     "declaredInTest": 0,
-    "total": 45
+    "total": 31
   },
   "discardedRelations": [],
   "files": {
@@ -116,7 +116,7 @@
       "medium": 1
     },
     "componentsByRule": {
-      "model-call-without-timeout": 8,
+      "model-call-without-timeout": 11,
       "observability-coverage": 5
     },
     "strengths": 0,
@@ -128,11 +128,11 @@
   "name": "vercel-ai-chatbot",
   "relations": {
     "byKind": {
-      "calls_service": 18,
+      "calls_service": 9,
       "calls_tool": 5,
-      "invokes_model": 6,
+      "invokes_model": 9,
       "queries_database": 1
     },
-    "total": 30
+    "total": 24
   }
 }

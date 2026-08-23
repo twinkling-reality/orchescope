@@ -9,10 +9,16 @@ import {
   objectArgument,
   stringValue,
 } from '@orchescope/source-analysis';
-import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
-import { promptCallSupport, registerPromptEntries } from '../prompt-input.ts';
+import type {
+  AdapterFindings,
+  AgentSystemAdapter,
+  DiscoveryContext,
+  TopologyDiscovery,
+} from '../adapter.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
+import { implementationBody } from '../implementation-span.ts';
 import { definitionForCall, matchCalls, projectUses } from '../matching.ts';
+import { promptCallSupport, registerPromptEntries } from '../prompt-input.ts';
 
 /**
  * The Vercel AI SDK.
@@ -67,15 +73,28 @@ const toolNamesFrom = (entries: readonly ObjectEntryFact[]): readonly string[] =
   return [];
 };
 
-type Counts = { components: number; edges: number };
+type Counts = { components: number; edges: number; inspectedInputs: number };
+type RelationCounts = Pick<Counts, 'components' | 'edges'>;
 
 const discoverToolDefinitions = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   files: Set<string>,
-): number => {
+  unresolved: TopologyDiscovery['unresolved'][number][],
+): { readonly components: number; readonly inspectedInputs: number } => {
   let components = 0;
+  let inspectedInputs = 0;
   for (const match of matchCalls(context.modules, { names: ['tool'], packages: PACKAGES })) {
+    inspectedInputs += 1;
+    files.add(match.module.file);
+    if (match.call.enclosingUnresolved === true) {
+      unresolved.push({
+        kind: 'adapter_input',
+        reason: 'a tool declaration sits inside a callable whose source name is not authoritative',
+        location: match.call.location,
+      });
+      continue;
+    }
     const entries = objectArgument(match.call);
     const definition = definitionForCall(match.module, match.call);
     const description = stringValue(findEntry(entries, 'description')?.value);
@@ -96,17 +115,19 @@ const discoverToolDefinitions = (
       }),
     );
     components += 1;
-    files.add(match.module.file);
     context.bindings.register(match.module.file, name, identity);
     // The call holds the tool's `execute`, so what runs when the tool is invoked is written inside it.
-    context.implementations.record({
-      identity,
-      file: match.module.file,
-      body: match.call.location,
-      symbol: `tool(${name})`,
-    });
+    const body = implementationBody(match.module, match.call, findEntry(entries, 'execute')?.value);
+    if (body !== undefined) {
+      context.implementations.record({
+        identity,
+        file: match.module.file,
+        body,
+        symbol: `tool(${name})`,
+      });
+    }
   }
-  return components;
+  return { components, inspectedInputs };
 };
 
 /**
@@ -121,7 +142,7 @@ const linkNamedTools = (
   caller: ComponentIdentity,
   match: ReturnType<typeof matchCalls>[number],
   toolNames: readonly string[],
-): Counts => {
+): RelationCounts => {
   let components = 0;
   let edges = 0;
   for (const toolName of toolNames) {
@@ -167,21 +188,32 @@ const discoverGenerationCalls = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   files: Set<string>,
+  unresolved: TopologyDiscovery['unresolved'][number][],
 ): Counts => {
   let components = 0;
   let edges = 0;
+  let inspectedInputs = 0;
 
   for (const match of matchCalls(context.modules, {
     names: GENERATION_CALLS,
     packages: PACKAGES,
   })) {
+    inspectedInputs += 1;
+    files.add(match.module.file);
+    if (match.call.enclosingUnresolved === true) {
+      unresolved.push({
+        kind: 'adapter_input',
+        reason:
+          'a generation call sits inside a callable whose source name is not authoritative, so no caller relation was inferred',
+        location: match.call.location,
+      });
+      continue;
+    }
     const entries = objectArgument(match.call);
     const modelName = modelNameFrom(findEntry(entries, 'model')?.value) ?? 'unspecified';
     const toolNames = toolNamesFrom(entries);
     const maxSteps = numberValue(findEntry(entries, 'maxSteps')?.value);
     const callee = dotted(match.call.calleePath);
-    files.add(match.module.file);
-
     builder.addComponent(
       drafts.sourceComponent({
         kind: 'model',
@@ -269,7 +301,7 @@ const discoverGenerationCalls = (
     components += linked.components;
     edges += linked.edges;
   }
-  return { components, edges };
+  return { components, edges, inspectedInputs };
 };
 
 export const vercelAiSdkAdapter: AgentSystemAdapter = {
@@ -279,12 +311,32 @@ export const vercelAiSdkAdapter: AgentSystemAdapter = {
   appliesTo: (context) => projectUses(context, PACKAGES),
   discover: (context, builder): AdapterFindings => {
     const files = new Set<string>();
-    const tools = discoverToolDefinitions(context, builder, files);
-    const generations = discoverGenerationCalls(context, builder, files);
+    const unresolved: TopologyDiscovery['unresolved'][number][] = [];
+    const tools = discoverToolDefinitions(context, builder, files, unresolved);
+    const generations = discoverGenerationCalls(context, builder, files, unresolved);
     return {
-      componentsFound: tools + generations.components,
+      componentsFound: tools.components + generations.components,
       edgesFound: generations.edges,
       filesInspected: [...files],
+      ...(unresolved.length === 0
+        ? {}
+        : {
+            topology: {
+              status: 'incomplete',
+              inspectedInputs: tools.inspectedInputs + generations.inspectedInputs,
+              explicitRelations: generations.edges,
+              conditionalConstructs: 0,
+              conditionalDestinations: 0,
+              entryBoundaries: 0,
+              entryTargets: [],
+              terminalBoundaries: 0,
+              boundaryFacts: [],
+              configurationBounds: 0,
+              configurationBoundFacts: [],
+              unresolvedCount: unresolved.length,
+              unresolved,
+            },
+          }),
     };
   },
 };

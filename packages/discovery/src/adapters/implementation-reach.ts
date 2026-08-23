@@ -16,10 +16,8 @@ import type { ImplementationSpan } from '../implementation-span.ts';
  * classified as destructive, and reachable from nothing. Three rules were wrong at once because of it,
  * and only one of the three could have been fixed inside the rule.
  *
- * The join is by line containment rather than by enclosing scope. An inline handler is anonymous, so
- * the nearest named scope of a call inside it is whatever encloses the registration, which at module
- * scope is nothing at all. Containment is the only fact in the model that says the call belongs to the
- * body, and it is the fact the registration call already carries.
+ * The join uses the exact callable range. A wider registration or configuration expression can contain
+ * nested callable declarations and eager configuration effects that do not run when the handler does.
  *
  * What a contained call reaches is answered by its name where it has one and by its call site where it
  * does not, which is the difference between a handler delegating to a declared function and a handler
@@ -32,19 +30,52 @@ import type { ImplementationSpan } from '../implementation-span.ts';
 const ADAPTER_ID = 'adapter:implementation-reach';
 const drafts = createDrafts(ADAPTER_ID);
 
-const endLineOf = (location: SourceLocation): number => location.endLine ?? location.startLine;
-
 /**
- * Whether a call sits inside a body, by line.
- *
- * The declaring call is excluded by its own start line: a registration call opens the span it defines,
- * and reading it as a call the body makes would draw every tool a relation to itself.
+ * Whether a call sits inside the exact callable range, including a one-line arrow body.
  */
-const insideBody = (body: SourceLocation, call: CallFact): boolean =>
-  call.location.startLine > body.startLine && endLineOf(call.location) <= endLineOf(body);
+const insideBody = (body: SourceLocation, call: CallFact): boolean => {
+  const startsAfter =
+    call.location.startLine > body.startLine ||
+    (call.location.startLine === body.startLine &&
+      (call.location.startColumn ?? 0) > (body.startColumn ?? 0));
+  const bodyEndLine = body.endLine ?? body.startLine;
+  const callEndLine = call.location.endLine ?? call.location.startLine;
+  const endsBefore =
+    callEndLine < bodyEndLine ||
+    (callEndLine === bodyEndLine &&
+      (call.location.endColumn ?? 0) <= (body.endColumn ?? Number.MAX_SAFE_INTEGER));
+  return startsAfter && endsBefore;
+};
 
-const callsInside = (module: ModuleFacts, span: ImplementationSpan): readonly CallFact[] =>
-  module.calls.filter((call) => insideBody(span.body, call));
+const sameRange = (left: SourceLocation, right: SourceLocation): boolean =>
+  left.file === right.file &&
+  left.startLine === right.startLine &&
+  left.startColumn === right.startColumn &&
+  left.endLine === right.endLine &&
+  left.endColumn === right.endColumn;
+
+const namesForSpan = (module: ModuleFacts, span: ImplementationSpan): ReadonlySet<string> =>
+  new Set(
+    module.definitions
+      .filter((definition) => sameRange(definition.location, span.body))
+      .flatMap((definition) => [
+        definition.name,
+        definition.name.split('.').at(-1) ?? definition.name,
+        ...(definition.enclosing === undefined
+          ? []
+          : [`${definition.enclosing}.${definition.name}`]),
+      ]),
+  );
+
+const callsInside = (module: ModuleFacts, span: ImplementationSpan): readonly CallFact[] => {
+  const names = namesForSpan(module, span);
+  return module.calls.filter(
+    (call) =>
+      insideBody(span.body, call) &&
+      ((call.enclosingLocation !== undefined && sameRange(call.enclosingLocation, span.body)) ||
+        (call.enclosing !== undefined && names.has(call.enclosing))),
+  );
+};
 
 /**
  * The component a call inside a body reaches.
@@ -71,7 +102,7 @@ const reachedBy = (
 
 export const implementationReachAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '1',
+  version: '2',
   // A body is a convention of the language, not a package.
   packages: [],
   appliesTo: (context) => context.implementations.all().length > 0,

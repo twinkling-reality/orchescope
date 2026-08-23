@@ -7,9 +7,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 104,
-      "edgesFound": 54,
-      "filesInspected": 31,
+      "componentsFound": 2,
+      "edgesFound": 1,
+      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:implementation-reach": {
@@ -25,10 +25,10 @@
       "status": "not_applicable"
     },
     "adapter:langgraph": {
-      "componentsFound": 13,
-      "edgesFound": 14,
-      "filesInspected": 2,
-      "status": "completed"
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:manifest": {
       "componentsFound": 0,
@@ -37,16 +37,16 @@
       "status": "not_applicable"
     },
     "adapter:mcp": {
-      "componentsFound": 1,
+      "componentsFound": 0,
       "edgesFound": 0,
-      "filesInspected": 1,
-      "status": "completed"
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:model-sdk": {
-      "componentsFound": 1,
+      "componentsFound": 0,
       "edgesFound": 0,
-      "filesInspected": 7,
-      "status": "completed"
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:openai-agents": {
       "componentsFound": 0,
@@ -67,10 +67,10 @@
       "status": "not_applicable"
     },
     "adapter:search-index": {
-      "componentsFound": 4,
+      "componentsFound": 0,
       "edgesFound": 0,
-      "filesInspected": 4,
-      "status": "completed"
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:vercel-ai-sdk": {
       "componentsFound": 0,
@@ -85,54 +85,44 @@
       "status": "not_applicable"
     }
   },
-  "agentSystemDetected": true,
+  "agentSystemDetected": false,
   "components": {
     "byKind": {
-      "entrypoint": 50,
-      "external_service": 50,
-      "mcp_server": 1,
-      "provider": 1,
-      "retrieval": 1,
-      "workflow": 2,
-      "workflow_step": 11
+      "entrypoint": 1,
+      "external_service": 1
     },
     "declaredInTest": 0,
-    "total": 116
+    "total": 2
   },
   "discardedRelations": [],
   "files": {
-    "discovered": 439,
-    "inSupportedLanguages": 367,
-    "parsed": 365,
-    "skipped": 4,
+    "discovered": 61,
+    "inSupportedLanguages": 56,
+    "parsed": 56,
+    "skipped": 0,
     "truncated": false
   },
   "findings": {
     "byRule": {
-      "observability-coverage": 1,
-      "topology-shape": 1
+      "observability-coverage": 1
     },
     "bySeverity": {
-      "info": 1,
-      "low": 1
+      "info": 1
     },
     "componentsByRule": {
-      "observability-coverage": 5,
-      "topology-shape": 2
+      "observability-coverage": 2
     },
     "strengths": 0,
-    "total": 2
+    "total": 1
   },
   "foundNothing": [],
-  "kind": "agent_system",
+  "kind": "not_agent_system",
   "languagesNotAnalysed": [],
-  "name": "gpt-researcher",
+  "name": "agentgauge",
   "relations": {
     "byKind": {
-      "calls_service": 50,
-      "contains": 11,
-      "transitions_to": 3
+      "calls_service": 1
     },
-    "total": 64
+    "total": 1
   }
 }

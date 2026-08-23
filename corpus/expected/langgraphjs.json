@@ -9,7 +9,7 @@
     "adapter:effects": {
       "componentsFound": 55,
       "edgesFound": 30,
-      "filesInspected": 25,
+      "filesInspected": 26,
       "status": "completed"
     },
     "adapter:implementation-reach": {

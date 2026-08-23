@@ -30,12 +30,14 @@ import type {
 import type { ComponentDraft, EdgeDraft } from './drafts.ts';
 import {
   mergeBasis,
+  mergeComponentEffectMetadata,
   mergeConfidence,
   mergeConfigLocations,
   mergeDetails,
-  mergeMetadata,
   mergePermissions,
   mergePolicy,
+  mergeRelationMetadata,
+  mergeSideEffect,
   mergeSourceLocations,
   mergeStrings,
 } from './merge.ts';
@@ -221,7 +223,13 @@ export class SystemGraphBuilder {
         discoveredBy: [draft.discoveredBy],
         evidenceIds,
         tags: [...(draft.tags ?? [])],
-        metadata: { ...(draft.metadata ?? {}) },
+        metadata: mergeComponentEffectMetadata(
+          {},
+          draft.metadata ?? {},
+          undefined,
+          draft.sideEffect,
+          evidenceIds,
+        ),
         basis: draft.basis,
         confidence: draft.confidence,
         details: draft.details,
@@ -243,11 +251,17 @@ export class SystemGraphBuilder {
     existing.discoveredBy = mergeStrings(existing.discoveredBy, [draft.discoveredBy]);
     existing.evidenceIds = mergeStrings(existing.evidenceIds, evidenceIds);
     existing.tags = mergeStrings(existing.tags, draft.tags ?? []);
-    existing.metadata = mergeMetadata(existing.metadata, draft.metadata ?? {});
+    existing.metadata = mergeComponentEffectMetadata(
+      existing.metadata,
+      draft.metadata ?? {},
+      existing.sideEffect,
+      draft.sideEffect,
+      evidenceIds,
+    );
     existing.basis = mergeBasis(existing.basis, draft.basis);
     existing.confidence = mergeConfidence(existing.confidence, draft.confidence);
     existing.details = mergeDetails(existing.details, draft.details);
-    existing.sideEffect = existing.sideEffect ?? draft.sideEffect;
+    existing.sideEffect = mergeSideEffect(existing.sideEffect, draft.sideEffect);
     existing.description = existing.description ?? draft.description;
   }
 
@@ -271,7 +285,7 @@ export class SystemGraphBuilder {
         basis: draft.basis,
         confidence: draft.confidence,
         policy: draft.policy,
-        metadata: { ...(draft.metadata ?? {}) },
+        metadata: mergeRelationMetadata({}, draft.metadata ?? {}, evidenceIds),
       });
       return;
     }
@@ -282,7 +296,7 @@ export class SystemGraphBuilder {
     existing.basis = mergeBasis(existing.basis, draft.basis);
     existing.confidence = mergeConfidence(existing.confidence, draft.confidence);
     existing.policy = mergePolicy(existing.policy, draft.policy);
-    existing.metadata = mergeMetadata(existing.metadata, draft.metadata ?? {});
+    existing.metadata = mergeRelationMetadata(existing.metadata, draft.metadata ?? {}, evidenceIds);
   }
 
   hasComponent(identity: Parameters<typeof identityKey>[0]): boolean {

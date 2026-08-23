@@ -17,6 +17,7 @@ import {
   jsonPointer,
 } from '../config-files.ts';
 import { configIdentity, createDrafts, sourceIdentity } from '../drafts.ts';
+import { implementationBody } from '../implementation-span.ts';
 import { definitionForCall, matchCalls, projectUses } from '../matching.ts';
 
 /**
@@ -425,16 +426,21 @@ const discoverTools = (
       const toolIdentity = sourceIdentity('tool', module.file, toolName);
       context.bindings.register(module.file, toolName, toolIdentity);
       /*
-       * The registration call is the tool's body: the handler is an argument to it, and an inline
-       * function argument carries no location of its own. What that body reaches is the tool's own
-       * behaviour, and nothing joined the two until it was recorded here.
+       * The tool body is the exact inline function argument or the uniquely settled function binding.
+       * The surrounding registration and its other configuration arguments do not execute as tool behaviour.
        */
-      context.implementations.record({
-        identity: toolIdentity,
-        file: module.file,
-        body: call.location,
-        symbol: `${dotted(call.calleePath)}("${toolName}")`,
-      });
+      const body = [...call.args]
+        .reverse()
+        .map((argument) => implementationBody(module, call, argument))
+        .find((candidate) => candidate !== undefined);
+      if (body !== undefined) {
+        context.implementations.record({
+          identity: toolIdentity,
+          file: module.file,
+          body,
+          symbol: `${dotted(call.calleePath)}("${toolName}")`,
+        });
+      }
 
       builder.addEdge(
         drafts.edge({

@@ -49,8 +49,8 @@
       "status": "completed"
     },
     "adapter:openai-agents": {
-      "componentsFound": 1965,
-      "edgesFound": 296,
+      "componentsFound": 1922,
+      "edgesFound": 371,
       "filesInspected": 315,
       "status": "completed"
     },
@@ -88,7 +88,7 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 616,
+      "agent": 1639,
       "database": 1,
       "entrypoint": 7,
       "evaluator": 4,
@@ -97,10 +97,10 @@
       "model": 18,
       "prompt": 180,
       "provider": 1,
-      "tool": 237
+      "tool": 248
     },
-    "declaredInTest": 636,
-    "total": 1074
+    "declaredInTest": 1666,
+    "total": 2108
   },
   "discardedRelations": [],
   "files": {
@@ -126,7 +126,7 @@
       "model-call-without-timeout": 36,
       "observability-coverage": 5,
       "prompt-injection-boundary": 16,
-      "topology-shape": 8
+      "topology-shape": 6
     },
     "strengths": 0,
     "total": 4
@@ -138,15 +138,15 @@
   "relations": {
     "byKind": {
       "calls_service": 4,
-      "calls_tool": 66,
-      "hands_off_to": 73,
-      "invokes_model": 36,
+      "calls_tool": 142,
+      "hands_off_to": 181,
+      "invokes_model": 44,
       "provides_tool": 11,
       "queries_database": 4,
       "served_by_provider": 1,
       "uses_prompt": 181,
-      "validated_by": 2
+      "validated_by": 4
     },
-    "total": 378
+    "total": 572
   }
 }

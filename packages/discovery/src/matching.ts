@@ -221,6 +221,7 @@ const hasExplicitLocalShadow = (module: ModuleFacts, symbol: RuntimeSymbol): boo
       (definition) =>
         definition.name === root &&
         definition.enclosing === undefined &&
+        definition.enclosingLocation === undefined &&
         (enclosed || locationMayPrecede(definition.location, symbol.location)),
     ) ||
     module.assignments.some(
@@ -228,6 +229,7 @@ const hasExplicitLocalShadow = (module: ModuleFacts, symbol: RuntimeSymbol): boo
         assignment.target.length === 1 &&
         assignment.target[0] === root &&
         assignment.enclosing === undefined &&
+        assignment.enclosingLocation === undefined &&
         (enclosed || locationMayPrecede(assignment.location, symbol.location)),
     )
   );

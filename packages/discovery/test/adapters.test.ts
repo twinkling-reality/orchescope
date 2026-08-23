@@ -1217,6 +1217,42 @@ export async function answer(question: string) {
       `expected the tool relation in ${edges.join(', ')}`,
     );
   });
+
+  it('does not let callback-local tools or generation calls fabricate outer identities', async () => {
+    const { result, edges } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'scoped-ai-app', dependencies: { ai: '^5.0.0' } });
+      workspace.write(
+        'src/answer.ts',
+        `import { streamText, tool } from 'ai';
+import { openai } from '@ai-sdk/openai';
+
+const shared = tool({ description: 'The module tool used by answer.' });
+declare const items: unknown[];
+
+items.map(async () => {
+  const shared = tool({ description: 'A callback-local tool.' });
+  return streamText({ model: openai('gpt-4o-mini'), tools: { shared }, prompt: 'local' });
+});
+
+export function answer() {
+  return streamText({ model: openai('gpt-4o-mini'), tools: { shared }, prompt: 'global' });
+}
+`,
+      );
+    });
+    assert.ok(edges.includes('calls_tool:agent:answer->tool:shared'));
+    assert.equal(
+      result.graph.components.some((component) => component.id.includes('streamtext-caller')),
+      false,
+    );
+    assert.equal(result.graph.coverage.topology?.status, 'incomplete');
+    assert.equal(result.graph.coverage.topology?.unresolvedCount, 2);
+    assert.ok(
+      result.graph.coverage.topology?.unresolved.some((entry) =>
+        entry.reason.includes('no caller relation'),
+      ),
+    );
+  });
 });
 
 describe('model SDKs', () => {
@@ -2005,6 +2041,350 @@ seatAgent.handoffs.push(triageAgent);
     assert.ok(
       edges.includes('hands_off_to:agent:triage-agent->agent:seat-agent'),
       `the fact model claims one shape in two languages, and an assignment is that shape: ${edges.join(', ')}`,
+    );
+  });
+});
+
+describe('Python agent handoffs in named lexical scopes', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writePythonProject(workspace, {
+      name: 'scoped-python-handoffs',
+      dependencies: ['openai-agents>=0.4'],
+    });
+    workspace.write(
+      'src/scoped.py',
+      `from agents import Agent, Runner, ToolCallItem, function_tool
+
+def first_scope():
+    target = Agent(name="First target")
+    source = Agent(name="First source", handoffs=[target])
+    return source
+
+def second_scope():
+    target = Agent(name="Second target")
+    source = Agent(name="Second source", handoffs=[target])
+    return source
+
+def duplicate_names():
+    first = Agent(name="Duplicate")
+    second = Agent(name="Duplicate", handoffs=[first])
+    return second
+
+def actual_self_handoff():
+    agent = Agent(name="Self")
+    agent.handoffs = [agent]
+    return agent
+
+def direct_return():
+    @function_tool
+    def local_tool() -> str:
+        return "ok"
+    return Agent(name="Factory agent", tools=[local_tool])
+
+def second_direct_return():
+    @function_tool
+    def local_tool() -> str:
+        return "different"
+    return Agent(name="Second factory agent", tools=[local_tool])
+
+def nested_constructions():
+    target = Agent(name="Nested target")
+    result = Runner.run(Agent(name="Nested source", handoffs=[target]))
+    item = ToolCallItem(agent=Agent(name="Wrapped agent"))
+    return result, item
+
+def nested_same_constructor():
+    outer = Agent(name="Outer", handoffs=[Agent(name="Inner")])
+    return outer
+`,
+    );
+  };
+
+  it('resolves reused variable names only inside their named function', async () => {
+    const { edges } = await scan(build);
+    assert.ok(edges.includes('hands_off_to:agent:first_scope.source->agent:first_scope.target'));
+    assert.ok(edges.includes('hands_off_to:agent:second_scope.source->agent:second_scope.target'));
+  });
+
+  it('distinguishes same-name constructions and preserves a proven same-variable self-handoff', async () => {
+    const { edges } = await scan(build);
+    assert.equal(edges.includes('hands_off_to:agent:duplicate->agent:duplicate'), false);
+    assert.ok(
+      edges.includes('hands_off_to:agent:duplicate_names.second->agent:duplicate_names.first'),
+    );
+    assert.ok(
+      edges.includes(
+        'hands_off_to:agent:actual_self_handoff.agent->agent:actual_self_handoff.agent',
+      ),
+    );
+  });
+
+  it('resolves a local decorated tool for an Agent returned directly from the same function', async () => {
+    const { edges, ids } = await scan(build);
+    assert.ok(
+      edges.includes('calls_tool:agent:direct_return.factory-agent->tool:direct_return.local_tool'),
+      `expected the local tool relation in ${edges.join(', ')}`,
+    );
+    assert.ok(
+      edges.includes(
+        'calls_tool:agent:second_direct_return.second-factory-agent->tool:second_direct_return.local_tool',
+      ),
+    );
+    assert.ok(ids.includes('tool:direct_return.local_tool'));
+    assert.ok(ids.includes('tool:second_direct_return.local_tool'));
+  });
+
+  it('does not borrow a containing result variable for a nested Agent construction', async () => {
+    const { edges, ids } = await scan(build);
+    assert.ok(ids.includes('agent:nested_constructions.nested-source'));
+    assert.ok(ids.includes('agent:nested_constructions.wrapped-agent'));
+    assert.equal(ids.includes('agent:nested_constructions.result'), false);
+    assert.equal(ids.includes('agent:nested_constructions.item'), false);
+    assert.ok(
+      edges.includes(
+        'hands_off_to:agent:nested_constructions.nested-source->agent:nested_constructions.target',
+      ),
+    );
+    assert.ok(ids.includes('agent:nested_same_constructor.outer'));
+    assert.ok(ids.includes('agent:nested_same_constructor.inner'));
+  });
+});
+
+describe('agent constructions that share one runtime name', () => {
+  it('uses stable module bindings and refuses repeated ownerless constructions', async () => {
+    const { result, edges, ids } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'duplicate-agent-runtime-names',
+        dependencies: { '@openai/agents': '^0.1.0' },
+      });
+      workspace.write(
+        'src/agents.ts',
+        `import { Agent } from '@openai/agents';
+
+const first = new Agent({ name: 'Bound duplicate' });
+const second = new Agent({ name: 'Bound duplicate', handoffs: [first] });
+
+declare function register(value: unknown): void;
+register(new Agent({ name: 'Ownerless duplicate' }));
+register(new Agent({ name: 'Ownerless duplicate' }));
+
+export { first, second };
+`,
+      );
+    });
+    assert.ok(ids.includes('agent:first'));
+    assert.ok(ids.includes('agent:second'));
+    assert.ok(edges.includes('hands_off_to:agent:second->agent:first'));
+    assert.equal(ids.includes('agent:ownerless-duplicate'), false);
+    assert.ok(
+      result.graph.coverage.topology?.unresolved.some((entry) =>
+        entry.reason.includes('share one stable source binding without a distinct source identity'),
+      ),
+    );
+  });
+
+  it('binds only the outer construction when the same constructor is nested', async () => {
+    const { ids } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'nested-agent-construction',
+        dependencies: { '@openai/agents': '^0.1.0' },
+      });
+      workspace.write(
+        'src/agent.ts',
+        `import { Agent } from '@openai/agents';
+
+export const build = (): Agent => {
+  const outer = new Agent({ name: 'Outer', handoffs: [new Agent({ name: 'Inner' })] });
+  return outer;
+};
+`,
+      );
+    });
+    assert.ok(ids.includes('agent:build.outer'));
+    assert.ok(ids.includes('agent:build.inner'));
+  });
+
+  it('refuses chained constructor calls whose retained arguments belong to the chained method', async () => {
+    const { result, ids } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'chained-agent-construction',
+        dependencies: { '@openai/agents': '^0.1.0' },
+      });
+      workspace.write(
+        'src/agent.ts',
+        `import { Agent, Agent as OpenAgent } from '@openai/agents';
+import * as sdk from '@openai/agents';
+
+const direct = new Agent({ name: 'Direct' });
+const renamed = new OpenAgent({ name: 'Renamed' });
+const namespaced = new sdk.Agent({ name: 'Namespaced' });
+const created = Agent.create({ name: 'Created' });
+const renamedCreated = OpenAgent.create({ name: 'Renamed created' });
+const namespaceCreated = sdk.Agent.create({ name: 'Namespace created' });
+const cloned = new Agent({ name: 'Base', tools: [] }).clone({ name: 'Clone' });
+const directClone = Agent.clone({ name: 'Direct clone' });
+const renamedClone = OpenAgent.clone({ name: 'Renamed clone' });
+const namespaceClone = sdk.Agent.clone({ name: 'Namespace clone' });
+
+export {
+  cloned,
+  created,
+  direct,
+  directClone,
+  namespaceClone,
+  namespaceCreated,
+  namespaced,
+  renamed,
+  renamedClone,
+  renamedCreated,
+};
+`,
+      );
+    });
+    assert.ok(ids.includes('agent:direct'));
+    assert.ok(ids.includes('agent:renamed'));
+    assert.ok(ids.includes('agent:namespaced'));
+    assert.ok(ids.includes('agent:created'));
+    assert.ok(ids.includes('agent:renamed-created'));
+    assert.ok(ids.includes('agent:namespace-created'));
+    assert.equal(ids.includes('agent:cloned'), false);
+    assert.ok(ids.includes('agent:base'));
+    assert.equal(ids.includes('agent:direct-clone'), false);
+    assert.equal(ids.includes('agent:renamed-clone'), false);
+    assert.equal(ids.includes('agent:namespace-clone'), false);
+    assert.ok(
+      (result.graph.coverage.topology?.unresolved.filter((entry) =>
+        entry.reason.includes('call chained from an Agent constructor'),
+      ).length ?? 0) >= 4,
+    );
+  });
+
+  it('refuses a Python Agent clone when the fact retains only the chained call', async () => {
+    const { result, ids } = await scan((workspace) => {
+      writePythonProject(workspace, {
+        name: 'chained-agent-construction-python',
+        dependencies: ['openai-agents>=0.4'],
+      });
+      workspace.write(
+        'src/agent.py',
+        `from agents import Agent
+
+def build():
+    return Agent(name="Base", tools=[]).clone(name="Clone")
+`,
+      );
+    });
+    assert.equal(ids.includes('agent:build.agent'), false);
+    assert.equal(ids.includes('agent:build.base'), false);
+    assert.ok(
+      result.graph.coverage.topology?.unresolved.some((entry) =>
+        entry.reason.includes('call chained from an Agent constructor'),
+      ),
+    );
+  });
+});
+
+describe('Agent resources declared in an outer named scope', () => {
+  it('resolves an MCP server used by an Agent inside an anonymous callback', async () => {
+    const { edges } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'scoped-agent-mcp',
+        dependencies: { '@openai/agents': '^0.1.0' },
+      });
+      workspace.write(
+        'src/agent.ts',
+        `import { Agent, MCPServerStdio, withTrace } from '@openai/agents';
+
+async function main(): Promise<void> {
+  const mcpServer = new MCPServerStdio({ name: 'Filesystem' });
+  await withTrace('example', async () => {
+    const agent = new Agent({ name: 'Assistant', mcpServers: [mcpServer] });
+    void agent;
+  });
+}
+
+void main();
+`,
+      );
+    });
+    assert.ok(
+      edges.includes('provides_tool:mcp_server:filesystem->agent:main.agent'),
+      `expected the outer server relation in ${edges.join(', ')}`,
+    );
+  });
+
+  it('walks nested named closures while a nearer non-resource binding remains a shadow', async () => {
+    const { edges } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'nested-scoped-agent-mcp',
+        dependencies: { '@openai/agents': '^0.1.0' },
+      });
+      workspace.write(
+        'src/agent.ts',
+        `import { Agent, MCPServerStdio, withTrace } from '@openai/agents';
+
+async function main(): Promise<void> {
+  const server = new MCPServerStdio({ name: 'Outer server' });
+  async function helper(): Promise<void> {
+    await withTrace('nested', async () => {
+      const agent = new Agent({ name: 'Nested agent', mcpServers: [server] });
+      void agent;
+    });
+  }
+  async function shadowed(): Promise<void> {
+    const server = { custom: true };
+    await withTrace('shadowed', async () => {
+      const agent = new Agent({ name: 'Shadowed agent', mcpServers: [server] });
+      void agent;
+    });
+  }
+  await helper();
+  await shadowed();
+}
+
+void main();
+`,
+      );
+    });
+    assert.ok(
+      edges.includes('provides_tool:mcp_server:outer-server->agent:main.helper.agent'),
+      `expected the closure relation in ${edges.join(', ')}`,
+    );
+    assert.equal(
+      edges.includes('provides_tool:mcp_server:outer-server->agent:main.shadowed.agent'),
+      false,
+    );
+  });
+
+  it('refuses an outer captured server that can be reassigned before the helper runs', async () => {
+    const { edges } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'reassigned-scoped-agent-mcp',
+        dependencies: { '@openai/agents': '^0.1.0' },
+      });
+      workspace.write(
+        'src/agent.ts',
+        `import { Agent, MCPServerStdio, withTrace } from '@openai/agents';
+
+async function main(): Promise<void> {
+  let server: unknown = new MCPServerStdio({ name: 'Reassigned server' });
+  async function helper(): Promise<void> {
+    await withTrace('nested', async () => {
+      const agent = new Agent({ name: 'Nested agent', mcpServers: [server] });
+      void agent;
+    });
+  }
+  server = { custom: true };
+  await helper();
+}
+
+void main();
+`,
+      );
+    });
+    assert.equal(
+      edges.includes('provides_tool:mcp_server:reassigned-server->agent:main.helper.agent'),
+      false,
     );
   });
 });
@@ -3290,6 +3670,40 @@ export const overview = async (env: Env): Promise<unknown> => {
     );
   });
 
+  it('keeps a bound resource but refuses an anonymous callback as its caller', async () => {
+    const { ids, edges, adapters } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'worker-callback' });
+      workspace.write(
+        'wrangler.toml',
+        `name = "events-worker"
+main = "src/index.ts"
+compatibility_date = "2024-12-18"
+
+[[d1_databases]]
+binding = "EVENTS_DB"
+database_name = "app-events"
+database_id = "c13a8424-bc2c-486c-8b50-9b8748a88b72"
+`,
+      );
+      workspace.write(
+        'src/index.ts',
+        `export const inspect = (items: string[], env: Env) =>
+  items.map(() => readSettings(env.EVENTS_DB));
+`,
+      );
+    });
+    assert.ok(ids.includes('database:app-events'));
+    assert.equal(ids.includes('entrypoint:module-scope'), false);
+    assert.equal(
+      edges.some((edge) => edge.startsWith('queries_database:')),
+      false,
+    );
+    assert.match(
+      adapters.find((entry) => entry.adapterId === 'adapter:workers-bindings')?.detail ?? '',
+      /platform binding use sits inside a callable whose owner this build cannot name/,
+    );
+  });
+
   it('stays quiet on a repository with no such manifest', async () => {
     const { adapters } = await scan((workspace) => {
       writeNodeProject(workspace, { name: 'plain-app' });
@@ -3376,6 +3790,397 @@ export const send = () => axios.post('https://api.example.com/orders', {});
       false,
       `mock setup is not a request, saw ${edges.join(', ')}`,
     );
+  });
+});
+
+describe('external effects inside object callables', () => {
+  const build = (workspace: ReturnType<typeof createTempWorkspace>): void => {
+    writeNodeProject(workspace, { name: 'command-app' });
+    workspace.write(
+      'src/update-pricing.ts',
+      `const defineCommand = <T>(command: T): T => command;
+
+export const updatePricingCommand = defineCommand({
+  async run({ url }: { url: string }): Promise<Response> {
+    return await fetch(url);
+  },
+  arrow: async (url: string): Promise<Response> => fetch(url),
+  expression: async function (url: string): Promise<Response> {
+    return fetch(url);
+  },
+});
+`,
+    );
+  };
+
+  it('attributes every request to the smallest named object callable', async () => {
+    const { result, ids, edges } = await scan(build);
+    const callers = result.graph.components
+      .filter((component) => component.kind === 'entrypoint')
+      .map((component) => component.identity.localName)
+      .sort();
+    assert.deepEqual(callers, ['arrow', 'expression', 'run']);
+    assert.equal(ids.includes('entrypoint:module-scope'), false);
+    for (const caller of callers) {
+      assert.ok(
+        edges.some(
+          (edge) =>
+            edge.startsWith(`calls_service:entrypoint:${caller.toLowerCase()}->`) &&
+            edge.includes(caller.toLowerCase()),
+        ),
+        `no source-scoped service relation for ${caller} among ${edges.join(', ')}`,
+      );
+    }
+  });
+
+  it('retains the callable symbol and call-site citation on the graph relation', async () => {
+    const { result } = await scan(build);
+    const relation = result.graph.edges.find(
+      (edge) => edge.kind === 'calls_service' && edge.from === 'entrypoint:run',
+    );
+    assert.equal(relation?.sourceLocations[0]?.file, 'src/update-pricing.ts');
+    assert.equal(relation?.sourceLocations[0]?.startLine, 5);
+    const cited = result.evidence.find((record) => relation?.evidence.includes(record.id));
+    assert.equal(cited?.kind, 'source_span');
+    assert.equal(cited?.kind === 'source_span' ? cited.symbol : undefined, 'fetch');
+  });
+
+  it('keeps a direct top-level request at module scope', async () => {
+    const { ids, edges } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'module-request' });
+      workspace.write('src/request.ts', "void fetch('https://example.com/pricing');\n");
+    });
+    assert.ok(ids.includes('entrypoint:module-scope'));
+    assert.ok(
+      edges.includes('calls_service:entrypoint:module-scope->external_service:example.com'),
+      `the top-level call lost its module owner: ${edges.join(', ')}`,
+    );
+  });
+
+  it('refuses to invent module ownership for a request inside an unnamed callback', async () => {
+    const { ids, edges, adapters } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'callback-request' });
+      workspace.write(
+        'src/request.ts',
+        `export const requestAll = (urls: string[]): Promise<Response[]> =>
+  Promise.all(urls.map(async (url) => fetch(url)));
+`,
+      );
+    });
+    assert.equal(ids.includes('entrypoint:module-scope'), false);
+    assert.equal(
+      edges.some((edge) => edge.startsWith('calls_service:')),
+      false,
+    );
+    assert.match(
+      adapters.find((entry) => entry.adapterId === 'adapter:effects')?.detail ?? '',
+      /callables? whose owners? this build cannot name/,
+    );
+  });
+
+  it('uses one ownership refusal for stores, queues and retry helpers too', async () => {
+    const { ids, edges, adapters } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'callback-effects',
+        dependencies: {
+          '@prisma/client': '^6.0.0',
+          bullmq: '^5.0.0',
+          'p-retry': '^6.0.0',
+        },
+      });
+      workspace.write(
+        'src/effects.ts',
+        `import { PrismaClient } from '@prisma/client';
+import { Queue } from 'bullmq';
+import pRetry from 'p-retry';
+
+async function send(): Promise<void> {
+  await fetch('https://notify.example.com/send', { method: 'POST' });
+}
+export const inspect = (items: string[]) => items.map(async () => {
+  new PrismaClient();
+  new Queue('jobs');
+  await pRetry(send, { retries: 3 });
+});
+`,
+      );
+    });
+    assert.ok(ids.includes('database:prisma'));
+    assert.ok(ids.includes('queue:jobs'));
+    assert.equal(ids.includes('entrypoint:module-scope'), false);
+    assert.equal(
+      edges.some(
+        (edge) =>
+          edge.includes('entrypoint:module-scope') &&
+          (edge.startsWith('queries_database:') ||
+            edge.startsWith('publishes_to_queue:') ||
+            edge.startsWith('calls_service:')),
+      ),
+      false,
+    );
+    assert.match(
+      adapters.find((entry) => entry.adapterId === 'adapter:effects')?.detail ?? '',
+      /callables? whose owners? this build cannot name/,
+    );
+  });
+
+  it('counts a retried external call once when its anonymous loop also refuses ownership', async () => {
+    const { result, adapters } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'callback-retry' });
+      workspace.write(
+        'src/retry.ts',
+        `export const sendAll = (items: string[]) => items.map(async (body) => {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await fetch('https://notify.example.com/send', { method: 'POST', body });
+      break;
+    } catch (error) {
+      if (attempt === 2) throw error;
+    }
+  }
+});
+`,
+      );
+    });
+    const effects = adapters.find((entry) => entry.adapterId === 'adapter:effects');
+    assert.match(effects?.detail ?? '', /1 external call sits/);
+    assert.doesNotMatch(effects?.detail ?? '', /2 external calls sit/);
+    assert.match(effects?.detail ?? '', /1 retry loop sits/);
+    assert.equal(
+      result.graph.edges.some((edge) => edge.policy?.retry !== undefined),
+      false,
+      'an unresolved loop still emitted retry policy from an invented owner',
+    );
+  });
+
+  it('reports an unresolved retry loop even when its external call belongs to a named function', async () => {
+    const { result, adapters } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'delegated-callback-retry' });
+      workspace.write(
+        'src/retry.ts',
+        `async function send(): Promise<void> {
+  await fetch('https://notify.example.com/send', { method: 'POST' });
+}
+export const sendAll = (items: string[]) => items.map(async () => {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try { return await send(); } catch (error) { if (attempt === 2) throw error; }
+  }
+});
+`,
+      );
+    });
+    const effects = adapters.find((entry) => entry.adapterId === 'adapter:effects');
+    assert.doesNotMatch(effects?.detail ?? '', /external call sits/);
+    assert.match(effects?.detail ?? '', /1 retry loop sits/);
+    assert.equal(
+      result.graph.edges.some((edge) => edge.policy?.retry !== undefined),
+      false,
+    );
+  });
+
+  it('refuses retry relations for duplicate callable names in sibling blocks', async () => {
+    const { result, adapters } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'ambiguous-block-retries' });
+      workspace.write(
+        'src/retry.ts',
+        `export function configure(flag: boolean): void {
+  if (flag) {
+    const command = { run() { for (let attempt = 0; attempt < 3; attempt += 1) fetch('https://read.example.com'); } };
+    void command;
+  } else {
+    const command = { run() { for (let attempt = 0; attempt < 3; attempt += 1) fetch('https://write.example.com', { method: 'POST' }); } };
+    void command;
+  }
+}
+`,
+      );
+    });
+    assert.equal(
+      result.graph.edges.some((edge) => edge.policy?.retry !== undefined),
+      false,
+    );
+    assert.match(
+      adapters.find((entry) => entry.adapterId === 'adapter:effects')?.detail ?? '',
+      /2 retry loops sit inside callables whose owners this build cannot name/,
+    );
+  });
+
+  it('does not execute callable definitions merely because an outer loop constructs them', async () => {
+    const { result, edges } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'declared-in-loop' });
+      workspace.write(
+        'src/setup.ts',
+        `export function setup(): void {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    register({ run() { return fetch('https://notify.example.com/object', { method: 'POST' }); } });
+    function send() { return fetch('https://notify.example.com/function', { method: 'POST' }); }
+    void send;
+  }
+}
+`,
+      );
+    });
+    assert.equal(
+      result.graph.edges.some((edge) => edge.policy?.retry !== undefined),
+      false,
+      'a callable body that is only declared inside a loop is not retried by that loop',
+    );
+    assert.equal(
+      edges.some((edge) => edge.startsWith('calls_service:entrypoint:setup->')),
+      false,
+    );
+    assert.ok(edges.some((edge) => edge.startsWith('calls_service:entrypoint:setup.run->')));
+    assert.ok(edges.some((edge) => edge.startsWith('calls_service:entrypoint:setup.send->')));
+  });
+
+  it('keeps getter and setter effects distinct and aggregates a shared service conservatively', async () => {
+    const { result, ids, edges } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'accessor-effects' });
+      workspace.write(
+        'src/accessors.ts',
+        `export const command = {
+  get value() { return fetch('https://example.com/items'); },
+  set value(input: unknown) {
+    void fetch('https://example.com/items', { method: 'POST', body: String(input) });
+  },
+};
+`,
+      );
+    });
+    assert.ok(ids.includes('entrypoint:command.value.get'));
+    assert.ok(ids.includes('entrypoint:command.value.set'));
+    assert.ok(
+      edges.includes('calls_service:entrypoint:command.value.get->external_service:example.com'),
+    );
+    assert.ok(
+      edges.includes('calls_service:entrypoint:command.value.set->external_service:example.com'),
+    );
+    const service = result.graph.components.find(
+      (component) => component.id === 'external_service:example.com',
+    );
+    assert.equal(service?.sideEffect, 'unknown');
+    assert.ok(service?.permissions.some((permission) => permission.mode === 'read'));
+    assert.ok(service?.permissions.some((permission) => permission.mode === 'write'));
+  });
+
+  it('marks a same-relation GET and POST aggregate as mixed and unknown', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'mixed-effects' });
+      workspace.write(
+        'src/sync.ts',
+        `export const sync = async (): Promise<void> => {
+  await fetch('https://example.com/items');
+  await fetch('https://example.com/items', { method: 'POST', body: 'update' });
+};
+`,
+      );
+    });
+    const relation = result.graph.edges.find(
+      (edge) =>
+        edge.kind === 'calls_service' &&
+        edge.from === 'entrypoint:sync' &&
+        edge.to === 'external_service:example.com',
+    );
+    assert.equal(relation?.metadata['httpMethod'], 'mixed');
+    assert.equal(relation?.metadata['sideEffect'], 'unknown');
+    assert.equal(
+      result.graph.components.find((component) => component.id === 'external_service:example.com')
+        ?.sideEffect,
+      'unknown',
+    );
+  });
+
+  it('does not let an unsettled request method inherit POST from a sibling call', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'mixed-axios-effects',
+        dependencies: { axios: '^1.7.0' },
+      });
+      workspace.write(
+        'src/sync.ts',
+        `import axios from 'axios';
+export const sync = async (): Promise<void> => {
+  await axios.request('https://example.com/items');
+  await axios.post('https://example.com/items', { update: true });
+};
+`,
+      );
+    });
+    const relation = result.graph.edges.find(
+      (edge) =>
+        edge.kind === 'calls_service' &&
+        edge.from === 'entrypoint:sync' &&
+        edge.to === 'external_service:example.com',
+    );
+    assert.equal(relation?.metadata['httpMethod'], 'mixed');
+    assert.equal(relation?.metadata['sideEffect'], 'unknown');
+  });
+
+  it('keeps lexical object owners distinct and refuses colliding ownerless callables', async () => {
+    const { result, ids, adapters } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'literal-owner-collisions' });
+      workspace.write(
+        'src/commands.ts',
+        `export function a() {
+  const command = { run() { return fetch('https://example.com/status'); } };
+  return command;
+}
+export function b() {
+  const command = { run() { return fetch('https://example.com/charge', { method: 'POST' }); } };
+  return command;
+}
+register({ run() { return fetch('https://example.net/status'); } });
+register({ run() { return fetch('https://example.net/charge', { method: 'POST' }); } });
+register(function poll() { return fetch('https://poll.example.com/status'); });
+register(function poll() { return fetch('https://poll.example.com/charge', { method: 'POST' }); });
+`,
+      );
+    });
+    assert.ok(ids.includes('entrypoint:a.command.run'));
+    assert.ok(ids.includes('entrypoint:b.command.run'));
+    assert.equal(
+      ids.some((id) => id === 'entrypoint:run' || id === 'entrypoint:poll'),
+      false,
+    );
+    assert.match(
+      adapters.find((adapter) => adapter.adapterId === 'adapter:effects')?.detail ?? '',
+      /callables? whose owners? this build cannot name/,
+    );
+    assert.equal(
+      result.graph.components.find((component) => component.id === 'external_service:example.com')
+        ?.sideEffect,
+      'unknown',
+    );
+  });
+
+  it('keeps nested class declarations and named expressions distinct across lexical scopes', async () => {
+    const { ids } = await scan((workspace) => {
+      writeNodeProject(workspace, { name: 'class-owner-collisions' });
+      workspace.write(
+        'src/commands.ts',
+        `export function a() {
+  class C { run() { return fetch('https://example.com/status'); } }
+  const X = class Local { run() { return fetch('https://example.net/status'); } };
+  return { C, X };
+}
+export function b() {
+  class C { run() { return fetch('https://example.com/charge', { method: 'POST' }); } }
+  const X = class Local { run() { return fetch('https://example.net/charge', { method: 'POST' }); } };
+  return { C, X };
+}
+export const root = {
+  Worker: class { run() { return fetch('https://example.org/status'); } },
+  nested: { Worker: (class { run() { return fetch('https://example.org/charge', { method: 'POST' }); } } as object) },
+};
+`,
+      );
+    });
+    assert.ok(ids.includes('entrypoint:a.c.run'));
+    assert.ok(ids.includes('entrypoint:a.x.run'));
+    assert.ok(ids.includes('entrypoint:b.c.run'));
+    assert.ok(ids.includes('entrypoint:b.x.run'));
+    assert.ok(ids.includes('entrypoint:root.worker.run'));
+    assert.ok(ids.includes('entrypoint:root.nested.worker.run'));
   });
 });
 
@@ -4330,6 +5135,65 @@ export const wireMoney = tool({
     );
   });
 
+  it('does not treat nested callable definitions or configuration effects as handler execution', async () => {
+    const { result } = await scan(
+      payments(`export const exactHandler = tool({
+  description: 'Exact handler boundary.',
+  prepare: fetch('https://config.example.com/load', { method: 'POST' }),
+  run: async () => fetch('https://unused.example.com/run', { method: 'POST' }),
+  execute: async () => ({
+    run() { return fetch('https://nested.example.com/run', { method: 'POST' }); },
+  }),
+});
+`),
+    );
+    const fromTool = result.graph.edges.filter((edge) => edge.from === 'tool:exacthandler');
+    assert.equal(
+      fromTool.some((edge) =>
+        ['external_service:config.example.com', 'external_service:unused.example.com'].includes(
+          edge.to,
+        ),
+      ),
+      false,
+    );
+    assert.equal(
+      fromTool.some((edge) => edge.to === 'external_service:nested.example.com'),
+      false,
+      'declaring a nested run method does not execute it',
+    );
+  });
+
+  it('settles same-named handler bindings in their exact lexical scope', async () => {
+    const { result } = await scan(
+      payments(`export function firstTool() {
+  const handler = async () => fetch('https://first.example.com/run');
+  return tool({ description: 'first', execute: handler });
+}
+export function secondTool() {
+  const handler = async () => fetch('https://second.example.com/run');
+  return tool({ description: 'second', execute: handler });
+}
+`),
+    );
+    const implementationEdges = result.graph.edges.filter((edge) =>
+      edge.discoveredBy.includes('adapter:implementation-reach'),
+    );
+    assert.ok(
+      implementationEdges.some(
+        (edge) =>
+          edge.from === 'tool:firsttool' && edge.to === 'external_service:first.example.com',
+      ),
+      `first handler did not settle among ${implementationEdges.map((edge) => `${edge.from}->${edge.to}`).join(', ')}`,
+    );
+    assert.ok(
+      implementationEdges.some(
+        (edge) =>
+          edge.from === 'tool:secondtool' && edge.to === 'external_service:second.example.com',
+      ),
+      `second handler did not settle among ${implementationEdges.map((edge) => `${edge.from}->${edge.to}`).join(', ')}`,
+    );
+  });
+
   /*
    * The address is what the request says about itself when no scope names it. The client's own name is
    * not evidence about the operation, and reading it as though it were is what left this `unknown`.
@@ -5142,5 +6006,320 @@ export const tell = async (topic: string): Promise<unknown> =>
       input?.details?.for === 'prompt' && input.details.interpolatesUntrustedInput,
       true,
     );
+  });
+
+  it('keeps an exact agent input through an anonymous tracing callback', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'traced-storyteller',
+        dependencies: { '@openai/agents': '^0.1.0' },
+      });
+      workspace.write(
+        'src/story.ts',
+        `import { Agent, run, withTrace } from '@openai/agents';
+
+async function main(): Promise<void> {
+  const agent = new Agent({
+    name: 'Storyteller',
+    instructions: 'Tell a concise story grounded in the topic.',
+  });
+  await withTrace('story', async () => {
+    await run(agent, 'Tell me a story about a lighthouse.');
+  });
+}
+
+void main();
+`,
+      );
+    });
+    const input = result.graph.components.find(
+      (component) => component.kind === 'prompt' && component.metadata['channel'] === 'input',
+    );
+    assert.ok(input !== undefined);
+    assert.ok(
+      result.graph.edges.some(
+        (edge) =>
+          edge.kind === 'uses_prompt' && edge.from === 'agent:main.agent' && edge.to === input.id,
+      ),
+      result.graph.edges
+        .filter((edge) => edge.kind === 'uses_prompt')
+        .map((edge) => edge.from)
+        .join(', '),
+    );
+  });
+
+  it('does not lend an outer agent through an anonymous callback shadow', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'shadowed-trace',
+        dependencies: { '@openai/agents': '^0.1.0' },
+      });
+      workspace.write(
+        'src/story.ts',
+        `import { Agent, run } from '@openai/agents';
+
+async function main(items: unknown[]): Promise<void> {
+  const agent = new Agent({
+    name: 'Outer storyteller',
+    instructions: 'Tell a concise story grounded in the topic.',
+  });
+  await Promise.all(items.map(async (agent) => run(agent, 'Parameter shadow input.')));
+  await Promise.all(items.map(async () => {
+    const agent = items[0];
+    return run(agent, 'Local shadow input.');
+  }));
+}
+
+void main([]);
+`,
+      );
+    });
+    assert.equal(
+      result.graph.components.some(
+        (component) => component.kind === 'prompt' && component.metadata['channel'] === 'input',
+      ),
+      false,
+    );
+  });
+
+  it('settles callback-local agents only inside their exact lexical scope', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'callback-local-agent',
+        dependencies: { '@openai/agents': '^0.1.0' },
+      });
+      workspace.write(
+        'src/story.ts',
+        `import { Agent, run } from '@openai/agents';
+
+declare const items: unknown[];
+
+items.map(async () => {
+  const agent = new Agent({ name: 'Callback storyteller' });
+  return items.map(async () => run(agent, 'A callback-local prompt that is reachable here.'));
+});
+
+items.map(async () => run(agent, 'A sibling prompt that must not borrow the local agent.'));
+`,
+      );
+    });
+    const inputEdges = result.graph.edges.filter((edge) => edge.kind === 'uses_prompt');
+    assert.equal(inputEdges.length, 1);
+    assert.equal(inputEdges[0]?.from, 'agent:callback-storyteller');
+  });
+
+  it('stops nested callback lookup at the nearest parameter or write shadow', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'nested-callback-shadow',
+        dependencies: { '@openai/agents': '^0.1.0' },
+      });
+      workspace.write(
+        'src/story.ts',
+        `import { Agent, run } from '@openai/agents';
+
+async function main(items: unknown[]): Promise<void> {
+  let agent = new Agent({ name: 'Outer storyteller' });
+  await Promise.all(items.map(async (agent) =>
+    items.map(async () => run(agent, 'A nested parameter shadow must stay unresolved.'))));
+  await Promise.all(items.map(async () => {
+    agent = items[0];
+    return run(agent, 'A callback write must block the outer agent binding.');
+  }));
+}
+
+void main([]);
+`,
+      );
+    });
+    assert.equal(
+      result.graph.components.some(
+        (component) => component.kind === 'prompt' && component.metadata['channel'] === 'input',
+      ),
+      false,
+    );
+  });
+
+  it('keeps callback-local prompt values local and respects a prompt parameter shadow', async () => {
+    const { result } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'callback-local-prompt',
+        dependencies: { '@openai/agents': '^0.1.0' },
+      });
+      workspace.write(
+        'src/story.ts',
+        `import { Agent, run } from '@openai/agents';
+
+const agent = new Agent({ name: 'Storyteller' });
+const outerPrompt = 'This outer prompt must not replace a callback parameter.';
+declare const items: unknown[];
+
+items.map(async () => {
+  const localPrompt = 'This callback-local prompt is reachable at the call site.';
+  return run(agent, localPrompt);
+});
+items.map(async (outerPrompt) => run(agent, outerPrompt));
+run(agent, localPrompt);
+`,
+      );
+    });
+    const inputEdges = result.graph.edges.filter((edge) => edge.kind === 'uses_prompt');
+    assert.equal(inputEdges.length, 1);
+    assert.equal(inputEdges[0]?.from, 'agent:storyteller');
+  });
+
+  it('does not let callback-local OpenAI resources overwrite module bindings', async () => {
+    const { edges } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'callback-local-tools',
+        dependencies: { '@openai/agents': '^0.1.0' },
+      });
+      workspace.write(
+        'src/story.ts',
+        `import { Agent, MCPServerStdio, tool } from '@openai/agents';
+
+const shared = tool({ name: 'Global tool', description: 'The module tool.' });
+const server = new MCPServerStdio({ name: 'Global server' });
+declare const items: unknown[];
+
+items.map(() => {
+  const shared = tool({ name: 'Local tool', description: 'The callback-local tool.' });
+  const server = new MCPServerStdio({ name: 'Local server' });
+  return { shared, server };
+});
+
+export const agent = new Agent({ name: 'Outer agent', tools: [shared], mcpServers: [server] });
+`,
+      );
+    });
+    assert.ok(edges.includes('calls_tool:agent:outer-agent->tool:global-tool'), edges.join(', '));
+    assert.equal(edges.includes('calls_tool:agent:outer-agent->tool:local-tool'), false);
+    assert.ok(edges.includes('provides_tool:mcp_server:global-server->agent:outer-agent'));
+    assert.equal(edges.includes('provides_tool:mcp_server:local-server->agent:outer-agent'), false);
+  });
+
+  it('refuses unresolved OpenAI resources that have no distinct runtime name', async () => {
+    const { result, edges } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'unnamed-callback-resources',
+        dependencies: { '@openai/agents': '^0.1.0' },
+      });
+      workspace.write(
+        'src/story.ts',
+        `import { Agent, tool } from '@openai/agents';
+
+const shared = tool({ description: 'The module tool.' });
+declare const items: unknown[];
+
+items.map(() => {
+  const shared = tool({ description: 'A different callback-local tool.' });
+  return shared;
+});
+
+export const agent = new Agent({ name: 'Outer agent', tools: [shared] });
+`,
+      );
+    });
+    const shared = result.graph.components.filter((component) => component.id === 'tool:shared');
+    assert.equal(shared.length, 1);
+    assert.equal(shared[0]?.evidence.length, 1);
+    assert.ok(edges.includes('calls_tool:agent:outer-agent->tool:shared'));
+    assert.ok(
+      result.graph.coverage.topology?.unresolved.some((entry) =>
+        entry.reason.includes('declares no distinct runtime name'),
+      ),
+    );
+  });
+
+  it('links explicitly named OpenAI resources inside the same anonymous callback', async () => {
+    const { edges } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'same-callback-resources',
+        dependencies: { '@openai/agents': '^0.1.0' },
+      });
+      workspace.write(
+        'src/story.ts',
+        `import { Agent, tool, withTrace } from '@openai/agents';
+
+void withTrace('billing', async () => {
+  const checker = tool({ name: 'Billing checker', description: 'Read billing status.' });
+  const agent = new Agent({ name: 'Billing agent', tools: [checker] });
+  return agent;
+});
+`,
+      );
+    });
+    assert.ok(
+      edges.includes('calls_tool:agent:billing-agent->tool:billing-checker'),
+      edges.join(', '),
+    );
+  });
+
+  it('refuses a sibling callback resource when a nearer non-resource binding shadows it', async () => {
+    const { result, edges } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'sibling-callback-resources',
+        dependencies: { '@openai/agents': '^0.1.0' },
+      });
+      workspace.write(
+        'src/story.ts',
+        `import { Agent, tool } from '@openai/agents';
+
+declare const items: unknown[];
+items.map(() => {
+  const shared = tool({ name: 'Sibling tool', description: 'Not in the agent callback.' });
+  return shared;
+});
+items.map(() => {
+  const shared = { execute: () => 'custom' };
+  return new Agent({ name: 'Scoped agent', tools: [shared] });
+});
+`,
+      );
+    });
+    assert.equal(edges.includes('calls_tool:agent:scoped-agent->tool:sibling-tool'), false);
+    assert.ok(
+      result.graph.coverage.topology?.unresolved.some((entry) =>
+        entry.reason.includes("not settled in the agent's exact lexical scope"),
+      ),
+    );
+  });
+
+  it('does not borrow a scoped resource across an overwrite or before its definition', async () => {
+    const { result, edges } = await scan((workspace) => {
+      writeNodeProject(workspace, {
+        name: 'scoped-resource-settlement',
+        dependencies: { '@openai/agents': '^0.1.0' },
+      });
+      workspace.write(
+        'src/story.ts',
+        `import { Agent, tool, withTrace } from '@openai/agents';
+
+void withTrace('billing', async () => {
+  let overwritten = tool({ name: 'Overwritten tool', description: 'No longer bound at use.' });
+  overwritten = { execute: () => 'custom' };
+  const overwrittenAgent = new Agent({ name: 'Overwritten agent', tools: [overwritten] });
+  const earlyAgent = new Agent({ name: 'Early agent', tools: [late] });
+  const late = tool({ name: 'Late tool', description: 'Declared after the agent use.' });
+  return { overwrittenAgent, earlyAgent, late };
+});
+
+let moduleOverwritten = tool({ name: 'Module overwritten tool', description: 'Rebound.' });
+moduleOverwritten = { execute: () => 'custom' };
+export const moduleAgent = new Agent({ name: 'Module agent', tools: [moduleOverwritten] });
+export const moduleEarlyAgent = new Agent({ name: 'Module early agent', tools: [moduleLate] });
+const moduleLate = tool({ name: 'Module late tool', description: 'Declared after its use.' });
+`,
+      );
+    });
+    for (const edge of [
+      'calls_tool:agent:overwritten-agent->tool:overwritten-tool',
+      'calls_tool:agent:early-agent->tool:late-tool',
+      'calls_tool:agent:module-agent->tool:module-overwritten-tool',
+      'calls_tool:agent:module-early-agent->tool:module-late-tool',
+    ]) {
+      assert.equal(edges.includes(edge), false, edge);
+    }
+    assert.ok((result.graph.coverage.topology?.unresolvedCount ?? 0) >= 4);
   });
 });

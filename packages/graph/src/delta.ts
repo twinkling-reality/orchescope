@@ -21,8 +21,8 @@ import type {
   SystemGraph,
 } from '@orchescope/schema';
 import { isObservableKind } from './analysis.ts';
-import type { ComponentMatch } from './reconcile.ts';
-import type { ReconcileBehavior } from './reconcile.ts';
+import { effectEvidenceFor } from './merge.ts';
+import type { ComponentMatch, ReconcileBehavior } from './reconcile.ts';
 
 /**
  * The declared versus exercised delta.
@@ -159,15 +159,19 @@ const annotationContradictions = (
       });
     }
 
+    const exactWriteEvidence = effectEvidenceFor(component.metadata, 'non_idempotent_write').filter(
+      (id) => component.evidence.includes(id as EvidenceId),
+    ) as EvidenceId[];
     if (
       component.details.readOnlyHint === true &&
-      component.sideEffect === 'non_idempotent_write'
+      (component.sideEffect === 'non_idempotent_write' || exactWriteEvidence.length > 0)
     ) {
       const record = derivedEvidence({
         producer: PRODUCER,
         rule: 'contradiction:destructive_hint',
         basis: 'discovered',
-        inputs: component.evidence as EvidenceId[],
+        inputs:
+          exactWriteEvidence.length > 0 ? exactWriteEvidence : (component.evidence as EvidenceId[]),
         note: `${component.id} declares readOnlyHint true but its discovered effect class is non_idempotent_write`,
       });
       results.push({

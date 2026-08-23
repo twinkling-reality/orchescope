@@ -11,6 +11,7 @@ import {
   controlFlowCycles,
   declaredCallersOf,
   degrees,
+  effectEvidenceFor,
   type IndexedGraph,
   isControlFlowKind,
   operationsPerformedBy,
@@ -628,6 +629,38 @@ const modelReachable = (graph: IndexedGraph): ReadonlySet<string> =>
       .map((component) => component.id),
   );
 
+const APPROVAL_EFFECTS: readonly SideEffectClass[] = [
+  'financial',
+  'destructive',
+  'non_idempotent_write',
+];
+
+type ApprovalEffect = {
+  readonly effect: SideEffectClass;
+  readonly evidence: readonly EvidenceId[];
+};
+
+/** The strongest exact consequential constituent retained beneath an unknown aggregate effect. */
+const approvalEffectOf = (component: Component): ApprovalEffect | undefined => {
+  if (APPROVAL_EFFECTS.includes(component.sideEffect ?? 'unknown')) {
+    const effect = component.sideEffect as SideEffectClass;
+    const specific = effectEvidenceFor(component.metadata, effect).filter((id) =>
+      component.evidence.includes(id as EvidenceId),
+    ) as EvidenceId[];
+    return { effect, evidence: specific.length > 0 ? specific : component.evidence };
+  }
+  const retained = component.metadata['effectClasses'];
+  if (!Array.isArray(retained)) return undefined;
+  for (const effect of APPROVAL_EFFECTS) {
+    if (!retained.includes(effect)) continue;
+    const evidence = effectEvidenceFor(component.metadata, effect).filter((id) =>
+      component.evidence.includes(id as EvidenceId),
+    ) as EvidenceId[];
+    if (evidence.length > 0) return { effect, evidence };
+  }
+  return undefined;
+};
+
 /**
  * The decision that has to happen before a consequential operation runs.
  *
@@ -686,7 +719,9 @@ const approvedOperationDraft = (
   context: RuleContext,
   component: Component,
   facts: ApprovalFacts,
+  effectClaim: ApprovalEffect,
 ): FindingDraft => {
+  const { effect, evidence: effectEvidence } = effectClaim;
   const declaredCallers = declaredCallersOf(context.graph, component.id);
   const approvedCallers = declaredCallers.filter(
     (caller) => caller.details?.for === 'tool' && caller.details.approvalRequired === true,
@@ -700,7 +735,7 @@ const approvedOperationDraft = (
       })
     : undefined;
   const inputs = [
-    ...component.evidence,
+    ...effectEvidence,
     ...facts.guardEdges.flatMap((edge) => edge.evidence),
     ...facts.policyEdges.flatMap((edge) => edge.evidence),
     ...(facts.behindApprovedCallers ? approvedCallers.flatMap((caller) => caller.evidence) : []),
@@ -732,7 +767,7 @@ const approvedOperationDraft = (
     confidence: CONFIDENCE_BANDS.strongStructural,
     basis: 'discovered',
     title: `${component.displayName} is behind an approval boundary`,
-    explanation: `${component.displayName} has effect class ${component.sideEffect} and is guarded: ${declaration}.`,
+    explanation: `${component.displayName} includes a discovered ${effect} effect and is guarded: ${declaration}.`,
     impact:
       'The reviewed declaration routes this consequential operation through an explicit approval decision.',
     components: [component.id],
@@ -740,7 +775,7 @@ const approvedOperationDraft = (
     claimEvidence: {
       mechanism: [record.id],
       subject: [
-        ...(component.evidence.slice(0, 3) as EvidenceId[]),
+        ...(effectEvidence.slice(0, 3) as EvidenceId[]),
         ...(callerPopulation === undefined ? [] : [callerPopulation.id]),
       ],
       conclusion: [record.id, ...(callerPopulation === undefined ? [] : [callerPopulation.id])],
@@ -754,7 +789,9 @@ const approvedOperationDraft = (
 const unapprovedOperationDraft = (
   component: Component,
   incoming: readonly Edge[],
+  effectClaim: ApprovalEffect,
 ): FindingDraft => {
+  const { effect, evidence: effectEvidence } = effectClaim;
   const record = absenceEvidence({
     producer: PRODUCER,
     searched: `an approval gate or approval requirement on ${component.id}`,
@@ -770,18 +807,18 @@ const unapprovedOperationDraft = (
       key: 'unapproved',
       groupedTitle: '{count} consequential operations have no approval boundary',
     },
-    severity: component.sideEffect === 'financial' ? 'high' : 'medium',
+    severity: effect === 'financial' ? 'high' : 'medium',
     confidence: CONFIDENCE_BANDS.structural,
     basis: 'discovered',
-    title: `${component.displayName} performs a ${component.sideEffect} effect with no approval boundary`,
-    explanation: `${component.displayName} was classified ${component.sideEffect} and no approval gate, tool approval requirement or calling policy requiring approval was found. A model deciding on its own to invoke this operation is the whole risk.`,
+    title: `${component.displayName} performs a ${effect} effect with no approval boundary`,
+    explanation: `${component.displayName} includes a discovered ${effect} effect, and no approval gate, tool approval requirement or calling policy requiring approval was found. A model deciding on its own to invoke this operation is the whole risk.`,
     impact:
       'An agent can perform a consequential external action without a human or a policy deciding that it should.',
     components: [component.id],
     newEvidence: [record],
     claimEvidence: {
       mechanism: [record.id],
-      subject: component.evidence.slice(0, 3) as EvidenceId[],
+      subject: effectEvidence.slice(0, 3) as EvidenceId[],
       conclusion: [record.id],
     },
     taxonomy: ['owasp-llm:LLM06', 'owasp-asi:ASI04'],
@@ -800,12 +837,10 @@ export const approvalBoundaryRule: Rule = {
   category: 'security',
   summary: 'Whether an operation with an external effect is guarded by an approval boundary.',
   evaluate: (context) => {
-    const consequential = auditedComponents(context.graph).filter(
-      (component) =>
-        component.sideEffect === 'financial' ||
-        component.sideEffect === 'destructive' ||
-        component.sideEffect === 'non_idempotent_write',
-    );
+    const consequential = auditedComponents(context.graph).flatMap((component) => {
+      const effectClaim = approvalEffectOf(component);
+      return effectClaim === undefined ? [] : [{ component, effectClaim }];
+    });
     if (consequential.length === 0)
       return notApplicable('no operation with a risky effect class was discovered');
 
@@ -813,7 +848,7 @@ export const approvalBoundaryRule: Rule = {
     const topology = topologyRequirements(context.graph);
     const callerPopulationComplete =
       topology.status === 'complete' && topology.reachabilityComplete;
-    const risky = consequential.filter((component) => reachable.has(component.id));
+    const risky = consequential.filter(({ component }) => reachable.has(component.id));
     const unreached = consequential.length - risky.length;
     /*
      * Named rather than dropped. An operation this declines to report is one it looked at and decided was
@@ -833,7 +868,7 @@ export const approvalBoundaryRule: Rule = {
 
     const drafts: FindingDraft[] = [];
     let incompleteCallerPopulations = 0;
-    for (const component of risky) {
+    for (const { component, effectClaim } of risky) {
       const facts = approvalFactsFor(context, component, callerPopulationComplete);
       if (
         facts.guarded ||
@@ -841,7 +876,7 @@ export const approvalBoundaryRule: Rule = {
         facts.guardedByPolicy ||
         facts.behindApprovedCallers
       ) {
-        drafts.push(approvedOperationDraft(context, component, facts));
+        drafts.push(approvedOperationDraft(context, component, facts, effectClaim));
         continue;
       }
 
@@ -849,7 +884,7 @@ export const approvalBoundaryRule: Rule = {
         incompleteCallerPopulations += 1;
         continue;
       }
-      drafts.push(unapprovedOperationDraft(component, facts.incoming));
+      drafts.push(unapprovedOperationDraft(component, facts.incoming, effectClaim));
     }
     if (drafts.length === 0 && incompleteCallerPopulations > 0) {
       return insufficient(

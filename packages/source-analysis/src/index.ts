@@ -43,6 +43,7 @@ export {
   findEntry,
   type ImportFact,
   identifierItems,
+  type LexicalScopeFact,
   type LiteralDestinationFact,
   type ModuleFacts,
   numberValue,

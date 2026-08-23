@@ -20,7 +20,8 @@ other repository already named by this repository are regression inputs, never h
 The [blocked a38ed43f evaluation](../research/a38ed43f-blocked-blind-evaluation.md), the
 [blocked 604fce75 evaluation](../research/604fce75-blocked-blind-evaluation.md), the
 [blocked 48828a1d evaluation](../research/48828a1d-blocked-blind-evaluation.md), the
-[blocked df99c97c evaluation](../research/df99c97c-blocked-blind-evaluation.md), and the
+[blocked df99c97c evaluation](../research/df99c97c-blocked-blind-evaluation.md), the
+[blocked d00a06b5 evaluation](../research/d00a06b5-blocked-blind-evaluation.md), and the
 [passed 95c7756c evaluation](../research/95c7756c-passed-blind-evaluation.md) are durable records of completed
 applications of this protocol. Every repository selected in a completed evaluation, and its source lineage, is
 part of a used population. Those repositories and their source lineages are permanently ineligible as blind holdouts
@@ -118,6 +119,8 @@ inside `pnpm verify`; the named command makes the release boundary reviewable wi
 | A function-scoped provider import cannot authorize a sibling scope or invent a dynamic compatible provider. | `packages/discovery/test/nested-module-binding.test.ts`, `discovers function-scoped namespace clients without inventing a dynamic compatible provider`; `does not grant one function-scoped namespace import to another lexical scope` |
 | A branch-local provider client cannot authorize an ambiguous post-join call. | `packages/discovery/test/nested-module-binding.test.ts`, `refuses a provider identity after competing branch-local clients join`; `keeps calls inside their own client branch while refusing its dynamic provider` |
 | An unsettled model-client binding preserves an enclosing agent boundary only when every reachable receiver binding is a recognized model client. | `packages/discovery/test/nested-module-binding.test.ts`, `explains an unsettled call when only one branch has a recognized client`; `refuses alternate control-flow clients while keeping straight-line settlement`; `refuses a JavaScript client whose later assignment is not source-settled` |
+| An external effect belongs to the smallest authoritative callable, never a borrowed module or surrounding scope. | `packages/discovery/test/adapters.test.ts`, `attributes every request to the smallest named object callable`; `keeps a direct top-level request at module scope`; `refuses to invent module ownership for a request inside an unnamed callback`; `tests/e2e/object-method-effects.test.ts`, `keeps the caller, service, finding, citation and Mermaid label on the method` |
+| An Agent construction uses only its direct stable source binding, and its relations stay inside that lexical scope. | `packages/discovery/test/adapters.test.ts`, `resolves reused variable names only inside their named function`; `distinguishes same-name constructions and preserves a proven same-variable self-handoff`; `does not borrow a containing result variable for a nested Agent construction`; `binds only the outer construction when the same constructor is nested`; `refuses a Python Agent clone when the fact retains only the chained call` |
 
 The deterministic fixtures falsify one assumption at a time. The independently selected positive and negative prevent
 those author-controlled fixtures from becoming the evidence that a candidate generalizes.

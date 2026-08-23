@@ -7,8 +7,8 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 10,
-      "edgesFound": 5,
+      "componentsFound": 8,
+      "edgesFound": 4,
       "filesInspected": 3,
       "status": "completed"
     },
@@ -89,8 +89,8 @@
   "components": {
     "byKind": {
       "agent": 4,
-      "entrypoint": 5,
-      "external_service": 5,
+      "entrypoint": 4,
+      "external_service": 4,
       "mcp_server": 1,
       "model": 2,
       "prompt": 3,
@@ -98,7 +98,7 @@
       "tool": 1
     },
     "declaredInTest": 0,
-    "total": 22
+    "total": 20
   },
   "discardedRelations": [],
   "files": {
@@ -132,12 +132,12 @@
   "name": "anthropic-quickstarts",
   "relations": {
     "byKind": {
-      "calls_service": 5,
+      "calls_service": 4,
       "invokes_model": 4,
       "provides_tool": 1,
       "served_by_provider": 2,
       "uses_prompt": 3
     },
-    "total": 15
+    "total": 14
   }
 }

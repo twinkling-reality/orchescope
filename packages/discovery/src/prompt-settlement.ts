@@ -1,5 +1,5 @@
 import type { SourceLocation } from '@orchescope/schema';
-import type { ArgumentFact, ModuleFacts } from '@orchescope/source-analysis';
+import type { ArgumentFact, LexicalScopeFact, ModuleFacts } from '@orchescope/source-analysis';
 
 import type { DiscoveryContext } from './adapter.ts';
 import { lexicalPromptOwner, resolvePromptDefinition } from './prompt-binding.ts';
@@ -37,6 +37,8 @@ const settleTemplate = (input: {
   readonly value: Extract<ArgumentFact, { readonly kind: 'template' }>;
   readonly before: SourceLocation;
   readonly enclosing: string | undefined;
+  readonly lexicalScopes: readonly LexicalScopeFact[];
+  readonly lexicalShadows: readonly string[];
   readonly locations: readonly SourceLocation[];
   readonly depth: number;
   readonly seen: ReadonlySet<string>;
@@ -75,6 +77,8 @@ const settleTemplate = (input: {
       name,
       input.enclosing,
       input.before,
+      input.lexicalScopes,
+      input.lexicalShadows,
     );
     if (target?.definition.value === undefined) continue;
     const nested = settle(
@@ -86,6 +90,12 @@ const settleTemplate = (input: {
       [...input.locations, target.definition.location],
       input.depth + 1,
       input.seen,
+      target.module.file === input.module.file && target.definition.enclosingLocation !== undefined
+        ? input.lexicalScopes
+        : [],
+      target.module.file === input.module.file && target.definition.enclosingLocation !== undefined
+        ? input.lexicalShadows
+        : [],
     );
     if (nested.leaves.length > 0) resolvedNames += 1;
     resolved.push(
@@ -104,6 +114,85 @@ const settleTemplate = (input: {
     : { leaves: [leafAt(input.value, input.module, input.before, input.locations)] };
 };
 
+type RecursiveSettlement = {
+  readonly context: DiscoveryContext;
+  readonly module: ModuleFacts;
+  readonly before: SourceLocation;
+  readonly enclosing: string | undefined;
+  readonly locations: readonly SourceLocation[];
+  readonly depth: number;
+  readonly seen: ReadonlySet<string>;
+  readonly lexicalScopes: readonly LexicalScopeFact[];
+  readonly lexicalShadows: readonly string[];
+};
+
+const settleValues = (
+  input: RecursiveSettlement,
+  values: readonly {
+    readonly value: ArgumentFact;
+    readonly before: SourceLocation;
+    readonly locations: readonly SourceLocation[];
+  }[],
+): PromptSettlement => {
+  const settlements = values.map((entry) =>
+    settle(
+      input.context,
+      input.module,
+      entry.value,
+      entry.before,
+      input.enclosing,
+      entry.locations,
+      input.depth + 1,
+      input.seen,
+      input.lexicalScopes,
+      input.lexicalShadows,
+    ),
+  );
+  const reason = settlements.find((entry) => entry.reason !== undefined)?.reason;
+  return {
+    leaves: settlements.flatMap((entry) => entry.leaves),
+    ...(reason === undefined ? {} : { reason }),
+  };
+};
+
+const settleObject = (
+  input: RecursiveSettlement,
+  value: Extract<ArgumentFact, { readonly kind: 'object' }>,
+): PromptSettlement => {
+  if (value.complete !== true) {
+    return { leaves: [], reason: 'prompt object contains an unresolved spread or computed key' };
+  }
+  const promptEntries = value.entries.filter((entry) =>
+    [
+      'content',
+      'text',
+      'parts',
+      'messages',
+      'input',
+      'prompt',
+      'system',
+      'instructions',
+      'json',
+      'body',
+      'data',
+    ].includes(entry.key),
+  );
+  if (new Set(promptEntries.map((entry) => entry.key)).size !== promptEntries.length) {
+    return { leaves: [], reason: 'prompt object contains an ambiguous repeated text property' };
+  }
+  if (promptEntries.length === 0) {
+    return { leaves: [], reason: 'prompt object has no supported text-bearing property' };
+  }
+  return settleValues(
+    input,
+    promptEntries.map((entry) => ({
+      value: entry.value,
+      before: entry.location,
+      locations: [...input.locations, entry.location],
+    })),
+  );
+};
+
 const settle = (
   context: DiscoveryContext,
   module: ModuleFacts,
@@ -113,16 +202,37 @@ const settle = (
   locations: readonly SourceLocation[],
   depth = 0,
   seen: ReadonlySet<string> = new Set(),
+  lexicalScopes: readonly LexicalScopeFact[] = [],
+  lexicalShadows: readonly string[] = [],
 ): PromptSettlement => {
   if (depth >= MAX_VALUE_HOPS)
     return { leaves: [], reason: 'prompt value exceeds four source bindings' };
   if (value.kind === 'string') return { leaves: [leafAt(value, module, before, locations)] };
   if (value.kind === 'template')
-    return settleTemplate({ context, module, value, before, enclosing, locations, depth, seen });
+    return settleTemplate({
+      context,
+      module,
+      value,
+      before,
+      enclosing,
+      lexicalScopes,
+      lexicalShadows,
+      locations,
+      depth,
+      seen,
+    });
   if (value.kind === 'identifier') {
     const key = `${module.file}:${enclosing ?? '<module>'}:${value.name}`;
     if (seen.has(key)) return { leaves: [], reason: 'prompt binding contains a cycle' };
-    const target = resolvePromptDefinition(context, module, value.name, enclosing, before);
+    const target = resolvePromptDefinition(
+      context,
+      module,
+      value.name,
+      enclosing,
+      before,
+      lexicalScopes,
+      lexicalShadows,
+    );
     if (target?.definition.value === undefined) {
       return {
         leaves: [],
@@ -140,6 +250,12 @@ const settle = (
       [...locations, target.definition.location],
       depth + 1,
       nextSeen,
+      target.module.file === module.file && target.definition.enclosingLocation !== undefined
+        ? lexicalScopes
+        : [],
+      target.module.file === module.file && target.definition.enclosingLocation !== undefined
+        ? lexicalShadows
+        : [],
     );
     return {
       ...nested,
@@ -155,57 +271,16 @@ const settle = (
   if (value.kind === 'array') {
     if (value.complete !== true)
       return { leaves: [], reason: 'prompt array contains an unresolved spread' };
-    const settlements = value.items.map((item) =>
-      settle(context, module, item, before, enclosing, locations, depth + 1, seen),
+    return settleValues(
+      { context, module, before, enclosing, locations, depth, seen, lexicalScopes, lexicalShadows },
+      value.items.map((item) => ({ value: item, before, locations })),
     );
-    const reason = settlements.find((entry) => entry.reason !== undefined)?.reason;
-    return {
-      leaves: settlements.flatMap((entry) => entry.leaves),
-      ...(reason === undefined ? {} : { reason }),
-    };
   }
   if (value.kind === 'object') {
-    if (value.complete !== true) {
-      return { leaves: [], reason: 'prompt object contains an unresolved spread or computed key' };
-    }
-    const promptEntries = value.entries.filter((entry) =>
-      [
-        'content',
-        'text',
-        'parts',
-        'messages',
-        'input',
-        'prompt',
-        'system',
-        'instructions',
-        'json',
-        'body',
-        'data',
-      ].includes(entry.key),
+    return settleObject(
+      { context, module, before, enclosing, locations, depth, seen, lexicalScopes, lexicalShadows },
+      value,
     );
-    if (new Set(promptEntries.map((entry) => entry.key)).size !== promptEntries.length) {
-      return { leaves: [], reason: 'prompt object contains an ambiguous repeated text property' };
-    }
-    if (promptEntries.length === 0) {
-      return { leaves: [], reason: 'prompt object has no supported text-bearing property' };
-    }
-    const settlements = promptEntries.map((entry) =>
-      settle(
-        context,
-        module,
-        entry.value,
-        entry.location,
-        enclosing,
-        [...locations, entry.location],
-        depth + 1,
-        seen,
-      ),
-    );
-    const reason = settlements.find((entry) => entry.reason !== undefined)?.reason;
-    return {
-      leaves: settlements.flatMap((entry) => entry.leaves),
-      ...(reason === undefined ? {} : { reason }),
-    };
   }
   if (
     value.kind === 'call' &&
@@ -213,7 +288,18 @@ const settle = (
     value.args.length === 1 &&
     value.args[0] !== undefined
   ) {
-    return settle(context, module, value.args[0], before, enclosing, locations, depth + 1, seen);
+    return settle(
+      context,
+      module,
+      value.args[0],
+      before,
+      enclosing,
+      locations,
+      depth + 1,
+      seen,
+      lexicalScopes,
+      lexicalShadows,
+    );
   }
   return { leaves: [], reason: 'prompt value is computed rather than source-settled text' };
 };
@@ -225,4 +311,18 @@ export const settlePromptInput = (
   before: SourceLocation,
   enclosing: string | undefined,
   locations: readonly SourceLocation[],
-): PromptSettlement => settle(context, module, value, before, enclosing, locations);
+  lexicalScopes: readonly LexicalScopeFact[] = [],
+  lexicalShadows: readonly string[] = [],
+): PromptSettlement =>
+  settle(
+    context,
+    module,
+    value,
+    before,
+    enclosing,
+    locations,
+    0,
+    new Set(),
+    lexicalScopes,
+    lexicalShadows,
+  );

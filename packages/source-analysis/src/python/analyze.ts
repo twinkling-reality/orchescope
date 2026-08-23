@@ -440,7 +440,10 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
     case 'dictionary':
       return dictionaryArgumentFact(node, context);
     case 'lambda':
-      return { kind: 'function' };
+      return {
+        kind: 'function',
+        location: location(context.file, node),
+      };
     case 'await': {
       const inner = namedChildren(node)[0];
       return inner === undefined

@@ -213,17 +213,22 @@ const usesBinding = (
   name: string,
 ): readonly {
   readonly location: ModuleFacts['calls'][number]['location'];
-  readonly enclosing: string;
+  readonly enclosing: string | undefined;
+  readonly enclosingUnresolved: boolean;
 }[] =>
   module.calls
     .filter(
       (call) => call.calleePath.includes(name) || call.args.some((a) => namesIn(a).includes(name)),
     )
-    .map((call) => ({ location: call.location, enclosing: call.enclosing ?? 'module-scope' }));
+    .map((call) => ({
+      location: call.location,
+      enclosing: call.enclosing,
+      enclosingUnresolved: call.enclosingUnresolved === true,
+    }));
 
 export const workersBindingsAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '1',
+  version: '2',
   // A deployment manifest is a convention of the platform, not a package the repository depends on.
   packages: [],
   appliesTo: (context) => context.configs.some(isWorkersManifest),
@@ -231,6 +236,7 @@ export const workersBindingsAdapter: AgentSystemAdapter = {
     const files = new Set<string>();
     let components = 0;
     let edges = 0;
+    let unresolvedCallers = 0;
 
     const bindings = context.configs.filter(isWorkersManifest).flatMap(bindingsOf);
     for (const binding of bindings) {
@@ -261,11 +267,16 @@ export const workersBindingsAdapter: AgentSystemAdapter = {
       if (isTestFile(module.file)) continue;
       for (const binding of bindings) {
         for (const use of usesBinding(module, binding.binding)) {
+          if (use.enclosingUnresolved) {
+            files.add(module.file);
+            unresolvedCallers += 1;
+            continue;
+          }
           const caller = ensureCaller({
             module,
             context,
             builder,
-            name: use.enclosing,
+            name: use.enclosing ?? 'module-scope',
             location: use.location,
           });
           if (caller.added) components += 1;
@@ -290,6 +301,15 @@ export const workersBindingsAdapter: AgentSystemAdapter = {
       }
     }
 
-    return { componentsFound: components, edgesFound: edges, filesInspected: [...files] };
+    return {
+      componentsFound: components,
+      edgesFound: edges,
+      filesInspected: [...files],
+      ...(unresolvedCallers === 0
+        ? {}
+        : {
+            note: `${unresolvedCallers} platform binding ${unresolvedCallers === 1 ? 'use sits' : 'uses sit'} inside a callable whose owner this build cannot name, so no caller component or relation was inferred.`,
+          }),
+    };
   },
 };

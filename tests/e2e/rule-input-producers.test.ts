@@ -5,11 +5,11 @@ import { dirname, join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { discover } from '../../packages/discovery/src/discover.ts';
-import { DEFAULT_RULES } from '../../packages/findings/src/index.ts';
 import { createDeadline, fixedClock } from '../../packages/domain/src/index.ts';
+import { DEFAULT_RULES } from '../../packages/findings/src/index.ts';
 import {
-  type AgentOperation as AgentOperationName,
   AgentOperation,
+  type AgentOperation as AgentOperationName,
   ComponentKind,
   EdgeKind,
   EdgePolicy,
@@ -294,6 +294,7 @@ export const deliver = () => pRetry(postDelivery, { retries: 4 });
   'src/client.ts': `import axios from 'axios';
 
 export const send = () => axios.post('https://api.example.com/orders', {});
+export const read = () => axios.get('https://api.example.com/orders');
 `,
   'packages/worker/wrangler.toml': `name = "events-worker"
 main = "src/index.ts"

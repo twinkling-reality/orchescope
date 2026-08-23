@@ -7,8 +7,8 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 18,
-      "edgesFound": 12,
+      "componentsFound": 10,
+      "edgesFound": 5,
       "filesInspected": 4,
       "status": "completed"
     },
@@ -88,11 +88,11 @@
   "agentSystemDetected": false,
   "components": {
     "byKind": {
-      "entrypoint": 6,
-      "external_service": 6
+      "entrypoint": 5,
+      "external_service": 5
     },
     "declaredInTest": 0,
-    "total": 12
+    "total": 10
   },
   "discardedRelations": [],
   "files": {
@@ -124,8 +124,8 @@
   "name": "open-agent-platform",
   "relations": {
     "byKind": {
-      "calls_service": 6
+      "calls_service": 5
     },
-    "total": 6
+    "total": 5
   }
 }

@@ -2,10 +2,15 @@ import { CONFIDENCE_BANDS, identityKey, isTestFile, sha256Hex } from '@orchescop
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type { ComponentIdentity } from '@orchescope/schema';
 
-import type { AdapterFindings, AgentSystemAdapter, TopologyDiscovery } from '../adapter.ts';
+import type {
+  AdapterFindings,
+  AgentSystemAdapter,
+  DiscoveryContext,
+  TopologyDiscovery,
+} from '../adapter.ts';
 import { configIdentity, createDrafts, sourceIdentity } from '../drafts.ts';
 import type { PromptInput } from '../prompt-input.ts';
-import { settlePromptInput, type PromptLeaf } from '../prompt-settlement.ts';
+import { type PromptLeaf, settlePromptInput } from '../prompt-settlement.ts';
 
 const ADAPTER_ID = 'adapter:prompts';
 const drafts = createDrafts(ADAPTER_ID);
@@ -13,12 +18,24 @@ const MAX_REFUSALS = 10;
 
 type SourcePromptInput = Exclude<PromptInput, { readonly kind: 'config' }>;
 
+const settleSourcePrompt = (context: DiscoveryContext, input: SourcePromptInput) =>
+  settlePromptInput(
+    context,
+    input.module,
+    input.value,
+    input.location,
+    input.call.lexicalEnclosing ?? input.call.enclosing,
+    [input.location],
+    input.call.lexicalScopes ?? [],
+    input.call.lexicalShadows ?? [],
+  );
+
 const promptIdentity = (input: SourcePromptInput, leaf: PromptLeaf): ComponentIdentity =>
   sourceIdentity(
     'prompt',
     leaf.file,
     leaf.name === undefined
-      ? `${input.consumer.localName}-${input.channel}-${input.call.enclosing ?? 'call'}-${leaf.location.startLine}-${leaf.location.startColumn ?? 0}`
+      ? `${input.consumer.localName}-${input.channel}-${input.call.lexicalEnclosing ?? input.call.enclosing ?? 'call'}-${leaf.location.startLine}-${leaf.location.startColumn ?? 0}`
       : leaf.enclosing === undefined
         ? leaf.name
         : `${leaf.enclosing}.${leaf.name}`,
@@ -113,14 +130,7 @@ export const promptsAdapter: AgentSystemAdapter = {
 
     for (const input of inputs) {
       files.add(input.module.file);
-      const settlement = settlePromptInput(
-        context,
-        input.module,
-        input.value,
-        input.location,
-        input.call.enclosing,
-        [input.location],
-      );
+      const settlement = settleSourcePrompt(context, input);
       if (settlement.reason !== undefined) {
         unresolvedCount += 1;
         if (unresolved.length < MAX_REFUSALS) {
