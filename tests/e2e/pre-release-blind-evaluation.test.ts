@@ -24,6 +24,8 @@ const blockedObjectMethodRecord = readFileSync(
   join(repositoryRoot, blockedObjectMethodRecordPath),
   'utf8',
 );
+const blockedRoleRecordPath = 'docs/research/724a1abd-blocked-blind-evaluation.md';
+const blockedRoleRecord = readFileSync(join(repositoryRoot, blockedRoleRecordPath), 'utf8');
 const passedRecordPath = 'docs/research/95c7756c-passed-blind-evaluation.md';
 const passedRecord = readFileSync(join(repositoryRoot, passedRecordPath), 'utf8');
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
@@ -463,6 +465,50 @@ describe('the frozen pre-release blind evaluation protocol', () => {
       1,
     );
     assert.equal(entries.filter((entry) => entry.name === 'agentgauge').length, 1);
+  });
+
+  it('blocks a mislabeled negative, retires both lineages and promotes only the positive', () => {
+    for (const fact of [
+      '724a1abda9a1176b28b5633495d67a6b0e2bc194',
+      '38981b8d9a6a6b626d74c7ae9ebb170cb550217528011270165a207cc5cfbcc5',
+      'https://github.com/AnshMNSoni/email-agent',
+      '67a176ef44f2ec9b7edfeec8b7da665beaf0a749',
+      '7266b6393e321d6d431a4dcd1a033980df14bce64ed51f0686d6b2a9217a8b5f',
+      'https://github.com/wzchav/tokentab',
+      '608a27881e865f020a86e0fc45f580224e25e161',
+      '4445ce0aacef628e792df8c6056db618044bc95380f2fd45aee9f3e1c0b554ba',
+      'f4ca15a4fef4ce5f14ebf3367b4290d299e1ca224a42a1fcfbf000c9a6acc4bc',
+    ]) {
+      assert.ok(blockedRoleRecord.includes(fact), `role block record omitted ${fact}`);
+    }
+    assert.match(blockedRoleRecord, /release decision was \*\*BLOCK\*\*/);
+    assert.match(blockedRoleRecord, /construct `Agent\(config=cfg\)`/);
+    assert.match(blockedRoleRecord, /call `agent\.send\(user_in\)`/);
+    assert.match(blockedRoleRecord, /downloads Python from a fixed remote host/);
+    assert.match(blockedRoleRecord, /reported\s+`agentSystemDetected: false`/);
+    assert.match(blockedRoleRecord, /provisional PASS was therefore overturned/);
+    assert.match(blockedRoleRecord, /`GOOGLE_APPLICATION_CREDENTIALS` was present/);
+    assert.match(blockedRoleRecord, /Tokentab contributes no clean negative precision invariant/);
+    assert.match(blockedRoleRecord, /different unseen positive and negative pair/);
+    assert.doesNotMatch(
+      blockedRoleRecord,
+      /\/Users\/|\/tmp\/|\brun_[0-9a-f]{8}\b|\bev_[0-9a-f]{8}\b|traceId|spanId/,
+    );
+    assert.ok(protocol.includes('../research/724a1abd-blocked-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/724a1abd-blocked-blind-evaluation.md'));
+    assert.match(protocol, /repository metadata does not settle the target's role/);
+    assert.match(protocol, /release owner independently verifies that reading/);
+    assert.match(protocol, /role mismatch stops measurement/);
+
+    const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
+    assert.equal(entries.filter((entry) => entry.name === 'email-agent').length, 1);
+    assert.equal(
+      entries.some(
+        (entry) =>
+          entry.name === 'tokentab' || entry.url === 'https://github.com/wzchav/tokentab.git',
+      ),
+      false,
+    );
   });
 
   it('preserves the exact passed candidate, targets, decision and bounded runtime refusal', () => {

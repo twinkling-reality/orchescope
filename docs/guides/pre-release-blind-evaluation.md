@@ -21,7 +21,8 @@ The [blocked a38ed43f evaluation](../research/a38ed43f-blocked-blind-evaluation.
 [blocked 604fce75 evaluation](../research/604fce75-blocked-blind-evaluation.md), the
 [blocked 48828a1d evaluation](../research/48828a1d-blocked-blind-evaluation.md), the
 [blocked df99c97c evaluation](../research/df99c97c-blocked-blind-evaluation.md), the
-[blocked d00a06b5 evaluation](../research/d00a06b5-blocked-blind-evaluation.md), and the
+[blocked d00a06b5 evaluation](../research/d00a06b5-blocked-blind-evaluation.md), the
+[blocked 724a1abd evaluation](../research/724a1abd-blocked-blind-evaluation.md), and the
 [passed 95c7756c evaluation](../research/95c7756c-passed-blind-evaluation.md) are durable records of completed
 applications of this protocol. Every repository selected in a completed evaluation, and its source lineage, is
 part of a used population. Those repositories and their source lineages are permanently ineligible as blind holdouts
@@ -45,6 +46,13 @@ a different unseen positive and negative pair.
 6. Before measurement, record why the positive is an implemented agent application, why the negative is only adjacent,
    the licence path and digest for each, and the search proving neither target occurs in the corpus or development
    record.
+
+Exclusion clearance authorizes acquisition; repository metadata does not settle the target's role. After clearance and
+before either scan can support a release decision, the evaluator reads the exact pinned source needed to validate both
+roles, and the release owner independently verifies that reading. A negative is ineligible when its executable source
+constructs or drives an agent, selects tools or actions for a goal, or delegates that behavior to downloaded code. A
+role mismatch stops measurement: retire both exposed lineages, preserve the rejection, and select a different unseen
+pair. A scan's `agentSystemDetected: false` cannot turn an implemented agent application into a valid negative.
 
 The evaluator installs the tarball into a clean temporary prefix and invokes that installed binary. Source commands
 such as `pnpm orchescope` are not release evidence. The checksum must equal the one produced from the frozen candidate.

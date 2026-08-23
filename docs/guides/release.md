@@ -65,6 +65,12 @@ an external call inside a named object method was attributed to module scope, an
 propagated through the graph, finding and exports. Both targets contribute distinct regression boundaries, and neither
 source lineage can be reused as an unseen holdout.
 
+The [blocked 724a1abd evaluation](../research/724a1abd-blocked-blind-evaluation.md) records a sixth completed block: the
+proposed negative contained a packaged interactive coding-agent surface despite repository metadata describing
+log-analysis tooling. The positive is a permanent regression input, the invalid negative adds no corpus entry, and
+neither exposed source lineage can be reused as an unseen holdout. Exclusion clearance is followed by independent
+source-role validation before a negative scan can support publication.
+
 The [passed 95c7756c evaluation](../research/95c7756c-passed-blind-evaluation.md) records the same boundary for a
 completed passing gate. Its selected positive becomes a regression input, its negative adds no duplicate corpus entry,
 and neither source lineage can be reused as an unseen holdout.

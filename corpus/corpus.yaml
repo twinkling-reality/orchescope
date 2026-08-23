@@ -1185,6 +1185,353 @@ repositories:
           - ruleId: observability-coverage
             severity: info
 
+  - name: email-agent
+    source: git
+    url: https://github.com/AnshMNSoni/email-agent.git
+    commit: 67a176ef44f2ec9b7edfeec8b7da665beaf0a749
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive application selected independently for the blind evaluation of candidate
+      724a1abd. It builds one LangGraph email workflow with eight registered steps and seven literal conditional
+      destinations, backed by a literal ChatOllama model. The regression holds the source-supported identities and
+      relations without turning workflow steps into agents, control flow into handoffs, or unsupported Gmail client
+      chains into absence evidence.
+
+      The graph's loop-built terminal edges, entry boundary and raw model-client topology remain three explicit
+      refusals. No runtime is attempted because the repository supplies no fake or offline scenario and its ordinary
+      path requires Gmail OAuth state plus a running local Ollama model. Its MIT LICENSE has SHA-256
+      7266b6393e321d6d431a4dcd1a033980df14bce64ed51f0686d6b2a9217a8b5f.
+    acceptance:
+      graphPopulation:
+        components: 11
+        edges: 16
+      exactIdsByKind:
+        model:
+          - model:ollama/qwen2.5-coder-3b
+        provider:
+          - provider:ollama
+        workflow:
+          - workflow:graph.py-graph
+        workflow_step:
+          - workflow_step:classify_intent
+          - workflow_step:handle_converse
+          - workflow_step:handle_delete
+          - workflow_step:handle_label
+          - workflow_step:handle_list_search
+          - workflow_step:handle_read
+          - workflow_step:handle_send
+          - workflow_step:handle_summarize
+      absentKinds:
+        - agent
+        - agent_group
+      absentComponentTerms:
+        - module-scope
+        - unspecified
+      requiredEdges:
+        - kind: served_by_provider
+          from: model:ollama/qwen2.5-coder-3b
+          to: provider:ollama
+          sourceFile: agent/graph.py
+          evidence:
+            - producer: adapter:model-sdk
+              symbol: ChatOllama
+              sourceFile: agent/graph.py
+              startLine: 41
+              endLine: 41
+        - kind: contains
+          from: workflow:graph.py-graph
+          to: workflow_step:classify_intent
+          sourceFile: agent/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: add_node("classify_intent")
+              sourceFile: agent/graph.py
+              startLine: 558
+              endLine: 558
+        - kind: contains
+          from: workflow:graph.py-graph
+          to: workflow_step:handle_list_search
+          sourceFile: agent/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: add_node("handle_list_search")
+              sourceFile: agent/graph.py
+              startLine: 559
+              endLine: 559
+        - kind: contains
+          from: workflow:graph.py-graph
+          to: workflow_step:handle_read
+          sourceFile: agent/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: add_node("handle_read")
+              sourceFile: agent/graph.py
+              startLine: 560
+              endLine: 560
+        - kind: contains
+          from: workflow:graph.py-graph
+          to: workflow_step:handle_summarize
+          sourceFile: agent/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: add_node("handle_summarize")
+              sourceFile: agent/graph.py
+              startLine: 561
+              endLine: 561
+        - kind: contains
+          from: workflow:graph.py-graph
+          to: workflow_step:handle_send
+          sourceFile: agent/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: add_node("handle_send")
+              sourceFile: agent/graph.py
+              startLine: 562
+              endLine: 562
+        - kind: contains
+          from: workflow:graph.py-graph
+          to: workflow_step:handle_delete
+          sourceFile: agent/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: add_node("handle_delete")
+              sourceFile: agent/graph.py
+              startLine: 563
+              endLine: 563
+        - kind: contains
+          from: workflow:graph.py-graph
+          to: workflow_step:handle_label
+          sourceFile: agent/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: add_node("handle_label")
+              sourceFile: agent/graph.py
+              startLine: 564
+              endLine: 564
+        - kind: contains
+          from: workflow:graph.py-graph
+          to: workflow_step:handle_converse
+          sourceFile: agent/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: add_node("handle_converse")
+              sourceFile: agent/graph.py
+              startLine: 565
+              endLine: 565
+        - kind: transitions_to
+          from: workflow_step:classify_intent
+          to: workflow_step:handle_list_search
+          sourceFile: agent/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: add_conditional_edges("classify_intent") branch "handle_list_search"
+              sourceFile: agent/graph.py
+              startLine: 573
+              endLine: 573
+        - kind: transitions_to
+          from: workflow_step:classify_intent
+          to: workflow_step:handle_read
+          sourceFile: agent/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: add_conditional_edges("classify_intent") branch "handle_read"
+              sourceFile: agent/graph.py
+              startLine: 574
+              endLine: 574
+        - kind: transitions_to
+          from: workflow_step:classify_intent
+          to: workflow_step:handle_summarize
+          sourceFile: agent/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: add_conditional_edges("classify_intent") branch "handle_summarize"
+              sourceFile: agent/graph.py
+              startLine: 575
+              endLine: 575
+        - kind: transitions_to
+          from: workflow_step:classify_intent
+          to: workflow_step:handle_send
+          sourceFile: agent/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: add_conditional_edges("classify_intent") branch "handle_send"
+              sourceFile: agent/graph.py
+              startLine: 576
+              endLine: 576
+        - kind: transitions_to
+          from: workflow_step:classify_intent
+          to: workflow_step:handle_delete
+          sourceFile: agent/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: add_conditional_edges("classify_intent") branch "handle_delete"
+              sourceFile: agent/graph.py
+              startLine: 577
+              endLine: 577
+        - kind: transitions_to
+          from: workflow_step:classify_intent
+          to: workflow_step:handle_label
+          sourceFile: agent/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: add_conditional_edges("classify_intent") branch "handle_label"
+              sourceFile: agent/graph.py
+              startLine: 578
+              endLine: 578
+        - kind: transitions_to
+          from: workflow_step:classify_intent
+          to: workflow_step:handle_converse
+          sourceFile: agent/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: add_conditional_edges("classify_intent") branch "handle_converse"
+              sourceFile: agent/graph.py
+              startLine: 579
+              endLine: 579
+      componentMetadata:
+        model:ollama/qwen2.5-coder-3b:
+          framework: langchain
+          modelValueBasis: literal
+        provider:ollama:
+          framework: langchain
+          modelValueBasis: literal
+        workflow:graph.py-graph:
+          framework: langgraph
+          receiver: g
+        workflow_step:classify_intent:
+          framework: langgraph
+          role: workflow_step
+      componentEvidence:
+        model:ollama/qwen2.5-coder-3b:
+          - producer: adapter:model-sdk
+            symbol: ChatOllama
+            sourceFile: agent/graph.py
+            startLine: 41
+            endLine: 41
+        provider:ollama:
+          - producer: adapter:model-sdk
+            symbol: ChatOllama
+            sourceFile: agent/graph.py
+            startLine: 41
+            endLine: 41
+        workflow:graph.py-graph:
+          - producer: adapter:langgraph
+            symbol: StateGraph
+            sourceFile: agent/graph.py
+            startLine: 556
+            endLine: 556
+        workflow_step:classify_intent:
+          - producer: adapter:langgraph
+            symbol: add_node("classify_intent")
+            sourceFile: agent/graph.py
+            startLine: 558
+            endLine: 558
+        workflow_step:handle_list_search:
+          - producer: adapter:langgraph
+            symbol: add_node("handle_list_search")
+            sourceFile: agent/graph.py
+            startLine: 559
+            endLine: 559
+        workflow_step:handle_read:
+          - producer: adapter:langgraph
+            symbol: add_node("handle_read")
+            sourceFile: agent/graph.py
+            startLine: 560
+            endLine: 560
+        workflow_step:handle_summarize:
+          - producer: adapter:langgraph
+            symbol: add_node("handle_summarize")
+            sourceFile: agent/graph.py
+            startLine: 561
+            endLine: 561
+        workflow_step:handle_send:
+          - producer: adapter:langgraph
+            symbol: add_node("handle_send")
+            sourceFile: agent/graph.py
+            startLine: 562
+            endLine: 562
+        workflow_step:handle_delete:
+          - producer: adapter:langgraph
+            symbol: add_node("handle_delete")
+            sourceFile: agent/graph.py
+            startLine: 563
+            endLine: 563
+        workflow_step:handle_label:
+          - producer: adapter:langgraph
+            symbol: add_node("handle_label")
+            sourceFile: agent/graph.py
+            startLine: 564
+            endLine: 564
+        workflow_step:handle_converse:
+          - producer: adapter:langgraph
+            symbol: add_node("handle_converse")
+            sourceFile: agent/graph.py
+            startLine: 565
+            endLine: 565
+      sourceCitations:
+        model:ollama/qwen2.5-coder-3b:
+          - agent/graph.py
+        provider:ollama:
+          - agent/graph.py
+        workflow:graph.py-graph:
+          - agent/graph.py
+        workflow_step:classify_intent:
+          - agent/graph.py
+        workflow_step:handle_converse:
+          - agent/graph.py
+        workflow_step:handle_delete:
+          - agent/graph.py
+        workflow_step:handle_label:
+          - agent/graph.py
+        workflow_step:handle_list_search:
+          - agent/graph.py
+        workflow_step:handle_read:
+          - agent/graph.py
+        workflow_step:handle_send:
+          - agent/graph.py
+        workflow_step:handle_summarize:
+          - agent/graph.py
+      adapterOutcomes:
+        adapter:langgraph:
+          status: completed
+          componentsFound: 9
+          edgesFound: 15
+          filesInspected: 1
+        adapter:model-sdk:
+          status: completed
+          componentsFound: 2
+          edgesFound: 1
+          filesInspected: 1
+        adapter:effects:
+          status: completed
+          componentsFound: 0
+          edgesFound: 0
+          filesInspected: 0
+      topology:
+        status: incomplete
+        unresolvedCount: 3
+        conditionalDestinations: 7
+        requiredRefusals:
+          - kind: adapter_input
+            reason: adapter:model-sdk recognized a raw client or wrapper but has not stated a closed topology population for that producer.
+            sourceFile: agent/graph.py
+            startLine: 30
+          - kind: entry_boundary
+            reason: No supported entry boundary was found for this LangGraph construction.
+            sourceFile: agent/graph.py
+            startLine: 556
+          - kind: explicit_relation
+            reason: add_edge did not state two bounded literal endpoints.
+            sourceFile: agent/graph.py
+            startLine: 585
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+        exactRisks:
+          - ruleId: observability-coverage
+            severity: info
+
   - name: langchain-langgraph-agents
     source: git
     url: https://github.com/Chaitanya-Keyal/langchain-langgraph-agents.git

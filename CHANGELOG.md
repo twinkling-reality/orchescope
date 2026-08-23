@@ -13,8 +13,26 @@ The third candidate, commit `df99c97c192e12177a7aa78dee012e0dec10bab5` with arch
 `0670c1ace229159a3bcd6a63ccfa53a7832db58b376272612225b2a7177a4709`, was independently evaluated and blocked as
 well. The fourth candidate, commit `d00a06b5c8c45ebfcd1ca75cb2bbdb0951c1e8a7` with archive SHA-256
 `9b2834897befd6a6f5288c973bea25a81f4389cff5de17a090545d421c12cfc6`, was independently evaluated and blocked too.
+The fifth candidate, commit `724a1abda9a1176b28b5633495d67a6b0e2bc194` with archive SHA-256
+`38981b8d9a6a6b626d74c7ae9ebb170cb550217528011270165a207cc5cfbcc5`, was independently evaluated and blocked as well.
 None was published, tagged, pushed or attached to a release. A corrected candidate cannot be published until a
 different unseen positive and negative pair clears the blind gate.
+
+### Blind negative roles are verified from acquired source
+
+Exclusion clearance proves that a target is unseen and unrelated to the exposed population; it does not prove that the
+repository role inferred from public metadata is true. After clearance, both exact pins now receive a bounded source
+role review before their scans can support a release decision, and the release owner independently verifies that
+review. A proposed negative that constructs or drives an agent, selects tools or actions for a goal, or delegates that
+behavior to downloaded code is rejected and replaced. `agentSystemDetected: false` cannot validate a mislabeled
+negative.
+
+The defect was exposed by the proposed `tokentab` negative. Alongside its session-log analysis, the exact pin declares
+a packaged interactive coding-agent entry point that constructs an Agent, exposes its tools and sends user input to it;
+its setup path also downloads and executes Python in memory. It is retired but not added as a negative corpus entry.
+The selected `email-agent` positive is pinned instead: one LangGraph workflow, eight source-cited steps, seven literal
+conditional transitions, the exact Ollama model/provider identity, three explicit topology refusals and no strengths
+or component metrics.
 
 ### Workflow topology is no longer presented as agent identity
 
