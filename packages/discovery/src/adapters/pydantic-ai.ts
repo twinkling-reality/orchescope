@@ -10,7 +10,7 @@ import type {
 import { booleanValue, findEntry, numberValue, stringValue } from '@orchescope/source-analysis';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { createDrafts, sourceIdentity } from '../drafts.ts';
-import { definitionForCall, hasLocalBinding, matchCalls, projectUses } from '../matching.ts';
+import { definitionForCall, hasBindingAt, matchCalls, projectUses } from '../matching.ts';
 import { addModelReference } from '../model-reference.ts';
 import { promptCallSupport, registerPromptEntries } from '../prompt-input.ts';
 
@@ -216,7 +216,9 @@ const runInputConsumer = (
       ? undefined
       : { identity: agent.identity, supportingLocations: agent.supportingLocations };
   }
-  if (local.length > 1 || hasLocalBinding(module, call.enclosing, receiver)) return undefined;
+  if (local.length > 1 || hasBindingAt(module, call.enclosing, receiver, call.location)) {
+    return undefined;
+  }
   const consumer = context.bindings.lookup(module.file, receiver);
   if (consumer?.kind !== 'agent') return undefined;
   const matches = agents.filter((agent) => identityKey(agent.identity) === identityKey(consumer));

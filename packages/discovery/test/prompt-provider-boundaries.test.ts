@@ -211,6 +211,11 @@ async def answer(agent):
 
 async def shadowed_runner(Runner):
     return await Runner.run(agent, 'The provider callable is shadowed even though the agent is real.')
+
+async def outer(agent):
+    async def nested():
+        return await Runner.run(agent, 'This belongs to the containing parameter, not the module agent.')
+    return await nested()
 `,
       );
     });

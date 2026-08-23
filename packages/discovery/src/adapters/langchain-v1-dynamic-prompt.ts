@@ -9,7 +9,7 @@ import type {
 import { findEntry } from '@orchescope/source-analysis';
 
 import type { AgentSystemAdapter } from '../adapter.ts';
-import { hasLocalBinding } from '../matching.ts';
+import { hasBindingAt } from '../matching.ts';
 import { LANGCHAIN_CREATE_AGENT_ADAPTER_ID } from './langchain-v1-create-agent-origin.ts';
 
 type Discovery = Parameters<AgentSystemAdapter['discover']>[0];
@@ -62,7 +62,7 @@ const resolveMiddlewareItem = (
   name: string,
   before: SourceLocation,
 ): MiddlewareDefinition | undefined => {
-  if (hasLocalBinding(module, call.enclosing, name)) return undefined;
+  if (hasBindingAt(module, call.enclosing, name, before)) return undefined;
   const resolved = context.symbols.resolve(module.file, name);
   if (resolved?.definition === undefined) return undefined;
   const owner = context.symbols.moduleOf(resolved.file);
@@ -118,7 +118,7 @@ const stableMiddlewareList = (
       endsBefore(definition.location, before),
   );
   if (local.length > 1) return undefined;
-  if (local.length === 0 && hasLocalBinding(module, call.enclosing, name)) return undefined;
+  if (local.length === 0 && hasBindingAt(module, call.enclosing, name, before)) return undefined;
   const selected = local[0] ?? context.symbols.resolve(module.file, name)?.definition;
   if (selected?.kind !== 'variable' || selected.value === undefined) return undefined;
   const owner = context.symbols.moduleOf(selected.location.file) ?? module;

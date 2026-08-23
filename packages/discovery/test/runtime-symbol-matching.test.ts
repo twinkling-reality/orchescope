@@ -26,7 +26,7 @@ const symbol = (
   origin:
     | { readonly module: string; readonly imported: string; readonly isType: boolean }
     | undefined,
-) => ({ path, origin, enclosing: undefined });
+) => ({ path, origin, enclosing: undefined, location });
 
 const postgres = { names: ['Client', 'Pool'], packages: ['pg'] } as const;
 
@@ -181,6 +181,49 @@ describe('runtime provider symbol matching', () => {
           enclosing: 'build',
         },
         postgres,
+      ),
+      undefined,
+    );
+  });
+
+  it('rejects an existing provider root shadowed by a parameter in a containing closure', () => {
+    const shadowed = moduleFacts({
+      definitions: [
+        {
+          kind: 'function',
+          name: 'outer',
+          exported: false,
+          async: false,
+          decorators: [],
+          parameters: [{ name: 'OpenAI', location: { ...location, startLine: 1 } }],
+          location: { ...location, startLine: 1, endLine: 8 },
+          initializer: undefined,
+          enclosing: undefined,
+        },
+        {
+          kind: 'function',
+          name: 'inner',
+          exported: false,
+          async: false,
+          decorators: [],
+          parameters: [],
+          location: { ...location, startLine: 3, endLine: 5 },
+          initializer: undefined,
+          enclosing: 'outer',
+        },
+      ],
+    });
+    assert.equal(
+      matchRuntimeSymbol(
+        [shadowed],
+        shadowed,
+        {
+          path: ['OpenAI'],
+          origin: { module: 'openai', imported: 'OpenAI', isType: false },
+          enclosing: 'inner',
+          location: { ...location, startLine: 4 },
+        },
+        { names: ['OpenAI'], packages: ['openai'] },
       ),
       undefined,
     );

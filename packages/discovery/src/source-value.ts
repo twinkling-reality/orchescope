@@ -7,6 +7,14 @@ import type {
 } from '@orchescope/source-analysis';
 import type { DiscoveryContext } from './adapter.ts';
 import { matchRuntimeSymbol } from './matching.ts';
+import {
+  expandSourceChoices,
+  type ResolvedSourceChoices,
+  type ResolvedSourceValue,
+} from './source-choice.ts';
+import { dataclassFieldDefault } from './source-dataclass-default.ts';
+
+export type { ResolvedSourceChoices, ResolvedSourceValue } from './source-choice.ts';
 
 /**
  * A source value settled by a bounded local chain.
@@ -14,12 +22,6 @@ import { matchRuntimeSymbol } from './matching.ts';
  * `configuration_default` is deliberately distinct from `binding`: a default is one possible static
  * value and does not state what a run selected.
  */
-export type ResolvedSourceValue = {
-  readonly value: ArgumentFact;
-  readonly basis: 'binding' | 'configuration_default';
-  readonly locations: readonly SourceLocation[];
-};
-
 export type SourceValueQuery = {
   readonly context: DiscoveryContext;
   readonly module: ModuleFacts;
@@ -30,8 +32,15 @@ export type SourceValueQuery = {
 
 const MAX_VALUE_HOPS = 4;
 
+const locationEndsBefore = (declaration: SourceLocation, use: SourceLocation): boolean => {
+  const endLine = declaration.endLine ?? declaration.startLine;
+  if (endLine !== use.startLine) return endLine < use.startLine;
+  if (declaration.endColumn === undefined || use.startColumn === undefined) return false;
+  return declaration.endColumn <= use.startColumn;
+};
+
 const beforeUse = (definition: DefinitionFact, use: SourceLocation): boolean =>
-  definition.location.startLine <= use.startLine;
+  locationEndsBefore(definition.location, use);
 
 /** One stable definition in the same lexical scope, with no subsequent root write hidden from it. */
 const stableDefinition = (
@@ -48,13 +57,47 @@ const stableDefinition = (
       beforeUse(definition, before),
   );
   if (candidates.length !== 1) return undefined;
+  const aliases = new Set([name]);
+  for (let hop = 0; hop < MAX_VALUE_HOPS; hop += 1) {
+    const reached = new Set(aliases);
+    let added = false;
+    for (const definition of module.definitions) {
+      if (
+        definition.kind !== 'variable' ||
+        definition.enclosing !== enclosing ||
+        aliases.has(definition.name) ||
+        !beforeUse(definition, before)
+      ) {
+        continue;
+      }
+      if (
+        definition.aliasedFrom?.some(
+          (path) => path.length === 1 && path[0] !== undefined && reached.has(path[0]),
+        ) === true
+      ) {
+        aliases.add(definition.name);
+        added = true;
+      }
+    }
+    if (!added) break;
+  }
+  const aliasClosureComplete = !module.definitions.some(
+    (definition) =>
+      definition.kind === 'variable' &&
+      definition.enclosing === enclosing &&
+      !aliases.has(definition.name) &&
+      definition.aliasedFrom?.some(
+        (path) => path.length === 1 && path[0] !== undefined && aliases.has(path[0]),
+      ) === true,
+  );
+  if (!aliasClosureComplete) return undefined;
   if (
     module.assignments.some(
       (assignment) =>
-        assignment.target.length === 1 &&
-        assignment.target[0] === name &&
+        assignment.target[0] !== undefined &&
+        aliases.has(assignment.target[0]) &&
         assignment.enclosing === enclosing &&
-        assignment.location.startLine <= before.startLine,
+        locationEndsBefore(assignment.location, before),
     )
   ) {
     return undefined;
@@ -135,30 +178,32 @@ const exactPydanticField = (
   context: DiscoveryContext,
   module: ModuleFacts,
   definition: DefinitionFact,
-): boolean => {
-  if (definition.value?.kind !== 'call') return false;
+): readonly SourceLocation[] | undefined => {
+  if (definition.value?.kind !== 'call') return undefined;
   const root = definition.value.path[0];
-  if (root === undefined) return false;
+  if (root === undefined) return undefined;
   const imports = module.imports.filter((entry) => entry.local === root);
-  if (imports.length !== 1) return false;
+  if (imports.length !== 1) return undefined;
   const imported = imports[0];
-  if (imported === undefined) return false;
-  return (
-    matchRuntimeSymbol(
-      context.modules,
-      module,
-      {
-        path: definition.value.path,
-        origin: {
-          module: imported.module,
-          imported: imported.imported,
-          isType: imported.isType,
-        },
-        enclosing: definition.enclosing,
+  if (imported === undefined) return undefined;
+  if (!locationEndsBefore(imported.location, definition.location)) return undefined;
+  return matchRuntimeSymbol(
+    context.modules,
+    module,
+    {
+      path: definition.value.path,
+      origin: {
+        module: imported.module,
+        imported: imported.imported,
+        isType: imported.isType,
       },
-      { names: ['Field'], packages: ['pydantic'] },
-    ) !== undefined
-  );
+      enclosing: definition.enclosing,
+      location: definition.location,
+    },
+    { names: ['Field'], packages: ['pydantic'] },
+  ) === undefined
+    ? undefined
+    : [imported.location, definition.location];
 };
 
 const configurationDefault = (
@@ -187,12 +232,9 @@ const configurationDefault = (
   );
   if (fields.length !== 1) return undefined;
   const declared = fields[0];
-  if (
-    declared?.value?.kind !== 'call' ||
-    !exactPydanticField(query.context, typeModule, declared)
-  ) {
-    return undefined;
-  }
+  if (declared?.value?.kind !== 'call') return undefined;
+  const fieldLocations = exactPydanticField(query.context, typeModule, declared);
+  if (fieldLocations === undefined) return undefined;
   const keywordObjects = declared.value.args.filter(
     (argument): argument is Extract<ArgumentFact, { readonly kind: 'object' }> =>
       argument.kind === 'object',
@@ -207,7 +249,8 @@ const configurationDefault = (
     basis: 'configuration_default',
     locations: [
       ...(typeBinding?.locations ?? []),
-      declared.location,
+      resolvedType.definition.location,
+      ...fieldLocations,
       defaultEntry.location,
       ...nested.locations,
     ],
@@ -245,10 +288,20 @@ const resolve = (
         }
       }
     }
-    return configurationDefault(query, value.path);
+    return configurationDefault(query, value.path) ?? dataclassFieldDefault(query, value.path);
   }
   return { value, basis: 'binding', locations: [] };
 };
 
-export const resolveSourceValue = (query: SourceValueQuery): ResolvedSourceValue | undefined =>
-  resolve(query, query.value, 0);
+export const resolveSourceChoices = (query: SourceValueQuery): ResolvedSourceChoices => {
+  return expandSourceChoices({
+    value: query.value,
+    before: query.before,
+    resolve: (value, depth) => resolve(query, value, depth),
+  });
+};
+
+export const resolveSourceValue = (query: SourceValueQuery): ResolvedSourceValue | undefined => {
+  const resolved = resolveSourceChoices(query);
+  return resolved.complete && resolved.values.length === 1 ? resolved.values[0] : undefined;
+};

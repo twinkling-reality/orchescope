@@ -1,4 +1,5 @@
 import { CONFIDENCE_BANDS } from '@orchescope/domain';
+import type { SourceLocation } from '@orchescope/schema';
 import type {
   CalleeOrigin,
   CallFact,
@@ -85,6 +86,7 @@ type RuntimeSymbol = {
   readonly path: readonly string[];
   readonly origin: CalleeOrigin | undefined;
   readonly enclosing: string | undefined;
+  readonly location: SourceLocation;
 };
 
 export type RuntimeSymbolMatch = {
@@ -99,15 +101,15 @@ export const hasLocalBinding = (
   name: string,
 ): boolean => {
   if (enclosing === undefined) return false;
-  const scope = module.definitions.find(
-    (definition) =>
-      (definition.kind === 'function' ||
-        definition.kind === 'method' ||
-        (definition.kind === 'variable' && definition.parameters !== undefined)) &&
-      (definition.name === enclosing || definition.name.endsWith(`.${enclosing}`)),
-  );
   return (
-    scope?.parameters?.some((parameter) => parameter.name === name) === true ||
+    module.definitions.some(
+      (definition) =>
+        (definition.kind === 'function' ||
+          definition.kind === 'method' ||
+          (definition.kind === 'variable' && definition.parameters !== undefined)) &&
+        (definition.name === enclosing || definition.name.endsWith(`.${enclosing}`)) &&
+        definition.parameters?.some((parameter) => parameter.name === name) === true,
+    ) ||
     module.definitions.some(
       (definition) =>
         definition.kind === 'variable' &&
@@ -123,6 +125,87 @@ export const hasLocalBinding = (
   );
 };
 
+const containsLocation = (container: SourceLocation, contained: SourceLocation): boolean => {
+  const startsBefore =
+    container.startLine < contained.startLine ||
+    (container.startLine === contained.startLine &&
+      (container.startColumn ?? 0) <= (contained.startColumn ?? 0));
+  const containerEndLine = container.endLine ?? container.startLine;
+  const containedEndLine = contained.endLine ?? contained.startLine;
+  const endsAfter =
+    containerEndLine > containedEndLine ||
+    (containerEndLine === containedEndLine &&
+      (container.endColumn ?? Number.MAX_SAFE_INTEGER) >= (contained.endColumn ?? 0));
+  return startsBefore && endsAfter;
+};
+
+const locationEndsBefore = (declaration: SourceLocation, use: SourceLocation): boolean => {
+  const endLine = declaration.endLine ?? declaration.startLine;
+  if (endLine !== use.startLine) return endLine < use.startLine;
+  if (declaration.endColumn === undefined || use.startColumn === undefined) return false;
+  return declaration.endColumn <= use.startColumn;
+};
+
+const locationMayPrecede = (declaration: SourceLocation, use: SourceLocation): boolean =>
+  locationEndsBefore(declaration, use) ||
+  ((declaration.endLine ?? declaration.startLine) === use.startLine &&
+    (declaration.endColumn === undefined || use.startColumn === undefined));
+
+/** A binding in any function or method whose source range lexically contains this use. */
+const callableScopesContaining = (
+  module: ModuleFacts,
+  use: SourceLocation,
+): readonly DefinitionFact[] =>
+  module.definitions.filter(
+    (definition) =>
+      (definition.kind === 'function' ||
+        definition.kind === 'method' ||
+        (definition.kind === 'variable' && definition.parameters !== undefined)) &&
+      containsLocation(definition.location, use),
+  );
+
+/** A binding in any function or method whose source range lexically contains this use. */
+export const hasContainingCallableBinding = (
+  module: ModuleFacts,
+  use: SourceLocation,
+  name: string,
+): boolean => {
+  const scopes = callableScopesContaining(module, use);
+  return scopes.some(
+    (scope) =>
+      scope.parameters?.some((parameter) => parameter.name === name) === true ||
+      module.definitions.some(
+        (definition) =>
+          definition.kind === 'variable' &&
+          definition.name === name &&
+          definition.enclosing !== undefined &&
+          (scope.name === definition.enclosing ||
+            scope.name.endsWith(`.${definition.enclosing}`)) &&
+          containsLocation(scope.location, definition.location),
+      ) ||
+      module.assignments.some(
+        (assignment) =>
+          assignment.target.length === 1 &&
+          assignment.target[0] === name &&
+          assignment.enclosing !== undefined &&
+          (scope.name === assignment.enclosing ||
+            scope.name.endsWith(`.${assignment.enclosing}`)) &&
+          containsLocation(scope.location, assignment.location),
+      ),
+  );
+};
+
+/** Resolves a local binding against an exact lexical use, with a conservative fact-only fallback. */
+export const hasBindingAt = (
+  module: ModuleFacts,
+  enclosing: string | undefined,
+  name: string,
+  use: SourceLocation,
+): boolean =>
+  callableScopesContaining(module, use).length > 0
+    ? hasContainingCallableBinding(module, use, name)
+    : hasLocalBinding(module, enclosing, name);
+
 /**
  * A local declaration that can replace the imported root binding makes the recorded origin unsafe.
  * The analyzers intentionally retain import origins as compact facts rather than a full scope graph, so
@@ -131,18 +214,21 @@ export const hasLocalBinding = (
 const hasExplicitLocalShadow = (module: ModuleFacts, symbol: RuntimeSymbol): boolean => {
   const root = symbol.path[0];
   if (root === undefined) return true;
+  const enclosed = callableScopesContaining(module, symbol.location).length > 0;
   return (
-    hasLocalBinding(module, symbol.enclosing, root) ||
+    hasContainingCallableBinding(module, symbol.location, root) ||
     module.definitions.some(
       (definition) =>
         definition.name === root &&
-        (definition.enclosing === undefined || definition.enclosing === symbol.enclosing),
+        definition.enclosing === undefined &&
+        (enclosed || locationMayPrecede(definition.location, symbol.location)),
     ) ||
     module.assignments.some(
       (assignment) =>
         assignment.target.length === 1 &&
         assignment.target[0] === root &&
-        (assignment.enclosing === undefined || assignment.enclosing === symbol.enclosing),
+        assignment.enclosing === undefined &&
+        (enclosed || locationMayPrecede(assignment.location, symbol.location)),
     )
   );
 };
@@ -215,6 +301,7 @@ export const matchCalls = (
           path: call.calleePath,
           origin: call.origin,
           enclosing: call.enclosing,
+          location: call.location,
         },
         query,
       );
@@ -269,6 +356,7 @@ export const decoratedDefinitions = (
             path: decorator.path,
             origin: decorator.origin,
             enclosing: definition.enclosing,
+            location: decorator.location,
           },
           { names: decoratorNames, packages, ...options },
         );

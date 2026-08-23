@@ -2,7 +2,7 @@ import type { SourceLocation } from '@orchescope/schema';
 import type { DefinitionFact, ModuleFacts } from '@orchescope/source-analysis';
 
 import type { DiscoveryContext } from './adapter.ts';
-import { hasLocalBinding } from './matching.ts';
+import { hasBindingAt } from './matching.ts';
 
 const startsBefore = (left: SourceLocation, right: SourceLocation): boolean =>
   left.startLine < right.startLine ||
@@ -113,8 +113,9 @@ const hasScopedLocalBinding = (
   scope: DefinitionFact | undefined,
   enclosing: string | undefined,
   name: string,
+  use: SourceLocation,
 ): boolean => {
-  if (scope === undefined) return hasLocalBinding(module, enclosing, name);
+  if (scope === undefined) return hasBindingAt(module, enclosing, name, use);
   return (
     scope.parameters?.some((parameter) => parameter.name === name) === true ||
     module.definitions.some(
@@ -177,7 +178,7 @@ export const resolvePromptDefinition = (
   const scoped = stableDefinition(module, name, enclosing, before);
   if (scoped !== undefined) return { module, definition: scoped };
   const scope = lexicalScopeAt(module, before);
-  if (enclosing !== undefined && hasScopedLocalBinding(module, scope, enclosing, name)) {
+  if (enclosing !== undefined && hasScopedLocalBinding(module, scope, enclosing, name, before)) {
     return undefined;
   }
   const global = stableDefinition(module, name, undefined, before);

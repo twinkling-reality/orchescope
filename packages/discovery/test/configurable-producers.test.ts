@@ -225,13 +225,14 @@ describe('configuration-backed model and search producers', () => {
     const modelRun = result.graph.coverage.adapters.find(
       (run) => run.adapterId === 'adapter:model-sdk',
     );
-    assert.equal(modelRun?.applicability?.relevantImports, 2);
+    assert.equal(modelRun?.applicability?.relevantImports, 3);
     assert.equal(modelRun?.applicability?.omittedImports, 0);
     assert.deepEqual(
       modelRun?.applicability?.sample.map((entry) => [entry.module, entry.imported]),
       [
         ['langchain_ollama', 'ChatOllama'],
         ['research.lmstudio', 'ChatLMStudio'],
+        ['langchain_openai', '*'],
       ],
     );
     const searchRun = result.graph.coverage.adapters.find(

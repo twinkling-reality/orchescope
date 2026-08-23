@@ -14,14 +14,10 @@ import type {
   AdapterFindings,
   AgentSystemAdapter,
   DiscoveryContext,
+  TopologyDiscovery,
 } from '../adapter.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
-import {
-  definitionForCall,
-  hasLocalBinding,
-  matchRuntimeSymbol,
-  moduleMatches,
-} from '../matching.ts';
+import { definitionForCall, hasBindingAt, matchRuntimeSymbol, moduleMatches } from '../matching.ts';
 import { localModules, namesLocalModule } from '../local-modules.ts';
 import {
   clientTimeoutMs,
@@ -32,6 +28,11 @@ import {
 } from '../model-deadline.ts';
 import { resolveSourceValue, type ResolvedSourceValue } from '../source-value.ts';
 import { registerPromptEntries } from '../prompt-input.ts';
+import { discoverLangChainOpenAiModels } from './langchain-openai-chat-model.ts';
+import {
+  chatOpenAiApplicability,
+  LANGCHAIN_OPENAI_PACKAGES,
+} from './langchain-openai-chat-model-origin.ts';
 
 /**
  * Raw model SDK usage.
@@ -72,7 +73,6 @@ const PROVIDERS = [
 ] as const;
 
 const LANGCHAIN_OLLAMA_PACKAGES = ['langchain_ollama'] as const;
-const LANGCHAIN_OPENAI_PACKAGES = ['langchain_openai'] as const;
 const ALL_PACKAGES = [
   ...PROVIDERS.flatMap((entry) => [...entry.packages]),
   ...LANGCHAIN_OLLAMA_PACKAGES,
@@ -96,7 +96,23 @@ const matchesMethod = (call: CallFact, methods: readonly string[]): string | und
   return undefined;
 };
 
-type Discovered = { components: number; edges: number; files: Set<string> };
+type Discovered = { componentKeys: Set<string>; edgeKeys: Set<string>; files: Set<string> };
+
+const populationIdentityKey = (identity: ComponentIdentity): string =>
+  `${identity.kind}:${identity.namespace}:${identity.localName}`;
+
+const recordComponent = (found: Discovered, identity: ComponentIdentity): void => {
+  found.componentKeys.add(populationIdentityKey(identity));
+};
+
+const recordEdge = (
+  found: Discovered,
+  kind: string,
+  from: ComponentIdentity,
+  to: ComponentIdentity,
+): void => {
+  found.edgeKeys.add(`${kind}:${populationIdentityKey(from)}->${populationIdentityKey(to)}`);
+};
 
 type Wrapper = {
   readonly provider: 'ollama' | 'lmstudio';
@@ -147,7 +163,8 @@ const localLmStudioWrapper = (
   if (declarations.length !== 1) return undefined;
   const definingModule = context.symbols.moduleOf(resolved.file);
   if (definingModule === undefined) return undefined;
-  const bases = resolved.definition.initializer ?? [];
+  const wrapperDefinition = resolved.definition;
+  const bases = wrapperDefinition.initializer ?? [];
   const matchedBase = bases
     .map((base) => {
       const path = base.split('.');
@@ -165,7 +182,8 @@ const localLmStudioWrapper = (
             imported: imported.imported,
             isType: imported.isType,
           },
-          enclosing: resolved.definition?.name,
+          enclosing: wrapperDefinition.name,
+          location: wrapperDefinition.location,
         },
         { names: ['ChatOpenAI'], packages: LANGCHAIN_OPENAI_PACKAGES },
       );
@@ -190,7 +208,12 @@ const wrapperAt = (
   const ollama = matchRuntimeSymbol(
     context.modules,
     module,
-    { path: call.calleePath, origin: call.origin, enclosing: call.enclosing },
+    {
+      path: call.calleePath,
+      origin: call.origin,
+      enclosing: call.enclosing,
+      location: call.location,
+    },
     { names: ['ChatOllama'], packages: LANGCHAIN_OLLAMA_PACKAGES },
   );
   if (ollama !== undefined) {
@@ -226,14 +249,7 @@ const directWrapperImports = (context: DiscoveryContext): AdapterApplicability =
       if (wrapper !== undefined) rows.push(wrapper.applicability);
     }
   }
-  return [
-    ...new Map(
-      rows.map((row) => [
-        `${row.location.file}:${row.location.startLine}:${row.module}:${row.imported}`,
-        row,
-      ]),
-    ).values(),
-  ];
+  return [...new Map(rows.map((row) => [applicabilityKey(row), row])).values()];
 };
 
 const rawProviderImports = (context: DiscoveryContext): AdapterApplicability => {
@@ -257,7 +273,12 @@ const rawProviderImports = (context: DiscoveryContext): AdapterApplicability => 
           matchRuntimeSymbol(
             context.modules,
             module,
-            { path: call.calleePath, origin: call.origin, enclosing: call.enclosing },
+            {
+              path: call.calleePath,
+              origin: call.origin,
+              enclosing: call.enclosing,
+              location: call.location,
+            },
             {
               names: provider.clients,
               packages: provider.packages,
@@ -280,16 +301,52 @@ const rawProviderImports = (context: DiscoveryContext): AdapterApplicability => 
   return [...importRows, ...callRows];
 };
 
+const applicabilityKey = (row: AdapterApplicability[number]): string =>
+  `${row.location.file}:${row.location.startLine}:${row.location.startColumn ?? 0}:${row.location.endLine ?? row.location.startLine}:${row.location.endColumn ?? 0}:${row.module}:${row.imported}`;
+
+const distinctApplicability = (rows: AdapterApplicability): AdapterApplicability => [
+  ...new Map(rows.map((row) => [applicabilityKey(row), row])).values(),
+];
+
+const legacyModelSdkApplicability = (context: DiscoveryContext): AdapterApplicability =>
+  distinctApplicability([...rawProviderImports(context), ...directWrapperImports(context)]);
+
 const modelSdkApplicability = (context: DiscoveryContext): AdapterApplicability => {
-  const rows = [...rawProviderImports(context), ...directWrapperImports(context)];
-  return [
-    ...new Map(
-      rows.map((row) => [
-        `${row.location.file}:${row.location.startLine}:${row.module}:${row.imported}`,
-        row,
-      ]),
-    ).values(),
-  ];
+  const rows = [...legacyModelSdkApplicability(context), ...chatOpenAiApplicability(context)];
+  return [...new Map(rows.map((row) => [applicabilityKey(row), row])).values()];
+};
+
+const modelSdkTopology = (input: {
+  readonly context: DiscoveryContext;
+  readonly relations: number;
+  readonly direct: ReturnType<typeof discoverLangChainOpenAiModels>['topology'];
+}): TopologyDiscovery => {
+  const legacy = legacyModelSdkApplicability(input.context);
+  const unresolved = [...input.direct.unresolved];
+  for (const row of legacy) {
+    if (unresolved.length >= 10) break;
+    unresolved.push({
+      kind: 'adapter_input',
+      reason:
+        'adapter:model-sdk recognized a raw client or wrapper but has not stated a closed topology population for that producer.',
+      location: row.location,
+    });
+  }
+  return {
+    status: input.direct.status === 'incomplete' || legacy.length > 0 ? 'incomplete' : 'complete',
+    inspectedInputs: modelSdkApplicability(input.context).length,
+    explicitRelations: input.relations,
+    conditionalConstructs: 0,
+    conditionalDestinations: 0,
+    entryBoundaries: 0,
+    entryTargets: [],
+    terminalBoundaries: 0,
+    boundaryFacts: [],
+    configurationBounds: 0,
+    configurationBoundFacts: [],
+    unresolvedCount: input.direct.unresolvedCount + legacy.length,
+    unresolved,
+  };
 };
 
 /** The variable a construction was assigned to, which is the name every later call reaches it by. */
@@ -340,7 +397,12 @@ const registerProviderClientAt = (input: {
   const matched = matchRuntimeSymbol(
     context.modules,
     module,
-    { path: call.calleePath, origin: call.origin, enclosing: call.enclosing },
+    {
+      path: call.calleePath,
+      origin: call.origin,
+      enclosing: call.enclosing,
+      location: call.location,
+    },
     {
       names: provider.clients,
       packages: provider.packages,
@@ -394,7 +456,7 @@ const registerProviderClientAt = (input: {
       }),
     );
   }
-  found.components += 1;
+  recordComponent(found, providerIdentity(provider.provider));
   found.files.add(module.file);
   const definition = stableVariableHolding(module, call);
   if (definition === undefined) return undefined;
@@ -467,7 +529,7 @@ const modelCallsIn = (
       const scoped = clients.get(receiverKey(call.enclosing, receiver));
       const client =
         scoped ??
-        (hasLocalBinding(module, call.enclosing, receiver)
+        (hasBindingAt(module, call.enclosing, receiver, call.location)
           ? undefined
           : clients.get(receiverKey(undefined, receiver)));
       if (client?.provider !== provider) continue;
@@ -633,7 +695,8 @@ const registerModelCalls = (
         }),
       );
     }
-    found.components += 1;
+    const modelComponent = modelIdentity(provider.provider, model);
+    recordComponent(found, modelComponent);
     found.files.add(module.file);
     /*
      * What this call site produced, for whatever asks later what a line of code reaches.
@@ -658,7 +721,7 @@ const registerModelCalls = (
         symbol: dotted(call.calleePath),
       }),
     );
-    found.edges += 1;
+    recordEdge(found, 'served_by_provider', modelComponent, providerIdentity(provider.provider));
 
     // The caller is attributed to its enclosing function, recorded as an entry point when the
     // repository has no framework declared agent to attach the call to.
@@ -679,7 +742,7 @@ const registerModelCalls = (
           tags: ['hand-written-loop'],
         }),
       );
-      found.components += 1;
+      recordComponent(found, callerIdentity);
       builder.addEdge(
         drafts.edge({
           kind: 'invokes_model',
@@ -691,7 +754,7 @@ const registerModelCalls = (
           ...deadlineOnRelation(deadline),
         }),
       );
-      found.edges += 1;
+      recordEdge(found, 'invokes_model', callerIdentity, modelComponent);
     }
   }
 };
@@ -826,8 +889,9 @@ const addWrapperEvidence = (input: {
       confidence: CONFIDENCE_BANDS.deterministic,
     }),
   );
-  found.components += 2;
-  found.edges += 1;
+  recordComponent(found, identity);
+  recordComponent(found, provider);
+  recordEdge(found, 'served_by_provider', identity, provider);
   found.files.add(module.file);
   return identity;
 };
@@ -861,21 +925,30 @@ const registerLangChainWrappers = (
 
 export const modelSdkAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '2',
+  version: '3',
   packages: ALL_PACKAGES,
   applicability: modelSdkApplicability,
   appliesTo: (context) => modelSdkApplicability(context).length > 0,
   discover: (context, builder): AdapterFindings => {
-    const found: Discovered = { components: 0, edges: 0, files: new Set() };
+    const found: Discovered = { componentKeys: new Set(), edgeKeys: new Set(), files: new Set() };
     for (const module of context.modules) {
       const clientDeadlines = registerProviderClients(module, builder, context, found);
       registerModelCalls(module, builder, context, found, clientDeadlines);
       registerLangChainWrappers(module, builder, context, found);
     }
+    const direct = discoverLangChainOpenAiModels(context, builder);
+    for (const key of direct.componentKeys) found.componentKeys.add(key);
+    for (const key of direct.edgeKeys) found.edgeKeys.add(key);
+    for (const file of direct.files) found.files.add(file);
     return {
-      componentsFound: found.components,
-      edgesFound: found.edges,
+      componentsFound: found.componentKeys.size,
+      edgesFound: found.edgeKeys.size,
       filesInspected: [...found.files],
+      topology: modelSdkTopology({
+        context,
+        relations: found.edgeKeys.size,
+        direct: direct.topology,
+      }),
     };
   },
 };

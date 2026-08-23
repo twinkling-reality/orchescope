@@ -135,6 +135,7 @@ export const constructedRetry = (
       path: call.calleePath,
       origin: call.origin,
       enclosing: call.enclosing,
+      location: call.location,
     },
     { names: [...RETRY_CONSTRUCTORS], packages: TENACITY_PACKAGES },
   );
@@ -171,6 +172,7 @@ export const decoratedRetry = (
       path: decorator.path,
       origin: decorator.origin,
       enclosing: definition.enclosing,
+      location: decorator.location,
     },
     { names: ['retry'], packages: TENACITY_PACKAGES },
   );

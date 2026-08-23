@@ -257,6 +257,7 @@ const discoverGraphConstruction = (
         path: call.calleePath,
         origin: call.origin,
         enclosing: call.enclosing,
+        location: call.location,
       },
       { names: GRAPH_CONSTRUCTORS, packages: GRAPH_PACKAGES },
     );
@@ -865,6 +866,7 @@ const discoverReactAgents = (
         path: call.calleePath,
         origin: call.origin,
         enclosing: call.enclosing,
+        location: call.location,
       },
       { names: ['create_react_agent'], packages: GRAPH_PACKAGES },
     );
@@ -1021,6 +1023,7 @@ const discoverModule = (
           path: call.calleePath,
           origin: call.origin,
           enclosing: call.enclosing,
+          location: call.location,
         },
         { names: GRAPH_CONSTRUCTORS, packages: GRAPH_PACKAGES },
       ) !== undefined;

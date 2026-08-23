@@ -150,6 +150,7 @@ const datastoreCallMatches = (
       path: call.calleePath,
       origin: call.origin,
       enclosing: call.enclosing,
+      location: call.location,
     },
     { names: candidate.names, packages: candidate.packages },
   ) !== undefined;
@@ -816,6 +817,7 @@ const clientAliases = (
             path: call.calleePath,
             origin: call.origin,
             enclosing: call.enclosing,
+            location: call.location,
           },
           { names: candidate.names, packages: candidate.packages },
         ) !== undefined,
@@ -1111,6 +1113,7 @@ const discoverStores = (
             path: call.calleePath,
             origin: call.origin,
             enclosing: call.enclosing,
+            location: call.location,
           },
           { names: candidate.names, packages: candidate.packages },
         ) !== undefined,

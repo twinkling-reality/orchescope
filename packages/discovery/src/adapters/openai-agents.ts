@@ -21,7 +21,7 @@ import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from 
 import {
   decoratedDefinitions,
   definitionForCall,
-  hasLocalBinding,
+  hasBindingAt,
   matchCalls,
   matchRuntimeSymbol,
   projectUses,
@@ -310,6 +310,7 @@ const agentConstructionCalls = (context: DiscoveryContext) => {
           path: call.calleePath,
           origin: call.origin,
           enclosing: call.enclosing,
+          location: call.location,
         },
         { names: ['Agent'], packages: PACKAGES },
       );
@@ -615,7 +616,9 @@ const runInputConsumer = (
       ? undefined
       : { identity: agent.identity, supportingLocations: agent.supportingLocations };
   }
-  if (local.length > 1 || hasLocalBinding(module, call.enclosing, agentName)) return undefined;
+  if (local.length > 1 || hasBindingAt(module, call.enclosing, agentName, call.location)) {
+    return undefined;
+  }
   const consumer = context.bindings.lookup(module.file, agentName);
   if (consumer?.kind !== 'agent') return undefined;
   const matches = agents.filter((agent) => identityKey(agent.identity) === identityKey(consumer));
@@ -638,7 +641,12 @@ const registerRunInputs = (context: DiscoveryContext, agents: readonly PendingAg
       const providerCall = matchRuntimeSymbol(
         context.modules,
         module,
-        { path: call.calleePath, origin: call.origin, enclosing: call.enclosing },
+        {
+          path: call.calleePath,
+          origin: call.origin,
+          enclosing: call.enclosing,
+          location: call.location,
+        },
         { names: ['Runner', 'run', 'run_sync'], packages: PACKAGES },
       );
       if (providerCall === undefined) continue;

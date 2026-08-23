@@ -15,6 +15,10 @@ export type ArgumentFact =
   | {
       readonly kind: 'object';
       readonly entries: readonly ObjectEntryFact[];
+      /** Python's synthetic keyword bundle, distinct from a positional dictionary value. */
+      readonly role?: 'keywords';
+      /** Exact spread operands retained even though their eventual keys may be computed. */
+      readonly spreads?: readonly ObjectSpreadFact[];
       /** False when a spread or computed key means the retained entries are not the whole object. */
       readonly complete?: boolean;
     }
@@ -24,6 +28,14 @@ export type ArgumentFact =
   | { readonly kind: 'null' }
   | { readonly kind: 'identifier'; readonly name: string }
   | { readonly kind: 'member'; readonly path: readonly string[] }
+  | {
+      /** Bounded alternatives written by a short-circuiting source selection. */
+      readonly kind: 'selection';
+      readonly operator: 'or';
+      readonly alternatives: readonly SourceChoiceFact[];
+      /** False when the retained alternatives are not the whole expression. */
+      readonly complete: boolean;
+    }
   | {
       readonly kind: 'array';
       readonly items: readonly ArgumentFact[];
@@ -70,6 +82,16 @@ export type ArgumentFact =
 
 export type ObjectEntryFact = {
   readonly key: string;
+  readonly value: ArgumentFact;
+  readonly location: SourceLocation;
+};
+
+export type ObjectSpreadFact = {
+  readonly value: ArgumentFact;
+  readonly location: SourceLocation;
+};
+
+export type SourceChoiceFact = {
   readonly value: ArgumentFact;
   readonly location: SourceLocation;
 };

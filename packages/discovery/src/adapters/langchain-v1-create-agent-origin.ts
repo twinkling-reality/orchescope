@@ -1,7 +1,7 @@
 import type { CallFact, ImportFact, ModuleFacts } from '@orchescope/source-analysis';
 import type { AdapterApplicability, DiscoveryContext } from '../adapter.ts';
 import { localModules, namesLocalModule } from '../local-modules.ts';
-import { hasLocalBinding } from '../matching.ts';
+import { hasBindingAt } from '../matching.ts';
 
 /** The one runtime export this adapter is authorised to interpret. */
 export const LANGCHAIN_CREATE_AGENT_ADAPTER_ID = 'adapter:langchain-v1-create-agent';
@@ -52,7 +52,7 @@ const shadowsImportedRoot = (module: ModuleFacts, call: CallFact): boolean => {
   const root = call.calleePath[0];
   if (root === undefined) return true;
   return (
-    hasLocalBinding(module, call.enclosing, root) ||
+    hasBindingAt(module, call.enclosing, root, call.location) ||
     module.definitions.some(
       (definition) =>
         (definition.name === root || definition.name.endsWith(`.${root}`)) &&

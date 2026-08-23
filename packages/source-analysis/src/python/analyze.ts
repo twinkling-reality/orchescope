@@ -15,6 +15,7 @@ import {
   isLiteralFact,
   type ModuleFacts,
   type ObjectEntryFact,
+  type ObjectSpreadFact,
   type ParameterFact,
   type ReturnAnnotationFact,
   type ReturnFact,
@@ -273,6 +274,93 @@ const signedNumberArgumentFact = (node: Node): ArgumentFact => {
     : { kind: 'unknown', nodeType: node.type };
 };
 
+const MAX_SOURCE_CHOICES = 8;
+
+function sourceSelectionFact(node: Node, context: Context): ArgumentFact {
+  const alternatives: Extract<
+    ArgumentFact,
+    { readonly kind: 'selection' }
+  >['alternatives'][number][] = [];
+  let complete = true;
+  let closed = false;
+  const staticTruth = (value: ArgumentFact): boolean | undefined => {
+    if (value.kind === 'string') return value.value.length > 0;
+    if (value.kind === 'number') return value.value !== 0;
+    if (value.kind === 'boolean') return value.value;
+    if (value.kind === 'null') return false;
+    if (value.kind === 'array' && value.complete !== false) return value.items.length > 0;
+    if (value.kind === 'object' && value.complete !== false) return value.entries.length > 0;
+    return undefined;
+  };
+  const walk = (candidate: Node): void => {
+    if (closed) return;
+    const operators =
+      candidate.type === 'boolean_operator'
+        ? candidate.children.filter((child) => !child.isNamed)
+        : [];
+    if (
+      candidate.type === 'boolean_operator' &&
+      operators.length > 0 &&
+      operators.every((operator) => operator.type === 'or')
+    ) {
+      for (const operand of namedChildren(candidate)) walk(operand);
+      return;
+    }
+    const value = argumentFact(candidate, context);
+    const truth = staticTruth(value);
+    if (truth === false) return;
+    if (alternatives.length >= MAX_SOURCE_CHOICES) {
+      complete = false;
+      return;
+    }
+    alternatives.push({
+      value,
+      location: location(context.file, candidate),
+    });
+    if (truth === true) closed = true;
+  };
+  walk(node);
+  return { kind: 'selection', operator: 'or', alternatives, complete };
+}
+
+function dictionaryArgumentFact(node: Node, context: Context): ArgumentFact {
+  const entries: ObjectEntryFact[] = [];
+  const spreads: ObjectSpreadFact[] = [];
+  for (const pair of namedChildren(node)) {
+    if (pair.type === 'dictionary_splat') {
+      const valueNode = namedChildren(pair)[0];
+      if (valueNode !== undefined) {
+        spreads.push({
+          value: argumentFact(valueNode, context),
+          location: location(context.file, pair),
+        });
+      }
+      continue;
+    }
+    if (pair.type !== 'pair') continue;
+    const keyNode = childField(pair, 'key');
+    const valueNode = childField(pair, 'value');
+    if (keyNode === undefined || valueNode === undefined) continue;
+    const key = keyNode.type === 'string' ? stringLiteralValue(keyNode) : keyNode.text;
+    if (key === undefined) continue;
+    entries.push({
+      key,
+      value: argumentFact(valueNode, context),
+      location: location(context.file, pair),
+    });
+  }
+  return {
+    kind: 'object',
+    entries,
+    spreads,
+    complete: namedChildren(node).every((child) => {
+      if (child.type !== 'pair') return false;
+      const key = childField(child, 'key');
+      return key?.type === 'string' && stringLiteralValue(key) !== undefined;
+    }),
+  };
+}
+
 const argumentFact = (node: Node, context: Context): ArgumentFact => {
   switch (node.type) {
     case 'string':
@@ -296,6 +384,13 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
         ? { kind: 'unknown', nodeType: node.type }
         : { kind: 'member', path };
     }
+    case 'boolean_operator': {
+      const operators = node.children.filter((child) => !child.isNamed);
+      if (operators.length === 0 || operators.some((operator) => operator.type !== 'or')) {
+        return { kind: 'unknown', nodeType: node.type };
+      }
+      return sourceSelectionFact(node, context);
+    }
     case 'subscript':
       return subscriptPath(node);
     case 'call': {
@@ -307,14 +402,26 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
        * spelled two ways.
        */
       const callee = childField(node, 'function');
-      const { positional, keywords, keywordsComplete } = splitArguments(node, context);
+      const { positional, keywords, keywordSpreads, keywordsComplete } = splitArguments(
+        node,
+        context,
+      );
       return {
         kind: 'call',
         path: callee === undefined ? [] : attributePath(callee),
         args:
           keywords.length === 0 && keywordsComplete
             ? positional
-            : [...positional, { kind: 'object', entries: keywords, complete: keywordsComplete }],
+            : [
+                ...positional,
+                {
+                  kind: 'object',
+                  entries: keywords,
+                  role: 'keywords',
+                  spreads: keywordSpreads,
+                  complete: keywordsComplete,
+                },
+              ],
       };
     }
     case 'list':
@@ -330,27 +437,8 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
         complete: children.every((child) => !child.type.includes('splat')),
       };
     }
-    case 'dictionary': {
-      const entries: ObjectEntryFact[] = [];
-      for (const pair of namedChildren(node)) {
-        if (pair.type !== 'pair') continue;
-        const keyNode = childField(pair, 'key');
-        const valueNode = childField(pair, 'value');
-        if (keyNode === undefined || valueNode === undefined) continue;
-        const key = keyNode.type === 'string' ? stringLiteralValue(keyNode) : keyNode.text;
-        if (key === undefined) continue;
-        entries.push({
-          key,
-          value: argumentFact(valueNode, context),
-          location: location(context.file, pair),
-        });
-      }
-      return {
-        kind: 'object',
-        entries,
-        complete: namedChildren(node).every((child) => child.type === 'pair'),
-      };
-    }
+    case 'dictionary':
+      return dictionaryArgumentFact(node, context);
     case 'lambda':
       return { kind: 'function' };
     case 'await': {
@@ -752,14 +840,26 @@ const decoratorFacts = (node: Node, context: Context): readonly DecoratorFact[] 
     if (inner.type === 'call') {
       const callee = childField(inner, 'function');
       const path = callee === undefined ? [] : attributePath(callee);
-      const { positional, keywords, keywordsComplete } = splitArguments(inner, context);
+      const { positional, keywords, keywordSpreads, keywordsComplete } = splitArguments(
+        inner,
+        context,
+      );
       facts.push({
         path,
         origin: path[0] === undefined ? undefined : context.bindings.get(path[0]),
         args:
           keywords.length === 0 && keywordsComplete
             ? positional
-            : [...positional, { kind: 'object', entries: keywords, complete: keywordsComplete }],
+            : [
+                ...positional,
+                {
+                  kind: 'object',
+                  entries: keywords,
+                  role: 'keywords',
+                  spreads: keywordSpreads,
+                  complete: keywordsComplete,
+                },
+              ],
         location: location(context.file, child),
       });
       continue;
@@ -791,15 +891,28 @@ const decoratorFacts = (node: Node, context: Context): readonly DecoratorFact[] 
 const splitArguments = (
   call: Node,
   context: Context,
-): { positional: ArgumentFact[]; keywords: ObjectEntryFact[]; keywordsComplete: boolean } => {
+): {
+  positional: ArgumentFact[];
+  keywords: ObjectEntryFact[];
+  keywordSpreads: ObjectSpreadFact[];
+  keywordsComplete: boolean;
+} => {
   const positional: ArgumentFact[] = [];
   const keywords: ObjectEntryFact[] = [];
+  const keywordSpreads: ObjectSpreadFact[] = [];
   let keywordsComplete = true;
   const list = childField(call, 'arguments');
-  if (list === undefined) return { positional, keywords, keywordsComplete };
+  if (list === undefined) return { positional, keywords, keywordSpreads, keywordsComplete };
   for (const child of namedChildren(list)) {
     if (child.type === 'dictionary_splat') {
       keywordsComplete = false;
+      const valueNode = namedChildren(child)[0];
+      if (valueNode !== undefined) {
+        keywordSpreads.push({
+          value: argumentFact(valueNode, context),
+          location: location(context.file, child),
+        });
+      }
       continue;
     }
     if (child.type === 'keyword_argument') {
@@ -815,7 +928,7 @@ const splitArguments = (
     }
     positional.push(argumentFact(child, context));
   }
-  return { positional, keywords, keywordsComplete };
+  return { positional, keywords, keywordSpreads, keywordsComplete };
 };
 
 /** Traverses one conditional consequence with a scoped type-only binding set when it cannot run. */
@@ -985,11 +1098,20 @@ const recordCall = (
 ): void => {
   const callee = childField(node, 'function');
   const path = callee === undefined ? [] : attributePath(callee);
-  const { positional, keywords, keywordsComplete } = splitArguments(node, context);
+  const { positional, keywords, keywordSpreads, keywordsComplete } = splitArguments(node, context);
   const args =
     keywords.length === 0 && keywordsComplete
       ? positional
-      : [...positional, { kind: 'object' as const, entries: keywords, complete: keywordsComplete }];
+      : [
+          ...positional,
+          {
+            kind: 'object' as const,
+            entries: keywords,
+            role: 'keywords' as const,
+            spreads: keywordSpreads,
+            complete: keywordsComplete,
+          },
+        ];
 
   const envName = environmentName(path, positional);
   if (envName !== undefined) {
@@ -1363,6 +1485,63 @@ const recordWithBindings = (node: Node, context: Context, frame: Frame): void =>
   }
 };
 
+const assignmentPath = (left: Node | undefined): readonly string[] => {
+  if (left === undefined) return [];
+  if (left.type !== 'subscript') return attributePath(left);
+  const member = left?.type === 'subscript' ? subscriptPath(left) : undefined;
+  if (member?.kind === 'member') return member.path;
+  return attributePath(childField(left, 'value') ?? left);
+};
+
+const recordAssignmentWrite = (
+  node: Node,
+  left: Node | undefined,
+  right: Node | undefined,
+  path: readonly string[],
+  context: Context,
+  frame: Frame,
+): void => {
+  if ((path.length > 1 || (left?.type === 'subscript' && path.length > 0)) && right !== undefined) {
+    context.assignments.push({
+      target: path,
+      value: argumentFact(right, context),
+      location: location(context.file, node),
+      ...(frame.name === undefined ? {} : { enclosing: frame.name }),
+    });
+  }
+};
+
+const recordAssignmentDefinition = (
+  node: Node,
+  left: Node | undefined,
+  right: Node | undefined,
+  path: readonly string[],
+  context: Context,
+  frame: Frame,
+): void => {
+  const name = left === undefined || left.type === 'subscript' ? undefined : path.join('.');
+  if (name === undefined || name.length === 0) return;
+  const initializer =
+    right !== undefined && right.type === 'call'
+      ? attributePath(childField(right, 'function') ?? right)
+      : undefined;
+  const aliasedFrom = right === undefined ? [] : aliasedNames(right);
+  const literals = right === undefined ? [] : boundLiterals(right, context);
+  context.definitions.push({
+    kind: 'variable',
+    name,
+    exported: !name.startsWith('_'),
+    async: false,
+    decorators: [],
+    location: location(context.file, node),
+    initializer: initializer !== undefined && initializer.length > 0 ? initializer : undefined,
+    ...(right === undefined ? {} : { value: argumentFact(right, context) }),
+    ...(aliasedFrom.length === 0 ? {} : { aliasedFrom }),
+    ...(literals.length === 0 ? {} : { literals }),
+    enclosing: frame.name,
+  });
+};
+
 const recordAssignment = (
   node: Node,
   context: Context,
@@ -1371,44 +1550,13 @@ const recordAssignment = (
 ): void => {
   const left = childField(node, 'left');
   const right = childField(node, 'right');
-  const path = left === undefined ? [] : attributePath(left);
+  const path = assignmentPath(left);
   /*
-   * A value written onto something that already exists, kept only where the target is a member.
-   *
-   * A plain `x = ...` is already a variable definition and adding it here would say the same thing twice. What is
-   * not said anywhere else is `agent.handoffs = [...]`, which is how a repository wires a cycle it could not name
-   * in a constructor.
+   * A plain root assignment is a definition. Member and subscript writes are retained separately so
+   * consumers can refuse a stale value even when a computed key prevents exact member settlement.
    */
-  if (path.length > 1 && right !== undefined) {
-    context.assignments.push({
-      target: path,
-      value: argumentFact(right, context),
-      location: location(context.file, node),
-      ...(frame.name === undefined ? {} : { enclosing: frame.name }),
-    });
-  }
-  const name = left === undefined ? undefined : path.join('.');
-  if (name !== undefined && name.length > 0) {
-    const initializer =
-      right !== undefined && right.type === 'call'
-        ? attributePath(childField(right, 'function') ?? right)
-        : undefined;
-    const aliasedFrom = right === undefined ? [] : aliasedNames(right);
-    const literals = right === undefined ? [] : boundLiterals(right, context);
-    context.definitions.push({
-      kind: 'variable',
-      name,
-      exported: !name.startsWith('_'),
-      async: false,
-      decorators: [],
-      location: location(context.file, node),
-      initializer: initializer !== undefined && initializer.length > 0 ? initializer : undefined,
-      ...(right === undefined ? {} : { value: argumentFact(right, context) }),
-      ...(aliasedFrom.length === 0 ? {} : { aliasedFrom }),
-      ...(literals.length === 0 ? {} : { literals }),
-      enclosing: frame.name,
-    });
-  }
+  recordAssignmentWrite(node, left, right, path, context, frame);
+  recordAssignmentDefinition(node, left, right, path, context, frame);
   if (right !== undefined) traverse(right, context, frame, collecting);
 };
 

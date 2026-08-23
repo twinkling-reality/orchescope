@@ -17,12 +17,7 @@ import type {
 } from '../adapter.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
 import { localModules, namesLocalModule } from '../local-modules.ts';
-import {
-  definitionForCall,
-  hasLocalBinding,
-  matchRuntimeSymbol,
-  moduleMatches,
-} from '../matching.ts';
+import { definitionForCall, hasBindingAt, matchRuntimeSymbol, moduleMatches } from '../matching.ts';
 import { type ResolvedSourceValue, resolveSourceValue } from '../source-value.ts';
 
 /**
@@ -131,7 +126,12 @@ const exactPerplexityCall = (
   const matched = matchRuntimeSymbol(
     context.modules,
     module,
-    { path: call.calleePath, origin: call.origin, enclosing: call.enclosing },
+    {
+      path: call.calleePath,
+      origin: call.origin,
+      enclosing: call.enclosing,
+      location: call.location,
+    },
     { names: ['post'], packages: ['requests'] },
   );
   if (matched === undefined) return undefined;
@@ -162,7 +162,12 @@ const searchApplicability = (context: DiscoveryContext): AdapterApplicability =>
           matchRuntimeSymbol(
             context.modules,
             module,
-            { path: call.calleePath, origin: call.origin, enclosing: call.enclosing },
+            {
+              path: call.calleePath,
+              origin: call.origin,
+              enclosing: call.enclosing,
+              location: call.location,
+            },
             { names: service.clients, packages: service.packages },
           ) !== undefined,
       );
@@ -295,7 +300,12 @@ const clientsIn = (
     const matched = matchRuntimeSymbol(
       context.modules,
       module,
-      { path: call.calleePath, origin: call.origin, enclosing: call.enclosing },
+      {
+        path: call.calleePath,
+        origin: call.origin,
+        enclosing: call.enclosing,
+        location: call.location,
+      },
       { names: service.clients, packages: service.packages },
     );
     if (matched === undefined) continue;
@@ -429,7 +439,7 @@ const discoverQueries = (
       const scoped = held.get(receiverKey(call.enclosing, receiver));
       const target =
         scoped ??
-        (hasLocalBinding(module, call.enclosing, receiver)
+        (hasBindingAt(module, call.enclosing, receiver, call.location)
           ? undefined
           : held.get(receiverKey(undefined, receiver)));
       if (target === undefined) continue;
