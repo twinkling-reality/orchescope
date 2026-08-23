@@ -4,7 +4,7 @@ import { INFERRED_ENTRY_POINT_TAG } from '@orchescope/domain';
 import type { EdgeDraft } from '@orchescope/graph';
 import { indexGraph } from '@orchescope/graph';
 import type { EdgePolicy, SystemGraph } from '@orchescope/schema';
-import { buildGraph, componentDraft, edgeDraft } from '@orchescope/testkit';
+import { buildGraph, componentDraft, edgeDraft, evidenceForGraph } from '@orchescope/testkit';
 import { evaluateRules } from '../src/engine.ts';
 import type { Rule, RuleContext } from '../src/rule.ts';
 import {
@@ -97,7 +97,7 @@ const contextFor = (graph: SystemGraph): RuleContext => ({
   benchmarks: [],
   chaosReports: [],
   scenarios: [],
-  evidenceById: new Map(),
+  evidenceById: evidenceForGraph(graph),
 });
 
 const withCompleteTopology = (graph: SystemGraph): SystemGraph => {
@@ -121,13 +121,20 @@ const withCompleteTopology = (graph: SystemGraph): SystemGraph => {
         conditionalConstructs: 0,
         conditionalDestinations: 0,
         entryBoundaries: 1,
-        entryTargets: graph.components
-          .filter(
-            (component) =>
-              component.kind === 'entrypoint' ||
-              component.kind === 'agent_group' ||
-              component.kind === 'agent',
-          )
+        entryTargets: (graph.components.filter(
+          (component) =>
+            component.kind === 'entrypoint' ||
+            component.kind === 'agent_group' ||
+            component.kind === 'agent',
+        )[0] === undefined
+          ? graph.components.slice(0, 1)
+          : graph.components.filter(
+              (component) =>
+                component.kind === 'entrypoint' ||
+                component.kind === 'agent_group' ||
+                component.kind === 'agent',
+            )
+        )
           .slice(0, 1)
           .map((component) => component.identity),
         terminalBoundaries: 0,
@@ -382,7 +389,7 @@ describe('bounded-retry-with-declared-idempotency', () => {
     assert.equal(draft?.polarity, 'strength');
     assert.equal(draft?.severity, 'info');
     assert.equal(draft?.goalEligible, false);
-    assert.match(draft?.explanation ?? '', /at most 3 times/);
+    assert.match(draft?.explanation ?? '', /at most 3 attempts/);
     assert.match(draft?.explanation ?? '', /exponential/);
   });
 
@@ -446,7 +453,7 @@ describe('the two retry rules together', () => {
         benchmarks: [],
         chaosReports: [],
         scenarios: [],
-        evidenceById: new Map(),
+        evidenceById: evidenceForGraph(graph),
       },
       rules: [unsafeRetryRule, safeRetryRule],
     });
@@ -477,14 +484,16 @@ describe('the two retry rules together', () => {
  */
 describe('findings that repeat', () => {
   const toolsWithNoCaller = (count: number): SystemGraph =>
-    buildGraph(
-      [
-        orchestrator,
-        ...Array.from({ length: count }, (_unused, index) =>
-          componentDraft({ kind: 'tool', name: `tool_${index}`, file: `src/tools/${index}.ts` }),
-        ),
-      ],
-      [],
+    withCompleteTopology(
+      buildGraph(
+        [
+          orchestrator,
+          ...Array.from({ length: count }, (_unused, index) =>
+            componentDraft({ kind: 'tool', name: `tool_${index}`, file: `src/tools/${index}.ts` }),
+          ),
+        ],
+        [],
+      ),
     );
 
   const evaluate = (graph: SystemGraph) =>
@@ -499,7 +508,7 @@ describe('findings that repeat', () => {
         benchmarks: [],
         chaosReports: [],
         scenarios: [],
-        evidenceById: new Map(),
+        evidenceById: evidenceForGraph(graph),
       },
       rules: [unusedConfiguredToolRule],
     }).findingSet.findings;
@@ -508,7 +517,7 @@ describe('findings that repeat', () => {
     const findings = evaluate(toolsWithNoCaller(40));
     assert.equal(findings.length, 1, 'forty instances of one pattern are one finding');
     const finding = findings[0];
-    assert.match(finding?.title ?? '', /^40 tools are defined/);
+    assert.match(finding?.title ?? '', /^40 tools have no exact declared caller relation/);
     assert.equal(
       finding?.metrics.find((metric) => metric.name === 'occurrences')?.value,
       40,
@@ -530,7 +539,7 @@ describe('findings that repeat', () => {
 
   it('says nothing about occurrences when the pattern happened once', () => {
     const finding = evaluate(toolsWithNoCaller(1))[0];
-    assert.equal(finding?.title, 'tool_0 is defined and nothing calls it');
+    assert.equal(finding?.title, 'tool_0 has no exact declared caller relation');
     assert.deepEqual(
       finding?.metrics.filter((metric) => metric.name === 'occurrences'),
       [],
@@ -542,7 +551,7 @@ describe('findings that repeat', () => {
     const metric = finding?.metrics.find((metric) => metric.name === 'toolsWithoutCaller');
     assert.equal(metric?.value, 3);
     assert.equal(metric?.sampleSize, 3);
-    assert.match(finding?.explanation ?? '', /the caller is somewhere Orchescope did not read/);
+    assert.match(finding?.explanation ?? '', /caller is outside the audited system/);
   });
 });
 
@@ -551,15 +560,22 @@ describe('the order findings are reported in', () => {
     const noisy = Array.from({ length: 40 }, (_unused, index) =>
       componentDraft({ kind: 'tool', name: `tool_${index}`, file: `src/tools/${index}.ts` }),
     );
-    const graph = buildGraph(
-      [orchestrator, refund, ...noisy],
-      [
-        edgeDraft('calls_tool', orchestrator, refund, {
-          policy: {
-            retry: { maxAttempts: 3, bounded: true, backoff: 'exponential', idempotency: 'absent' },
-          },
-        } as Partial<EdgeDraft>),
-      ],
+    const graph = withCompleteTopology(
+      buildGraph(
+        [orchestrator, refund, ...noisy],
+        [
+          edgeDraft('calls_tool', orchestrator, refund, {
+            policy: {
+              retry: {
+                maxAttempts: 3,
+                bounded: true,
+                backoff: 'exponential',
+                idempotency: 'absent',
+              },
+            },
+          } as Partial<EdgeDraft>),
+        ],
+      ),
     );
     const findings = evaluateRules({
       scanId: 'scan_0000000000000000',
@@ -572,7 +588,7 @@ describe('the order findings are reported in', () => {
         benchmarks: [],
         chaosReports: [],
         scenarios: [],
-        evidenceById: new Map(),
+        evidenceById: evidenceForGraph(graph),
       },
       rules: [unsafeRetryRule, unusedConfiguredToolRule],
     }).findingSet.findings;
@@ -603,7 +619,11 @@ describe('the order findings are reported in', () => {
             explanation: 'one sentence.',
             impact: 'one sentence.',
             components: ['agent:orchestrator'],
-            evidence: [orchestrator.evidence[0]?.id ?? ''],
+            claimEvidence: {
+              mechanism: [orchestrator.evidence[0]?.id ?? ''],
+              subject: [orchestrator.evidence[0]?.id ?? ''],
+              conclusion: [orchestrator.evidence[0]?.id ?? ''],
+            },
             goalEligible: eligible,
             goalReason: eligible ? 'A bounded edit.' : 'A decision for the owner.',
           },
@@ -622,7 +642,7 @@ describe('the order findings are reported in', () => {
         benchmarks: [],
         chaosReports: [],
         scenarios: [],
-        evidenceById: new Map(),
+        evidenceById: evidenceForGraph(buildGraph([orchestrator], [])),
       },
       rules: [ruleFor('a-decision', false), ruleFor('a-bounded-edit', true)],
     }).findingSet.findings;
@@ -665,9 +685,14 @@ describe('side-effect-approval-boundary reachability', () => {
 
   it('fires on an operation an agent can reach', () => {
     const outcome = outcomeFor(
-      buildGraph(
-        [orchestrator, refund, charge],
-        [edgeDraft('calls_tool', orchestrator, refund), edgeDraft('calls_service', refund, charge)],
+      withCompleteTopology(
+        buildGraph(
+          [orchestrator, refund, charge],
+          [
+            edgeDraft('calls_tool', orchestrator, refund),
+            edgeDraft('calls_service', refund, charge),
+          ],
+        ),
       ),
     );
     assert.equal(outcome.status, 'fired');
@@ -680,9 +705,43 @@ describe('side-effect-approval-boundary reachability', () => {
     );
   });
 
+  it('binds a complete caller-population absence to a universal approval strength', () => {
+    const approvedTool = componentDraft({
+      kind: 'tool',
+      name: 'approved_charge',
+      file: 'src/charge.ts',
+      details: {
+        for: 'tool',
+        approvalRequired: true,
+      },
+    });
+    const graph = withCompleteTopology(
+      buildGraph(
+        [orchestrator, approvedTool, charge],
+        [
+          edgeDraft('calls_tool', orchestrator, approvedTool),
+          edgeDraft('calls_service', approvedTool, charge),
+        ],
+      ),
+    );
+    const outcome = outcomeFor(graph);
+    const strength = outcome.drafts.find(
+      (draft) =>
+        draft.polarity === 'strength' &&
+        draft.components.includes('external_service:api.stripe.com'),
+    );
+    assert.ok(strength !== undefined);
+    const population = strength.newEvidence?.find((record) => record.kind === 'absence');
+    assert.equal(population?.kind, 'absence');
+    assert.equal(population?.inspectedCount, 1);
+    assert.ok(strength.claimEvidence.conclusion.includes(population.id));
+  });
+
   it('stays quiet about a write no agent, tool or server reaches', () => {
     const outcome = outcomeFor(
-      buildGraph([sidebar, uiDelete], [edgeDraft('calls_service', sidebar, uiDelete)]),
+      withCompleteTopology(
+        buildGraph([sidebar, uiDelete], [edgeDraft('calls_service', sidebar, uiDelete)]),
+      ),
     );
     assert.notEqual(outcome.status, 'fired');
     assert.equal(outcome.drafts.length, 0);
@@ -694,12 +753,14 @@ describe('side-effect-approval-boundary reachability', () => {
    */
   it('says how many consequential operations it declined to report, and why', () => {
     const outcome = outcomeFor(
-      buildGraph(
-        [orchestrator, refund, sidebar, uiDelete],
-        [
-          edgeDraft('calls_tool', orchestrator, refund),
-          edgeDraft('calls_service', sidebar, uiDelete),
-        ],
+      withCompleteTopology(
+        buildGraph(
+          [orchestrator, refund, sidebar, uiDelete],
+          [
+            edgeDraft('calls_tool', orchestrator, refund),
+            edgeDraft('calls_service', sidebar, uiDelete),
+          ],
+        ),
       ),
     );
     assert.equal(outcome.status, 'fired');
@@ -715,7 +776,7 @@ describe('side-effect-approval-boundary reachability', () => {
    * has not wired an agent to them yet is the subject of a different rule, not an exemption from this one.
    */
   it('treats a tool as reachable even with no agent wired to it', () => {
-    const outcome = outcomeFor(buildGraph([refund], []));
+    const outcome = outcomeFor(withCompleteTopology(buildGraph([refund], [])));
     assert.equal(outcome.status, 'fired');
     assert.deepEqual(outcome.drafts[0]?.components, ['tool:issue_refund']);
   });
@@ -1175,7 +1236,7 @@ describe('the source locations a finding lists', () => {
         benchmarks: [],
         chaosReports: [],
         scenarios: [],
-        evidenceById: new Map(),
+        evidenceById: evidenceForGraph(graph),
       },
       rules: [unsafeRetryRule],
     });

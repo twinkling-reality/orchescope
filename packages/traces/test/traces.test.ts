@@ -283,6 +283,9 @@ describe('deriveTopology', () => {
     assert.equal(result.runMetrics.toolCalls, 1);
     assert.equal(result.runMetrics.agentSteps, 1);
     assert.equal(result.topology.components.length, 3);
+    assert.equal(result.evidence.length, 3);
+    assert.ok(result.evidence.every((record) => record.kind === 'span'));
+    assert.equal(new Set(result.evidence.map((record) => record.id)).size, 3);
   });
 
   /**

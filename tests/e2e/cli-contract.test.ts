@@ -168,6 +168,15 @@ describe('startup and discovery', () => {
     assert.equal(result.code, EXIT.user);
   });
 
+  it('refuses an unbounded audit run population', async () => {
+    const result = await run(['--cwd', demo, 'audit', '--runs', '101', '--json']);
+    assert.equal(result.code, EXIT.user);
+    const document = parsed(result);
+    const error = document['error'] as { code: string; message: string };
+    assert.equal(error.code, 'INVALID_ARGUMENT');
+    assert.match(error.message, /integer from 0 through 100/);
+  });
+
   it('reports what the machine can and cannot do', async () => {
     const result = await run(['doctor', '--json']);
     const document = parsed(result);

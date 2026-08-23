@@ -11,6 +11,7 @@ import type {
   Sha256Hex,
   SideEffectRecord,
   SystemGraph,
+  Evidence,
 } from '@orchescope/schema';
 
 /**
@@ -20,6 +21,26 @@ import type {
 
 export const TEST_TIMESTAMP = '2026-01-01T00:00:00.000Z';
 const ZERO_DIGEST = '0'.repeat(64) as Sha256Hex;
+const EVIDENCE_BY_ID = new Map<string, Evidence>();
+
+const remember = <T extends Evidence>(evidence: T): T => {
+  EVIDENCE_BY_ID.set(evidence.id, evidence);
+  return evidence;
+};
+
+/** Exact fixture evidence referenced by a built graph, for engine tests that enforce resolution. */
+export const evidenceForGraph = (graph: SystemGraph): ReadonlyMap<string, Evidence> => {
+  const ids = new Set([
+    ...graph.components.flatMap((component) => component.evidence),
+    ...graph.edges.flatMap((edge) => edge.evidence),
+  ]);
+  return new Map(
+    [...ids]
+      .sort()
+      .map((id) => [id, EVIDENCE_BY_ID.get(id)] as const)
+      .filter((entry): entry is readonly [string, Evidence] => entry[1] !== undefined),
+  );
+};
 
 export const testProvenance = (
   overrides: Partial<GraphProvenance> = {},
@@ -63,11 +84,13 @@ export type ComponentFixture = {
 export const componentDraft = (fixture: ComponentFixture): ComponentDraft => {
   const file = fixture.file ?? `src/${fixture.kind}s/${fixture.name}.ts`;
   const line = fixture.line ?? 1;
-  const evidence = sourceSpanEvidence({
-    producer: fixture.discoveredBy ?? 'fixture',
-    location: { file, startLine: line },
-    symbol: fixture.name,
-  });
+  const evidence = remember(
+    sourceSpanEvidence({
+      producer: fixture.discoveredBy ?? 'fixture',
+      location: { file, startLine: line },
+      symbol: fixture.name,
+    }),
+  );
   return {
     identity: buildIdentity(fixture.kind, moduleNamespace(file), fixture.name),
     kind: fixture.kind,
@@ -98,11 +121,13 @@ export const edgeDraft = (
   confidence: 0.9,
   discoveredBy: 'fixture',
   evidence: [
-    sourceSpanEvidence({
-      producer: 'fixture',
-      location: from.sourceLocations?.[0] ?? { file: 'src/main.ts', startLine: 1 },
-      symbol: `${from.displayName}->${to.displayName}`,
-    }),
+    remember(
+      sourceSpanEvidence({
+        producer: 'fixture',
+        location: from.sourceLocations?.[0] ?? { file: 'src/main.ts', startLine: 1 },
+        symbol: `${from.displayName}->${to.displayName}`,
+      }),
+    ),
   ],
   ...overrides,
 });

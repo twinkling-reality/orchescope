@@ -7,6 +7,7 @@ export {
   buildReportBundle,
   type CapabilityInput,
 } from './bundle.ts';
+export { REPORT_EVIDENCE_CEILING, selectReportEvidence } from './evidence-selection.ts';
 export {
   auditCommand,
   benchmarkCommand,

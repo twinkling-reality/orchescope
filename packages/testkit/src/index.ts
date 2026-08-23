@@ -7,6 +7,7 @@ export {
   type ComponentFixture,
   componentDraft,
   edgeDraft,
+  evidenceForGraph,
   emptyCoverage,
   observedComponent,
   observedEdge,

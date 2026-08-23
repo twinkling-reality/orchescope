@@ -5,6 +5,7 @@ import type {
   EvidenceId,
   SourceLocation,
 } from '@orchescope/schema';
+import { OrchescopeError } from './errors.ts';
 import { evidenceId } from './ids.ts';
 
 /**
@@ -64,6 +65,10 @@ export const spanEvidence = (input: {
   readonly traceId: string;
   readonly spanId: string;
   readonly spanName: string;
+  readonly observedComponent?: {
+    readonly kind: string;
+    readonly observedName: string;
+  };
   readonly attribute?: string;
   readonly attributeValue?: string;
 }): Evidence =>
@@ -75,31 +80,70 @@ export const spanEvidence = (input: {
     traceId: input.traceId,
     spanId: input.spanId,
     spanName: input.spanName,
+    ...(input.observedComponent === undefined
+      ? {}
+      : { observedComponent: { ...input.observedComponent } }),
     ...(input.attribute === undefined ? {} : { attribute: input.attribute }),
     ...(input.attributeValue === undefined ? {} : { attributeValue: input.attributeValue }),
   });
 
-export const metricEvidence = (input: {
+type MetricEvidenceInput = {
   readonly producer: string;
-  readonly runId: string;
   readonly metric: string;
   readonly value: number;
   readonly unit: string;
+  /** Number of metric observations, not a substitute for the exact run population. */
   readonly sampleSize: number;
   readonly componentId?: string;
   readonly basis?: ClaimBasis;
-}): Evidence =>
-  withId({
+} & (
+  | { readonly runId: string; readonly runIds?: never }
+  | { readonly runId?: never; readonly runIds: readonly string[] }
+);
+
+export const metricEvidence = (input: MetricEvidenceInput): Evidence => {
+  const candidate = input as MetricEvidenceInput & {
+    readonly runId?: string;
+    readonly runIds?: readonly string[];
+  };
+  const hasRunId = candidate.runId !== undefined;
+  const hasRunIds = candidate.runIds !== undefined;
+  if (hasRunId === hasRunIds) {
+    throw new OrchescopeError(
+      'INVALID_ARGUMENT',
+      'Metric evidence requires exactly one single-run identity or aggregate run population.',
+    );
+  }
+
+  const runPopulation =
+    candidate.runIds === undefined ? undefined : [...new Set(candidate.runIds)].sort();
+  if (candidate.runId === '' || runPopulation?.some((id) => id === '')) {
+    throw new OrchescopeError(
+      'INVALID_ARGUMENT',
+      'Metric evidence run identities must not be empty.',
+    );
+  }
+  if (runPopulation !== undefined && (runPopulation.length === 0 || runPopulation.length > 100)) {
+    throw new OrchescopeError(
+      'LIMIT_EXCEEDED',
+      'Aggregate metric evidence requires between 1 and 100 distinct run identities.',
+    );
+  }
+
+  const record = {
     kind: 'metric' as const,
     basis: input.basis ?? 'observed',
     producer: input.producer,
-    runId: input.runId,
     metric: input.metric,
     value: input.value,
     unit: input.unit,
     sampleSize: input.sampleSize,
     ...(input.componentId === undefined ? {} : { componentId: input.componentId }),
-  });
+  };
+  return candidate.runId === undefined
+    ? withId({ ...record, runIds: runPopulation as string[] })
+    : withId({ ...record, runId: candidate.runId });
+};
 
 export const faultInjectionEvidence = (input: {
   readonly producer: string;
@@ -107,6 +151,15 @@ export const faultInjectionEvidence = (input: {
   readonly faultKind: string;
   readonly target: string;
   readonly appliedCount: number;
+  readonly taskCompleted?: boolean;
+  readonly recovered?: boolean;
+  readonly duplicateSideEffects?: number;
+  readonly costAmplification?: number;
+  readonly retryAmplification?: number;
+  readonly prohibitedSideEffects?: number;
+  readonly userInterventions?: number;
+  readonly degradedGracefully?: boolean;
+  readonly policyViolations?: number;
 }): Evidence =>
   withId({
     kind: 'fault_injection' as const,
@@ -116,6 +169,27 @@ export const faultInjectionEvidence = (input: {
     faultKind: input.faultKind,
     target: input.target,
     appliedCount: input.appliedCount,
+    ...(input.taskCompleted === undefined ? {} : { taskCompleted: input.taskCompleted }),
+    ...(input.recovered === undefined ? {} : { recovered: input.recovered }),
+    ...(input.duplicateSideEffects === undefined
+      ? {}
+      : { duplicateSideEffects: input.duplicateSideEffects }),
+    ...(input.costAmplification === undefined
+      ? {}
+      : { costAmplification: input.costAmplification }),
+    ...(input.retryAmplification === undefined
+      ? {}
+      : { retryAmplification: input.retryAmplification }),
+    ...(input.prohibitedSideEffects === undefined
+      ? {}
+      : { prohibitedSideEffects: input.prohibitedSideEffects }),
+    ...(input.userInterventions === undefined
+      ? {}
+      : { userInterventions: input.userInterventions }),
+    ...(input.degradedGracefully === undefined
+      ? {}
+      : { degradedGracefully: input.degradedGracefully }),
+    ...(input.policyViolations === undefined ? {} : { policyViolations: input.policyViolations }),
   });
 
 export const derivedEvidence = (input: {

@@ -37,6 +37,36 @@ const contextFor = (graph: SystemGraph): RuleContext => ({
   evidenceById: new Map(),
 });
 
+const completeTopology = (graph: SystemGraph): SystemGraph => ({
+  ...graph,
+  coverage: {
+    ...graph.coverage,
+    topology: {
+      status: 'complete',
+      producers: [
+        {
+          adapterId: 'fixture:topology',
+          status: 'complete',
+          inspectedInputs: graph.components.length,
+          relationsFound: graph.edges.length,
+        },
+      ],
+      inspectedInputs: graph.components.length,
+      explicitRelations: graph.edges.length,
+      conditionalConstructs: 0,
+      conditionalDestinations: 0,
+      entryBoundaries: 1,
+      entryTargets: graph.components.slice(0, 1).map((component) => component.identity),
+      terminalBoundaries: 0,
+      boundaryFacts: [{ kind: 'entry', location: { file: 'src/main.ts', startLine: 1 } }],
+      configurationBounds: 0,
+      configurationBoundFacts: [],
+      unresolvedCount: 0,
+      unresolved: [],
+    },
+  },
+});
+
 const agent = componentDraft({ kind: 'agent', name: 'orchestrator', file: 'src/main.ts' });
 
 const fixtureTool = componentDraft({
@@ -68,7 +98,7 @@ describe('a population that exists and is entirely declared in tests', () => {
 
   it('still judges a tool the source declares beside one a test declares', () => {
     const outcome = unusedConfiguredToolRule.evaluate(
-      contextFor(buildGraph([agent, fixtureTool, shippedTool])),
+      contextFor(completeTopology(buildGraph([agent, fixtureTool, shippedTool]))),
     );
     assert.equal(outcome.status, 'fired');
     const named = outcome.drafts.flatMap((draft) => draft.components);

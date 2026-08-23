@@ -101,6 +101,10 @@ export const MissingSpanAttribute = Type.Object(
     ),
     /** Observed components in this run that did not carry the attribute. */
     observedComponents: NonNegativeInt,
+    /** Bounded span evidence sample establishing the refusal population. */
+    evidence: Type.Optional(Type.Array(EvidenceId, { maxItems: 10 })),
+    /** Further affected components outside the evidence sample. */
+    evidenceOmitted: Type.Optional(NonNegativeInt),
   },
   { additionalProperties: false },
 );
@@ -185,7 +189,15 @@ export const RuntimeTopology = Type.Object(
     edges: Type.Array(ObservedEdge),
     sideEffects: Type.Array(SideEffectRecord),
     coverage: Type.Object(
-      { missingSpanAttributes: Type.Array(MissingSpanAttribute) },
+      {
+        /** Accepted spans inspected by topology derivation. Missing on imported legacy topologies. */
+        acceptedSpans: Type.Optional(NonNegativeInt),
+        /** Spans dropped before inspection because the configured receiver ceiling was reached. */
+        droppedSpans: Type.Optional(NonNegativeInt),
+        /** Inputs rejected during trace validation and therefore absent from the inspected population. */
+        rejectedSpans: Type.Optional(NonNegativeInt),
+        missingSpanAttributes: Type.Array(MissingSpanAttribute),
+      },
       { additionalProperties: false },
     ),
     /** Repository revision reported by the target through the OpenTelemetry `vcs.*` attributes. */

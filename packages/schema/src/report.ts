@@ -135,6 +135,48 @@ export const GoalValidationSummary = Type.Object(
 );
 export type GoalValidationSummary = Static<typeof GoalValidationSummary>;
 
+export const EvidenceCoverage = Type.Object(
+  {
+    totalEligible: NonNegativeInt,
+    included: NonNegativeInt,
+    omitted: NonNegativeInt,
+    ceiling: NonNegativeInt,
+    requiredIncluded: NonNegativeInt,
+    omissionReasons: Type.Array(
+      Type.Object(
+        {
+          reason: literals([
+            'uncited_span_over_ceiling',
+            'uncited_discovery_over_ceiling',
+            'uncited_derived_over_ceiling',
+            'uncited_other_over_ceiling',
+          ] as const),
+          count: NonNegativeInt,
+        },
+        { additionalProperties: false },
+      ),
+      { maxItems: 4 },
+    ),
+  },
+  { additionalProperties: false },
+);
+export type EvidenceCoverage = Static<typeof EvidenceCoverage>;
+
+export const ReportRunPopulations = Type.Object(
+  {
+    observed: Type.Object(
+      { count: NonNegativeInt, runIds: Type.Array(NonEmptyString(), { maxItems: 100 }) },
+      { additionalProperties: false },
+    ),
+    silent: Type.Object(
+      { count: NonNegativeInt, runIds: Type.Array(NonEmptyString(), { maxItems: 100 }) },
+      { additionalProperties: false },
+    ),
+  },
+  { additionalProperties: false },
+);
+export type ReportRunPopulations = Static<typeof ReportRunPopulations>;
+
 export const ReportBundle = Document(
   schemaId('report'),
   SCHEMA_VERSIONS.report,
@@ -146,9 +188,13 @@ export const ReportBundle = Document(
     /** The declared versus exercised delta. Present once at least one run has been ingested. */
     reconciliation: Type.Optional(ReconciliationDelta),
     findings: Type.Array(Finding),
-    /** Evidence records referenced by anything in this bundle, deduplicated. */
+    /** All required citations plus uncited eligible records that fit within evidenceCoverage.ceiling. */
     evidence: Type.Array(Evidence),
+    /** Missing on older reports; absence means evidence export completeness is unknown. */
+    evidenceCoverage: Type.Optional(EvidenceCoverage),
     runs: Type.Array(RunRecord),
+    /** Exact observed and silent populations. Missing on older reports means unknown. */
+    runPopulations: Type.Optional(ReportRunPopulations),
     scenarios: Type.Array(Scenario),
     scenarioRuns: Type.Array(ScenarioRunSummary),
     componentMetrics: Type.Array(ComponentRunMetrics),

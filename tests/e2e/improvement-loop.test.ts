@@ -315,6 +315,8 @@ describe('the improvement loop', () => {
     const reportFile = join(root, 'loop-report.json');
     await runCli(root, ['export', '--format', 'json', '--out', reportFile]);
     const bundle = JSON.parse(readFileSync(reportFile, 'utf8')) as {
+      evidence: { id: string; kind: string; inputs?: string[] }[];
+      goals: { id: string; evidence: string[] }[];
       scenarioRuns: { scenarioId: string; evaluators: { kind: string; passed: boolean }[] }[];
       goalValidations?: {
         goalId: string;
@@ -322,6 +324,26 @@ describe('the improvement loop', () => {
         outcomes: { criterionId: string; satisfied: boolean; decided: boolean; detail: string }[];
       }[];
     };
+
+    const exportedGoal = bundle.goals.find((entry) => entry.id === goal.id);
+    assert.ok(exportedGoal !== undefined, 'the rescan report dropped the goal');
+    const exportedEvidence = new Set(bundle.evidence.map((record) => record.id));
+    for (const evidenceId of exportedGoal.evidence) {
+      assert.ok(
+        exportedEvidence.has(evidenceId),
+        `the rescan report dropped historical goal evidence ${evidenceId}`,
+      );
+    }
+    const retainedDerivation = bundle.evidence.find(
+      (record) => exportedGoal.evidence.includes(record.id) && record.kind === 'derived',
+    );
+    assert.ok(retainedDerivation !== undefined, 'the fixture goal carried no retained derivation');
+    for (const input of retainedDerivation.inputs ?? []) {
+      assert.ok(
+        exportedEvidence.has(input),
+        `the rescan report dropped historical derivation input ${input}`,
+      );
+    }
 
     // The judgement reaches the report. Without it the goals screen has only the comparison log to read,
     // and a goal that was judged but has no comparison attached looks like one nobody ever tried to

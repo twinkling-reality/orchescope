@@ -1,4 +1,5 @@
 import {
+  absenceEvidence,
   agree,
   CONFIDENCE_BANDS,
   derivedEvidence,
@@ -145,7 +146,11 @@ export const sequentialIndependentCallsRule: Rule = {
         components: [sourceId, ...targets.map((target) => target.id)],
         edges: neverParallel.map((edge) => edge.id),
         newEvidence: [record],
-        evidence: neverParallel.flatMap((edge) => edge.evidence.slice(0, 2)) as EvidenceId[],
+        claimEvidence: {
+          mechanism: [record.id],
+          subject: neverParallel.flatMap((edge) => edge.evidence.slice(0, 2)) as EvidenceId[],
+          conclusion: [record.id],
+        },
         metrics: [
           {
             name: 'sequential_total_ms',
@@ -213,7 +218,7 @@ export const latencyConcentrationRule: Rule = {
       if (component === undefined) continue;
       const record = metricEvidence({
         producer: PRODUCER,
-        runId: context.observedRuns.map((run) => run.run.id).join(','),
+        runIds: context.observedRuns.map((run) => run.run.id),
         metric: 'self_time_share',
         value: share,
         unit: 'fraction',
@@ -237,7 +242,11 @@ export const latencyConcentrationRule: Rule = {
         impact: 'Any latency work that does not touch this component will not move the total much.',
         components: [component.id],
         newEvidence: [record],
-        evidence: component.evidence.slice(0, 2) as EvidenceId[],
+        claimEvidence: {
+          mechanism: [record.id],
+          subject: component.evidence.slice(0, 2) as EvidenceId[],
+          conclusion: [record.id],
+        },
         metrics: [
           {
             name: 'self_time_ms',
@@ -291,6 +300,15 @@ export const tokenConcentrationRule: Rule = {
       if (share < TOKEN_SHARE_THRESHOLD || entry.executions < MIN_EXECUTIONS_FOR_SHARE) continue;
       const component = context.graph.component(entry.componentId);
       if (component === undefined) continue;
+      const record = metricEvidence({
+        producer: PRODUCER,
+        runIds: context.observedRuns.map((run) => run.run.id),
+        metric: 'token_share',
+        value: share,
+        unit: 'fraction',
+        sampleSize: entry.executions,
+        componentId: entry.componentId,
+      });
       drafts.push({
         ruleId: 'tokens-concentrated-in-one-component',
         situation: 'component-holds-large-token-share',
@@ -307,7 +325,12 @@ export const tokenConcentrationRule: Rule = {
         explanation: `${component.displayName} used ${entry.inputTokens} input and ${entry.outputTokens} output tokens across ${formatCount(entry.executions, 'execution')}, which is ${Math.round(share * 100)} percent of the ${overall} tokens measured. Orchescope reports tokens rather than money because the generative AI conventions carry no cost attribute and a bundled price table would go stale.`,
         impact: 'Token reduction work anywhere else has a smaller ceiling than work here.',
         components: [component.id],
-        evidence: component.evidence.slice(0, 2) as EvidenceId[],
+        newEvidence: [record],
+        claimEvidence: {
+          mechanism: [record.id],
+          subject: component.evidence.slice(0, 2) as EvidenceId[],
+          conclusion: [record.id],
+        },
         metrics: [
           {
             name: 'input_tokens',
@@ -399,9 +422,13 @@ export const repeatedContextRule: Rule = {
         impact: `Each agent pays for context it may not use. At ${Math.round(largest)} tokens per call, the redundant share is the largest single lever on cost here.`,
         components: similar.map((candidate) => candidate.entry.componentId),
         newEvidence: [record],
-        evidence: similar.flatMap(
-          (candidate) => candidate.component?.evidence.slice(0, 1) ?? [],
-        ) as EvidenceId[],
+        claimEvidence: {
+          mechanism: [record.id],
+          subject: similar.flatMap(
+            (candidate) => candidate.component?.evidence.slice(0, 1) ?? [],
+          ) as EvidenceId[],
+          conclusion: [record.id],
+        },
         metrics: similar.map((candidate) => ({
           name: `input_tokens_per_execution:${candidate.entry.componentId}`,
           value: Math.round(candidate.tokensPerExecution),
@@ -466,7 +493,11 @@ export const unreliableRelationRule: Rule = {
         impact: 'A call that fails this often shapes both the latency distribution and the cost.',
         components: [edge.from, edge.to],
         edges: [edge.id],
-        evidence: edge.evidence.slice(0, 3) as EvidenceId[],
+        claimEvidence: {
+          mechanism: edge.evidence.slice(0, 3) as EvidenceId[],
+          subject: edge.evidence.slice(0, 3) as EvidenceId[],
+          conclusion: edge.evidence.slice(0, 3) as EvidenceId[],
+        },
         metrics: [
           {
             name: 'error_rate',
@@ -509,7 +540,7 @@ const coverageClaimSupport = (
   }
   const record = metricEvidence({
     producer: PRODUCER,
-    runId: context.observedRuns.map((entry) => entry.run.id).join(','),
+    runIds: context.observedRuns.map((entry) => entry.run.id),
     metric: 'component_exercise_rate',
     value: rate,
     unit: 'fraction',
@@ -537,6 +568,23 @@ const noObservationDraft = (
   named: readonly ComponentId[],
 ): FindingDraft => {
   const silent = context.silentRuns.length;
+  const population =
+    silent === 0
+      ? absenceEvidence({
+          producer: PRODUCER,
+          searched: 'a recorded runtime run',
+          scope: 'the complete recorded run population loaded for this audit',
+          inspectedCount: 0,
+        })
+      : metricEvidence({
+          producer: PRODUCER,
+          runIds: context.silentRuns.map((run) => run.id),
+          metric: 'accepted_spans',
+          value: 0,
+          unit: 'span',
+          sampleSize: silent,
+          basis: 'discovered',
+        });
   return {
     ruleId: 'observability-coverage',
     situation: silent === 0 ? 'no-runtime-run-recorded' : 'recorded-run-produced-no-spans',
@@ -569,10 +617,12 @@ const noObservationDraft = (
     impact:
       'Reconciliation, latency, cost and resilience findings are all unavailable, and they are where most of the value is.',
     components: [...named],
-    evidence: named.slice(0, 2).flatMap((componentId) => {
-      const component = context.graph.component(componentId);
-      return component === undefined ? [] : (component.evidence.slice(0, 1) as EvidenceId[]);
-    }),
+    newEvidence: [population],
+    claimEvidence: {
+      mechanism: [population.id],
+      subject: [population.id],
+      conclusion: [population.id],
+    },
     recommendation:
       silent === 0
         ? {
@@ -640,11 +690,16 @@ export const observabilityCoverageRule: Rule = {
           confidence: CONFIDENCE_BANDS.deterministic,
           basis: 'observed',
           title: `${Math.round(rate * 100)} percent of declared components were exercised`,
-          explanation: `${coverage.exercisedComponents} of ${coverage.declaredComponents} declared components appeared in at least one run, so the runtime findings in this report cover most of the system.`,
-          impact: 'Conclusions about behaviour rest on evidence for most of the declared model.',
+          explanation: `${coverage.exercisedComponents} of ${coverage.declaredComponents} declared components appeared in at least one run. This is component identity coverage; independently qualified relation coverage is reported separately.`,
+          impact:
+            'Component-level runtime conclusions rest on evidence for most of the declared component population.',
           components: exercised,
           newEvidence: support.newEvidence,
-          evidence: support.evidence,
+          claimEvidence: {
+            mechanism: support.newEvidence.map((record) => record.id),
+            subject: [...support.evidence, ...support.newEvidence.map((record) => record.id)],
+            conclusion: support.newEvidence.map((record) => record.id),
+          },
           metrics: [
             {
               name: 'component_exercise_rate',
@@ -682,7 +737,11 @@ export const observabilityCoverageRule: Rule = {
         impact: 'Most runtime conclusions do not cover the unexercised part of the system.',
         components: unexercised,
         newEvidence: support.newEvidence,
-        evidence: support.evidence,
+        claimEvidence: {
+          mechanism: support.newEvidence.map((record) => record.id),
+          subject: [...support.evidence, ...support.newEvidence.map((record) => record.id)],
+          conclusion: support.newEvidence.map((record) => record.id),
+        },
         metrics: [
           {
             name: 'component_exercise_rate',

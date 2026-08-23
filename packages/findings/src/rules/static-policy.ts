@@ -203,7 +203,11 @@ export const unsafeRetryRule: Rule = {
         components: [target.id, ...(source === undefined ? [] : [source.id])],
         edges: [edge.id],
         newEvidence: [record],
-        evidence: edge.evidence as EvidenceId[],
+        claimEvidence: {
+          mechanism: [record.id],
+          subject: edge.evidence as EvidenceId[],
+          conclusion: [record.id],
+        },
         taxonomy: ['owasp-asi:ASI06'],
         recommendation: UNSAFE_RETRY_REMEDIATIONS['no-idempotency-key'](target.displayName),
         remediationVariant: 'no-idempotency-key',
@@ -301,6 +305,12 @@ export const unboundedRetryRule: Rule = {
       }
       const target = retriedOperationOf(context, edge) ?? context.graph.component(edge.to);
       const source = context.graph.component(edge.from);
+      const record = absenceEvidence({
+        producer: PRODUCER,
+        searched: `a deterministic attempt ceiling for ${edge.id}`,
+        scope: `the ${edge.evidence.length} source facts attached to the retry relation`,
+        inspectedCount: edge.evidence.length,
+      });
       drafts.push({
         ruleId: 'unbounded-retry',
         situation: 'retry-without-attempt-ceiling',
@@ -322,7 +332,12 @@ export const unboundedRetryRule: Rule = {
           ...(source === undefined ? [] : [source.id]),
         ],
         edges: [edge.id],
-        evidence: edge.evidence as EvidenceId[],
+        newEvidence: [record],
+        claimEvidence: {
+          mechanism: [record.id],
+          subject: edge.evidence as EvidenceId[],
+          conclusion: [record.id],
+        },
         recommendation: UNBOUNDED_RETRY_REMEDIATIONS['no-attempt-ceiling'](),
         remediationVariant: 'no-attempt-ceiling',
         goalEligible: true,
@@ -453,8 +468,13 @@ export const missingTimeoutRule: Rule = {
     }
     const missing = modelEdges.filter((edge) => !declaresDeadline(edge));
     if (missing.length === 0) {
-      const evidence = modelEdges.flatMap((edge) => edge.evidence.slice(0, 1)) as EvidenceId[];
       const origins = deadlineOrigins(modelEdges);
+      const population = absenceEvidence({
+        producer: PRODUCER,
+        searched: 'an inspected in-system model invocation without a declared timeout',
+        scope: 'the complete audited invokes_model relation population',
+        inspectedCount: modelEdges.length,
+      });
       return fired([
         {
           ruleId: 'model-call-without-timeout',
@@ -465,13 +485,18 @@ export const missingTimeoutRule: Rule = {
           severity: 'info',
           confidence: CONFIDENCE_BANDS.strongStructural,
           basis: 'discovered',
-          title: 'Every discovered model invocation declares a timeout',
-          explanation: `All ${formatCount(modelEdges.length, 'model call')} ${agree(modelEdges.length, 'carries', 'carry')} an explicit timeout${origins === undefined ? '' : `, ${origins}`}, so a hung provider cannot stall a run indefinitely.`,
+          title: 'Every inspected in-system model invocation declares a timeout',
+          explanation: `All ${formatCount(modelEdges.length, 'model call')} ${agree(modelEdges.length, 'carries', 'carry')} an explicit timeout${origins === undefined ? '' : `, ${origins}`}. This is a claim about the inspected declarations; runtime enforcement was not observed by this rule.`,
           impact:
-            'A slow or hanging provider fails fast instead of consuming the whole run budget.',
+            'Every inspected model invocation has a source-declared deadline available to bound its wait.',
           components: modelEdges.map((edge) => edge.from),
           edges: modelEdges.map((edge) => edge.id),
-          evidence,
+          newEvidence: [population],
+          claimEvidence: {
+            mechanism: [population.id],
+            subject: [population.id],
+            conclusion: [population.id],
+          },
           goalEligible: false,
           goalReason: 'Nothing to change.',
           tags: ['positive', 'timeout'],
@@ -490,6 +515,12 @@ export const missingTimeoutRule: Rule = {
     const drafts: FindingDraft[] = [...byModel].map(([modelId, edges]) => {
       const target = context.graph.component(modelId);
       const callers = [...new Set(edges.map((edge) => edge.from))];
+      const population = absenceEvidence({
+        producer: PRODUCER,
+        searched: `a declared timeout on the ${edges.length} invocation relations reaching ${modelId}`,
+        scope: 'the complete audited invokes_model relation group for this exact model identity',
+        inspectedCount: edges.length,
+      });
       return {
         ruleId: 'model-call-without-timeout',
         situation: 'model-call-without-timeout',
@@ -507,7 +538,12 @@ export const missingTimeoutRule: Rule = {
         impact: 'One unresponsive provider call can consume an entire run.',
         components: [...callers, ...(target === undefined ? [] : [target.id])],
         edges: edges.map((edge) => edge.id),
-        evidence: edges.flatMap((edge) => edge.evidence.slice(0, 2)) as EvidenceId[],
+        newEvidence: [population],
+        claimEvidence: {
+          mechanism: [population.id],
+          subject: edges.flatMap((edge) => edge.evidence.slice(0, 2)) as EvidenceId[],
+          conclusion: [population.id],
+        },
         recommendation: TIMEOUT_REMEDIATIONS[timeoutVariantFor(target)](),
         remediationVariant: timeoutVariantFor(target),
         goalEligible: true,
@@ -584,6 +620,153 @@ export const APPROVAL_REMEDIATIONS = {
   }),
 } satisfies RemediationVariants;
 
+type ApprovalFacts = {
+  readonly guardEdges: readonly Edge[];
+  readonly incoming: readonly Edge[];
+  readonly policyEdges: readonly Edge[];
+  readonly guarded: boolean;
+  readonly requiresApproval: boolean;
+  readonly guardedByPolicy: boolean;
+  readonly allKnownCallersApproved: boolean;
+  readonly behindApprovedCallers: boolean;
+};
+
+const approvalFactsFor = (
+  context: RuleContext,
+  component: Component,
+  callerPopulationComplete: boolean,
+): ApprovalFacts => {
+  const guardEdges = context.graph
+    .outgoing(component.id)
+    .filter((edge) => edge.kind === 'guarded_by');
+  const incoming = context.graph.incoming(component.id);
+  const policyEdges = incoming.filter((edge) => edge.policy?.requiresApproval === true);
+  const allKnownCallersApproved = approvedCallersOf(context, component);
+  return {
+    guardEdges,
+    incoming,
+    policyEdges,
+    guarded: guardEdges.length > 0,
+    requiresApproval:
+      component.details?.for === 'tool' && component.details.approvalRequired === true,
+    guardedByPolicy: policyEdges.length > 0,
+    allKnownCallersApproved,
+    behindApprovedCallers: callerPopulationComplete && allKnownCallersApproved,
+  };
+};
+
+const approvedOperationDraft = (
+  context: RuleContext,
+  component: Component,
+  facts: ApprovalFacts,
+): FindingDraft => {
+  const declaredCallers = declaredCallersOf(context.graph, component.id);
+  const approvedCallers = declaredCallers.filter(
+    (caller) => caller.details?.for === 'tool' && caller.details.approvalRequired === true,
+  );
+  const callerPopulation = facts.behindApprovedCallers
+    ? absenceEvidence({
+        producer: PRODUCER,
+        searched: `an unapproved declared caller reaching ${component.id}`,
+        scope: 'the complete declared caller population for this exact component identity',
+        inspectedCount: declaredCallers.length,
+      })
+    : undefined;
+  const inputs = [
+    ...component.evidence,
+    ...facts.guardEdges.flatMap((edge) => edge.evidence),
+    ...facts.policyEdges.flatMap((edge) => edge.evidence),
+    ...(facts.behindApprovedCallers ? approvedCallers.flatMap((caller) => caller.evidence) : []),
+    ...(callerPopulation === undefined ? [] : [callerPopulation.id]),
+  ] as EvidenceId[];
+  const record = derivedEvidence({
+    producer: PRODUCER,
+    rule: 'side-effect-approval-boundary:declared',
+    inputs,
+    note: `${component.id} has a declared approval boundary${facts.behindApprovedCallers ? ' across the complete declared caller population' : ' on the cited declaration or relation'}`,
+  });
+  const declaration = facts.guarded
+    ? 'an approval gate was discovered'
+    : facts.requiresApproval
+      ? 'the tool declares that approval is required'
+      : facts.guardedByPolicy
+        ? 'the calling policy declares that approval is required'
+        : 'every tool that reaches it declares that approval is required';
+  return {
+    ruleId: 'side-effect-approval-boundary',
+    situation: 'consequential-operation-with-approval',
+    category: 'security',
+    polarity: 'strength',
+    occurrence: {
+      key: 'approved',
+      groupedTitle: '{count} consequential operations are behind an approval boundary',
+    },
+    severity: 'info',
+    confidence: CONFIDENCE_BANDS.strongStructural,
+    basis: 'discovered',
+    title: `${component.displayName} is behind an approval boundary`,
+    explanation: `${component.displayName} has effect class ${component.sideEffect} and is guarded: ${declaration}.`,
+    impact:
+      'The reviewed declaration routes this consequential operation through an explicit approval decision.',
+    components: [component.id],
+    newEvidence: [...(callerPopulation === undefined ? [] : [callerPopulation]), record],
+    claimEvidence: {
+      mechanism: [record.id],
+      subject: [
+        ...(component.evidence.slice(0, 3) as EvidenceId[]),
+        ...(callerPopulation === undefined ? [] : [callerPopulation.id]),
+      ],
+      conclusion: [record.id, ...(callerPopulation === undefined ? [] : [callerPopulation.id])],
+    },
+    goalEligible: false,
+    goalReason: 'Nothing to change.',
+    tags: ['positive', 'approval'],
+  };
+};
+
+const unapprovedOperationDraft = (
+  component: Component,
+  incoming: readonly Edge[],
+): FindingDraft => {
+  const record = absenceEvidence({
+    producer: PRODUCER,
+    searched: `an approval gate or approval requirement on ${component.id}`,
+    scope: 'the declared graph',
+    inspectedCount: incoming.length,
+  });
+  return {
+    ruleId: 'side-effect-approval-boundary',
+    situation: 'consequential-operation-without-approval',
+    category: 'security',
+    polarity: 'risk',
+    occurrence: {
+      key: 'unapproved',
+      groupedTitle: '{count} consequential operations have no approval boundary',
+    },
+    severity: component.sideEffect === 'financial' ? 'high' : 'medium',
+    confidence: CONFIDENCE_BANDS.structural,
+    basis: 'discovered',
+    title: `${component.displayName} performs a ${component.sideEffect} effect with no approval boundary`,
+    explanation: `${component.displayName} was classified ${component.sideEffect} and no approval gate, tool approval requirement or calling policy requiring approval was found. A model deciding on its own to invoke this operation is the whole risk.`,
+    impact:
+      'An agent can perform a consequential external action without a human or a policy deciding that it should.',
+    components: [component.id],
+    newEvidence: [record],
+    claimEvidence: {
+      mechanism: [record.id],
+      subject: component.evidence.slice(0, 3) as EvidenceId[],
+      conclusion: [record.id],
+    },
+    taxonomy: ['owasp-llm:LLM06', 'owasp-asi:ASI04'],
+    recommendation: APPROVAL_REMEDIATIONS['no-approval-boundary'](component.displayName),
+    remediationVariant: 'no-approval-boundary',
+    goalEligible: true,
+    goalReason: 'The scope is one call site plus a scenario that asserts the approval happened.',
+    requiresHumanReview: true,
+    tags: ['approval', 'side-effect'],
+  };
+};
+
 export const approvalBoundaryRule: Rule = {
   id: 'side-effect-approval-boundary',
   remediations: APPROVAL_REMEDIATIONS,
@@ -600,6 +783,9 @@ export const approvalBoundaryRule: Rule = {
       return notApplicable('no operation with a risky effect class was discovered');
 
     const reachable = modelReachable(context.graph);
+    const topology = topologyRequirements(context.graph);
+    const callerPopulationComplete =
+      topology.status === 'complete' && topology.reachabilityComplete;
     const risky = consequential.filter((component) => reachable.has(component.id));
     const unreached = consequential.length - risky.length;
     /*
@@ -619,78 +805,37 @@ export const approvalBoundaryRule: Rule = {
     if (risky.length === 0) return notApplicable(declined ?? 'nothing reachable was consequential');
 
     const drafts: FindingDraft[] = [];
+    let incompleteCallerPopulations = 0;
     for (const component of risky) {
-      const guarded = context.graph
-        .outgoing(component.id)
-        .some((edge) => edge.kind === 'guarded_by');
-      const requiresApproval =
-        component.details?.for === 'tool' && component.details.approvalRequired === true;
-      const incoming = context.graph.incoming(component.id);
-      const guardedByPolicy = incoming.some((edge) => edge.policy?.requiresApproval === true);
-      const behindApprovedCallers = approvedCallersOf(context, component);
-
-      if (guarded || requiresApproval || guardedByPolicy || behindApprovedCallers) {
-        drafts.push({
-          ruleId: 'side-effect-approval-boundary',
-          situation: 'consequential-operation-with-approval',
-          category: 'security',
-          polarity: 'strength',
-          occurrence: {
-            key: 'approved',
-            groupedTitle: '{count} consequential operations are behind an approval boundary',
-          },
-          severity: 'info',
-          confidence: CONFIDENCE_BANDS.strongStructural,
-          basis: 'discovered',
-          title: `${component.displayName} is behind an approval boundary`,
-          explanation: `${component.displayName} has effect class ${component.sideEffect} and is guarded: ${guarded ? 'an approval gate was discovered' : requiresApproval ? 'the tool declares that approval is required' : guardedByPolicy ? 'the calling policy declares that approval is required' : 'every tool that reaches it declares that approval is required'}.`,
-          impact:
-            'The risky operation cannot run without an explicit decision, which is the correct shape.',
-          components: [component.id],
-          evidence: component.evidence.slice(0, 3) as EvidenceId[],
-          goalEligible: false,
-          goalReason: 'Nothing to change.',
-          tags: ['positive', 'approval'],
-        });
+      const facts = approvalFactsFor(context, component, callerPopulationComplete);
+      if (
+        facts.guarded ||
+        facts.requiresApproval ||
+        facts.guardedByPolicy ||
+        facts.behindApprovedCallers
+      ) {
+        drafts.push(approvedOperationDraft(context, component, facts));
         continue;
       }
 
-      const record = absenceEvidence({
-        producer: PRODUCER,
-        searched: `an approval gate or approval requirement on ${component.id}`,
-        scope: 'the declared graph',
-        inspectedCount: incoming.length,
-      });
-      drafts.push({
-        ruleId: 'side-effect-approval-boundary',
-        situation: 'consequential-operation-without-approval',
-        category: 'security',
-        polarity: 'risk',
-        occurrence: {
-          key: 'unapproved',
-          groupedTitle: '{count} consequential operations have no approval boundary',
-        },
-        severity: component.sideEffect === 'financial' ? 'high' : 'medium',
-        confidence: CONFIDENCE_BANDS.structural,
-        basis: 'discovered',
-        title: `${component.displayName} performs a ${component.sideEffect} effect with no approval boundary`,
-        explanation: `${component.displayName} was classified ${component.sideEffect} and no approval gate, tool approval requirement or calling policy requiring approval was found. A model deciding on its own to invoke this operation is the whole risk.`,
-        impact:
-          'An agent can perform a consequential external action without a human or a policy deciding that it should.',
-        components: [component.id],
-        newEvidence: [record],
-        evidence: component.evidence.slice(0, 3) as EvidenceId[],
-        taxonomy: ['owasp-llm:LLM06', 'owasp-asi:ASI04'],
-        recommendation: APPROVAL_REMEDIATIONS['no-approval-boundary'](component.displayName),
-        remediationVariant: 'no-approval-boundary',
-        goalEligible: true,
-        goalReason:
-          'The scope is one call site plus a scenario that asserts the approval happened.',
-        requiresHumanReview: true,
-        tags: ['approval', 'side-effect'],
-      });
+      if (!callerPopulationComplete && facts.allKnownCallersApproved) {
+        incompleteCallerPopulations += 1;
+        continue;
+      }
+      drafts.push(unapprovedOperationDraft(component, facts.incoming));
     }
-    return fired(drafts, declined);
+    if (drafts.length === 0 && incompleteCallerPopulations > 0) {
+      return insufficient(
+        `${formatCount(incompleteCallerPopulations, 'consequential operation')} lacked a complete declared caller population, so approval absence was not asserted`,
+      );
+    }
+    const ruleDetails = [
+      declined,
+      incompleteCallerPopulations === 0
+        ? undefined
+        : `${formatCount(incompleteCallerPopulations, 'consequential operation')} lacked a complete declared caller population and was left unclassified`,
+    ].filter((detail): detail is string => detail !== undefined);
+    return fired(drafts, ruleDetails.length === 0 ? undefined : ruleDetails.join('; '));
   },
 };
 
@@ -772,39 +917,56 @@ export const promptInjectionBoundaryRule: Rule = {
       );
     }
 
-    const drafts: FindingDraft[] = prompts.map((prompt) => ({
-      ruleId: 'prompt-injection-boundary',
-      situation: 'runtime-content-interpolated-into-prompt',
-      occurrence: {
-        key: 'interpolated-prompt',
-        groupedTitle: '{count} prompts interpolate run time content',
-      },
-      category: 'security' as const,
-      polarity: 'risk' as const,
-      severity: 'medium' as const,
-      confidence: CONFIDENCE_BANDS.heuristic,
-      basis: 'inferred' as const,
-      title: `${prompt.displayName} interpolates run time content into a prompt`,
-      explanation: `This prompt contains substitution points, and the system also reads content from ${formatCount(untrustedSources.length, 'source')} that Orchescope cannot vouch for: retrieval results, tool results and MCP server output. Whether a substituted value comes from one of those sources cannot be established from syntax alone, so this is a boundary to review rather than a proven vulnerability.`,
-      impact:
-        'If retrieved or tool provided text reaches this prompt, instructions inside that text are indistinguishable from the system prompt.',
-      components: [prompt.id, ...untrustedSources.slice(0, 5).map((component) => component.id)],
-      evidence: prompt.evidence.slice(0, 3) as EvidenceId[],
-      taxonomy: ['owasp-llm:LLM01', 'owasp-asi:ASI01'],
-      recommendation: PROMPT_INJECTION_REMEDIATIONS['interpolated-prompt'](),
-      remediationVariant: 'interpolated-prompt',
-      suggestedExperiment: {
-        description:
-          'Inject an instruction into retrieved content and assert the system ignores it.',
-        command: ['orchescope', 'chaos', '--scenario', 'scenarios/support-desk.yaml'],
-        expectedSignal:
-          'no policy violation and no prohibited effect while the injected content is present',
-      },
-      goalEligible: true,
-      goalReason: 'The change is local to prompt assembly and is checked by an injection scenario.',
-      requiresHumanReview: true,
-      tags: ['prompt-injection'],
-    }));
+    const drafts: FindingDraft[] = prompts.map((prompt) => {
+      const record = derivedEvidence({
+        producer: PRODUCER,
+        rule: 'prompt-injection-boundary',
+        inputs: [
+          ...prompt.evidence,
+          ...untrustedSources.flatMap((component) => component.evidence.slice(0, 1)),
+        ] as EvidenceId[],
+        note: `${prompt.id} interpolates runtime content while ${untrustedSources.length} in-system untrusted content sources were discovered`,
+      });
+      return {
+        ruleId: 'prompt-injection-boundary',
+        situation: 'runtime-content-interpolated-into-prompt',
+        occurrence: {
+          key: 'interpolated-prompt',
+          groupedTitle: '{count} prompts interpolate run time content',
+        },
+        category: 'security' as const,
+        polarity: 'risk' as const,
+        severity: 'medium' as const,
+        confidence: CONFIDENCE_BANDS.heuristic,
+        basis: 'inferred' as const,
+        title: `${prompt.displayName} interpolates run time content into a prompt`,
+        explanation: `This prompt contains substitution points, and the system also reads content from ${formatCount(untrustedSources.length, 'source')} that Orchescope cannot vouch for: retrieval results, tool results and MCP server output. Whether a substituted value comes from one of those sources cannot be established from syntax alone, so this is a boundary to review rather than a proven vulnerability.`,
+        impact:
+          'If retrieved or tool provided text reaches this prompt, instructions inside that text are indistinguishable from the system prompt.',
+        components: [prompt.id, ...untrustedSources.slice(0, 5).map((component) => component.id)],
+        newEvidence: [record],
+        claimEvidence: {
+          mechanism: [record.id],
+          subject: prompt.evidence.slice(0, 3) as EvidenceId[],
+          conclusion: [record.id],
+        },
+        taxonomy: ['owasp-llm:LLM01', 'owasp-asi:ASI01'],
+        recommendation: PROMPT_INJECTION_REMEDIATIONS['interpolated-prompt'](),
+        remediationVariant: 'interpolated-prompt',
+        suggestedExperiment: {
+          description:
+            'Inject an instruction into retrieved content and assert the system ignores it.',
+          command: ['orchescope', 'chaos', '--scenario', 'scenarios/support-desk.yaml'],
+          expectedSignal:
+            'no policy violation and no prohibited effect while the injected content is present',
+        },
+        goalEligible: true,
+        goalReason:
+          'The change is local to prompt assembly and is checked by an injection scenario.',
+        requiresHumanReview: true,
+        tags: ['prompt-injection'],
+      };
+    });
     return examined(drafts, { count: prompts.length, singular: 'interpolated prompt' });
   },
 };
@@ -879,7 +1041,11 @@ const unreachableDrafts = (
         },
       ],
       newEvidence: [population],
-      evidence: component.evidence.slice(0, 2) as EvidenceId[],
+      claimEvidence: {
+        mechanism: [population.id],
+        subject: component.evidence.slice(0, 2) as EvidenceId[],
+        conclusion: [population.id],
+      },
       goalEligible: false,
       goalReason: 'Deleting or wiring a component is a decision for the owner.',
       tags: ['unreachable'],
@@ -929,7 +1095,11 @@ const cycleDrafts = (graph: IndexedGraph): readonly FindingDraft[] =>
             : 'The cycle remains cyclic, and its run length depends on the runtime-selected configuration rather than on the static default alone.',
         components: [...new Set(cycle)],
         edges: cycleEdges.map((edge) => edge.id),
-        evidence: [...new Set(cycleEdges.flatMap((edge) => edge.evidence))] as EvidenceId[],
+        claimEvidence: {
+          mechanism: [...new Set(cycleEdges.flatMap((edge) => edge.evidence))] as EvidenceId[],
+          subject: [...new Set(cycleEdges.flatMap((edge) => edge.evidence))] as EvidenceId[],
+          conclusion: [...new Set(cycleEdges.flatMap((edge) => edge.evidence))] as EvidenceId[],
+        },
         goalEligible: false,
         goalReason: 'Whether the cycle is intended is a question for the owner.',
         tags: ['cycle'],
@@ -948,6 +1118,16 @@ export const architectureShapeRule: Rule = {
     for (const entry of highFanOut) {
       const component = context.graph.component(entry.componentId);
       if (component === undefined || component.kind !== 'agent') continue;
+      const relationEvidence = context.graph
+        .outgoing(component.id)
+        .filter((edge) => isControlFlowKind(edge.kind))
+        .flatMap((edge) => edge.evidence) as EvidenceId[];
+      const record = derivedEvidence({
+        producer: PRODUCER,
+        rule: 'topology-shape:fan-out',
+        inputs: relationEvidence,
+        note: `${component.id} has ${entry.controlFlowOutDegree} outgoing control-flow relations`,
+      });
       drafts.push({
         ruleId: 'topology-shape',
         situation: 'agent-wide-control-flow-fanout',
@@ -964,7 +1144,12 @@ export const architectureShapeRule: Rule = {
         explanation: `This agent has ${formatCount(entry.controlFlowOutDegree, 'outgoing control flow path')}. Wide coordination is not wrong on its own, and it does make the agent's prompt, its failure handling and its token cost harder to reason about.`,
         impact: 'Every added branch multiplies the paths that have to be tested.',
         components: [component.id],
-        evidence: component.evidence.slice(0, 2) as EvidenceId[],
+        newEvidence: [record],
+        claimEvidence: {
+          mechanism: [record.id],
+          subject: component.evidence.slice(0, 2) as EvidenceId[],
+          conclusion: [record.id],
+        },
         goalEligible: false,
         goalReason: 'Splitting an orchestrator is a design decision, not a bounded edit.',
         tags: ['complexity'],
@@ -1026,9 +1211,11 @@ export const architectureShapeRule: Rule = {
           impact: 'The system can be reasoned about one path at a time.',
           components: audited.slice(0, 5).map((component) => component.id),
           newEvidence: [population],
-          evidence: audited
-            .slice(0, 3)
-            .flatMap((component) => component.evidence.slice(0, 1)) as EvidenceId[],
+          claimEvidence: {
+            mechanism: [population.id],
+            subject: [population.id],
+            conclusion: [population.id],
+          },
           goalEligible: false,
           goalReason: 'Nothing to change.',
           metrics: [
@@ -1116,7 +1303,11 @@ export const broadPermissionRule: Rule = {
           'Broader access than a component needs widens the blast radius of a prompt injection or a bug.',
         components: [component.id],
         newEvidence: [record],
-        evidence: component.evidence.slice(0, 2) as EvidenceId[],
+        claimEvidence: {
+          mechanism: [record.id],
+          subject: component.evidence.slice(0, 2) as EvidenceId[],
+          conclusion: [record.id],
+        },
         taxonomy: ['owasp-llm:LLM06'],
         recommendation: {
           summary:
@@ -1171,6 +1362,12 @@ export const unusedConfiguredToolRule: Rule = {
           .incoming(tool.id)
           .some((edge) => isControlFlowKind(edge.kind) || edge.kind === 'provides_tool'),
     );
+    const topology = topologyRequirements(context.graph);
+    if (orphans.length > 0 && !topology.reachabilityComplete) {
+      return insufficient(
+        `caller absence was not asserted because topology completeness is ${topology.status} across ${topology.inspectedInputs} inspected inputs`,
+      );
+    }
     if (orphans.length === 0) {
       return examined(
         [],
@@ -1179,36 +1376,50 @@ export const unusedConfiguredToolRule: Rule = {
       );
     }
 
-    const drafts: FindingDraft[] = orphans.map((tool) => ({
-      ruleId: 'configured-tool-has-no-caller',
-      situation: 'configured-tool-without-caller',
-      occurrence: {
-        key: 'no-caller',
-        groupedTitle: '{count} tools are defined and nothing in this repository calls them',
-      },
-      category: 'maintainability' as const,
-      polarity: 'risk' as const,
-      severity: 'low' as const,
-      confidence: CONFIDENCE_BANDS.structural,
-      basis: 'discovered' as const,
-      title: `${tool.displayName} is defined and nothing calls it`,
-      explanation: `${tool.displayName} was discovered as a tool and no agent, group or server in this repository points at it. That has three causes and this rule cannot tell them apart: the wiring is missing, the tool is left over from a change, or the caller is somewhere Orchescope did not read, which is what a tool list assembled at run time and a library exporting tools for an application elsewhere both look like. ${orphans.length} of the ${tools.length} discovered tools are in this state.`,
-      impact: 'A tool nobody calls still has to be maintained, and it may still hold credentials.',
-      components: [tool.id],
-      metrics: [
-        {
-          name: 'toolsWithoutCaller',
-          value: orphans.length,
-          unit: 'tool',
-          sampleSize: tools.length,
-          basis: 'discovered' as const,
+    const drafts: FindingDraft[] = orphans.map((tool) => {
+      const population = absenceEvidence({
+        producer: PRODUCER,
+        searched: `an exact declared control-flow or provides_tool relation targeting ${tool.id}`,
+        scope: 'the complete declared topology evidence population',
+        inspectedCount: topology.inspectedInputs,
+      });
+      return {
+        ruleId: 'configured-tool-has-no-caller',
+        situation: 'configured-tool-without-caller',
+        occurrence: {
+          key: 'no-caller',
+          groupedTitle: '{count} tools have no exact declared caller relation',
         },
-      ],
-      evidence: tool.evidence.slice(0, 2) as EvidenceId[],
-      goalEligible: false,
-      goalReason: 'Wiring or deleting a tool is a decision for the owner.',
-      tags: ['dead-configuration'],
-    }));
+        category: 'maintainability' as const,
+        polarity: 'risk' as const,
+        severity: 'low' as const,
+        confidence: CONFIDENCE_BANDS.structural,
+        basis: 'discovered' as const,
+        title: `${tool.displayName} has no exact declared caller relation`,
+        explanation: `${tool.displayName} was discovered as a tool and the complete declared topology contains no exact agent, group or server relation targeting it. That has three causes and this rule cannot tell them apart: the wiring is missing, the tool is left over from a change, or the caller is outside the audited system. ${orphans.length} of the ${tools.length} discovered tools are in this state.`,
+        impact:
+          'A tool with no exact declared caller relation still has to be maintained, and it may still hold credentials.',
+        components: [tool.id],
+        metrics: [
+          {
+            name: 'toolsWithoutCaller',
+            value: orphans.length,
+            unit: 'tool',
+            sampleSize: tools.length,
+            basis: 'discovered' as const,
+          },
+        ],
+        newEvidence: [population],
+        claimEvidence: {
+          mechanism: [population.id],
+          subject: tool.evidence.slice(0, 2) as EvidenceId[],
+          conclusion: [population.id],
+        },
+        goalEligible: false,
+        goalReason: 'Wiring or deleting a tool is a decision for the owner.',
+        tags: ['dead-configuration'],
+      };
+    });
     return examined(drafts, { count: tools.length, singular: 'discovered tool' });
   },
 };
@@ -1241,21 +1452,24 @@ export const safeRetryRule: Rule = {
           situation: 'bounded-retry-with-idempotency-key',
           occurrence: {
             key: 'safe-retry',
-            groupedTitle: '{count} retries are bounded and safe to repeat',
+            groupedTitle: '{count} retries declare a ceiling and idempotency key',
           },
           category: 'reliability' as const,
           polarity: 'strength' as const,
           severity: 'info' as const,
           confidence: CONFIDENCE_BANDS.strongStructural,
           basis: 'discovered' as const,
-          /* The risk this rule is the mirror of says "safe to repeat", so the strength says it too. */
-          title: `${target?.displayName ?? edge.to} is retried a bounded number of times and is safe to repeat`,
-          explanation: `${source?.displayName ?? edge.from} retries ${target?.displayName ?? edge.to} at most ${retry?.maxAttempts ?? 'a declared number of'} times with ${retry?.backoff ?? 'unknown'} backoff, and the operation declares an idempotency key. A repeat of the same attempt cannot produce the effect twice.`,
+          title: `${target?.displayName ?? edge.to} declares a bounded retry and idempotency key`,
+          explanation: `${source?.displayName ?? edge.from} declares at most ${retry?.maxAttempts ?? 'a bounded number of'} attempts with ${retry?.backoff ?? 'unknown'} backoff, and the operation declares an idempotency key. This is the source-declared shape used to limit and deduplicate repeats; runtime enforcement was not observed by this rule.`,
           impact:
-            'This retry recovers from a transient failure without the risk that makes an unkeyed retry dangerous.',
+            'The declared retry shape contains both an attempt ceiling and a downstream deduplication identity.',
           components: [edge.to, edge.from],
           edges: [edge.id],
-          evidence: edge.evidence.slice(0, 3) as EvidenceId[],
+          claimEvidence: {
+            mechanism: edge.evidence.slice(0, 3) as EvidenceId[],
+            subject: edge.evidence.slice(0, 3) as EvidenceId[],
+            conclusion: edge.evidence.slice(0, 3) as EvidenceId[],
+          },
           goalEligible: false,
           goalReason: 'Nothing to change.',
           tags: ['positive', 'retry', 'idempotency'],

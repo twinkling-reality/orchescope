@@ -80,6 +80,7 @@ export const auditDocument = (input: AuditDocumentInput): string => {
       [
         sourceRegion(result, layout, input.style.bold, false),
         findingRegion({ risks, strengths, verbose: false, style: input.style }),
+        join,
         gapRegion(result.graph.coverage, layout),
         written,
         [

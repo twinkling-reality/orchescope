@@ -28,6 +28,7 @@ import {
 import type { Workspace } from '@orchescope/workspace';
 import { resolveInsideRoot } from '@orchescope/workspace';
 import {
+  auditBehaviorDigest,
   componentDigest,
   criterionDigest,
   edgeDigest,
@@ -248,13 +249,17 @@ const auditAgentSystem = async (
      * An agent that traced its system and read "0 runs reconciled" would reasonably conclude the trace
      * failed to store anything, when what happened is that it stored a run holding no span.
      */
-    text: `Audit ${result.scanId}: ${formatCount(risks.length, 'risk')}, ${formatCount(result.bundle.summary.strengthCount, 'strength')}, ${formatCount(result.runsConsidered.length, 'run')} reconciled${result.silentRuns.length === 0 ? '' : `, ${formatCount(result.silentRuns.length, 'run')} recorded no span`}. Standing at ${standing?.title ?? 'closed loop'}. ${outcome.summary}.`,
+    text: `Audit ${result.scanId}: ${formatCount(risks.length, 'risk')}, ${formatCount(result.bundle.summary.strengthCount, 'strength')}, ${formatCount(result.runsConsidered.length, 'observed run')}, ${formatCount(result.silentRuns.length, 'silent run')} (no spans). Standing at ${standing?.title ?? 'closed loop'}. ${outcome.summary}.`,
     /*
      * The risks and the one next action, which are what an audit is read for. The reconciliation, the
      * loop steps and the capabilities stay in the payload: they are context for a decision rather than
      * the decision, and mirroring all of them would put a report back in the conversation.
      */
-    digest: [...risks.slice(0, maxFindings).map(findingDigest), ...nextActionDigest(next)],
+    digest: [
+      ...risks.slice(0, maxFindings).map(findingDigest),
+      ...(result.reconciliation === undefined ? [] : auditBehaviorDigest(result.reconciliation)),
+      ...nextActionDigest(next),
+    ],
     data: {
       /*
        * The build that produced this answer.
@@ -271,6 +276,8 @@ const auditAgentSystem = async (
       agentSystemDetected: result.agentSystemDetected,
       summary: result.bundle.summary,
       reconciliation: result.reconciliation,
+      runPopulations: result.bundle.runPopulations,
+      evidenceCoverage: result.bundle.evidenceCoverage,
       topFindings: risks.slice(0, maxFindings).map(findingLine),
       truncated: risks.length > maxFindings,
       rulesEvaluated: result.findingSet.rulesEvaluated.length,
@@ -423,7 +430,7 @@ const getReconciliationDelta = (
   }
   const delta = bundle.reconciliation;
   return {
-    text: `${delta.declaredNotExercised.components.length} declared and never exercised, ${delta.exercisedNotDeclared.components.length} exercised and never declared, ${formatCount(delta.contradictions.length, 'contradiction')}, ${formatCount(delta.duplicateSideEffects.length, 'duplicated side effect')}.`,
+    text: `${delta.declaredNotExercised.components.length} declared and never exercised, ${delta.exercisedNotDeclared.components.length} exercised without an exact static identity match, ${formatCount(delta.contradictions.length, 'contradiction')}, ${formatCount(delta.duplicateSideEffects.length, 'duplicated side effect')}.`,
     digest: reconciliationDigest(delta),
     data: { hasRuns: true, delta },
   };

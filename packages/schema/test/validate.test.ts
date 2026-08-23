@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { Type } from '@sinclair/typebox';
+import { MetricEvidence } from '../src/evidence.ts';
 import { Manifest, ManifestV1, ManifestV2 } from '../src/manifest.ts';
 import { DOCUMENT_SCHEMAS, documentDescriptors } from '../src/registry.ts';
 import { compileChecker, formatIssues, validate, validateDocument } from '../src/validate.ts';
@@ -78,6 +79,32 @@ describe('validate', () => {
   it('accepts a value that is not an object where the schema allows it', () => {
     assert.equal(validate(Type.Array(Type.Number()), [1, 2, 3]).ok, true);
     assert.equal(validate(Type.Array(Type.Number()), ['one']).ok, false);
+  });
+});
+
+describe('MetricEvidence run population', () => {
+  const common = {
+    id: 'ev_0123456789abcdef',
+    kind: 'metric',
+    basis: 'observed',
+    producer: 'test:metric',
+    metric: 'latency',
+    value: 12,
+    unit: 'ms',
+    sampleSize: 2,
+  };
+
+  it('accepts exactly one single-run or aggregate run identity shape', () => {
+    assert.equal(validate(MetricEvidence, { ...common, runId: 'run_one' }).ok, true);
+    assert.equal(validate(MetricEvidence, { ...common, runIds: ['run_one', 'run_two'] }).ok, true);
+  });
+
+  it('refuses metric evidence with neither or both run identity shapes', () => {
+    assert.equal(validate(MetricEvidence, common).ok, false);
+    assert.equal(
+      validate(MetricEvidence, { ...common, runId: 'run_one', runIds: ['run_one'] }).ok,
+      false,
+    );
   });
 });
 

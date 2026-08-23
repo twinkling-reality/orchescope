@@ -444,6 +444,18 @@ describe('the provider a span names', () => {
       },
     };
     assert.deepEqual(componentsOf([hosted]), ['model:azure/gpt-4.1-mini-2025-04-14']);
+    const evidence = deriveTopology(bundleOf([hosted])).evidence.find(
+      (record) => record.kind === 'span',
+    );
+    assert.equal(evidence?.kind, 'span');
+    if (evidence?.kind === 'span') {
+      assert.deepEqual(evidence.observedComponent, {
+        kind: 'model',
+        observedName: 'azure/gpt-4.1-mini-2025-04-14',
+      });
+      assert.equal(evidence.attribute, 'llm.model_name');
+      assert.equal(evidence.attributeValue, 'gpt-4.1-mini-2025-04-14');
+    }
   });
 });
 

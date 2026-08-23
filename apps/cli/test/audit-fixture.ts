@@ -95,6 +95,8 @@ export const auditResult = (over: {
   readonly findings?: readonly Finding[];
   readonly reconciliation?: AuditResult['reconciliation'];
   readonly runs?: AuditResult['bundle']['runs'];
+  readonly observedRunCount?: number;
+  readonly silentRunCount?: number;
 }): AuditResult => {
   /*
    * A reconciliation without a run in the bundle is a fixture that lied about its own shape: the join
@@ -132,8 +134,8 @@ export const auditResult = (over: {
         componentCount,
         edgeCount: over.edgeCount ?? 32,
         runCount: runs.length,
-        observedRunCount: runs.length,
-        silentRunCount: 0,
+        observedRunCount: over.observedRunCount ?? runs.length,
+        silentRunCount: over.silentRunCount ?? 0,
         findingCountBySeverity: {},
         strengthCount: 0,
       },
@@ -156,14 +158,20 @@ export const reconciliation = (over: {
   readonly notDeclared?: number;
   readonly contradictions?: number;
   readonly duplicates?: number;
+  readonly byKindAndName?: number;
+  readonly edgeExerciseRate?: number;
   readonly missingSpanAttributes?: NonNullable<
     NonNullable<AuditResult['reconciliation']>['coverage']['missingSpanAttributes']
+  >;
+  readonly behavioralAccount?: NonNullable<
+    NonNullable<AuditResult['reconciliation']>['behavioralAccount']
   >;
 }): NonNullable<AuditResult['reconciliation']> =>
   ({
     coverage: {
       exercisedComponents: over.exercised ?? 14,
       declaredComponents: over.declared ?? 21,
+      ...(over.edgeExerciseRate === undefined ? {} : { edgeExerciseRate: over.edgeExerciseRate }),
       ...(over.missingSpanAttributes === undefined
         ? {}
         : { missingSpanAttributes: over.missingSpanAttributes }),
@@ -172,4 +180,12 @@ export const reconciliation = (over: {
     exercisedNotDeclared: { components: Array.from({ length: over.notDeclared ?? 1 }, () => 'c') },
     contradictions: Array.from({ length: over.contradictions ?? 0 }, () => 'x'),
     duplicateSideEffects: Array.from({ length: over.duplicates ?? 1 }, () => 'x'),
+    joins: {
+      byCodeLocation: 0,
+      byRuntimeName: 0,
+      byKindAndName: over.byKindAndName ?? 0,
+      onNameAlone: [],
+      ambiguous: [],
+    },
+    ...(over.behavioralAccount === undefined ? {} : { behavioralAccount: over.behavioralAccount }),
   }) as unknown as NonNullable<AuditResult['reconciliation']>;

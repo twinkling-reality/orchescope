@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { indexGraph } from '@orchescope/graph';
 import type { ComponentDraft } from '@orchescope/graph';
 import type { ReconciliationDelta, RunRecord } from '@orchescope/schema';
-import { buildGraph, componentDraft } from '@orchescope/testkit';
+import { buildGraph, componentDraft, evidenceForGraph } from '@orchescope/testkit';
 import { evaluateRules } from '../src/engine.ts';
 import { fired, type Rule, type RuleContext } from '../src/rule.ts';
 import { broadPermissionRule } from '../src/rules/static-policy.ts';
@@ -69,7 +69,8 @@ const deltaOf = (input: {
   },
 });
 
-const indexed = () => indexGraph(buildGraph([planner, lookup], []));
+const systemGraph = () => buildGraph([planner, lookup], []);
+const indexed = () => indexGraph(systemGraph());
 
 const contextFor = (delta: ReconciliationDelta | undefined, withRun: boolean): RuleContext => ({
   graph: indexed(),
@@ -79,7 +80,7 @@ const contextFor = (delta: ReconciliationDelta | undefined, withRun: boolean): R
   benchmarks: [],
   chaosReports: [],
   scenarios: [],
-  evidenceById: new Map(),
+  evidenceById: evidenceForGraph(systemGraph()),
 });
 
 describe('observability-coverage', () => {
@@ -88,7 +89,7 @@ describe('observability-coverage', () => {
     assert.equal(outcome.status, 'fired');
     assert.equal(outcome.drafts.length, 1);
     const draft = outcome.drafts[0];
-    assert.ok((draft?.evidence.length ?? 0) > 0);
+    assert.ok((draft?.claimEvidence.conclusion.length ?? 0) > 0);
     assert.ok((draft?.components.length ?? 0) > 0);
   });
 
@@ -123,7 +124,7 @@ describe('observability-coverage', () => {
         benchmarks: [],
         chaosReports: [],
         scenarios: [],
-        evidenceById: new Map(),
+        evidenceById: evidenceForGraph(graph.graph),
       },
       rules: [observabilityCoverageRule],
     });
@@ -143,6 +144,16 @@ describe('observability-coverage', () => {
       ),
       false,
     );
+  });
+
+  it('binds the aggregate component population to the subject of a coverage claim', () => {
+    const outcome = observabilityCoverageRule.evaluate(
+      contextFor(deltaOf({ declared: 5, exercised: 5, notExercised: [], rate: 1 }), true),
+    );
+    const draft = outcome.drafts[0];
+    const population = draft?.newEvidence?.find((record) => record.kind === 'metric');
+    assert.equal(population?.kind, 'metric');
+    assert.ok(draft?.claimEvidence.subject.includes(population.id));
   });
 
   it('fires a risk that survives the engine when most declared components were not exercised', () => {
@@ -167,7 +178,7 @@ describe('observability-coverage', () => {
         benchmarks: [],
         chaosReports: [],
         scenarios: [],
-        evidenceById: new Map(),
+        evidenceById: evidenceForGraph(graph.graph),
       },
       rules: [observabilityCoverageRule],
     });
@@ -231,7 +242,11 @@ describe('a draft that claims an observed basis with nothing observed', () => {
           explanation: 'fixture',
           impact: 'fixture',
           components: context.graph.graph.components.slice(0, 1).map((component) => component.id),
-          evidence: context.graph.graph.components[0]?.evidence.slice(0, 1) ?? [],
+          claimEvidence: {
+            mechanism: context.graph.graph.components[0]?.evidence.slice(0, 1) ?? [],
+            subject: context.graph.graph.components[0]?.evidence.slice(0, 1) ?? [],
+            conclusion: context.graph.graph.components[0]?.evidence.slice(0, 1) ?? [],
+          },
           goalEligible: false,
           goalReason: 'fixture',
         },
@@ -250,7 +265,7 @@ describe('a draft that claims an observed basis with nothing observed', () => {
         benchmarks: [],
         chaosReports: [],
         scenarios: [],
-        evidenceById: new Map(),
+        evidenceById: evidenceForGraph(indexed().graph),
       },
       rules: [claimsObservation],
     });

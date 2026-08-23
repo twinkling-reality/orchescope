@@ -1,8 +1,14 @@
 import { discover } from '@orchescope/discovery';
-import { createDeadline, type Deadline, formatCount, runIsSilent } from '@orchescope/domain';
+import {
+  createDeadline,
+  type Deadline,
+  formatCount,
+  OrchescopeError,
+  runIsSilent,
+} from '@orchescope/domain';
 import { evaluateRules, linkConflicts } from '@orchescope/findings';
 import { computeDelta, indexGraph, type RunSideEffects, reconcile } from '@orchescope/graph';
-import { buildReportBundle } from '@orchescope/report';
+import { buildReportBundle, REPORT_EVIDENCE_CEILING } from '@orchescope/report';
 import type {
   ComponentId,
   ComponentRunMetrics,
@@ -59,6 +65,20 @@ export type AuditResult = {
   /** Runs that were recorded and produced no span. Named so a caller can say so, never reasoned from. */
   readonly silentRuns: readonly RunRecord[];
   readonly scanId: string;
+};
+
+const MAX_AUDIT_RUNS = 100;
+
+const validatedRunLimit = (value: number | undefined): number => {
+  const limit = value ?? 10;
+  if (!Number.isInteger(limit) || limit < 0 || limit > MAX_AUDIT_RUNS) {
+    throw new OrchescopeError(
+      'INVALID_ARGUMENT',
+      `The audit run limit must be an integer from 0 through ${MAX_AUDIT_RUNS}.`,
+      { remediation: `Set --runs to a value from 0 through ${MAX_AUDIT_RUNS}.` },
+    );
+  }
+  return limit;
 };
 
 /**
@@ -184,10 +204,11 @@ const reconcileStoredRuns = (input: {
     matches: reconciled.matches,
     ambiguous: reconciled.ambiguous,
     missingSpanAttributes: reconciled.missingSpanAttributes,
+    behavior: reconciled.behavior,
   });
   evidence.push(...delta.evidence);
   ingestPhase.finish(
-    `${formatCount(topologies.length, 'run')} reconciled, ${formatCount(attributed, 'component metric')} attributed, ${formatCount(delta.delta.exercisedNotDeclared.components.length, 'undeclared component')}, ${formatCount(delta.delta.contradictions.length, 'contradiction')}`,
+    `${formatCount(topologies.length, 'run')} reconciled, ${formatCount(attributed, 'component metric')} attributed, ${formatCount(delta.delta.exercisedNotDeclared.components.length, 'component without an exact static identity match')}, ${formatCount(delta.delta.contradictions.length, 'contradiction')}`,
   );
   return {
     graph: reconciled.graph,
@@ -259,6 +280,55 @@ const judgementsForGoals = (
     };
   });
 
+const evidenceDependencies = (record: Evidence): readonly string[] => {
+  if (record.kind === 'derived') return record.inputs;
+  if (record.kind === 'model_interpretation') return record.groundedIn;
+  return [];
+};
+
+/** Loads a bounded, cycle-safe closure for citations retained by goals across rescans. */
+const historicalGoalEvidence = (
+  workspace: Workspace,
+  goals: readonly Goal[],
+): readonly Evidence[] => {
+  const pending = [...new Set(goals.flatMap((goal) => goal.evidence))].sort();
+  const requested = new Set<string>();
+  const records = new Map<string, Evidence>();
+  while (pending.length > 0 && records.size <= REPORT_EVIDENCE_CEILING) {
+    const remaining = REPORT_EVIDENCE_CEILING + 1 - records.size;
+    const batch: string[] = [];
+    while (pending.length > 0 && batch.length < Math.min(100, remaining)) {
+      const id = pending.shift();
+      if (id === undefined || requested.has(id)) continue;
+      requested.add(id);
+      batch.push(id);
+    }
+    if (batch.length === 0) continue;
+    const loaded = [...workspace.store.evidenceByIds(batch)].sort((left, right) =>
+      left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
+    );
+    for (const record of loaded) {
+      records.set(record.id, record);
+      for (const dependency of evidenceDependencies(record)) {
+        if (!requested.has(dependency)) pending.push(dependency);
+      }
+    }
+    pending.sort();
+  }
+  if (records.size > REPORT_EVIDENCE_CEILING) {
+    throw new OrchescopeError(
+      'LIMIT_EXCEEDED',
+      `Retained goals require more than ${REPORT_EVIDENCE_CEILING} historical evidence records, above the report export ceiling.`,
+      {
+        detail: { required: records.size, ceiling: REPORT_EVIDENCE_CEILING },
+        remediation:
+          'Narrow the inspected repository with analysis.exclude; required goal evidence is never truncated.',
+      },
+    );
+  }
+  return [...records.values()];
+};
+
 const assembleReport = (input: {
   readonly workspace: Workspace;
   readonly graph: SystemGraph;
@@ -272,6 +342,12 @@ const assembleReport = (input: {
   const { workspace, graph, findings, runsConsidered } = input;
   const scenarios = workspace.store.listScenarios(workspace.projectId);
   const goals = workspace.store.listGoals(workspace.projectId);
+  const retainedGoalEvidence = historicalGoalEvidence(workspace, goals);
+  const reportEvidence = [
+    ...new Map(
+      [...input.evidence, ...retainedGoalEvidence].map((record) => [record.id, record]),
+    ).values(),
+  ];
   const evaluators = evaluatorsByRun(workspace, runsConsidered);
   const componentsByRun = new Map<string, readonly string[]>();
   for (const run of runsConsidered) {
@@ -284,7 +360,7 @@ const assembleReport = (input: {
   return buildReportBundle({
     graph,
     findings,
-    evidence: input.evidence,
+    evidence: reportEvidence,
     runs: runsConsidered,
     silentRuns: input.silentRuns,
     scenarios,
@@ -334,6 +410,7 @@ const gitForScan = (workspace: Workspace) => {
 export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
   const { workspace } = request;
   const { config } = workspace;
+  const runLimit = validatedRunLimit(request.runLimit);
   const handle =
     request.deadline === undefined
       ? createDeadline(config.analysis.timeoutMs, workspace.clock.monotonicMs)
@@ -403,7 +480,7 @@ export const runAudit = async (request: AuditRequest): Promise<AuditResult> => {
     const reconciled = reconcileStoredRuns({
       workspace,
       graph: scan.graph,
-      runLimit: request.runLimit ?? 10,
+      runLimit,
     });
     evidence.push(...reconciled.evidence);
     const graph = reconciled.graph;

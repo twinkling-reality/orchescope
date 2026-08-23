@@ -119,6 +119,8 @@ const writeAuditJson = (
         agentSystemDetected: result.agentSystemDetected,
         summary: result.bundle.summary,
         reconciliation: result.reconciliation,
+        runPopulations: result.bundle.runPopulations,
+        evidenceCoverage: result.bundle.evidenceCoverage,
         coverage: result.graph.coverage,
         findings: result.bundle.findings,
         rulesEvaluated: result.findingSet.rulesEvaluated,

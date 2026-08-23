@@ -92,7 +92,11 @@ export const declaredNotExercisedRule: Rule = {
           : 'Coverage of this component is zero, so no runtime claim about it can be made.',
         components: [componentId],
         newEvidence: [record],
-        evidence: component.evidence.slice(0, 3) as EvidenceId[],
+        claimEvidence: {
+          mechanism: [record.id],
+          subject: component.evidence.slice(0, 3) as EvidenceId[],
+          conclusion: [record.id],
+        },
         goalEligible: false,
         goalReason:
           'Removing or exercising a component is a design decision that needs a human to choose between the two.',
@@ -138,6 +142,7 @@ export const exercisedNotDeclaredRule: Rule = {
     const drafts: FindingDraft[] = [];
     let withoutIdentity = 0;
     let ambiguous = 0;
+    let incompleteEvidence = 0;
     for (const componentId of undeclared) {
       const component = context.graph.component(componentId);
       if (component === undefined) continue;
@@ -169,6 +174,24 @@ export const exercisedNotDeclaredRule: Rule = {
         scope: 'the statically discovered component population used by reconciliation',
         inspectedCount: staticPopulation,
       });
+      const runtimeOnly = component.evidence
+        .map((id) => context.evidenceById.get(id))
+        .find((record) => record?.kind === 'derived' && record.rule === 'runtime_only_component');
+      const exactObserved =
+        runtimeOnly?.kind === 'derived'
+          ? runtimeOnly.inputs.filter((id) => {
+              const record = context.evidenceById.get(id);
+              if (record?.kind !== 'span') return false;
+              return (
+                record.observedComponent?.kind === component.kind &&
+                record.observedComponent.observedName === component.displayName
+              );
+            })
+          : [];
+      if (runtimeOnly === undefined || exactObserved.length === 0) {
+        incompleteEvidence += 1;
+        continue;
+      }
       drafts.push({
         ruleId: 'exercised-not-declared',
         situation: 'observed-component-without-exact-declaration',
@@ -188,7 +211,11 @@ export const exercisedNotDeclaredRule: Rule = {
           'Without an exact static match, runtime cost, permissions and failure behaviour cannot be attached to a specific reviewed declaration.',
         components: [componentId],
         newEvidence: [unmatched],
-        evidence: component.evidence.slice(0, 5) as EvidenceId[],
+        claimEvidence: {
+          mechanism: [runtimeOnly.id, unmatched.id],
+          subject: exactObserved.slice(0, 5) as EvidenceId[],
+          conclusion: [runtimeOnly.id, unmatched.id],
+        },
         recommendation: {
           summary: `Make the exact runtime identity ${component.displayName} match a static declaration or an explicit manifest mapping.`,
           steps: [
@@ -204,7 +231,16 @@ export const exercisedNotDeclaredRule: Rule = {
         tags: ['reconciliation', 'exercised-not-declared'],
       });
     }
-    return fired(drafts, divertedDetail(withoutIdentity, ambiguous));
+    const diverted = divertedDetail(withoutIdentity, ambiguous);
+    const incomplete =
+      incompleteEvidence === 0
+        ? undefined
+        : `${formatCount(incompleteEvidence, 'runtime-only component')} lacked both an exact identity-bearing span and its reconciler derivation`;
+    const detail = [diverted, incomplete]
+      .filter((entry): entry is string => entry !== undefined)
+      .join('; ');
+    if (drafts.length === 0 && incompleteEvidence > 0) return insufficient(detail);
+    return fired(drafts, detail.length === 0 ? undefined : detail);
   },
 };
 
@@ -254,7 +290,11 @@ export const contradictedDeclarationRule: Rule = {
           ? 'A caller that trusts the declaration will make a decision the runtime does not honour, for example retrying an operation it believes is safe.'
           : 'The configured limit is not the limit that applies at runtime.',
         components: [contradiction.componentId],
-        evidence: contradiction.evidence,
+        claimEvidence: {
+          mechanism: contradiction.evidence,
+          subject: contradiction.evidence,
+          conclusion: contradiction.evidence,
+        },
         taxonomy: isAnnotation ? ['owasp-asi:ASI05'] : [],
         recommendation: {
           summary: 'Correct whichever side is wrong: the declaration or the behaviour.',
@@ -318,7 +358,11 @@ export const duplicateSideEffectRule: Rule = {
           'A duplicated external effect is visible to the user or to a third party. For a payment, a notification or a provisioning call, the second one is a real incident.',
         components: component === undefined ? [] : [component.id],
         newEvidence: [record],
-        evidence: duplicate.evidence,
+        claimEvidence: {
+          mechanism: [record.id],
+          subject: duplicate.evidence,
+          conclusion: [record.id],
+        },
         metrics: [
           {
             name: 'duplicate_occurrences',
@@ -380,40 +424,54 @@ export const unnamedObservationRule: Rule = {
       return clear('every observed component arrived under a name that identifies something');
     }
 
-    const drafts: FindingDraft[] = anonymous.map((component) => ({
-      ruleId: 'observed-name-carries-no-identity',
-      situation: 'observed-name-is-only-component-kind',
-      occurrence: {
-        key: 'unnamed',
-        groupedTitle: '{count} components were observed under names that are only their kind',
-      },
-      category: 'observability' as const,
-      polarity: 'risk' as const,
-      severity: 'medium' as const,
-      confidence: CONFIDENCE_BANDS.deterministic,
-      basis: 'observed' as const,
-      title: `The observed ${component.kind} is named "${component.displayName}", which is only its kind`,
-      explanation: `The instrumentation reported this ${component.kind} as ${component.displayName}, which says what it is rather than which one it is. A name that is only a kind cannot be joined to any declaration, so this run cannot say which declared ${component.kind} it exercised, and a library that reports something with no explicit name usually reports it this way.`,
-      impact:
-        'Every declaration of that kind stays unexercised in the delta, and the run adds a component nobody declared instead of joining to one. The coverage number is wrong in both directions.',
-      components: [component.id],
-      evidence: component.evidence.slice(0, 3) as EvidenceId[],
-      recommendation: {
-        summary: `Give the ${component.kind} an explicit name where it is defined, or map it in .orchescope/manifest.yaml with a runtimeName.`,
-        steps: [
-          'Name the component at its definition, which is what most libraries emit into the span when it is set.',
-          'If the name cannot be changed, declare the mapping with runtimeName in the manifest.',
-          'Rerun the same scenario and read the delta again.',
-        ],
-        effort: 'small' as const,
-        risk: 'low' as const,
-      },
-      goalEligible: true,
-      goalReason:
-        'Naming a component at its definition is a bounded edit, and the next run shows whether it worked.',
-      requiresRuntimeEvidence: true,
-      tags: ['reconciliation', 'observability'],
-    }));
+    const drafts: FindingDraft[] = anonymous.map((component) => {
+      const record = derivedEvidence({
+        producer: PRODUCER,
+        rule: 'observed-name-carries-no-identity',
+        inputs: component.evidence as EvidenceId[],
+        note: `${component.id} was observed under the kind-only name ${component.displayName}`,
+        basis: 'observed',
+      });
+      return {
+        ruleId: 'observed-name-carries-no-identity',
+        situation: 'observed-name-is-only-component-kind',
+        occurrence: {
+          key: 'unnamed',
+          groupedTitle: '{count} components were observed under names that are only their kind',
+        },
+        category: 'observability' as const,
+        polarity: 'risk' as const,
+        severity: 'medium' as const,
+        confidence: CONFIDENCE_BANDS.deterministic,
+        basis: 'observed' as const,
+        title: `The observed ${component.kind} is named "${component.displayName}", which is only its kind`,
+        explanation: `The instrumentation reported this ${component.kind} as ${component.displayName}, which says what it is rather than which one it is. A name that is only a kind cannot be joined to any declaration, so this run cannot say which declared ${component.kind} it exercised, and a library that reports something with no explicit name usually reports it this way.`,
+        impact:
+          'Every declaration of that kind stays unexercised in the delta, and the run adds a component with no exact identity match instead of joining to one. The coverage number is wrong in both directions.',
+        components: [component.id],
+        newEvidence: [record],
+        claimEvidence: {
+          mechanism: [record.id],
+          subject: component.evidence.slice(0, 3) as EvidenceId[],
+          conclusion: [record.id],
+        },
+        recommendation: {
+          summary: `Give the ${component.kind} an explicit name where it is defined, or map it in .orchescope/manifest.yaml with a runtimeName.`,
+          steps: [
+            'Name the component at its definition, which is what most libraries emit into the span when it is set.',
+            'If the name cannot be changed, declare the mapping with runtimeName in the manifest.',
+            'Rerun the same scenario and read the delta again.',
+          ],
+          effort: 'small' as const,
+          risk: 'low' as const,
+        },
+        goalEligible: true,
+        goalReason:
+          'Naming a component at its definition is a bounded edit, and the next run shows whether it worked.',
+        requiresRuntimeEvidence: true,
+        tags: ['reconciliation', 'observability'],
+      };
+    });
     return fired(drafts);
   },
 };
@@ -460,41 +518,55 @@ export const ambiguousObservationRule: Rule = {
       return clear('every observed name matched at most one declaration');
     }
 
-    const drafts: FindingDraft[] = contested.map((component) => ({
-      ruleId: 'observed-name-matches-many-declarations',
-      situation: 'observed-name-matches-multiple-declarations',
-      occurrence: {
-        key: 'ambiguous',
-        groupedTitle:
-          '{count} components were observed under names more than one declaration carries',
-      },
-      category: 'observability' as const,
-      polarity: 'risk' as const,
-      severity: 'medium' as const,
-      confidence: CONFIDENCE_BANDS.deterministic,
-      basis: 'observed' as const,
-      title: `The observed ${component.kind} "${component.displayName.trim()}" is declared in more than one place`,
-      explanation: `The run reported this ${component.kind} as ${component.displayName.trim()}, and more than one declaration in this repository carries that name. Reconciliation joined it to none of them rather than picking one, so this is a refusal and not a component nobody declared. Which declaration the run exercised is a fact this repository has and this build does not.`,
-      impact:
-        'Every declaration sharing that name stays unexercised in the delta and the run adds a component beside them, so the coverage number is wrong in both directions and no runtime claim can be attached to the declaration it belongs to.',
-      components: [component.id],
-      evidence: component.evidence.slice(0, 3) as EvidenceId[],
-      recommendation: {
-        summary: `Decide which declaration of ${component.displayName.trim()} the run exercised, or have the instrumentation emit a code location so the join is made by where it ran.`,
-        steps: [
-          'Read joins.ambiguous in the reconciliation delta for the names, and the declarations sharing each one.',
-          'Where the duplicates are two copies of one application, the answer is that they are copies, and only one of them belongs to the system this run measured.',
-          'Where they are genuinely different components, give one of them a name of its own, or emit code.file.path on the span so the join no longer depends on the name.',
-        ],
-        effort: 'medium' as const,
-        risk: 'medium' as const,
-      },
-      goalEligible: false,
-      goalReason:
-        'Clearing it means one of the declarations giving up a name, and which one is a decision about the repository that this build has no evidence for.',
-      requiresRuntimeEvidence: true,
-      tags: ['reconciliation', 'observability'],
-    }));
+    const drafts: FindingDraft[] = contested.map((component) => {
+      const record = derivedEvidence({
+        producer: PRODUCER,
+        rule: 'observed-name-matches-many-declarations',
+        inputs: component.evidence as EvidenceId[],
+        note: `${component.id} was observed under a name that reconciliation matched to multiple declarations and joined to none`,
+        basis: 'observed',
+      });
+      return {
+        ruleId: 'observed-name-matches-many-declarations',
+        situation: 'observed-name-matches-multiple-declarations',
+        occurrence: {
+          key: 'ambiguous',
+          groupedTitle:
+            '{count} components were observed under names more than one declaration carries',
+        },
+        category: 'observability' as const,
+        polarity: 'risk' as const,
+        severity: 'medium' as const,
+        confidence: CONFIDENCE_BANDS.deterministic,
+        basis: 'observed' as const,
+        title: `The observed ${component.kind} "${component.displayName.trim()}" is declared in more than one place`,
+        explanation: `The run reported this ${component.kind} as ${component.displayName.trim()}, and more than one declaration in this repository carries that name. Reconciliation joined it to none of them rather than picking one, so this is a refusal rather than evidence that no exact declaration exists. Which declaration the run exercised is a fact this repository has and this build does not.`,
+        impact:
+          'Every declaration sharing that name stays unexercised in the delta and the run adds a component beside them, so the coverage number is wrong in both directions and no runtime claim can be attached to the declaration it belongs to.',
+        components: [component.id],
+        newEvidence: [record],
+        claimEvidence: {
+          mechanism: [record.id],
+          subject: component.evidence.slice(0, 3) as EvidenceId[],
+          conclusion: [record.id],
+        },
+        recommendation: {
+          summary: `Decide which declaration of ${component.displayName.trim()} the run exercised, or have the instrumentation emit a code location so the join is made by where it ran.`,
+          steps: [
+            'Read joins.ambiguous in the reconciliation delta for the names, and the declarations sharing each one.',
+            'Where the duplicates are two copies of one application, the answer is that they are copies, and only one of them belongs to the system this run measured.',
+            'Where they are genuinely different components, give one of them a name of its own, or emit code.file.path on the span so the join no longer depends on the name.',
+          ],
+          effort: 'medium' as const,
+          risk: 'medium' as const,
+        },
+        goalEligible: false,
+        goalReason:
+          'Clearing it means one of the declarations giving up a name, and which one is a decision about the repository that this build has no evidence for.',
+        requiresRuntimeEvidence: true,
+        tags: ['reconciliation', 'observability'],
+      };
+    });
     return fired(drafts);
   },
 };

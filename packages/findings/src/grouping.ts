@@ -1,5 +1,5 @@
 import { severityRank } from '@orchescope/domain';
-import type { ComponentId, EdgeId, EvidenceId, FindingMetric } from '@orchescope/schema';
+import type { ComponentId, EdgeId, FindingMetric } from '@orchescope/schema';
 import type { FindingDraft } from './rule.ts';
 
 /**
@@ -16,7 +16,8 @@ import type { FindingDraft } from './rule.ts';
 
 const MAX_COMPONENTS = 25;
 const MAX_EDGES = 25;
-const MAX_EVIDENCE = 10;
+const MAX_CLAUSE_EVIDENCE = 100;
+const MAX_NEW_EVIDENCE = 100;
 
 /** Drafts only merge when everything the engine would otherwise have to reconcile already agrees. */
 const groupKey = (draft: FindingDraft): string =>
@@ -32,6 +33,33 @@ const groupKey = (draft: FindingDraft): string =>
   ].join('\u0000');
 
 const unionOf = <T>(values: readonly (readonly T[])[]): T[] => [...new Set(values.flat())];
+
+const mergedClause = (
+  drafts: readonly FindingDraft[],
+  clause: keyof FindingDraft['claimEvidence'],
+): {
+  readonly evidence: readonly string[];
+  readonly populationId?: string;
+  readonly refusal?: string;
+} => {
+  const evidence = unionOf(drafts.map((draft) => draft.claimEvidence[clause])).sort();
+  if (evidence.length <= MAX_CLAUSE_EVIDENCE) return { evidence };
+  const populationRecords = [
+    ...new Set(
+      drafts
+        .map((draft) => draft.claimPopulationEvidence?.[clause])
+        .filter((id): id is string => id !== undefined),
+    ),
+  ].sort();
+  const populationId = populationRecords[0];
+  if (populationRecords.length === 1 && populationId !== undefined) {
+    return { evidence: populationRecords, populationId };
+  }
+  return {
+    evidence: [],
+    refusal: `${clause} clause required ${evidence.length} evidence records, exceeding the ${MAX_CLAUSE_EVIDENCE} grouped-claim ceiling without one full-population record`,
+  };
+};
 
 const occurrenceMetrics = (
   occurrences: number,
@@ -78,6 +106,29 @@ const merge = (drafts: readonly FindingDraft[]): FindingDraft => {
   const components = unionOf(drafts.map((draft) => draft.components)).sort() as ComponentId[];
   const edges = unionOf(drafts.map((draft) => draft.edges ?? [])).sort() as EdgeId[];
   const withheld = Math.max(0, components.length - MAX_COMPONENTS);
+  const mechanism = mergedClause(drafts, 'mechanism');
+  const subject = mergedClause(drafts, 'subject');
+  const conclusion = mergedClause(drafts, 'conclusion');
+  const allNewEvidence = [
+    ...new Map(
+      drafts.flatMap((draft) => draft.newEvidence ?? []).map((record) => [record.id, record]),
+    ).values(),
+  ].sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+  const requiredIds = new Set([...mechanism.evidence, ...subject.evidence, ...conclusion.evidence]);
+  const usedPopulationRecord = [mechanism, subject, conclusion].some(
+    (clause) => clause.populationId !== undefined,
+  );
+  const newEvidence = usedPopulationRecord
+    ? allNewEvidence.filter((record) => requiredIds.has(record.id))
+    : allNewEvidence;
+  const refusals = [mechanism.refusal, subject.refusal, conclusion.refusal].filter(
+    (reason): reason is string => reason !== undefined,
+  );
+  if (newEvidence.length > MAX_NEW_EVIDENCE) {
+    refusals.push(
+      `grouped claim created ${newEvidence.length} evidence records, exceeding the ${MAX_NEW_EVIDENCE} grouped-evidence ceiling`,
+    );
+  }
 
   return {
     ...representative,
@@ -90,8 +141,22 @@ const merge = (drafts: readonly FindingDraft[]): FindingDraft => {
     explanation: `${representative.explanation} ${withheldSentence(drafts.length, components.length, withheld)}`,
     components: components.slice(0, MAX_COMPONENTS),
     edges: edges.slice(0, MAX_EDGES),
-    evidence: unionOf(drafts.map((draft) => draft.evidence)).slice(0, MAX_EVIDENCE) as EvidenceId[],
-    newEvidence: unionOf(drafts.map((draft) => draft.newEvidence ?? [])).slice(0, MAX_EVIDENCE),
+    claimEvidence: {
+      mechanism: mechanism.evidence,
+      subject: subject.evidence,
+      conclusion: conclusion.evidence,
+    },
+    claimPopulationEvidence: {
+      ...(mechanism.populationId === undefined ? {} : { mechanism: mechanism.populationId }),
+      ...(subject.populationId === undefined ? {} : { subject: subject.populationId }),
+      ...(conclusion.populationId === undefined ? {} : { conclusion: conclusion.populationId }),
+    },
+    ...(newEvidence.length <= MAX_NEW_EVIDENCE
+      ? { newEvidence }
+      : representative.newEvidence === undefined
+        ? {}
+        : { newEvidence: representative.newEvidence }),
+    ...(refusals.length === 0 ? {} : { claimEvidenceRefusal: refusals.join('; ') }),
     metrics: [
       ...(representative.metrics ?? []),
       ...occurrenceMetrics(drafts.length, components.length, withheld),

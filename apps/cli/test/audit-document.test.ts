@@ -61,7 +61,7 @@ describe('the glance', () => {
       render(detected),
       [
         'demo            this scan found 5 agents, 7 tools and 2 models',
-        '                read from 23 of 23 source files, with 1 run on record',
+        '                read from 23 of 23 source files, with 1 observed run',
         '',
         'problems        1 serious, 1 medium, worst first',
         'serious         a model is called with no timeout declared',

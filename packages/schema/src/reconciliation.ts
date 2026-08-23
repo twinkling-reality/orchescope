@@ -104,6 +104,60 @@ export const JoinSummary = Type.Object(
 );
 export type JoinSummary = Static<typeof JoinSummary>;
 
+export const BehavioralRelationRefusal = Type.Object(
+  {
+    reason: literals([
+      'relation_rederived_from_endpoint_evidence',
+      'endpoint_identity_unresolved',
+      'no_exact_declared_relation',
+    ] as const),
+    count: NonNegativeInt,
+    evidence: Type.Array(EvidenceId, { maxItems: 10 }),
+    evidenceOmitted: NonNegativeInt,
+  },
+  { additionalProperties: false },
+);
+export type BehavioralRelationRefusal = Static<typeof BehavioralRelationRefusal>;
+
+/**
+ * Bounded context beside the strict declared-relation exercise fraction.
+ *
+ * It never promotes component execution or structural span nesting into a declared relation. It says
+ * what the accepted trace population contained and why an observed structural relation did not qualify.
+ * Missing on older deltas means unknown.
+ */
+export const BehavioralAccount = Type.Object(
+  {
+    status: literals(['complete', 'incomplete'] as const),
+    acceptedSpans: NonNegativeInt,
+    droppedSpans: NonNegativeInt,
+    rejectedSpans: NonNegativeInt,
+    executedComponents: NonNegativeInt,
+    componentExecutions: NonNegativeInt,
+    executedByKind: Type.Array(
+      Type.Object(
+        { kind: NonEmptyString(), count: NonNegativeInt },
+        { additionalProperties: false },
+      ),
+      { maxItems: 32 },
+    ),
+    observedStructuralRelations: NonNegativeInt,
+    qualifiedDeclaredRelations: NonNegativeInt,
+    refusedObservedRelations: NonNegativeInt,
+    /** True only over a complete accepted-span population that reported no independent relation. */
+    noIndependentRelationObservation: Type.Boolean(),
+    refusals: Type.Array(BehavioralRelationRefusal, { maxItems: 3 }),
+    /** Aggregate metric whose exact run IDs and sample size bind the accepted-span population. */
+    populationEvidence: Type.Optional(EvidenceId),
+    /** Bounded evidence sample cited by the displayed behavioral narrative. */
+    evidence: Type.Array(EvidenceId, { maxItems: 100 }),
+    /** Affected evidence records outside the bounded sample. */
+    evidenceOmitted: NonNegativeInt,
+  },
+  { additionalProperties: false },
+);
+export type BehavioralAccount = Static<typeof BehavioralAccount>;
+
 export const ReconciliationDelta = Type.Object(
   {
     declaredNotExercised: DeclaredNotExercised,
@@ -130,6 +184,7 @@ export const ReconciliationDelta = Type.Object(
       },
       { additionalProperties: false },
     ),
+    behavioralAccount: Type.Optional(BehavioralAccount),
     /** Revision the static side was read at, so a delta can be reproduced. */
     revision: Type.Optional(
       Type.Object(

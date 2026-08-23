@@ -23,6 +23,7 @@ import type {
 import { layoutGraph } from './layout.ts';
 import { bakeLayouts, LAYOUT_RANK_KEY, MAP_LAYOUT_KEYS, MAP_LAYOUTS_KEY } from './layouts.ts';
 import { buildOverlays } from './overlays.ts';
+import { selectReportEvidence } from './evidence-selection.ts';
 
 /**
  * Report bundle assembly.
@@ -135,6 +136,8 @@ const withLayout = (graph: SystemGraph): SystemGraph => {
 export const buildReportBundle = (input: BuildBundleInput): ReportBundle => {
   const graph = withLayout(input.graph);
   const allRuns = [...input.runs, ...input.silentRuns];
+  const observedRunIds = [...new Set(input.runs.map((run) => run.id))].sort();
+  const silentRunIds = [...new Set(input.silentRuns.map((run) => run.id))].sort();
   const overlays = buildOverlays({
     graph,
     componentMetrics: input.componentMetrics,
@@ -166,6 +169,13 @@ export const buildReportBundle = (input: BuildBundleInput): ReportBundle => {
   const runtimeOnly = graph.components.filter(
     (component) => component.presence.runtime && !component.presence.static,
   );
+  const selectedEvidence = selectReportEvidence({
+    evidence: input.evidence,
+    graph,
+    findings: input.findings,
+    goals: input.goals,
+    reconciliation: input.reconciliation,
+  });
 
   const bundle: ReportBundle = {
     schemaVersion: 1,
@@ -179,8 +189,19 @@ export const buildReportBundle = (input: BuildBundleInput): ReportBundle => {
     graph,
     ...(input.reconciliation === undefined ? {} : { reconciliation: input.reconciliation }),
     findings: [...input.findings],
-    evidence: [...input.evidence],
+    evidence: [...selectedEvidence.evidence],
+    evidenceCoverage: selectedEvidence.coverage,
     runs: allRuns,
+    runPopulations: {
+      observed: {
+        count: observedRunIds.length,
+        runIds: observedRunIds,
+      },
+      silent: {
+        count: silentRunIds.length,
+        runIds: silentRunIds,
+      },
+    },
     scenarios: [...input.scenarios],
     scenarioRuns: [...input.scenarioRuns],
     componentMetrics: [...input.componentMetrics],
@@ -203,8 +224,8 @@ export const buildReportBundle = (input: BuildBundleInput): ReportBundle => {
       findingCountBySeverity,
       strengthCount,
       runCount: allRuns.length,
-      observedRunCount: input.runs.length,
-      silentRunCount: input.silentRuns.length,
+      observedRunCount: observedRunIds.length,
+      silentRunCount: silentRunIds.length,
       scenarioCount: input.scenarios.length,
     },
     metadata: {

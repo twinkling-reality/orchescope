@@ -1,8 +1,10 @@
 import {
+  absenceEvidence,
   componentId as buildComponentId,
   edgeId as buildEdgeId,
   derivedEvidence,
   identityFingerprint,
+  metricEvidence,
   normalizeLocalName,
   quantile,
   runtimeIdentity,
@@ -68,6 +70,34 @@ export type ReconcileResult = {
   readonly ambiguous: readonly AmbiguousMatch[];
   readonly runtimeOnlyComponentIds: readonly ComponentId[];
   readonly missingSpanAttributes: readonly MissingSpanAttribute[];
+  readonly behavior: ReconcileBehavior;
+};
+
+export type RelationRefusalReason =
+  | 'relation_rederived_from_endpoint_evidence'
+  | 'endpoint_identity_unresolved'
+  | 'no_exact_declared_relation';
+
+export type ReconcileBehavior = {
+  readonly status: 'complete' | 'incomplete';
+  readonly acceptedSpans: number;
+  readonly droppedSpans: number;
+  readonly rejectedSpans: number;
+  readonly executedComponents: number;
+  readonly componentExecutions: number;
+  readonly executedByKind: readonly { readonly kind: string; readonly count: number }[];
+  readonly observedStructuralRelations: number;
+  readonly qualifiedDeclaredRelations: number;
+  readonly refusals: readonly {
+    readonly reason: RelationRefusalReason;
+    readonly count: number;
+    readonly evidence: readonly EvidenceId[];
+    readonly evidenceOmitted: number;
+  }[];
+  readonly noIndependentRelationObservation: boolean;
+  readonly populationEvidence?: EvidenceId;
+  readonly evidence: readonly EvidenceId[];
+  readonly evidenceOmitted: number;
 };
 
 const PRODUCER = 'reconciler';
@@ -146,11 +176,14 @@ type Resolution =
 const sourceRefusal = (
   attribute: string,
   reason: NonNullable<MissingSpanAttribute['reason']>,
+  evidence: readonly EvidenceId[],
 ): MissingSpanAttribute => ({
   attribute,
   purpose: 'source_identity',
   reason,
   observedComponents: 1,
+  ...(evidence[0] === undefined ? {} : { evidence: [evidence[0]] }),
+  ...(evidence[0] === undefined ? { evidenceOmitted: 1 } : {}),
 });
 
 const sourceCandidates = (
@@ -168,7 +201,13 @@ const sourceCandidates = (
   if (result.kind === 'matched') {
     return { kind: 'matched', component: result.component, rule: 'code_location', refusals: [] };
   }
-  const refusals = [sourceRefusal(result.refusal.attribute, result.refusal.reason)];
+  const refusals = [
+    sourceRefusal(
+      result.refusal.attribute,
+      result.refusal.reason,
+      observed.evidence as EvidenceId[],
+    ),
+  ];
   if (result.kind === 'ambiguous') {
     return {
       kind: 'ambiguous',
@@ -273,6 +312,23 @@ type Mutable = {
   readonly sourceRefusals: Map<string, MissingSpanAttribute>;
   /** observed kind + normalised name to the component it resolved to, and how it was resolved. */
   readonly resolved: Map<string, { readonly id: ComponentId; readonly rule: MatchRule }>;
+  observedStructuralRelations: number;
+  qualifiedDeclaredRelations: number;
+  readonly relationRefusals: Map<
+    RelationRefusalReason,
+    { count: number; evidence: Set<EvidenceId> }
+  >;
+};
+
+const addRelationRefusal = (
+  state: Mutable,
+  reason: RelationRefusalReason,
+  evidence: readonly EvidenceId[],
+): void => {
+  const previous = state.relationRefusals.get(reason) ?? { count: 0, evidence: new Set() };
+  previous.count += 1;
+  for (const id of evidence) previous.evidence.add(id);
+  state.relationRefusals.set(reason, previous);
 };
 
 const observedResolutionKey = (
@@ -297,9 +353,16 @@ const addSourceRefusals = (state: Mutable, refusals: readonly MissingSpanAttribu
   for (const refusal of refusals) {
     const key = `${refusal.purpose}|${refusal.attribute}|${refusal.reason ?? ''}`;
     const previous = state.sourceRefusals.get(key);
+    const observedComponents = (previous?.observedComponents ?? 0) + refusal.observedComponents;
+    const evidence = [
+      ...new Set([...(previous?.evidence ?? []), ...(refusal.evidence ?? [])]),
+    ].sort();
+    const sample = evidence.slice(0, 10) as EvidenceId[];
     state.sourceRefusals.set(key, {
       ...refusal,
-      observedComponents: (previous?.observedComponents ?? 0) + refusal.observedComponents,
+      observedComponents,
+      ...(sample.length === 0 ? {} : { evidence: sample }),
+      evidenceOmitted: Math.max(0, observedComponents - sample.length),
     });
   }
 };
@@ -452,6 +515,7 @@ const reconcileComponents = (
 
 const reconcileEdges = (state: Mutable, topology: RuntimeTopology): void => {
   for (const observed of topology.edges) {
+    state.observedStructuralRelations += 1;
     const fromResolved = state.resolved.get(
       observedResolutionKey(
         observed.fromKind,
@@ -462,7 +526,10 @@ const reconcileEdges = (state: Mutable, topology: RuntimeTopology): void => {
     const toResolved = state.resolved.get(
       observedResolutionKey(observed.toKind, observed.toObservedName, observed.toObservedSource),
     );
-    if (fromResolved === undefined || toResolved === undefined) continue;
+    if (fromResolved === undefined || toResolved === undefined) {
+      addRelationRefusal(state, 'endpoint_identity_unresolved', observed.evidence);
+      continue;
+    }
     const from = fromResolved.id;
     const to = toResolved.id;
 
@@ -485,7 +552,11 @@ const reconcileEdges = (state: Mutable, topology: RuntimeTopology): void => {
         observed.provenance.relation.spanFields.length === 0 &&
         relationAttributes.length > 0 &&
         relationAttributes.every((attribute) => endpointAttributes.has(attribute));
-      if (exactlyRederived) continue;
+      if (exactlyRederived) {
+        addRelationRefusal(state, 'relation_rederived_from_endpoint_evidence', observed.evidence);
+        continue;
+      }
+      state.qualifiedDeclaredRelations += 1;
       state.edges.set(id, {
         ...existing,
         basis: strongerBasis(existing.basis, 'observed'),
@@ -494,6 +565,8 @@ const reconcileEdges = (state: Mutable, topology: RuntimeTopology): void => {
       });
       continue;
     }
+
+    addRelationRefusal(state, 'no_exact_declared_relation', observed.evidence);
 
     const record = derivedEvidence({
       producer: PRODUCER,
@@ -533,14 +606,125 @@ const aggregateMissingAttributes = (
   ]) {
     const key = `${missing.purpose}|${missing.attribute}|${missing.reason ?? ''}`;
     const previous = counts.get(key);
+    const evidence = [
+      ...new Set([...(previous?.evidence ?? []), ...(missing.evidence ?? [])]),
+    ].sort();
+    const sample = evidence.slice(0, 10) as EvidenceId[];
+    const observedComponents = (previous?.observedComponents ?? 0) + missing.observedComponents;
     counts.set(key, {
       ...missing,
-      observedComponents: (previous?.observedComponents ?? 0) + missing.observedComponents,
+      observedComponents,
+      ...(sample.length === 0 ? {} : { evidence: sample }),
+      ...(observedComponents <= sample.length
+        ? {}
+        : { evidenceOmitted: observedComponents - sample.length }),
     });
   }
   return [...counts.values()].sort((left, right) =>
     left.attribute < right.attribute ? -1 : left.attribute > right.attribute ? 1 : 0,
   );
+};
+
+const reconcileBehavior = (
+  state: Mutable,
+  topologies: readonly RuntimeTopology[],
+  runIds: readonly string[],
+): ReconcileBehavior => {
+  const acceptedValues = topologies.map((topology) => topology.coverage.acceptedSpans);
+  const droppedValues = topologies.map((topology) => topology.coverage.droppedSpans);
+  const rejectedValues = topologies.map((topology) => topology.coverage.rejectedSpans);
+  const coverageKnown = [...acceptedValues, ...droppedValues, ...rejectedValues].every(
+    (value) => value !== undefined,
+  );
+  const sumCoverage = (values: readonly (number | undefined)[]): number =>
+    values.reduce<number>((total, value) => total + (value ?? 0), 0);
+  const acceptedSpans = sumCoverage(acceptedValues);
+  const droppedSpans = sumCoverage(droppedValues);
+  const rejectedSpans = sumCoverage(rejectedValues);
+  const observedKeys = new Map<string, { kind: string; evidence: readonly EvidenceId[] }>();
+  let componentExecutions = 0;
+  for (const topology of topologies) {
+    for (const component of topology.components) {
+      componentExecutions += component.spanCount;
+      const key = observedResolutionKey(
+        component.kind,
+        component.observedName,
+        component.observedSource,
+      );
+      if (!observedKeys.has(key)) {
+        observedKeys.set(key, { kind: component.kind, evidence: component.evidence });
+      }
+    }
+  }
+  const byKind = new Map<string, number>();
+  for (const component of observedKeys.values()) {
+    byKind.set(component.kind, (byKind.get(component.kind) ?? 0) + 1);
+  }
+  const componentEvidence = [...observedKeys.values()].flatMap((component) =>
+    component.evidence.slice(0, 1),
+  ) as EvidenceId[];
+  const inputComplete = coverageKnown && droppedSpans === 0 && rejectedSpans === 0;
+  const populationEvidence =
+    coverageKnown && runIds.length > 0 && runIds.length <= 100
+      ? metricEvidence({
+          producer: PRODUCER,
+          runIds,
+          metric: 'runtime.accepted_spans',
+          value: acceptedSpans,
+          unit: 'spans',
+          sampleSize: acceptedSpans,
+        })
+      : undefined;
+  if (populationEvidence !== undefined) state.evidence.push(populationEvidence);
+  const noRelationEvidence =
+    inputComplete && state.observedStructuralRelations === 0 && acceptedSpans > 0
+      ? absenceEvidence({
+          producer: PRODUCER,
+          searched: 'an independently observed structural relation',
+          scope: `${acceptedSpans} accepted spans across runs ${runIds.join(', ')}`,
+          inspectedCount: acceptedSpans,
+        })
+      : undefined;
+  if (noRelationEvidence !== undefined) state.evidence.push(noRelationEvidence);
+  const refusals = [...state.relationRefusals]
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([reason, entry]) => {
+      const evidence = [...entry.evidence].sort();
+      return {
+        reason,
+        count: entry.count,
+        evidence: evidence.slice(0, 10),
+        evidenceOmitted: Math.max(0, evidence.length - 10),
+      };
+    });
+  const behaviorEvidence = [
+    ...new Set([
+      ...componentEvidence,
+      ...refusals.flatMap((entry) => entry.evidence),
+      ...(populationEvidence === undefined ? [] : [populationEvidence.id]),
+      ...(noRelationEvidence === undefined ? [] : [noRelationEvidence.id]),
+    ]),
+  ].sort() as EvidenceId[];
+  const accountBounded = behaviorEvidence.length <= 100 && populationEvidence !== undefined;
+  return {
+    status: inputComplete && accountBounded ? 'complete' : 'incomplete',
+    acceptedSpans,
+    droppedSpans,
+    rejectedSpans,
+    executedComponents: observedKeys.size,
+    componentExecutions,
+    executedByKind: [...byKind]
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      .map(([kind, count]) => ({ kind, count })),
+    observedStructuralRelations: state.observedStructuralRelations,
+    qualifiedDeclaredRelations: state.qualifiedDeclaredRelations,
+    refusals,
+    noIndependentRelationObservation:
+      inputComplete && state.observedStructuralRelations === 0 && acceptedSpans > 0,
+    ...(populationEvidence === undefined ? {} : { populationEvidence: populationEvidence.id }),
+    evidence: behaviorEvidence.slice(0, 100),
+    evidenceOmitted: Math.max(0, behaviorEvidence.length - 100),
+  };
 };
 
 export const reconcile = (
@@ -557,6 +741,9 @@ export const reconcile = (
     runtimeOnly: [],
     sourceRefusals: new Map(),
     resolved: new Map(),
+    observedStructuralRelations: 0,
+    qualifiedDeclaredRelations: 0,
+    relationRefusals: new Map(),
   };
 
   for (const topology of topologies) {
@@ -574,6 +761,7 @@ export const reconcile = (
   const edges = [...state.edges.values()].sort((left, right) =>
     left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
   );
+  const behavior = reconcileBehavior(state, topologies, runIds);
 
   return {
     graph: {
@@ -589,5 +777,6 @@ export const reconcile = (
     missingSpanAttributes: aggregateMissingAttributes(topologies, [
       ...state.sourceRefusals.values(),
     ]),
+    behavior,
   };
 };

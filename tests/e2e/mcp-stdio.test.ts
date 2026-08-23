@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
@@ -372,6 +372,9 @@ describe('the agent interface over stdio', () => {
       /^\d+\.\d+\.\d+/,
       `the payload does not name the build: ${JSON.stringify(Object.keys(data))}`,
     );
+    const text = textOf(result);
+    assert.match(text, /observed runs?/);
+    assert.match(text, /silent runs? \(no spans\)/);
   });
 
   /*
@@ -420,6 +423,92 @@ describe('the agent interface over stdio', () => {
         const capability = data.capabilities.find((entry) => entry.name === name);
         assert.equal(capability?.available, true, `${name}: ${capability?.reason}`);
       }
+    } finally {
+      await fresh.close();
+    }
+  });
+
+  it('explains executed components when the strict relation exercise rate is zero', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orchescope-mcp-behavior-'));
+    roots.push(root);
+    cpSync(join(repositoryRoot, 'apps/demo'), root, {
+      recursive: true,
+      filter: (source) => !source.includes('/node_modules') && !source.includes('/state'),
+    });
+    const fresh = new StdioClient(root);
+    try {
+      await fresh.request('initialize', {
+        protocolVersion: PROTOCOL_VERSION,
+        capabilities: {},
+        clientInfo: { name: 'orchescope-e2e', version: '1.0.0' },
+      });
+      fresh.notify('notifications/initialized');
+
+      writeFileSync(
+        join(root, 'component-only-trace.json'),
+        JSON.stringify({
+          resourceSpans: [
+            {
+              resource: {
+                attributes: [{ key: 'service.name', value: { stringValue: 'orchescope-demo' } }],
+              },
+              scopeSpans: [
+                {
+                  scope: { name: 'mcp-behavior' },
+                  spans: [
+                    {
+                      traceId: '00000000000000000000000000000001',
+                      spanId: '0000000000000001',
+                      name: 'chat demo-small',
+                      kind: 3,
+                      startTimeUnixNano: '1000000000000000000',
+                      endTimeUnixNano: '1000000005000000000',
+                      attributes: [
+                        { key: 'gen_ai.operation.name', value: { stringValue: 'chat' } },
+                        {
+                          key: 'gen_ai.provider.name',
+                          value: { stringValue: 'orchescope-demo' },
+                        },
+                        { key: 'gen_ai.request.model', value: { stringValue: 'demo-small' } },
+                      ],
+                      status: {},
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      );
+      const traceResponse = await fresh.request('tools/call', {
+        name: 'import_trace',
+        arguments: { path: 'component-only-trace.json' },
+      });
+      const traceResult = traceResponse['result'] as Message | undefined;
+      assert.ok(
+        traceResult !== undefined,
+        `trace import produced no result: ${JSON.stringify(traceResponse)}`,
+      );
+      assert.equal((traceResult['structuredContent'] as { spanCount?: number }).spanCount, 1);
+
+      const auditResponse = await fresh.request('tools/call', {
+        name: 'audit_agent_system',
+        arguments: {},
+      });
+      const auditResult = auditResponse['result'] as Message | undefined;
+      assert.ok(
+        auditResult !== undefined,
+        `audit produced no result: ${JSON.stringify(auditResponse)}`,
+      );
+      const data = auditResult['structuredContent'] as {
+        reconciliation?: {
+          coverage: { edgeExerciseRate: number };
+          behavioralAccount?: { executedComponents: number };
+        };
+      };
+      assert.ok((data.reconciliation?.behavioralAccount?.executedComponents ?? 0) > 0);
+      assert.equal(data.reconciliation?.coverage.edgeExerciseRate, 0);
+      assert.match(textOf(auditResult), /strict exercise rate/);
     } finally {
       await fresh.close();
     }

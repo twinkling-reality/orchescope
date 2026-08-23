@@ -136,6 +136,7 @@ def search(query):
       traceId: 'a'.repeat(32),
       spanId: 'b'.repeat(16),
       spanName: 'ChatOllama smollm2:135m',
+      observedComponent: { kind: 'model', observedName: 'ollama/smollm2:135m' },
       attribute: 'llm.model_name',
       attributeValue: 'smollm2:135m',
     });
@@ -194,6 +195,6 @@ def search(query):
     assert.match(mismatch.title, /without an exact matching static declaration/);
     assert.match(mismatch.explanation, /does not establish.*configurable provider path/);
     assert.equal(mismatch.newEvidence?.[0]?.kind, 'absence');
-    assert.ok(mismatch.evidence.includes(runtimeEvidence.id));
+    assert.ok(mismatch.claimEvidence.subject.includes(runtimeEvidence.id));
   });
 });

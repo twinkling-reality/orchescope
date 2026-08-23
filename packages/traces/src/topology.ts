@@ -441,7 +441,15 @@ const accumulateComponent = (
   accumulator.observedSource = accumulator.observedSource ?? facts.source.observedSource;
   mergeProvenance(accumulator.provenance.codeLocation, facts.source.codeLocationProvenance);
   for (const missing of facts.source.refusals) {
-    accumulator.sourceRefusals.set(missingAttributeKey(missing), missing);
+    const key = missingAttributeKey(missing);
+    const previous = accumulator.sourceRefusals.get(key);
+    accumulator.sourceRefusals.set(key, {
+      ...missing,
+      evidence:
+        previous?.evidence === undefined || previous.evidence.length === 0
+          ? [facts.evidenceId as EvidenceId]
+          : previous.evidence,
+    });
   }
   accumulator.mcpServer =
     accumulator.mcpServer ?? readString(span.attributes, MCP.serverName, MCP.methodName);
@@ -658,22 +666,12 @@ const emptyTraversalState = (
  */
 const recordHandoff = (
   state: TraversalState,
-  bundle: TraceBundle,
   node: SpanNode,
   parent: SpanNode | undefined,
   handoff: ObservedHandoff,
+  evidenceId: EvidenceId,
 ): void => {
   const span = node.span;
-  const spanRecord = spanEvidence({
-    producer: PRODUCER,
-    runId: bundle.runId,
-    traceId: span.traceId,
-    spanId: span.spanId,
-    spanName: span.name,
-    ...evidenceAttribute(span, handoff.provenance.relation),
-  });
-  state.evidence.push(spanRecord);
-
   const retried = isRetry(parent, node);
   const parallel = parallelSiblings(parent, node);
   accumulateEdge(
@@ -689,7 +687,7 @@ const recordHandoff = (
       provenance: handoff.provenance,
     },
     node,
-    { tokens: tokensOf(span), retried, parallel, evidenceId: spanRecord.id },
+    { tokens: tokensOf(span), retried, parallel, evidenceId },
   );
 
   if (span.status === 'error') state.metrics.errors += 1;
@@ -778,7 +776,16 @@ const visitSpan = (
   const span = node.span;
   const handoff = state.handoffs.get(span.spanId);
   if (handoff !== undefined) {
-    recordHandoff(state, bundle, node, parent, handoff);
+    const record = spanEvidence({
+      producer: PRODUCER,
+      runId: bundle.runId,
+      traceId: span.traceId,
+      spanId: span.spanId,
+      spanName: span.name,
+      ...evidenceAttribute(span, handoff.provenance.relation),
+    });
+    evidence.push(record);
+    recordHandoff(state, node, parent, handoff, record.id);
     encloseChildren(state, node, parent);
     for (const child of node.children) visitSpan(state, bundle, child, node);
     return;
@@ -788,12 +795,30 @@ const visitSpan = (
    * not counted as unattributed, because nothing it said went unreported.
    */
   if (state.superseded.has(span.spanId)) {
+    evidence.push(
+      spanEvidence({
+        producer: PRODUCER,
+        runId: bundle.runId,
+        traceId: span.traceId,
+        spanId: span.spanId,
+        spanName: span.name,
+      }),
+    );
     encloseChildren(state, node, parent);
     for (const child of node.children) visitSpan(state, bundle, child, node);
     return;
   }
   const component = componentOf(span);
   if ('reason' in component) {
+    evidence.push(
+      spanEvidence({
+        producer: PRODUCER,
+        runId: bundle.runId,
+        traceId: span.traceId,
+        spanId: span.spanId,
+        spanName: span.name,
+      }),
+    );
     unattributed.set(component.reason, (unattributed.get(component.reason) ?? 0) + 1);
     encloseChildren(state, node, parent);
     for (const child of node.children) visitSpan(state, bundle, child, node);
@@ -814,6 +839,7 @@ const visitSpan = (
     traceId: span.traceId,
     spanId: span.spanId,
     spanName: span.name,
+    observedComponent: { kind, observedName },
     ...evidenceAttribute(
       span,
       provenance.name.attributes.length > 0 ? provenance.name : provenance.kind,
@@ -872,6 +898,36 @@ const visitSpan = (
   for (const child of node.children) visitSpan(state, bundle, child, node);
 };
 
+const missingSourceAttributesOf = (
+  components: ReadonlyMap<string, ComponentAccumulator>,
+): MissingSpanAttribute[] => {
+  const missingSourceAttributes = new Map<string, MissingSpanAttribute>();
+  for (const accumulator of components.values()) {
+    for (const missing of accumulator.sourceRefusals.values()) {
+      const key = missingAttributeKey(missing);
+      const previous = missingSourceAttributes.get(key);
+      const evidence = [
+        ...new Set([...(previous?.evidence ?? []), ...(missing.evidence ?? [])]),
+      ].sort();
+      const sample = evidence.slice(0, 10) as EvidenceId[];
+      const observedComponents = (previous?.observedComponents ?? 0) + 1;
+      missingSourceAttributes.set(key, {
+        ...missing,
+        observedComponents,
+        ...(sample.length === 0 ? {} : { evidence: sample }),
+        ...(observedComponents <= sample.length
+          ? {}
+          : { evidenceOmitted: observedComponents - sample.length }),
+      });
+    }
+  }
+  return [...missingSourceAttributes.values()].sort((left, right) => {
+    const leftKey = missingAttributeKey(left);
+    const rightKey = missingAttributeKey(right);
+    return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+  });
+};
+
 export const deriveTopology = (bundle: TraceBundle): TopologyResult => {
   const { roots } = buildForest(bundle.spans);
   const state = emptyTraversalState(recognizeHandoffs(bundle.spans), supersededSpans(bundle.spans));
@@ -888,17 +944,7 @@ export const deriveTopology = (bundle: TraceBundle): TopologyResult => {
 
   const observedComponents = projectComponents(components);
   const observedEdges = projectEdges(edges);
-  const missingSourceAttributes = new Map<string, MissingSpanAttribute>();
-  for (const accumulator of components.values()) {
-    for (const missing of accumulator.sourceRefusals.values()) {
-      const key = missingAttributeKey(missing);
-      const previous = missingSourceAttributes.get(key);
-      missingSourceAttributes.set(key, {
-        ...missing,
-        observedComponents: (previous?.observedComponents ?? 0) + 1,
-      });
-    }
-  }
+  const missingSourceAttributes = missingSourceAttributesOf(components);
   const duplicateSideEffects = countDuplicateEffects(bundle.sideEffects);
   const effectsThatHappened = bundle.sideEffects.filter((effect) => effect.outcome !== 'failed');
   const observedSources = observedComponents
@@ -959,11 +1005,10 @@ export const deriveTopology = (bundle: TraceBundle): TopologyResult => {
       edges: observedEdges,
       sideEffects: [...bundle.sideEffects],
       coverage: {
-        missingSpanAttributes: [...missingSourceAttributes.values()].sort((left, right) => {
-          const leftKey = missingAttributeKey(left);
-          const rightKey = missingAttributeKey(right);
-          return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
-        }),
+        acceptedSpans: bundle.spans.length,
+        droppedSpans: bundle.droppedSpanCount,
+        rejectedSpans: bundle.rejected.reduce((total, entry) => total + entry.count, 0),
+        missingSpanAttributes: missingSourceAttributes,
       },
       ...(vcsRevision === undefined && vcsRepositoryUrl === undefined
         ? {}
@@ -978,7 +1023,9 @@ export const deriveTopology = (bundle: TraceBundle): TopologyResult => {
         count,
       })),
     },
-    evidence,
+    evidence: [...evidence].sort((left, right) =>
+      left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
+    ),
     runMetrics,
     componentMetricsByName,
     spanToComponentKey,

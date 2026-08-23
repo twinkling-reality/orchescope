@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { CONFIDENCE_BANDS, derivedEvidence, sourceSpanEvidence } from '@orchescope/domain';
+import {
+  CONFIDENCE_BANDS,
+  derivedEvidence,
+  sourceSpanEvidence,
+  spanEvidence,
+} from '@orchescope/domain';
 import { indexGraph } from '@orchescope/graph';
 import type { Contradiction, ReconciliationDelta, RunRecord } from '@orchescope/schema';
 import { buildGraph, componentDraft } from '@orchescope/testkit';
+import { evaluateRules } from '../src/engine.ts';
 import type { RuleContext } from '../src/rule.ts';
 import {
   ambiguousObservationRule,
@@ -52,6 +58,65 @@ const contextFor = (observed: readonly string[]): RuleContext => ({
   scenarios: [],
   evidenceById: new Map(),
 });
+
+const exactRuntimeContext = (
+  displayName = 'planner',
+  attributeValue = displayName,
+  includeDerivation = true,
+  observedCoordinateName: string | null = displayName,
+): RuleContext => {
+  const kind = displayName.includes('smollm2') ? ('model' as const) : ('agent' as const);
+  const span = spanEvidence({
+    producer: 'fixture:trace',
+    runId: 'run_0000000000000001',
+    traceId: 'a'.repeat(32),
+    spanId: 'b'.repeat(16),
+    spanName: `invoke ${displayName}`,
+    ...(observedCoordinateName === null
+      ? {}
+      : { observedComponent: { kind, observedName: observedCoordinateName } }),
+    attribute: kind === 'model' ? 'llm.model_name' : 'agent.name',
+    attributeValue,
+  });
+  const runtimeOnly = derivedEvidence({
+    producer: 'reconciler',
+    rule: 'runtime_only_component',
+    inputs: [span.id],
+  });
+  const base = buildGraph([
+    declared,
+    componentDraft({ kind, name: displayName, file: `runtime/${displayName}.ts` }),
+  ]);
+  const runtimeId = base.components.find((component) => component.displayName === displayName)?.id;
+  const graph = {
+    ...base,
+    components: base.components.map((component) =>
+      component.id !== runtimeId
+        ? component
+        : {
+            ...component,
+            presence: { static: false, runtime: true, manifest: false },
+            basis: 'observed' as const,
+            evidence: [span.id, ...(includeDerivation ? [runtimeOnly.id] : [])],
+          },
+    ),
+  };
+  return {
+    ...contextFor([]),
+    graph: indexGraph(graph),
+    delta: deltaWith([runtimeId as string]),
+    observedRuns: [
+      {
+        run: { id: 'run_0000000000000001' } as RunRecord,
+        componentMetrics: [],
+      },
+    ],
+    evidenceById: new Map([
+      [span.id, span],
+      ...(includeDerivation ? ([[runtimeOnly.id, runtimeOnly]] as const) : []),
+    ]),
+  };
+};
 
 /** The same run, with the reconciler having matched some of those names to more than one declaration. */
 const contested = (observed: readonly string[], ambiguous: readonly string[]): RuleContext => {
@@ -150,7 +215,8 @@ describe('exercised-not-declared', () => {
   });
 
   it('still fires for a component that arrived with a name of its own', () => {
-    const outcome = exercisedNotDeclaredRule.evaluate(contextFor(['agent:planner']));
+    const context = exactRuntimeContext();
+    const outcome = exercisedNotDeclaredRule.evaluate(context);
     assert.equal(outcome.status, 'fired');
     assert.equal(outcome.drafts.length, 1);
     assert.match(outcome.drafts[0]?.title ?? '', /^planner ran without an exact matching/);
@@ -170,6 +236,65 @@ describe('exercised-not-declared', () => {
       /anywhere|nobody|never declared|path unseen/i,
       'the finding must not expand an exact-match refusal into a repository-wide absence',
     );
+
+    const result = evaluateRules({
+      scanId: 'scan_exact_runtime_identity',
+      generatedAt: '2026-08-22T12:00:00.000Z',
+      graph: context.graph,
+      context: {
+        delta: context.delta,
+        observedRuns: context.observedRuns,
+        silentRuns: context.silentRuns,
+        benchmarks: context.benchmarks,
+        chaosReports: context.chaosReports,
+        scenarios: context.scenarios,
+        evidenceById: context.evidenceById,
+      },
+      rules: [exercisedNotDeclaredRule],
+    });
+    const finding = result.findingSet.findings[0];
+    assert.ok(finding !== undefined);
+    const records = new Map([
+      ...context.evidenceById,
+      ...result.evidence.map((record) => [record.id, record] as const),
+    ]);
+    assert.ok(finding.evidence.some((id) => records.get(id)?.kind === 'span'));
+    assert.ok(
+      finding.evidence.some(
+        (id) =>
+          records.get(id)?.kind === 'derived' &&
+          (records.get(id) as { rule?: string }).rule === 'runtime_only_component',
+      ),
+    );
+    assert.ok(finding.evidence.some((id) => records.get(id)?.kind === 'absence'));
+  });
+
+  it('requires the reconciler derivation in addition to an exact identity-bearing span', () => {
+    const outcome = exercisedNotDeclaredRule.evaluate(
+      exactRuntimeContext('planner', 'planner', false),
+    );
+    assert.equal(outcome.status, 'insufficient_evidence');
+    assert.deepEqual(outcome.drafts, []);
+  });
+
+  it('requires the exact composite provider and model coordinate', () => {
+    const exact = exercisedNotDeclaredRule.evaluate(
+      exactRuntimeContext('ollama/smollm2:135m', 'smollm2:135m'),
+    );
+    assert.equal(exact.status, 'fired');
+    const outcome = exercisedNotDeclaredRule.evaluate(
+      exactRuntimeContext('ollama/smollm2:135m', 'smollm2:135m', true, 'smollm2:135m'),
+    );
+    assert.equal(outcome.status, 'insufficient_evidence');
+    assert.deepEqual(outcome.drafts, []);
+  });
+
+  it('refuses a legacy span record that carries no exact observed component coordinate', () => {
+    const outcome = exercisedNotDeclaredRule.evaluate(
+      exactRuntimeContext('planner', 'planner', true, null),
+    );
+    assert.equal(outcome.status, 'insufficient_evidence');
+    assert.deepEqual(outcome.drafts, []);
   });
 
   /**
@@ -316,7 +441,11 @@ describe('declaration-contradicted-by-observation', () => {
     assert.equal(draft?.basis, 'observed');
     assert.equal(draft?.confidence, CONFIDENCE_BANDS.deterministic);
     assert.deepEqual(draft?.components, ['tool:issue_refund']);
-    assert.deepEqual(draft?.evidence, annotation.evidence, 'the finding cites the delta evidence');
+    assert.deepEqual(
+      draft?.claimEvidence.conclusion,
+      annotation.evidence,
+      'the finding cites the delta evidence',
+    );
     assert.deepEqual(draft?.taxonomy, ['owasp-asi:ASI05']);
     assert.equal(
       draft?.requiresHumanReview,

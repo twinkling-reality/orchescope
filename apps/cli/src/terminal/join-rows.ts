@@ -28,10 +28,19 @@ const fractionRows = (delta: Reconciliation): readonly Row[] => {
     rows.push({ kind: 'keyed', key: 'system', text: meter });
   }
   for (const missing of delta.coverage.missingSpanAttributes ?? []) {
+    const exactSourceIdentity =
+      missing.purpose === 'source_identity' || missing.purpose === 'code_location';
     rows.push({
       kind: 'keyed',
       key: 'system',
-      text: `${formatCount(missing.observedComponents, 'observed part')} lacked ${missing.attribute}; ${missing.purpose === 'code_location' ? 'code joins unavailable' : 'join unavailable'}`,
+      text: `${formatCount(missing.observedComponents, 'part')} ${missing.observedComponents === 1 ? 'lacks' : 'lack'} ${missing.attribute}; ${exactSourceIdentity ? 'exact source identity unavailable' : 'join unavailable'}`,
+    });
+  }
+  if (delta.joins.byKindAndName > 0) {
+    rows.push({
+      kind: 'keyed',
+      key: 'system',
+      text: `${formatCount(delta.joins.byKindAndName, 'part')} joined by heuristic kind and name only`,
     });
   }
   return rows;
@@ -44,10 +53,47 @@ const deltaRows = (delta: Reconciliation): readonly Row[] => {
   const duplicates = delta.duplicateSideEffects.length;
   return [
     `${formatCount(neverRan, 'part')} in the code never ran`,
-    `${formatCount(missing, 'part')} ran without being in the code`,
+    `${formatCount(missing, 'part')} ran without an exact static identity match`,
     `${formatCount(disagreements, 'place')} where the code and a run disagreed`,
     `${formatCount(duplicates, 'outside effect')} that happened twice in one run`,
   ].map((text) => ({ kind: 'keyed', key: 'system', text }) as const);
+};
+
+const behavioralRows = (delta: Reconciliation): readonly Row[] => {
+  const account = delta.behavioralAccount;
+  if (account === undefined || account.executedComponents === 0) return [];
+  if (delta.coverage.edgeExerciseRate !== 0) return [];
+  const structural =
+    account.observedStructuralRelations === 0
+      ? account.status === 'complete'
+        ? 'complete accepted population contained no independent structural relation'
+        : 'accepted subset reported 0 independent structural relations'
+      : `${formatCount(account.observedStructuralRelations, 'independent structural relation')} observed`;
+  const rows: Row[] = [
+    {
+      kind: 'keyed',
+      key: 'behavior',
+      text: `${formatCount(account.executedComponents, 'part')} executed in accepted subset of ${formatCount(account.acceptedSpans, 'span')}`,
+    },
+    {
+      kind: 'keyed',
+      key: 'behavior',
+      text: structural,
+    },
+    {
+      kind: 'keyed',
+      key: 'behavior',
+      text: '0 declared relations qualified for the strict exercise rate',
+    },
+  ];
+  if (account.status === 'incomplete' || account.droppedSpans > 0 || account.rejectedSpans > 0) {
+    rows.push({
+      kind: 'keyed',
+      key: 'behavior',
+      text: `account incomplete: ${formatCount(account.droppedSpans, 'span')} dropped, ${formatCount(account.rejectedSpans, 'span')} rejected`,
+    });
+  }
+  return rows;
 };
 
 /**
@@ -57,6 +103,8 @@ export const joinRegion = (
   reconciliation: AuditResult['reconciliation'],
   verbose = false,
 ): Region => {
-  if (!verbose || reconciliation === undefined) return [];
-  return [...fractionRows(reconciliation), ...deltaRows(reconciliation)];
+  if (reconciliation === undefined) return [];
+  const behavior = behavioralRows(reconciliation);
+  if (!verbose) return behavior;
+  return [...behavior, ...fractionRows(reconciliation), ...deltaRows(reconciliation)];
 };

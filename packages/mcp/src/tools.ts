@@ -118,7 +118,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: 'get_reconciliation_delta',
     description:
-      'Return the delta between what the repository declares and what the observed runs exercised: never exercised, never declared, contradicted declarations and duplicated side effects.',
+      'Return the delta between what the repository declares and what observed runs exercised: never exercised, no exact static identity match, contradicted declarations and duplicated side effects.',
     input: Empty,
     annotations: readOnly('Get the declared against exercised delta'),
     executes: false,

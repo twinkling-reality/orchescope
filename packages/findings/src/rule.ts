@@ -34,6 +34,15 @@ import type {
 
 export type RuleStatus = 'fired' | 'clear' | 'insufficient_evidence' | 'not_applicable';
 
+/** Producer-only bindings from each material finding clause to the evidence that supports it. */
+export type FindingClaimEvidence = {
+  readonly mechanism: readonly EvidenceId[];
+  readonly subject: readonly EvidenceId[];
+  readonly conclusion: readonly EvidenceId[];
+};
+
+export type FindingClaimClause = keyof FindingClaimEvidence;
+
 export type FindingDraft = {
   readonly ruleId: string;
   /** Stable rule-owned name for the situation being reported. Never derived from displayed prose. */
@@ -69,7 +78,17 @@ export type FindingDraft = {
   readonly identityDiscriminator?: string;
   /** Evidence records created by this rule. The engine stores them and rewrites the references. */
   readonly newEvidence?: readonly Evidence[];
-  readonly evidence: readonly EvidenceId[];
+  /** Persisted as one union in Finding.evidence; the clause boundaries do not change finding v1. */
+  readonly claimEvidence: FindingClaimEvidence;
+  /**
+   * A rule may replace an expanding grouped clause with one structured evidence record that describes
+   * the complete inspected population. The engine accepts an absence record whose inspected count, or a
+   * metric record whose sample size, covers the grouped occurrence population; this remains producer input
+   * and is not persisted in finding v1.
+   */
+  readonly claimPopulationEvidence?: Partial<Record<FindingClaimClause, EvidenceId>>;
+  /** Engine-owned refusal attached by grouping when a claim cannot stay inside its evidence ceiling. */
+  readonly claimEvidenceRefusal?: string;
   readonly metrics?: readonly FindingMetric[];
   readonly recommendation?: Recommendation;
   /**

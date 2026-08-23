@@ -6,6 +6,7 @@ import {
   spanEvidence,
 } from '@orchescope/domain';
 import type {
+  BehavioralAccount,
   Component,
   ComponentId,
   Contradiction,
@@ -21,6 +22,7 @@ import type {
 } from '@orchescope/schema';
 import { isObservableKind } from './analysis.ts';
 import type { ComponentMatch } from './reconcile.ts';
+import type { ReconcileBehavior } from './reconcile.ts';
 
 /**
  * The declared versus exercised delta.
@@ -385,6 +387,8 @@ export type DeltaInput = {
   readonly ambiguous?: readonly { readonly observedName: string }[];
   /** Span attributes absent from the observed topology, measured before reconciliation. */
   readonly missingSpanAttributes?: readonly MissingSpanAttribute[];
+  /** Accepted runtime population and strict relation decisions from reconciliation. */
+  readonly behavior?: ReconcileBehavior;
 };
 
 const summarizeJoins = (input: DeltaInput): JoinSummary => {
@@ -468,6 +472,27 @@ export const computeDelta = (input: DeltaInput): DeltaResult => {
         ? {}
         : { missingSpanAttributes: [...input.missingSpanAttributes] }),
     },
+    ...(input.behavior === undefined
+      ? {}
+      : {
+          behavioralAccount: {
+            ...input.behavior,
+            executedByKind: input.behavior.executedByKind.map((entry) => ({ ...entry })),
+            refusals: input.behavior.refusals.map((entry) => ({
+              ...entry,
+              evidence: [...entry.evidence],
+            })),
+            evidence: [...input.behavior.evidence],
+            evidenceOmitted: input.behavior.evidenceOmitted,
+            qualifiedDeclaredRelations: exercised,
+            refusedObservedRelations: input.behavior.refusals.reduce(
+              (total, entry) => total + entry.count,
+              0,
+            ),
+            noIndependentRelationObservation:
+              input.behavior.noIndependentRelationObservation && exercised === 0,
+          } satisfies BehavioralAccount,
+        }),
     ...(input.graph.provenance.git === undefined ? {} : { revision: input.graph.provenance.git }),
   };
 

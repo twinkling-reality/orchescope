@@ -158,6 +158,8 @@ export {
   Timestamp,
 } from './primitives.ts';
 export {
+  BehavioralAccount,
+  BehavioralRelationRefusal,
   Contradiction,
   DeclaredNotExercised,
   DuplicateSideEffect,
@@ -171,11 +173,13 @@ export {
   documentDescriptors,
 } from './registry.ts';
 export {
+  EvidenceCoverage,
   GoalValidationSummary,
   Overlay,
   OverlayKind,
   ReportBundle,
   ReportCapability,
+  ReportRunPopulations,
   ScenarioRunSummary,
 } from './report.ts';
 export {

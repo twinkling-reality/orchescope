@@ -108,25 +108,48 @@ export const SpanEvidence = Type.Object(
     traceId: Type.String({ pattern: '^[0-9a-f]{32}$' }),
     spanId: Type.String({ pattern: '^[0-9a-f]{16}$' }),
     spanName: NonEmptyString(),
+    /** Exact observed component coordinate when this accepted span was attributable. */
+    observedComponent: Type.Optional(
+      Type.Object(
+        { kind: NonEmptyString(), observedName: NonEmptyString() },
+        { additionalProperties: false },
+      ),
+    ),
     attribute: Type.Optional(NonEmptyString()),
     attributeValue: Type.Optional(Type.String({ maxLength: 2000 })),
   },
   { additionalProperties: false },
 );
 
-export const MetricEvidence = Type.Object(
-  {
-    ...evidenceBase,
-    kind: Type.Literal('metric'),
-    runId: NonEmptyString(),
-    metric: NonEmptyString(),
-    value: Type.Number(),
-    unit: NonEmptyString(),
-    sampleSize: NonNegativeInt,
-    componentId: Type.Optional(Type.String()),
-  },
-  { additionalProperties: false },
-);
+const metricEvidenceBase = {
+  ...evidenceBase,
+  kind: Type.Literal('metric'),
+  metric: NonEmptyString(),
+  value: Type.Number(),
+  unit: NonEmptyString(),
+  /** Number of metric observations, distinct from the exact run population below. */
+  sampleSize: NonNegativeInt,
+  componentId: Type.Optional(Type.String()),
+};
+
+export const MetricEvidence = Type.Union([
+  Type.Object(
+    {
+      ...metricEvidenceBase,
+      /** Exact run identity for an established single-run metric. */
+      runId: NonEmptyString(),
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      ...metricEvidenceBase,
+      /** Exact bounded run population for an aggregate metric. */
+      runIds: Type.Array(NonEmptyString(), { minItems: 1, maxItems: 100 }),
+    },
+    { additionalProperties: false },
+  ),
+]);
 
 export const ScenarioOutcomeEvidence = Type.Object(
   {
@@ -150,6 +173,16 @@ export const FaultInjectionEvidence = Type.Object(
     faultKind: NonEmptyString(),
     target: NonEmptyString(),
     appliedCount: NonNegativeInt,
+    /** Outcome facts carried with the injection so a resilience claim cites more than application alone. */
+    taskCompleted: Type.Optional(Type.Boolean()),
+    recovered: Type.Optional(Type.Boolean()),
+    duplicateSideEffects: Type.Optional(NonNegativeInt),
+    costAmplification: Type.Optional(Type.Number({ minimum: 0 })),
+    retryAmplification: Type.Optional(Type.Number({ minimum: 0 })),
+    prohibitedSideEffects: Type.Optional(NonNegativeInt),
+    userInterventions: Type.Optional(NonNegativeInt),
+    degradedGracefully: Type.Optional(Type.Boolean()),
+    policyViolations: Type.Optional(NonNegativeInt),
   },
   { additionalProperties: false },
 );

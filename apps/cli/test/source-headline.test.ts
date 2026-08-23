@@ -49,7 +49,52 @@ describe('the headline', () => {
     });
     assert.equal(
       lines(withRuns, 80)[1],
-      '                read from 23 of 23 source files, with 2 runs on record',
+      '                read from 23 of 23 source files, with 2 observed runs',
+    );
+  });
+
+  it('names observed and silent run populations when both exist', () => {
+    const mixed = auditResult({
+      runs: [{ id: 'run_observed' }, { id: 'run_silent' }] as unknown as ReturnType<
+        typeof auditResult
+      >['bundle']['runs'],
+      observedRunCount: 1,
+      silentRunCount: 1,
+    });
+    assert.equal(
+      lines(mixed, 80)[1],
+      '                23 of 23 source files; 1 observed run, 1 silent run (no spans)',
+    );
+  });
+
+  it('explains that a silent-only run population carried no spans', () => {
+    const silent = auditResult({
+      runs: [{ id: 'run_silent' }] as unknown as ReturnType<typeof auditResult>['bundle']['runs'],
+      observedRunCount: 0,
+      silentRunCount: 1,
+    });
+    assert.equal(
+      lines(silent, 80)[1],
+      '                read from 23 of 23 source files, with 1 silent run (no spans)',
+    );
+  });
+
+  it('keeps a legacy undivided run count on record instead of promoting it to observed', () => {
+    const legacy = auditResult({
+      runs: [{ id: 'run_unknown' }] as unknown as ReturnType<typeof auditResult>['bundle']['runs'],
+    });
+    const {
+      observedRunCount: _observedRunCount,
+      silentRunCount: _silentRunCount,
+      ...legacySummary
+    } = legacy.bundle.summary;
+    const legacyWithoutPopulations = {
+      ...legacy,
+      bundle: { ...legacy.bundle, summary: legacySummary },
+    } as ReturnType<typeof auditResult>;
+    assert.equal(
+      lines(legacyWithoutPopulations, 80)[1],
+      '                read from 23 of 23 source files, with 1 run on record',
     );
   });
 
@@ -58,7 +103,7 @@ describe('the headline', () => {
       lines(auditResult({ projectName: 'a-very-long-repository-name-here-now' }), 60),
       [
         'a-very-long-repository-name…  5 agents, 7 tools and 2 models',
-        '                read from 23 of 23 source files',
+        '                23 of 23 source files; no runs on record',
       ],
     );
   });

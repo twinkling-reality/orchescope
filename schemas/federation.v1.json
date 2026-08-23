@@ -510,6 +510,18 @@
                 "minLength": 1,
                 "type": "string"
               },
+              "evidence": {
+                "items": {
+                  "pattern": "^ev_[0-9a-f]{16}$",
+                  "type": "string"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              "evidenceOmitted": {
+                "minimum": 0,
+                "type": "integer"
+              },
               "observedComponents": {
                 "minimum": 0,
                 "type": "integer"
@@ -905,6 +917,24 @@
                 "const": "span",
                 "type": "string"
               },
+              "observedComponent": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "observedName": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "observedName"
+                ],
+                "type": "object"
+              },
               "producer": {
                 "minLength": 1,
                 "type": "string"
@@ -939,84 +969,173 @@
             "type": "object"
           },
           {
-            "additionalProperties": false,
-            "properties": {
-              "basis": {
-                "anyOf": [
-                  {
-                    "const": "observed",
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "basis": {
+                    "anyOf": [
+                      {
+                        "const": "observed",
+                        "type": "string"
+                      },
+                      {
+                        "const": "discovered",
+                        "type": "string"
+                      },
+                      {
+                        "const": "inferred",
+                        "type": "string"
+                      },
+                      {
+                        "const": "estimated",
+                        "type": "string"
+                      },
+                      {
+                        "const": "simulated",
+                        "type": "string"
+                      },
+                      {
+                        "const": "model_interpreted",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "observed: seen in a runtime trace. discovered: read from source or configuration. inferred: derived from other evidence by a deterministic rule. estimated: computed from a model of the system rather than measured. simulated: produced under injected faults. model_interpreted: proposed by a language model and reviewed against supplied evidence."
+                  },
+                  "componentId": {
                     "type": "string"
                   },
-                  {
-                    "const": "discovered",
+                  "id": {
+                    "pattern": "^ev_[0-9a-f]{16}$",
                     "type": "string"
                   },
-                  {
-                    "const": "inferred",
+                  "kind": {
+                    "const": "metric",
                     "type": "string"
                   },
-                  {
-                    "const": "estimated",
+                  "metric": {
+                    "minLength": 1,
                     "type": "string"
                   },
-                  {
-                    "const": "simulated",
+                  "producer": {
+                    "minLength": 1,
                     "type": "string"
                   },
-                  {
-                    "const": "model_interpreted",
+                  "runId": {
+                    "minLength": 1,
                     "type": "string"
+                  },
+                  "sampleSize": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "unit": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
                   }
+                },
+                "required": [
+                  "id",
+                  "basis",
+                  "producer",
+                  "kind",
+                  "metric",
+                  "value",
+                  "unit",
+                  "sampleSize",
+                  "runId"
                 ],
-                "description": "observed: seen in a runtime trace. discovered: read from source or configuration. inferred: derived from other evidence by a deterministic rule. estimated: computed from a model of the system rather than measured. simulated: produced under injected faults. model_interpreted: proposed by a language model and reviewed against supplied evidence."
+                "type": "object"
               },
-              "componentId": {
-                "type": "string"
-              },
-              "id": {
-                "pattern": "^ev_[0-9a-f]{16}$",
-                "type": "string"
-              },
-              "kind": {
-                "const": "metric",
-                "type": "string"
-              },
-              "metric": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "producer": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "runId": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "sampleSize": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "unit": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "value": {
-                "type": "number"
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "basis": {
+                    "anyOf": [
+                      {
+                        "const": "observed",
+                        "type": "string"
+                      },
+                      {
+                        "const": "discovered",
+                        "type": "string"
+                      },
+                      {
+                        "const": "inferred",
+                        "type": "string"
+                      },
+                      {
+                        "const": "estimated",
+                        "type": "string"
+                      },
+                      {
+                        "const": "simulated",
+                        "type": "string"
+                      },
+                      {
+                        "const": "model_interpreted",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "observed: seen in a runtime trace. discovered: read from source or configuration. inferred: derived from other evidence by a deterministic rule. estimated: computed from a model of the system rather than measured. simulated: produced under injected faults. model_interpreted: proposed by a language model and reviewed against supplied evidence."
+                  },
+                  "componentId": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "pattern": "^ev_[0-9a-f]{16}$",
+                    "type": "string"
+                  },
+                  "kind": {
+                    "const": "metric",
+                    "type": "string"
+                  },
+                  "metric": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "producer": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "runIds": {
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "maxItems": 100,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "sampleSize": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "unit": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "basis",
+                  "producer",
+                  "kind",
+                  "metric",
+                  "value",
+                  "unit",
+                  "sampleSize",
+                  "runIds"
+                ],
+                "type": "object"
               }
-            },
-            "required": [
-              "id",
-              "basis",
-              "producer",
-              "kind",
-              "runId",
-              "metric",
-              "value",
-              "unit",
-              "sampleSize"
-            ],
-            "type": "object"
+            ]
           },
           {
             "additionalProperties": false,
@@ -1154,6 +1273,17 @@
                 ],
                 "description": "observed: seen in a runtime trace. discovered: read from source or configuration. inferred: derived from other evidence by a deterministic rule. estimated: computed from a model of the system rather than measured. simulated: produced under injected faults. model_interpreted: proposed by a language model and reviewed against supplied evidence."
               },
+              "costAmplification": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "degradedGracefully": {
+                "type": "boolean"
+              },
+              "duplicateSideEffects": {
+                "minimum": 0,
+                "type": "integer"
+              },
               "faultKind": {
                 "minLength": 1,
                 "type": "string"
@@ -1166,9 +1296,24 @@
                 "const": "fault_injection",
                 "type": "string"
               },
+              "policyViolations": {
+                "minimum": 0,
+                "type": "integer"
+              },
               "producer": {
                 "minLength": 1,
                 "type": "string"
+              },
+              "prohibitedSideEffects": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "recovered": {
+                "type": "boolean"
+              },
+              "retryAmplification": {
+                "minimum": 0,
+                "type": "number"
               },
               "runId": {
                 "minLength": 1,
@@ -1177,6 +1322,13 @@
               "target": {
                 "minLength": 1,
                 "type": "string"
+              },
+              "taskCompleted": {
+                "type": "boolean"
+              },
+              "userInterventions": {
+                "minimum": 0,
+                "type": "integer"
               }
             },
             "required": [

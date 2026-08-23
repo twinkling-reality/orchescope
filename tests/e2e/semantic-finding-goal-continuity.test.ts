@@ -28,6 +28,14 @@ const runtimeToolId = graph.graph.components.find(
   (component) => component.displayName === 'runtime_tool',
 )?.id as string;
 const modelEdgeId = graph.graph.edges.find((edge) => edge.kind === 'invokes_model')?.id as string;
+const evidence = [...planner.evidence, ...model.evidence, ...runtimeTool.evidence];
+const timeoutEvidenceId = model.evidence[0]?.id as EvidenceId;
+const runtimeEvidenceId = runtimeTool.evidence[0]?.id as EvidenceId;
+const claim = (...ids: readonly EvidenceId[]) => ({
+  mechanism: ids,
+  subject: ids,
+  conclusion: ids,
+});
 
 const selectedDraft: FindingDraft = {
   ruleId: 'model-call-without-timeout',
@@ -42,7 +50,7 @@ const selectedDraft: FindingDraft = {
   impact: 'A provider can hold the run open.',
   components: [plannerId, modelId],
   edges: [modelEdgeId],
-  evidence: ['ev_timeout' as EvidenceId],
+  claimEvidence: claim(timeoutEvidenceId),
   recommendation: {
     summary: 'Set a timeout on the model client.',
     steps: ['Set an explicit timeout.'],
@@ -73,7 +81,7 @@ const findings = (rules: readonly Rule[]): readonly Finding[] =>
       benchmarks: [],
       chaosReports: [],
       scenarios: [],
-      evidenceById: new Map(),
+      evidenceById: new Map(evidence.map((record) => [record.id, record])),
     },
     rules,
   }).findingSet.findings;
@@ -90,7 +98,7 @@ describe('semantic finding goal continuity', () => {
       title: 'Runtime tool has no exact declaration',
       components: [runtimeToolId],
       edges: [],
-      evidence: ['ev_runtime' as EvidenceId],
+      claimEvidence: claim(runtimeEvidenceId),
       remediationVariant: 'manifest-declaration',
     };
     const after = findings([rule(runtimeDraft.ruleId, runtimeDraft), selectedRule]);

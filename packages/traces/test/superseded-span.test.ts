@@ -191,6 +191,13 @@ describe('a model call two instrumentations watched', () => {
     ]);
   });
 
+  it('keeps one evidence record for every accepted span, including superseded witnesses', () => {
+    const result = deriveTopology(bundleOf(RECORDED_RUN));
+    assert.equal(result.evidence.length, RECORDED_RUN.length);
+    assert.ok(result.evidence.every((record) => record.kind === 'span'));
+    assert.equal(new Set(result.evidence.map((record) => record.id)).size, RECORDED_RUN.length);
+  });
+
   it('stands alone when nothing else in the run watched the call', () => {
     // The fallback this shim exists to be. Without it a run of an uninstrumented system says nothing at
     // all, so a rule that dropped our span whenever any other producer was present would be wrong.

@@ -4,11 +4,13 @@ import {
   derivedEvidence,
   faultInjectionEvidence,
   formatCount,
+  metricEvidence,
 } from '@orchescope/domain';
 import type {
   BenchmarkReport,
   ChaosReport,
   ComponentId,
+  Evidence,
   EvidenceId,
   VariantResult,
 } from '@orchescope/schema';
@@ -77,6 +79,59 @@ type AgentCountComparison = {
   readonly components: readonly ComponentId[];
 };
 
+const agentCountEvidence = (
+  input: AgentCountComparison,
+): { readonly records: readonly Evidence[]; readonly conclusion: EvidenceId } => {
+  const { baseline, variant, baselineLatency, variantLatency, baselineSuccess, variantSuccess } =
+    input;
+  const records = [
+    metricEvidence({
+      producer: PRODUCER,
+      runIds: baseline.runIds,
+      metric: 'p50_duration_ms',
+      value: baselineLatency,
+      unit: 'ms',
+      sampleSize: baseline.completedRuns,
+      basis: 'observed',
+    }),
+    metricEvidence({
+      producer: PRODUCER,
+      runIds: variant.runIds,
+      metric: 'p50_duration_ms',
+      value: variantLatency,
+      unit: 'ms',
+      sampleSize: variant.completedRuns,
+      basis: 'observed',
+    }),
+    metricEvidence({
+      producer: PRODUCER,
+      runIds: baseline.runIds,
+      metric: 'success_rate',
+      value: baselineSuccess,
+      unit: 'fraction',
+      sampleSize: baseline.completedRuns,
+      basis: 'observed',
+    }),
+    metricEvidence({
+      producer: PRODUCER,
+      runIds: variant.runIds,
+      metric: 'success_rate',
+      value: variantSuccess,
+      unit: 'fraction',
+      sampleSize: variant.completedRuns,
+      basis: 'observed',
+    }),
+  ];
+  const conclusion = derivedEvidence({
+    producer: PRODUCER,
+    rule: 'agent-count-does-not-pay-for-itself',
+    inputs: records.map((record) => record.id),
+    note: `${variantLabel(variant)} against ${variantLabel(baseline)}: latency ${Math.round(baselineLatency)} ms to ${Math.round(variantLatency)} ms, success ${baselineSuccess.toFixed(2)} to ${variantSuccess.toFixed(2)}, tokens ${tokensOf(baseline)} to ${tokensOf(variant)}`,
+    basis: 'observed',
+  });
+  return { records: [...records, conclusion], conclusion: conclusion.id };
+};
+
 /**
  * The finding for one variant pair.
  *
@@ -88,13 +143,7 @@ const agentCountDraft = (input: AgentCountComparison): FindingDraft => {
     input;
   const tokenRatio = tokensOf(baseline) === 0 ? undefined : tokensOf(variant) / tokensOf(baseline);
   const enoughRuns = baseline.completedRuns >= 5 && variant.completedRuns >= 5;
-  const record = derivedEvidence({
-    producer: PRODUCER,
-    rule: 'agent-count-does-not-pay-for-itself',
-    inputs: [] as EvidenceId[],
-    note: `${variantLabel(variant)} against ${variantLabel(baseline)}: latency ${Math.round(baselineLatency)} ms to ${Math.round(variantLatency)} ms, success ${baselineSuccess.toFixed(2)} to ${variantSuccess.toFixed(2)}, tokens ${tokensOf(baseline)} to ${tokensOf(variant)}`,
-    basis: 'observed',
-  });
+  const evidence = agentCountEvidence(input);
 
   return {
     ruleId: 'agent-count-does-not-pay-for-itself',
@@ -114,8 +163,12 @@ const agentCountDraft = (input: AgentCountComparison): FindingDraft => {
     impact:
       'The extra coordination is being paid for in latency and tokens and is not returning a measurable success improvement on this scenario.',
     components: [...input.components],
-    newEvidence: [record],
-    evidence: [],
+    newEvidence: evidence.records,
+    claimEvidence: {
+      mechanism: [evidence.conclusion],
+      subject: [evidence.conclusion],
+      conclusion: [evidence.conclusion],
+    },
     metrics: [
       {
         name: 'p50_duration_ms',
@@ -253,6 +306,32 @@ export const concurrencySaturationRule: Rule = {
         // Superlinear latency growth against the added concurrency is the saturation signal.
         if (latencyRatio <= concurrencyRatio) continue;
 
+        const baselineRecord = metricEvidence({
+          producer: PRODUCER,
+          runIds: baseline.runIds,
+          metric: 'p50_duration_ms',
+          value: baselineLatency,
+          unit: 'ms',
+          sampleSize: baseline.completedRuns,
+          basis: 'observed',
+        });
+        const variantRecord = metricEvidence({
+          producer: PRODUCER,
+          runIds: variant.runIds,
+          metric: 'p50_duration_ms',
+          value: latency,
+          unit: 'ms',
+          sampleSize: variant.completedRuns,
+          basis: 'observed',
+        });
+        const record = derivedEvidence({
+          producer: PRODUCER,
+          rule: 'throughput-saturates-under-concurrency',
+          inputs: [baselineRecord.id, variantRecord.id],
+          note: `concurrency increased by ${concurrencyRatio.toFixed(1)} while latency increased by ${latencyRatio.toFixed(1)}`,
+          basis: 'observed',
+        });
+
         drafts.push({
           ruleId: 'throughput-saturates-under-concurrency',
           situation: 'latency-grows-faster-than-concurrency',
@@ -274,7 +353,12 @@ export const concurrencySaturationRule: Rule = {
           impact:
             'Beyond this point, more traffic makes every request slower rather than serving more of them.',
           components: [...taskLevelComponents(context.graph)],
-          evidence: [],
+          newEvidence: [baselineRecord, variantRecord, record],
+          claimEvidence: {
+            mechanism: [record.id],
+            subject: [record.id],
+            conclusion: [record.id],
+          },
           metrics: [
             {
               name: 'p50_duration_ms',
@@ -320,6 +404,72 @@ export const concurrencySaturationRule: Rule = {
 
 type ChaosOutcome = ChaosReport['outcomes'][number];
 
+const chaosEvidence = (outcome: ChaosOutcome): ReturnType<typeof faultInjectionEvidence> =>
+  faultInjectionEvidence({
+    producer: PRODUCER,
+    runId: outcome.runId,
+    faultKind: outcome.faultKind,
+    target: outcome.target,
+    appliedCount: outcome.appliedCount,
+    taskCompleted: outcome.taskCompleted,
+    recovered: outcome.recovered,
+    duplicateSideEffects: outcome.duplicateSideEffects,
+    ...(outcome.costAmplification === undefined
+      ? {}
+      : { costAmplification: outcome.costAmplification }),
+    ...(outcome.retryAmplification === undefined
+      ? {}
+      : { retryAmplification: outcome.retryAmplification }),
+    prohibitedSideEffects: outcome.prohibitedSideEffects,
+    userInterventions: outcome.userInterventions,
+    degradedGracefully: outcome.degradedGracefully,
+    policyViolations: outcome.policyViolations,
+  });
+
+const absorbedFaultDraft = (
+  context: RuleContext,
+  outcome: ChaosOutcome,
+  scenarioId: string,
+  record: ReturnType<typeof faultInjectionEvidence>,
+): FindingDraft => ({
+  ruleId: 'resilience-under-injected-fault',
+  situation: 'injected-fault-absorbed',
+  occurrence: {
+    key: canonicalJson({ scenarioId, faultKind: outcome.faultKind, target: outcome.target }),
+    groupedTitle: '{count} equivalent injected fault outcomes were recorded',
+  },
+  category: 'resilience',
+  polarity: 'strength',
+  severity: 'info',
+  confidence: CONFIDENCE_BANDS.deterministic,
+  basis: 'simulated',
+  title: `${outcome.faultKind} on ${outcome.target} was absorbed`,
+  explanation: `The fault was applied ${formatCount(outcome.appliedCount, 'time')}, the task still completed, recovery ${outcome.recovered ? 'happened' : 'degraded gracefully'}, no side effect was duplicated, no prohibited side effect or policy violation occurred, and no user intervention was recorded.${outcome.costAmplification === undefined ? ' Cost amplification was not measured.' : ` Cost amplification was ${outcome.costAmplification.toFixed(2)}.`}`,
+  impact: 'This failure mode is handled without user intervention.',
+  components: attributionFor(context, outcome.target),
+  newEvidence: [record],
+  claimEvidence: {
+    mechanism: [record.id],
+    subject: [record.id],
+    conclusion: [record.id],
+  },
+  goalEligible: false,
+  goalReason: 'Nothing to change.',
+  tags: ['positive', 'chaos', outcome.faultKind],
+});
+
+const classifyChaosOutcome = (outcome: ChaosOutcome) => ({
+  duplicated: outcome.duplicateSideEffects > 0,
+  collapsed: !outcome.taskCompleted,
+  amplified: outcome.costAmplification !== undefined && outcome.costAmplification > 1.5,
+  clean:
+    outcome.appliedCount > 0 &&
+    outcome.userInterventions === 0 &&
+    outcome.prohibitedSideEffects === 0 &&
+    outcome.policyViolations === 0 &&
+    (outcome.recovered || outcome.degradedGracefully),
+});
+
 /**
  * What one injected fault did.
  *
@@ -331,43 +481,19 @@ const chaosOutcomeDraft = (
   context: RuleContext,
   outcome: ChaosOutcome,
   scenarioId: string,
-): FindingDraft => {
-  const record = faultInjectionEvidence({
-    producer: PRODUCER,
-    runId: outcome.runId,
-    faultKind: outcome.faultKind,
-    target: outcome.target,
-    appliedCount: outcome.appliedCount,
-  });
-  const duplicated = outcome.duplicateSideEffects > 0;
-  const collapsed = !outcome.taskCompleted;
-  const amplified = (outcome.costAmplification ?? 1) > 1.5;
+): FindingDraft | undefined => {
+  const record = chaosEvidence(outcome);
+  const { duplicated, collapsed, amplified, clean } = classifyChaosOutcome(outcome);
   const occurrence = {
     key: canonicalJson({ scenarioId, faultKind: outcome.faultKind, target: outcome.target }),
     groupedTitle: '{count} equivalent injected fault outcomes were recorded',
   };
 
-  if (!collapsed && !duplicated && !amplified) {
-    return {
-      ruleId: 'resilience-under-injected-fault',
-      situation: 'injected-fault-absorbed',
-      occurrence,
-      category: 'resilience',
-      polarity: 'strength',
-      severity: 'info',
-      confidence: CONFIDENCE_BANDS.deterministic,
-      basis: 'simulated',
-      title: `${outcome.faultKind} on ${outcome.target} was absorbed`,
-      explanation: `The fault was applied ${formatCount(outcome.appliedCount, 'time')}, the task still completed, recovery ${outcome.recovered ? 'happened' : 'was not needed'}, no side effect was duplicated and cost amplification stayed at ${(outcome.costAmplification ?? 1).toFixed(2)}.`,
-      impact: 'This failure mode is handled without user intervention.',
-      components: attributionFor(context, outcome.target),
-      newEvidence: [record],
-      evidence: [],
-      goalEligible: false,
-      goalReason: 'Nothing to change.',
-      tags: ['positive', 'chaos', outcome.faultKind],
-    };
+  if (!collapsed && !duplicated && !amplified && clean) {
+    return absorbedFaultDraft(context, outcome, scenarioId, record);
   }
+
+  if (!collapsed && !duplicated && !amplified) return undefined;
 
   /*
    * The outcome in the words a reader who did not write the fault plan would use. "A side effect was
@@ -394,7 +520,7 @@ const chaosOutcomeDraft = (
     confidence: CONFIDENCE_BANDS.deterministic,
     basis: 'simulated',
     title: `${outcome.faultKind} on ${outcome.target}: ${headline}`,
-    explanation: `The fault was applied ${formatCount(outcome.appliedCount, 'time')} in run ${outcome.runId}. Task completed: ${outcome.taskCompleted}. Recovered: ${outcome.recovered}. Duplicate side effects: ${outcome.duplicateSideEffects}. Cost amplification against the baseline: ${(outcome.costAmplification ?? 1).toFixed(2)}. Retry amplification: ${(outcome.retryAmplification ?? 1).toFixed(2)}. This is a simulated failure, so the claim is about behaviour under an injected fault rather than about production.`,
+    explanation: `The fault was applied ${formatCount(outcome.appliedCount, 'time')} in run ${outcome.runId}. Task completed: ${outcome.taskCompleted}. Recovered: ${outcome.recovered}. Duplicate side effects: ${outcome.duplicateSideEffects}. ${outcome.costAmplification === undefined ? 'Cost amplification was not measured.' : `Cost amplification against the baseline: ${outcome.costAmplification.toFixed(2)}.`} ${outcome.retryAmplification === undefined ? 'Retry amplification was not measured.' : `Retry amplification: ${outcome.retryAmplification.toFixed(2)}.`} This is a simulated failure, so the claim is about behaviour under an injected fault rather than about production.`,
     impact: duplicated
       ? 'The failure path produces a duplicated external effect, which is visible outside the system.'
       : collapsed
@@ -402,7 +528,11 @@ const chaosOutcomeDraft = (
         : 'The failure path costs materially more than the healthy path.',
     components: attributionFor(context, outcome.target),
     newEvidence: [record],
-    evidence: [],
+    claimEvidence: {
+      mechanism: [record.id],
+      subject: [record.id],
+      conclusion: [record.id],
+    },
     metrics: [
       {
         name: 'duplicate_side_effects',
@@ -411,13 +541,17 @@ const chaosOutcomeDraft = (
         sampleSize: 1,
         basis: 'simulated',
       },
-      {
-        name: 'cost_amplification',
-        value: Number((outcome.costAmplification ?? 1).toFixed(2)),
-        unit: 'ratio',
-        sampleSize: 1,
-        basis: 'simulated',
-      },
+      ...(outcome.costAmplification === undefined
+        ? []
+        : [
+            {
+              name: 'cost_amplification',
+              value: Number(outcome.costAmplification.toFixed(2)),
+              unit: 'ratio',
+              sampleSize: 1,
+              basis: 'simulated' as const,
+            },
+          ]),
     ],
     recommendation: {
       summary: collapsed
@@ -455,9 +589,12 @@ export const resilienceRule: Rule = {
   evaluate: (context) => {
     if (context.chaosReports.length === 0) return notApplicable('no chaos suite has been run');
     const drafts: FindingDraft[] = [];
+    let insufficientOutcomes = 0;
     for (const report of context.chaosReports) {
       for (const outcome of report.outcomes) {
-        drafts.push(chaosOutcomeDraft(context, outcome, report.scenarioId));
+        const draft = chaosOutcomeDraft(context, outcome, report.scenarioId);
+        if (draft === undefined) insufficientOutcomes += 1;
+        else drafts.push(draft);
       }
       if (report.notApplied.length > 0) {
         return fired(
@@ -472,10 +609,21 @@ export const resilienceRule: Rule = {
      * A suite that ran and recorded no outcome measured nothing, which is not the same as a suite whose
      * outcomes were all fine. `clear` said the second about the first.
      */
-    return examined(drafts, {
-      count: context.chaosReports.reduce((total, report) => total + report.outcomes.length, 0),
-      singular: 'injected fault',
-    });
+    if (drafts.length === 0 && insufficientOutcomes > 0) {
+      return insufficient(
+        `${formatCount(insufficientOutcomes, 'fault outcome')} lacked the complete successful, graceful, intervention-free outcome evidence required for a resilience strength`,
+      );
+    }
+    return examined(
+      drafts,
+      {
+        count: context.chaosReports.reduce((total, report) => total + report.outcomes.length, 0),
+        singular: 'injected fault',
+      },
+      insufficientOutcomes === 0
+        ? undefined
+        : `${formatCount(insufficientOutcomes, 'fault outcome')} lacked sufficient outcome evidence for a resilience strength`,
+    );
   },
 };
 

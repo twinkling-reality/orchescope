@@ -71,7 +71,9 @@ const distinctLocations = (locations: readonly SourceLocation[]): readonly Sourc
     const key = sourceLocationKey(location);
     if (!seen.has(key)) seen.set(key, location);
   }
-  return [...seen.values()];
+  return [...seen.entries()]
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([, location]) => location);
 };
 
 const draftOrder = (left: FindingDraft, right: FindingDraft): number => {
@@ -138,6 +140,7 @@ const toFinding = (
   identity: FindingIdentity,
   componentIds: ReadonlySet<string>,
   evidenceIds: readonly EvidenceId[],
+  sourceLocations: readonly SourceLocation[],
 ): Finding => {
   const capped = capSeverity(draft.severity, draft.basis, draft.confidence);
   return {
@@ -153,11 +156,7 @@ const toFinding = (
     impact: draft.impact,
     components: draft.components.filter((id) => componentIds.has(id)),
     edges: [...(draft.edges ?? [])],
-    sourceLocations: distinctLocations(
-      draft.components
-        .map((id) => input.graph.component(id))
-        .flatMap((component) => component?.sourceLocations.slice(0, 2) ?? []),
-    ).slice(0, MAX_SOURCE_LOCATIONS),
+    sourceLocations: distinctLocations(sourceLocations).slice(0, MAX_SOURCE_LOCATIONS),
     evidence: [...evidenceIds],
     metrics: [...(draft.metrics ?? [])],
     ...(draft.recommendation === undefined ? {} : { recommendation: draft.recommendation }),
@@ -184,6 +183,139 @@ const toFinding = (
         : { remediationVariant: draft.remediationVariant }),
     },
   };
+};
+
+const CLAIM_CLAUSES = ['mechanism', 'subject', 'conclusion'] as const;
+
+const claimEvidenceIds = (draft: FindingDraft): readonly EvidenceId[] =>
+  [
+    ...new Set(CLAIM_CLAUSES.flatMap((clause) => draft.claimEvidence[clause])),
+  ].sort() as EvidenceId[];
+
+const evidenceDependencies = (record: Evidence): readonly EvidenceId[] => {
+  if (record.kind === 'derived') return record.inputs;
+  if (record.kind === 'model_interpretation') return record.groundedIn;
+  return [];
+};
+
+const claimShapeViolation = (
+  draft: FindingDraft,
+  evidenceById: ReadonlyMap<string, Evidence>,
+): string | undefined => {
+  if (draft.claimEvidenceRefusal !== undefined) return draft.claimEvidenceRefusal;
+  if ((draft.newEvidence?.length ?? 0) > 100) {
+    return `draft created ${draft.newEvidence?.length ?? 0} evidence records, exceeding the 100-record claim ceiling`;
+  }
+  const occurrenceCount =
+    draft.metrics?.find((metric) => metric.name === 'occurrences')?.value ?? 1;
+  for (const clause of CLAIM_CLAUSES) {
+    if (draft.claimEvidence[clause].length === 0) return `${clause} clause carried no evidence`;
+    if (draft.claimEvidence[clause].length > 100) {
+      return `${clause} clause carried ${draft.claimEvidence[clause].length} evidence records, exceeding the 100-record claim ceiling`;
+    }
+    const populationId = draft.claimPopulationEvidence?.[clause];
+    if (populationId !== undefined) {
+      if (!draft.claimEvidence[clause].includes(populationId)) {
+        return `${clause} clause population evidence ${populationId} was not bound to the clause`;
+      }
+      const population = evidenceById.get(populationId);
+      if (
+        draft.occurrence === undefined ||
+        !(
+          (population?.kind === 'absence' && population.inspectedCount >= occurrenceCount) ||
+          (population?.kind === 'metric' && population.sampleSize >= occurrenceCount)
+        )
+      ) {
+        return `${clause} clause population evidence ${populationId} was not a structured inspected population`;
+      }
+    }
+  }
+  return undefined;
+};
+
+const evidenceClosure = (
+  ids: readonly EvidenceId[],
+  evidenceById: ReadonlyMap<string, Evidence>,
+): ReadonlySet<string> => {
+  const closure = new Set<string>();
+  const pending = [...ids];
+  while (pending.length > 0) {
+    const id = pending.pop();
+    if (id === undefined || closure.has(id)) continue;
+    closure.add(id);
+    const record = evidenceById.get(id);
+    if (record !== undefined) pending.push(...evidenceDependencies(record));
+  }
+  return closure;
+};
+
+const incompleteResilienceOutcome = (record: Evidence): boolean =>
+  record.kind === 'fault_injection' &&
+  (record.taskCompleted === undefined ||
+    record.recovered === undefined ||
+    record.duplicateSideEffects === undefined ||
+    record.prohibitedSideEffects === undefined ||
+    record.userInterventions === undefined ||
+    record.degradedGracefully === undefined ||
+    record.policyViolations === undefined);
+
+const transitiveEvidenceViolation = (
+  draft: FindingDraft,
+  evidenceById: ReadonlyMap<string, Evidence>,
+): string | undefined => {
+  const conclusionClosure = evidenceClosure(draft.claimEvidence.conclusion, evidenceById);
+  const pending = [...claimEvidenceIds(draft)];
+  const seen = new Set<string>();
+  while (pending.length > 0) {
+    const id = pending.pop();
+    if (id === undefined || seen.has(id)) continue;
+    seen.add(id);
+    const record = evidenceById.get(id);
+    if (record === undefined) return `evidence ${id} could not be resolved`;
+    if (record.kind === 'derived' && record.inputs.length === 0) {
+      return `derived evidence ${id} carried no inputs`;
+    }
+    if (record.kind === 'model_interpretation' && record.groundedIn.length === 0) {
+      return `model interpretation evidence ${id} carried no grounding`;
+    }
+    if (record.kind === 'metric' && 'runIds' in record && record.runIds.length > 100) {
+      return `metric evidence ${id} exceeded the 100-run population ceiling`;
+    }
+    if (
+      draft.polarity === 'strength' &&
+      conclusionClosure.has(id) &&
+      incompleteResilienceOutcome(record)
+    ) {
+      return `fault injection evidence ${id} lacked the complete outcome required for a resilience strength`;
+    }
+    pending.push(...evidenceDependencies(record));
+  }
+  return undefined;
+};
+
+const evidenceViolation = (
+  draft: FindingDraft,
+  evidenceById: ReadonlyMap<string, Evidence>,
+): string | undefined =>
+  claimShapeViolation(draft, evidenceById) ?? transitiveEvidenceViolation(draft, evidenceById);
+
+const evidenceSourceLocations = (
+  ids: readonly EvidenceId[],
+  evidenceById: ReadonlyMap<string, Evidence>,
+): readonly SourceLocation[] => {
+  const locations: SourceLocation[] = [];
+  const pending = [...ids];
+  const seen = new Set<string>();
+  while (pending.length > 0) {
+    const id = pending.pop();
+    if (id === undefined || seen.has(id)) continue;
+    seen.add(id);
+    const record = evidenceById.get(id);
+    if (record === undefined) continue;
+    if (record.kind === 'source_span') locations.push(record.location);
+    pending.push(...evidenceDependencies(record));
+  }
+  return locations;
 };
 
 const semanticSubjectFor = (draft: FindingDraft): FindingSemanticSubject => {
@@ -244,24 +376,23 @@ export const evaluateRules = (input: EvaluateInput): EngineResult => {
   const drafts = groupDrafts([...collected.drafts].sort(draftOrder));
 
   const componentIds = new Set(input.graph.graph.components.map((component) => component.id));
+  const evidenceById = new Map(input.context.evidenceById);
+  for (const record of collected.newEvidence) evidenceById.set(record.id, record);
   const findings: Finding[] = [];
   const identityAssignments: FindingIdentityAssignment[] = [];
 
   for (const draft of drafts) {
-    const evidenceIds = [
-      ...new Set([...(draft.newEvidence ?? []).map((record) => record.id), ...draft.evidence]),
-    ] as EvidenceId[];
-
-    if (evidenceIds.length === 0) {
-      // A finding with no evidence is not reportable. Recording the drop keeps the omission visible.
+    const violation = evidenceViolation(draft, evidenceById);
+    if (violation !== undefined) {
       evaluated.push({
         ruleId: draft.ruleId,
         category: draft.category,
         status: 'insufficient_evidence',
-        detail: `a draft titled "${draft.title}" was dropped because it carried no evidence`,
+        detail: `a draft titled "${draft.title}" was dropped because its ${violation}`,
       });
       continue;
     }
+    const evidenceIds = claimEvidenceIds(draft);
 
     /*
      * The same admissibility test as the one above, applied to the word rather than to the citation.
@@ -285,7 +416,16 @@ export const evaluateRules = (input: EvaluateInput): EngineResult => {
 
     const identity = identityFor(draft);
     identityAssignments.push(identity);
-    findings.push(toFinding(draft, input, identity, componentIds, evidenceIds));
+    findings.push(
+      toFinding(
+        draft,
+        input,
+        identity,
+        componentIds,
+        evidenceIds,
+        evidenceSourceLocations(evidenceIds, evidenceById),
+      ),
+    );
   }
 
   assertNoFindingIdentityCollisions(identityAssignments);

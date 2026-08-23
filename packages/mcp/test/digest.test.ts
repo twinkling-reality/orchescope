@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { Component, Finding, MetricDelta, ReconciliationDelta } from '@orchescope/schema';
 import {
+  auditBehaviorDigest,
+  behavioralAccountDigest,
   componentDigest,
   findingDigest,
   metricDeltaDigest,
@@ -100,7 +102,7 @@ describe('componentDigest', () => {
     );
     assert.match(
       componentDigest(component({ static: false, runtime: true, manifest: false })),
-      /exercised, never declared/,
+      /exercised, no exact static identity match/,
     );
   });
 
@@ -193,6 +195,99 @@ describe('reconciliationDigest', () => {
     assert.match(lines.join('\n'), /model:openai\/gpt-4o/);
     assert.match(lines.join('\n'), /declared read only, observed wrote twice/);
     assert.match(lines.join('\n'), /no idempotency key was present/);
+  });
+
+  it('mirrors the bounded behavioral population and exact relation qualification', () => {
+    const delta = {
+      behavioralAccount: {
+        status: 'incomplete',
+        acceptedSpans: 16,
+        droppedSpans: 2,
+        rejectedSpans: 1,
+        executedComponents: 6,
+        componentExecutions: 14,
+        executedByKind: [{ kind: 'agent', count: 6 }],
+        observedStructuralRelations: 2,
+        qualifiedDeclaredRelations: 0,
+        refusedObservedRelations: 2,
+        noIndependentRelationObservation: false,
+        refusals: [],
+        evidence: [],
+        evidenceOmitted: 0,
+      },
+    } as unknown as ReconciliationDelta;
+    const [line] = behavioralAccountDigest(delta);
+    assert.match(line ?? '', /incomplete accepted-span subset/);
+    assert.match(line ?? '', /16 accepted spans/);
+    assert.match(line ?? '', /2 spans dropped/);
+    assert.match(line ?? '', /0 declared relations qualified for the strict exercise rate/);
+  });
+
+  it('adds behavior to an audit only beside a strict zero edge exercise rate', () => {
+    const delta = {
+      behavioralAccount: {
+        status: 'complete',
+        acceptedSpans: 3,
+        droppedSpans: 0,
+        rejectedSpans: 0,
+        executedComponents: 2,
+        componentExecutions: 3,
+        executedByKind: [{ kind: 'agent', count: 2 }],
+        observedStructuralRelations: 1,
+        qualifiedDeclaredRelations: 0,
+        refusedObservedRelations: 0,
+        noIndependentRelationObservation: false,
+        refusals: [],
+        evidence: [],
+        evidenceOmitted: 0,
+      },
+      coverage: { edgeExerciseRate: 0 },
+    } as unknown as ReconciliationDelta;
+    assert.equal(auditBehaviorDigest(delta).length, 1);
+    assert.deepEqual(
+      auditBehaviorDigest({
+        ...delta,
+        coverage: { ...delta.coverage, edgeExerciseRate: undefined },
+      } as unknown as ReconciliationDelta),
+      [],
+    );
+  });
+
+  it('distinguishes exact source refusal evidence from heuristic kind-and-name joins', () => {
+    const delta = {
+      declaredNotExercised: { components: [], edges: [], runIds: [] },
+      exercisedNotDeclared: { components: [], edges: [] },
+      contradictions: [],
+      duplicateSideEffects: [],
+      joins: {
+        byCodeLocation: 0,
+        byRuntimeName: 0,
+        byKindAndName: 1,
+        onNameAlone: ['agent:planner'],
+        ambiguous: [],
+      },
+      coverage: {
+        declaredComponents: 1,
+        exercisedComponents: 0,
+        declaredEdges: 0,
+        exercisedEdges: 0,
+        missingSpanAttributes: [
+          {
+            attribute: 'vcs.ref.head.revision',
+            purpose: 'source_identity',
+            reason: 'revision_mismatch',
+            observedComponents: 2,
+            evidence: ['ev_0123456789abcdef'],
+            evidenceOmitted: 1,
+          },
+        ],
+      },
+    } as ReconciliationDelta;
+    const text = reconciliationDigest(delta).join('\n');
+    assert.match(text, /Exact source identity unavailable/);
+    assert.match(text, /revision_mismatch/);
+    assert.match(text, /1 evidence sample cited and 1 affected observation omitted/);
+    assert.match(text, /heuristic kind and name only, not by exact code location/);
   });
 });
 

@@ -44,7 +44,7 @@ export const findingDigest = (finding: Finding): string =>
  */
 const presenceWords = (presence: Presence): string => {
   if (presence.static && presence.runtime) return 'declared and exercised';
-  if (presence.runtime) return 'exercised, never declared';
+  if (presence.runtime) return 'exercised, no exact static identity match';
   return presence.manifest
     ? 'declared in the manifest, never exercised'
     : 'declared, never exercised';
@@ -62,10 +62,59 @@ export const edgeDigest = (edge: Edge): string => {
   const seen =
     executions === 0
       ? edge.runtimeOnly
-        ? 'observed, never declared'
+        ? 'observed, no exact declared relation match'
         : 'declared, never exercised'
       : `${formatCount(executions, 'execution')}`;
   return `${edge.kind} ${edge.from} to ${edge.to}, ${seen}.`;
+};
+
+const SOURCE_REFUSAL_LIMIT = 10;
+
+export const behavioralAccountDigest = (delta: ReconciliationDelta): readonly string[] => {
+  const account = delta.behavioralAccount;
+  if (account === undefined) return [];
+  const population =
+    account.status === 'complete'
+      ? 'complete accepted-span population'
+      : `incomplete accepted-span subset; ${formatCount(account.droppedSpans, 'span')} dropped and ${formatCount(account.rejectedSpans, 'span')} rejected`;
+  return [
+    `Behavioral account over the ${population}: ${formatCount(account.acceptedSpans, 'accepted span')}, ${formatCount(account.executedComponents, 'executed component')}, ${formatCount(account.componentExecutions, 'component execution')}, ${formatCount(account.observedStructuralRelations, 'independently observed structural relation')}, and ${formatCount(account.qualifiedDeclaredRelations, 'declared relation')} qualified for the strict exercise rate.`,
+  ];
+};
+
+/** The bounded behavioral context the audit mirrors beside a strict zero relation exercise rate. */
+export const auditBehaviorDigest = (delta: ReconciliationDelta): readonly string[] => {
+  const account = delta.behavioralAccount;
+  if (
+    account === undefined ||
+    account.executedComponents === 0 ||
+    delta.coverage.edgeExerciseRate !== 0
+  ) {
+    return [];
+  }
+  return behavioralAccountDigest(delta);
+};
+
+const sourceIdentityDigest = (delta: ReconciliationDelta): readonly string[] => {
+  const refusals = (delta.coverage.missingSpanAttributes ?? []).filter(
+    (entry) => entry.purpose === 'source_identity' || entry.purpose === 'code_location',
+  );
+  const shown = refusals.slice(0, SOURCE_REFUSAL_LIMIT).map((entry) => {
+    const cited = entry.evidence?.length ?? 0;
+    const omitted = entry.evidenceOmitted ?? Math.max(0, entry.observedComponents - cited);
+    return `Exact source identity unavailable for ${formatCount(entry.observedComponents, 'observed component')}: ${entry.attribute}${entry.reason === undefined ? '' : ` (${entry.reason})`}; ${formatCount(cited, 'evidence sample')} cited and ${formatCount(omitted, 'affected observation')} omitted.`;
+  });
+  if (refusals.length > shown.length) {
+    shown.push(
+      `${formatCount(refusals.length - shown.length, 'additional exact source-identity refusal')} omitted from this bounded digest.`,
+    );
+  }
+  if (delta.joins.byKindAndName > 0) {
+    shown.push(
+      `${formatCount(delta.joins.byKindAndName, 'component')} joined by heuristic kind and name only, not by exact code location.`,
+    );
+  }
+  return shown;
 };
 
 /**
@@ -76,7 +125,9 @@ export const edgeDigest = (edge: Edge): string => {
  */
 export const reconciliationDigest = (delta: ReconciliationDelta): readonly string[] => [
   `Declared and never exercised: ${named(delta.declaredNotExercised.components)}.`,
-  `Exercised and never declared: ${named(delta.exercisedNotDeclared.components)}.`,
+  `Exercised without an exact static identity match: ${named(delta.exercisedNotDeclared.components)}.`,
+  ...behavioralAccountDigest(delta),
+  ...sourceIdentityDigest(delta),
   ...delta.contradictions.map(
     (entry) =>
       `Contradiction on ${entry.componentId} (${entry.kind}): declared ${entry.declared}, observed ${entry.observed}.`,

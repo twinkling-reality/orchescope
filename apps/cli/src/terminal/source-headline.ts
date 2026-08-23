@@ -71,10 +71,21 @@ const headlineVariants = (result: AuditResult): readonly string[] => {
  * still missing, and had no way to tell that the run was the reason rather than the remedy.
  */
 const runsPhrase = (result: AuditResult): string => {
-  const observed = result.bundle.summary.observedRunCount ?? result.bundle.summary.runCount ?? 0;
-  const silent = result.bundle.summary.silentRunCount ?? 0;
-  if (observed > 0) return `${formatCount(observed, 'run')} on record`;
-  return silent === 0 ? 'no runs on record' : `${formatCount(silent, 'run')} on record, no spans`;
+  const observed = result.bundle.summary.observedRunCount;
+  const silent = result.bundle.summary.silentRunCount;
+  if (observed === undefined && silent === undefined) {
+    const recorded = result.bundle.summary.runCount ?? 0;
+    return recorded === 0 ? 'no runs on record' : `${formatCount(recorded, 'run')} on record`;
+  }
+  const observedCount = observed ?? 0;
+  const silentCount = silent ?? 0;
+  if (observedCount > 0 && silentCount > 0) {
+    return `${formatCount(observedCount, 'observed run')}, ${formatCount(silentCount, 'silent run')} (no spans)`;
+  }
+  if (observedCount > 0) return formatCount(observedCount, 'observed run');
+  return silentCount === 0
+    ? 'no runs on record'
+    : `${formatCount(silentCount, 'silent run')} (no spans)`;
 };
 
 /**
@@ -104,6 +115,7 @@ const coverageVariants = (result: AuditResult, verbose: boolean): readonly strin
     return [
       `read from ${files}${beside}, with ${runs}`,
       `read from ${files}, with ${runs}`,
+      `${files}; ${runs}`,
       `read from ${files}`,
     ];
   /*

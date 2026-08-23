@@ -21,6 +21,14 @@ const plannerId = componentIds.find((id) => id.includes('planner')) as string;
 const primaryId = componentIds.find((id) => id.includes('primary')) as string;
 const secondaryId = componentIds.find((id) => id.includes('secondary')) as string;
 const edgeIds = graph.graph.edges.map((edge) => edge.id);
+const evidence = [...planner.evidence, ...primary.evidence, ...secondary.evidence];
+const primaryEvidenceId = primary.evidence[0]?.id as EvidenceId;
+const secondaryEvidenceId = secondary.evidence[0]?.id as EvidenceId;
+const claim = (...ids: readonly EvidenceId[]) => ({
+  mechanism: ids,
+  subject: ids,
+  conclusion: ids,
+});
 
 const draft = (overrides: Partial<FindingDraft> = {}): FindingDraft => ({
   ruleId: 'model-call-without-timeout',
@@ -35,7 +43,7 @@ const draft = (overrides: Partial<FindingDraft> = {}): FindingDraft => ({
   impact: 'A provider can hold the run open.',
   components: [plannerId, primaryId],
   edges: [edgeIds[0] as string],
-  evidence: ['ev_primary' as EvidenceId],
+  claimEvidence: claim(primaryEvidenceId),
   remediationVariant: 'client',
   goalEligible: true,
   goalReason: 'One bounded client setting.',
@@ -64,7 +72,7 @@ const evaluate = (
       benchmarks: [],
       chaosReports: [],
       scenarios: [],
-      evidenceById: new Map(),
+      evidenceById: new Map(evidence.map((record) => [record.id, record])),
     },
     rules,
   }).findingSet.findings;
@@ -85,7 +93,7 @@ describe('finding engine semantic identity', () => {
       category: 'architecture',
       components: [secondaryId],
       edges: [],
-      evidence: ['ev_runtime' as EvidenceId],
+      claimEvidence: claim(secondaryEvidenceId),
     });
     const after = byRule(
       evaluate([ruleFor(unrelatedDraft.ruleId, [unrelatedDraft]), selected]),
@@ -121,7 +129,7 @@ describe('finding engine semantic identity', () => {
           title: 'Secondary has no timeout',
           components: [plannerId, secondaryId],
           edges: [edgeIds[1] as string],
-          evidence: ['ev_secondary' as EvidenceId],
+          claimEvidence: claim(secondaryEvidenceId),
         }),
       ]),
     ]);
@@ -132,7 +140,7 @@ describe('finding engine semantic identity', () => {
   it('ignores component, edge and evidence order as well as prose, severity and time', () => {
     const firstDraft = draft({
       edges: [...edgeIds],
-      evidence: ['ev_primary' as EvidenceId, 'ev_second' as EvidenceId],
+      claimEvidence: claim(primaryEvidenceId, secondaryEvidenceId),
     });
     const first = evaluate([ruleFor('model-call-without-timeout', [firstDraft])])[0] as Finding;
     const reordered = evaluate(
@@ -144,7 +152,7 @@ describe('finding engine semantic identity', () => {
             severity: 'high',
             components: [primaryId, plannerId],
             edges: [...edgeIds].reverse(),
-            evidence: ['ev_second' as EvidenceId, 'ev_primary' as EvidenceId],
+            claimEvidence: claim(secondaryEvidenceId, primaryEvidenceId),
           }),
         ]),
       ],
@@ -165,7 +173,7 @@ describe('finding engine semantic identity', () => {
           occurrence,
           components: [plannerId, secondaryId],
           edges: [edgeIds[1] as string],
-          evidence: ['ev_secondary' as EvidenceId],
+          claimEvidence: claim(secondaryEvidenceId),
         }),
       ]),
     ])[0] as Finding;

@@ -162,7 +162,7 @@ describe('topology evidence completeness', () => {
     assert.ok(cycle);
     assert.equal(cycle.edges?.length, 3);
     assert.deepEqual(
-      [...(cycle.evidence ?? [])].sort(),
+      [...cycle.claimEvidence.conclusion].sort(),
       [...new Set(graph.edges.flatMap((edge) => edge.evidence))].sort(),
     );
     assert.match(cycle.explanation, /static default is 3/);

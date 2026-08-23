@@ -2346,6 +2346,24 @@
                 "const": "span",
                 "type": "string"
               },
+              "observedComponent": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "observedName": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "observedName"
+                ],
+                "type": "object"
+              },
               "producer": {
                 "minLength": 1,
                 "type": "string"
@@ -2380,84 +2398,173 @@
             "type": "object"
           },
           {
-            "additionalProperties": false,
-            "properties": {
-              "basis": {
-                "anyOf": [
-                  {
-                    "const": "observed",
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "basis": {
+                    "anyOf": [
+                      {
+                        "const": "observed",
+                        "type": "string"
+                      },
+                      {
+                        "const": "discovered",
+                        "type": "string"
+                      },
+                      {
+                        "const": "inferred",
+                        "type": "string"
+                      },
+                      {
+                        "const": "estimated",
+                        "type": "string"
+                      },
+                      {
+                        "const": "simulated",
+                        "type": "string"
+                      },
+                      {
+                        "const": "model_interpreted",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "observed: seen in a runtime trace. discovered: read from source or configuration. inferred: derived from other evidence by a deterministic rule. estimated: computed from a model of the system rather than measured. simulated: produced under injected faults. model_interpreted: proposed by a language model and reviewed against supplied evidence."
+                  },
+                  "componentId": {
                     "type": "string"
                   },
-                  {
-                    "const": "discovered",
+                  "id": {
+                    "pattern": "^ev_[0-9a-f]{16}$",
                     "type": "string"
                   },
-                  {
-                    "const": "inferred",
+                  "kind": {
+                    "const": "metric",
                     "type": "string"
                   },
-                  {
-                    "const": "estimated",
+                  "metric": {
+                    "minLength": 1,
                     "type": "string"
                   },
-                  {
-                    "const": "simulated",
+                  "producer": {
+                    "minLength": 1,
                     "type": "string"
                   },
-                  {
-                    "const": "model_interpreted",
+                  "runId": {
+                    "minLength": 1,
                     "type": "string"
+                  },
+                  "sampleSize": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "unit": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
                   }
+                },
+                "required": [
+                  "id",
+                  "basis",
+                  "producer",
+                  "kind",
+                  "metric",
+                  "value",
+                  "unit",
+                  "sampleSize",
+                  "runId"
                 ],
-                "description": "observed: seen in a runtime trace. discovered: read from source or configuration. inferred: derived from other evidence by a deterministic rule. estimated: computed from a model of the system rather than measured. simulated: produced under injected faults. model_interpreted: proposed by a language model and reviewed against supplied evidence."
+                "type": "object"
               },
-              "componentId": {
-                "type": "string"
-              },
-              "id": {
-                "pattern": "^ev_[0-9a-f]{16}$",
-                "type": "string"
-              },
-              "kind": {
-                "const": "metric",
-                "type": "string"
-              },
-              "metric": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "producer": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "runId": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "sampleSize": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "unit": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "value": {
-                "type": "number"
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "basis": {
+                    "anyOf": [
+                      {
+                        "const": "observed",
+                        "type": "string"
+                      },
+                      {
+                        "const": "discovered",
+                        "type": "string"
+                      },
+                      {
+                        "const": "inferred",
+                        "type": "string"
+                      },
+                      {
+                        "const": "estimated",
+                        "type": "string"
+                      },
+                      {
+                        "const": "simulated",
+                        "type": "string"
+                      },
+                      {
+                        "const": "model_interpreted",
+                        "type": "string"
+                      }
+                    ],
+                    "description": "observed: seen in a runtime trace. discovered: read from source or configuration. inferred: derived from other evidence by a deterministic rule. estimated: computed from a model of the system rather than measured. simulated: produced under injected faults. model_interpreted: proposed by a language model and reviewed against supplied evidence."
+                  },
+                  "componentId": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "pattern": "^ev_[0-9a-f]{16}$",
+                    "type": "string"
+                  },
+                  "kind": {
+                    "const": "metric",
+                    "type": "string"
+                  },
+                  "metric": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "producer": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "runIds": {
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "maxItems": 100,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "sampleSize": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "unit": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "basis",
+                  "producer",
+                  "kind",
+                  "metric",
+                  "value",
+                  "unit",
+                  "sampleSize",
+                  "runIds"
+                ],
+                "type": "object"
               }
-            },
-            "required": [
-              "id",
-              "basis",
-              "producer",
-              "kind",
-              "runId",
-              "metric",
-              "value",
-              "unit",
-              "sampleSize"
-            ],
-            "type": "object"
+            ]
           },
           {
             "additionalProperties": false,
@@ -2595,6 +2702,17 @@
                 ],
                 "description": "observed: seen in a runtime trace. discovered: read from source or configuration. inferred: derived from other evidence by a deterministic rule. estimated: computed from a model of the system rather than measured. simulated: produced under injected faults. model_interpreted: proposed by a language model and reviewed against supplied evidence."
               },
+              "costAmplification": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "degradedGracefully": {
+                "type": "boolean"
+              },
+              "duplicateSideEffects": {
+                "minimum": 0,
+                "type": "integer"
+              },
               "faultKind": {
                 "minLength": 1,
                 "type": "string"
@@ -2607,9 +2725,24 @@
                 "const": "fault_injection",
                 "type": "string"
               },
+              "policyViolations": {
+                "minimum": 0,
+                "type": "integer"
+              },
               "producer": {
                 "minLength": 1,
                 "type": "string"
+              },
+              "prohibitedSideEffects": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "recovered": {
+                "type": "boolean"
+              },
+              "retryAmplification": {
+                "minimum": 0,
+                "type": "number"
               },
               "runId": {
                 "minLength": 1,
@@ -2618,6 +2751,13 @@
               "target": {
                 "minLength": 1,
                 "type": "string"
+              },
+              "taskCompleted": {
+                "type": "boolean"
+              },
+              "userInterventions": {
+                "minimum": 0,
+                "type": "integer"
               }
             },
             "required": [
@@ -2882,6 +3022,78 @@
         ]
       },
       "type": "array"
+    },
+    "evidenceCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "ceiling": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "included": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "omissionReasons": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "count": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reason": {
+                "anyOf": [
+                  {
+                    "const": "uncited_span_over_ceiling",
+                    "type": "string"
+                  },
+                  {
+                    "const": "uncited_discovery_over_ceiling",
+                    "type": "string"
+                  },
+                  {
+                    "const": "uncited_derived_over_ceiling",
+                    "type": "string"
+                  },
+                  {
+                    "const": "uncited_other_over_ceiling",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "reason",
+              "count"
+            ],
+            "type": "object"
+          },
+          "maxItems": 4,
+          "type": "array"
+        },
+        "omitted": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "requiredIncluded": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "totalEligible": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "totalEligible",
+        "included",
+        "omitted",
+        "ceiling",
+        "requiredIncluded",
+        "omissionReasons"
+      ],
+      "type": "object"
     },
     "findings": {
       "items": {
@@ -6604,6 +6816,161 @@
     "reconciliation": {
       "additionalProperties": false,
       "properties": {
+        "behavioralAccount": {
+          "additionalProperties": false,
+          "properties": {
+            "acceptedSpans": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "componentExecutions": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "droppedSpans": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "evidence": {
+              "items": {
+                "pattern": "^ev_[0-9a-f]{16}$",
+                "type": "string"
+              },
+              "maxItems": 100,
+              "type": "array"
+            },
+            "evidenceOmitted": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "executedByKind": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "count": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "kind": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "count"
+                ],
+                "type": "object"
+              },
+              "maxItems": 32,
+              "type": "array"
+            },
+            "executedComponents": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "noIndependentRelationObservation": {
+              "type": "boolean"
+            },
+            "observedStructuralRelations": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "populationEvidence": {
+              "pattern": "^ev_[0-9a-f]{16}$",
+              "type": "string"
+            },
+            "qualifiedDeclaredRelations": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "refusals": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "count": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "evidence": {
+                    "items": {
+                      "pattern": "^ev_[0-9a-f]{16}$",
+                      "type": "string"
+                    },
+                    "maxItems": 10,
+                    "type": "array"
+                  },
+                  "evidenceOmitted": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "reason": {
+                    "anyOf": [
+                      {
+                        "const": "relation_rederived_from_endpoint_evidence",
+                        "type": "string"
+                      },
+                      {
+                        "const": "endpoint_identity_unresolved",
+                        "type": "string"
+                      },
+                      {
+                        "const": "no_exact_declared_relation",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "reason",
+                  "count",
+                  "evidence",
+                  "evidenceOmitted"
+                ],
+                "type": "object"
+              },
+              "maxItems": 3,
+              "type": "array"
+            },
+            "refusedObservedRelations": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "rejectedSpans": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "status": {
+              "anyOf": [
+                {
+                  "const": "complete",
+                  "type": "string"
+                },
+                {
+                  "const": "incomplete",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "acceptedSpans",
+            "droppedSpans",
+            "rejectedSpans",
+            "executedComponents",
+            "componentExecutions",
+            "executedByKind",
+            "observedStructuralRelations",
+            "qualifiedDeclaredRelations",
+            "refusedObservedRelations",
+            "noIndependentRelationObservation",
+            "refusals",
+            "evidence",
+            "evidenceOmitted"
+          ],
+          "type": "object"
+        },
         "contradictions": {
           "items": {
             "additionalProperties": false,
@@ -6705,6 +7072,18 @@
                   "attribute": {
                     "minLength": 1,
                     "type": "string"
+                  },
+                  "evidence": {
+                    "items": {
+                      "pattern": "^ev_[0-9a-f]{16}$",
+                      "type": "string"
+                    },
+                    "maxItems": 10,
+                    "type": "array"
+                  },
+                  "evidenceOmitted": {
+                    "minimum": 0,
+                    "type": "integer"
                   },
                   "observedComponents": {
                     "minimum": 0,
@@ -6977,6 +7356,60 @@
     "reportId": {
       "pattern": "^rpt_[0-9a-f]{16}$",
       "type": "string"
+    },
+    "runPopulations": {
+      "additionalProperties": false,
+      "properties": {
+        "observed": {
+          "additionalProperties": false,
+          "properties": {
+            "count": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "runIds": {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 100,
+              "type": "array"
+            }
+          },
+          "required": [
+            "count",
+            "runIds"
+          ],
+          "type": "object"
+        },
+        "silent": {
+          "additionalProperties": false,
+          "properties": {
+            "count": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "runIds": {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 100,
+              "type": "array"
+            }
+          },
+          "required": [
+            "count",
+            "runIds"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "observed",
+        "silent"
+      ],
+      "type": "object"
     },
     "runs": {
       "items": {

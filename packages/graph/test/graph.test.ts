@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { EdgePolicy, ObservedEdge } from '@orchescope/schema';
+import type { EdgePolicy, EvidenceId, ObservedEdge } from '@orchescope/schema';
 import {
   buildGraph,
   componentDraft,
@@ -652,6 +652,102 @@ describe('computeDelta', () => {
     assert.equal(exercisedEdges, 0);
     assert.equal(result.delta.coverage.edgeExerciseRate, 0);
   });
+
+  it('keeps runtime-only structural behavior separate from strict declared-relation exercise', () => {
+    const base = buildGraph(
+      [orchestrator, refund, inventory],
+      [edgeDraft('calls_tool', orchestrator, refund)],
+    );
+    const reconciled = reconcile(base, [
+      runtimeTopology({
+        coverage: {
+          acceptedSpans: 3,
+          droppedSpans: 0,
+          rejectedSpans: 0,
+          missingSpanAttributes: [],
+        },
+        components: [
+          observedComponent({ kind: 'agent', observedName: 'orchestrator' }),
+          observedComponent({ kind: 'tool', observedName: 'mystery_tool' }),
+        ],
+        edges: [
+          observedEdge({
+            kind: 'calls_tool',
+            fromKind: 'agent',
+            fromObservedName: 'orchestrator',
+            toKind: 'tool',
+            toObservedName: 'mystery_tool',
+          }),
+        ],
+      }),
+    ]);
+    const result = computeDelta({
+      graph: reconciled.graph,
+      runs: [{ runId: `run_${'c'.repeat(16)}`, sideEffects: [] }],
+      spanToComponent: new Map(),
+      matches: reconciled.matches,
+      ambiguous: reconciled.ambiguous,
+      behavior: reconciled.behavior,
+    });
+    assert.equal(result.delta.coverage.edgeExerciseRate, 0);
+    assert.equal(result.delta.behavioralAccount?.observedStructuralRelations, 1);
+    assert.equal(result.delta.behavioralAccount?.qualifiedDeclaredRelations, 0);
+    assert.equal(result.delta.behavioralAccount?.noIndependentRelationObservation, false);
+    assert.equal(
+      result.delta.behavioralAccount?.refusals.find(
+        (entry) => entry.reason === 'no_exact_declared_relation',
+      )?.count,
+      1,
+    );
+  });
+
+  it('scopes relation absence only to a complete accepted-span population', () => {
+    const reconciled = reconcile(buildGraph([orchestrator], []), [
+      runtimeTopology({
+        coverage: {
+          acceptedSpans: 1,
+          droppedSpans: 0,
+          rejectedSpans: 0,
+          missingSpanAttributes: [],
+        },
+        components: [observedComponent({ kind: 'agent', observedName: 'orchestrator' })],
+      }),
+    ]);
+    assert.equal(reconciled.behavior.noIndependentRelationObservation, true);
+    assert.equal(reconciled.behavior.status, 'complete');
+    assert.ok(reconciled.behavior.populationEvidence !== undefined);
+    const population = reconciled.evidence.find(
+      (record) => record.id === reconciled.behavior.populationEvidence,
+    );
+    assert.equal(population?.kind, 'metric');
+    if (population?.kind === 'metric' && 'runIds' in population) {
+      assert.deepEqual(population.runIds, [`run_${'c'.repeat(16)}`]);
+      assert.equal(population.sampleSize, 1);
+    }
+    assert.ok(
+      reconciled.evidence.some(
+        (record) => record.kind === 'absence' && record.inspectedCount === 1,
+      ),
+    );
+
+    const incomplete = reconcile(buildGraph([orchestrator], []), [
+      runtimeTopology({
+        coverage: {
+          acceptedSpans: 1,
+          droppedSpans: 1,
+          rejectedSpans: 0,
+          missingSpanAttributes: [],
+        },
+        components: [observedComponent({ kind: 'agent', observedName: 'orchestrator' })],
+      }),
+    ]);
+    assert.equal(incomplete.behavior.noIndependentRelationObservation, false);
+    assert.equal(incomplete.behavior.status, 'incomplete');
+    assert.equal(
+      incomplete.evidence.some((record) => record.kind === 'absence'),
+      false,
+    );
+  });
 });
 
 /**
@@ -1091,6 +1187,7 @@ describe('how a join was made', () => {
   });
 
   it('refuses the wrong revision without falling back to a unique name', () => {
+    const observedEvidence = 'ev_1111111111111111' as EvidenceId;
     const graph = buildGraph([agent], [], {
       git: { repositoryUrl, commit: revision, ref: 'main', dirty: false },
     });
@@ -1102,21 +1199,23 @@ describe('how a join was made', () => {
             observedName: 'support_agent',
             codeLocation: { file: 'src/support.py', line: 1 },
             observedSource: observedSource('src/support.py', 1, 'b'.repeat(40)),
+            evidence: [observedEvidence],
           }),
         ],
       }),
     ]);
     assert.equal(reconciled.matches.length, 0);
     assert.equal(reconciled.runtimeOnlyComponentIds.length, 1);
-    assert.ok(
-      reconciled.missingSpanAttributes.some(
-        (entry) =>
-          entry.attribute === 'vcs.ref.head.revision' && entry.reason === 'revision_mismatch',
-      ),
+    const refusal = reconciled.missingSpanAttributes.find(
+      (entry) =>
+        entry.attribute === 'vcs.ref.head.revision' && entry.reason === 'revision_mismatch',
     );
+    assert.deepEqual(refusal?.evidence, [observedEvidence]);
+    assert.equal(refusal?.evidenceOmitted, 0);
   });
 
   it('refuses a different repository coordinate without falling back to a unique name', () => {
+    const observedEvidence = 'ev_2222222222222222' as EvidenceId;
     const graph = buildGraph([agent], [], {
       git: { repositoryUrl, commit: revision, ref: 'main', dirty: false },
     });
@@ -1135,17 +1234,54 @@ describe('how a join was made', () => {
                 repositoryUrl: 'https://github.com/example/other',
               },
             },
+            evidence: [observedEvidence],
           }),
         ],
       }),
     ]);
     assert.equal(reconciled.matches.length, 0);
-    assert.ok(
-      reconciled.missingSpanAttributes.some(
-        (entry) =>
-          entry.attribute === 'vcs.repository.url.full' && entry.reason === 'repository_mismatch',
-      ),
+    const refusal = reconciled.missingSpanAttributes.find(
+      (entry) =>
+        entry.attribute === 'vcs.repository.url.full' && entry.reason === 'repository_mismatch',
     );
+    assert.deepEqual(refusal?.evidence, [observedEvidence]);
+    assert.equal(refusal?.evidenceOmitted, 0);
+  });
+
+  it('unions repeated source-identity refusal samples and counts the full affected population', () => {
+    const first = 'ev_3333333333333333' as EvidenceId;
+    const second = 'ev_4444444444444444' as EvidenceId;
+    const graph = buildGraph([agent], [], {
+      git: { repositoryUrl, commit: revision, ref: 'main', dirty: false },
+    });
+    const reconciled = reconcile(graph, [
+      runtimeTopology({
+        components: [
+          observedComponent({
+            kind: 'agent',
+            observedName: 'support_agent',
+            observedSource: observedSource('src/support.py', 1, 'b'.repeat(40)),
+            evidence: [first],
+          }),
+        ],
+      }),
+      runtimeTopology({
+        components: [
+          observedComponent({
+            kind: 'agent',
+            observedName: 'support_agent',
+            observedSource: observedSource('src/support.py', 1, 'c'.repeat(40)),
+            evidence: [second],
+          }),
+        ],
+      }),
+    ]);
+    const refusal = reconciled.missingSpanAttributes.find(
+      (entry) => entry.reason === 'revision_mismatch',
+    );
+    assert.equal(refusal?.observedComponents, 2);
+    assert.deepEqual(refusal?.evidence, [first, second]);
+    assert.equal(refusal?.evidenceOmitted, 0);
   });
 
   it('refuses an observed line outside the declaration range', () => {
@@ -1251,6 +1387,7 @@ describe('how a join was made', () => {
         attribute: 'code.file.path',
         purpose: 'code_location',
         observedComponents: 1,
+        evidenceOmitted: 1,
       },
     ]);
   });
@@ -1268,6 +1405,7 @@ describe('an observed relation that a declaration can exactly rederive', () => {
   ];
 
   it('does not count an endpoint attribute as runtime evidence for the declared relation', () => {
+    const relationEvidence = 'ev_5555555555555555' as EvidenceId;
     const reconciled = reconcile(declared, [
       runtimeTopology({
         components,
@@ -1278,6 +1416,7 @@ describe('an observed relation that a declaration can exactly rederive', () => {
             fromObservedName: 'orchestrator',
             toKind: 'agent',
             toObservedName: 'worker',
+            evidence: [relationEvidence],
             provenance: {
               relation: { attributes: ['graph.node.parent_id'], spanFields: [] },
               from: { attributes: ['graph.node.parent_id'], spanFields: [] },
@@ -1288,6 +1427,45 @@ describe('an observed relation that a declaration can exactly rederive', () => {
       }),
     ]);
     assert.equal(reconciled.graph.edges[0]?.observation, undefined);
+    assert.deepEqual(
+      reconciled.behavior.refusals.find(
+        (entry) => entry.reason === 'relation_rederived_from_endpoint_evidence',
+      ),
+      {
+        reason: 'relation_rederived_from_endpoint_evidence',
+        count: 1,
+        evidence: [relationEvidence],
+        evidenceOmitted: 0,
+      },
+    );
+  });
+
+  it('accounts for an observed relation whose endpoint identity was unresolved', () => {
+    const relationEvidence = 'ev_6666666666666666' as EvidenceId;
+    const reconciled = reconcile(declared, [
+      runtimeTopology({
+        components: [observedComponent({ kind: 'agent', observedName: 'orchestrator' })],
+        edges: [
+          observedEdge({
+            kind: 'hands_off_to',
+            fromKind: 'agent',
+            fromObservedName: 'orchestrator',
+            toKind: 'agent',
+            toObservedName: 'unidentified-worker',
+            evidence: [relationEvidence],
+          }),
+        ],
+      }),
+    ]);
+    assert.deepEqual(
+      reconciled.behavior.refusals.find((entry) => entry.reason === 'endpoint_identity_unresolved'),
+      {
+        reason: 'endpoint_identity_unresolved',
+        count: 1,
+        evidence: [relationEvidence],
+        evidenceOmitted: 0,
+      },
+    );
   });
 
   it('keeps the same declared relation when span nesting is what reported it', () => {
