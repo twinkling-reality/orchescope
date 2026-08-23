@@ -18,6 +18,12 @@
       "filesInspected": 0,
       "status": "not_applicable"
     },
+    "adapter:langchain-v1-create-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
     "adapter:langgraph": {
       "componentsFound": 6,
       "edgesFound": 10,
@@ -37,8 +43,8 @@
       "status": "not_applicable"
     },
     "adapter:model-sdk": {
-      "componentsFound": 12,
-      "edgesFound": 6,
+      "componentsFound": 4,
+      "edgesFound": 2,
       "filesInspected": 3,
       "status": "completed"
     },
@@ -49,7 +55,7 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 4,
+      "componentsFound": 0,
       "edgesFound": 0,
       "filesInspected": 1,
       "status": "completed"
@@ -87,12 +93,11 @@
       "entrypoint": 5,
       "external_service": 1,
       "model": 3,
-      "prompt": 4,
       "provider": 3,
       "retrieval": 4
     },
     "declaredInTest": 0,
-    "total": 26
+    "total": 22
   },
   "discardedRelations": [],
   "files": {

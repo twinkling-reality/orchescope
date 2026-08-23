@@ -4,6 +4,7 @@ import { acceptanceVerdict } from '../../scripts/corpus/acceptance.mjs';
 
 const entry = {
   acceptance: {
+    graphPopulation: { components: 1, edges: 1 },
     exactIdsByKind: { agent: ['agent:a'] },
     absentKinds: ['database'],
     absentComponentTerms: ['postgres'],
@@ -47,8 +48,24 @@ const entry = {
         ],
       },
     },
-    topology: { status: 'incomplete', unresolvedCount: 1, conditionalDestinations: 1 },
-    findings: { strengths: 0, requiredRules: ['topology-shape'] },
+    topology: {
+      status: 'incomplete',
+      unresolvedCount: 1,
+      conditionalDestinations: 1,
+      requiredRefusals: [
+        {
+          kind: 'conditional_destination',
+          reason: 'A dynamic router has no settled destination.',
+          sourceFile: 'src/graph.py',
+          startLine: 1,
+        },
+      ],
+    },
+    findings: {
+      strengths: 0,
+      requiredRules: ['topology-shape'],
+      exactRisks: [{ ruleId: 'topology-shape', severity: 'low' }],
+    },
   },
 };
 
@@ -78,7 +95,7 @@ const bundle = () => ({
       location: source,
     },
   ],
-  findings: [{ polarity: 'risk', ruleId: 'topology-shape' }],
+  findings: [{ polarity: 'risk', ruleId: 'topology-shape', severity: 'low' }],
   graph: {
     components: [
       {
@@ -116,7 +133,18 @@ const bundle = () => ({
           },
         },
       ],
-      topology: { status: 'incomplete', unresolvedCount: 1, conditionalDestinations: 1 },
+      topology: {
+        status: 'incomplete',
+        unresolvedCount: 1,
+        conditionalDestinations: 1,
+        unresolved: [
+          {
+            kind: 'conditional_destination',
+            reason: 'A dynamic router has no settled destination.',
+            location: source,
+          },
+        ],
+      },
     },
   },
 });
@@ -143,7 +171,7 @@ describe('corpus semantic acceptance', () => {
     changed.graph.edges = [];
     changed.graph.coverage.adapters[0]!.applicability.relevantImports = 1;
     changed.graph.coverage.topology.status = 'complete';
-    changed.findings = [{ polarity: 'strength', ruleId: 'acyclic-topology' }];
+    changed.findings = [{ polarity: 'strength', ruleId: 'acyclic-topology', severity: 'info' }];
 
     const broken = acceptanceVerdict(entry, changed).broken.join('\n');
     assert.match(broken, /agent identities/);
@@ -155,5 +183,56 @@ describe('corpus semantic acceptance', () => {
     assert.match(broken, /topology.status/);
     assert.match(broken, /reported 1 strengths/);
     assert.match(broken, /finding rule topology-shape was absent/);
+    assert.match(broken, /risk findings were/);
+  });
+
+  it('rejects substituted relation evidence while component and edge totals stay fixed', () => {
+    const changed = bundle();
+    changed.evidence[1]!.symbol = 'nearby_component';
+
+    const verdict = acceptanceVerdict(entry, changed);
+    assert.equal(changed.graph.components.length, bundle().graph.components.length);
+    assert.equal(changed.graph.edges.length, bundle().graph.edges.length);
+    assert.match(verdict.broken.join('\n'), /lacked adapter:langgraph evidence add_edge/);
+  });
+
+  it('rejects a same-count risk substitution by exact rule and severity', () => {
+    const changed = bundle();
+    changed.findings = [{ polarity: 'risk', ruleId: 'topology-shape', severity: 'info' }];
+
+    const broken = acceptanceVerdict(entry, changed).broken.join('\n');
+    assert.match(broken, /risk findings were/);
+    assert.doesNotMatch(broken, /finding rule topology-shape was absent/);
+  });
+
+  it('rejects a substituted refusal while aggregate topology counts stay fixed', () => {
+    const changed = bundle();
+    changed.graph.coverage.topology.unresolved[0]!.reason = 'A different refusal.';
+
+    const broken = acceptanceVerdict(entry, changed).broken.join('\n');
+    assert.match(broken, /topology refusal conditional_destination/);
+    assert.doesNotMatch(broken, /topology.unresolvedCount/);
+  });
+
+  it('rejects extra components or relations outside the declared exact populations', () => {
+    const changed = bundle();
+    changed.graph.components.push({
+      id: 'tool:extra',
+      kind: 'tool',
+      metadata: { configurationDefault: false },
+      sourceLocations: [source],
+      evidence: ['ev_agent'],
+    });
+    changed.graph.edges.push({
+      kind: 'hands_off_to',
+      from: 'agent:a',
+      to: 'tool:extra',
+      sourceLocations: [source],
+      evidence: ['ev_edge'],
+    });
+
+    const broken = acceptanceVerdict(entry, changed).broken.join('\n');
+    assert.match(broken, /graph had 2 components, expected 1/);
+    assert.match(broken, /graph had 2 edges, expected 1/);
   });
 });

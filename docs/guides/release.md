@@ -39,6 +39,10 @@ evaluator selects one unseen positive and one unseen agent-adjacent negative onl
 the installed tarball and checksum produced by `pnpm package`. A product fix invalidates that measurement and requires a
 new candidate and different holdouts. Known corpus repositories cannot clear this gate.
 
+The [blocked a38ed43f evaluation](../research/a38ed43f-blocked-blind-evaluation.md) records the candidate, selected
+targets, runtime boundary, and blocking decision from a completed gate. Its selected repositories and source lineages
+remain permanent regression inputs and cannot be reused as unseen holdouts for any candidate.
+
 `pnpm package` writes `release/release-summary.json`. Read it rather than trusting the exit code:
 
 | Field | What it has to say |

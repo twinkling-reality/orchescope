@@ -10,6 +10,8 @@ const protocol = readFileSync(
   'utf8',
 );
 const releaseGuide = readFileSync(join(repositoryRoot, 'docs/guides/release.md'), 'utf8');
+const blockedRecordPath = 'docs/research/a38ed43f-blocked-blind-evaluation.md';
+const blockedRecord = readFileSync(join(repositoryRoot, blockedRecordPath), 'utf8');
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
   readonly scripts: Readonly<Record<string, string>>;
 };
@@ -137,6 +139,78 @@ describe('the frozen pre-release blind evaluation protocol', () => {
     assert.match(protocol, /whether it passed or exposed a/);
     assert.match(protocol, /cannot clear the blind gate/);
     assert.match(protocol, /Each release selects a different unseen holdout/);
+  });
+
+  it('preserves the exact blocked candidate, targets, decision and runtime boundary', () => {
+    for (const fact of [
+      'a38ed43f14d58a4a5264de0644362366c3dd8648',
+      'e547d8cc19084a93d22a3d6605d28ac3197690558972386877963b2cf67fade7',
+      'https://github.com/Chaitanya-Keyal/langchain-langgraph-agents',
+      '25813f9ec571316cbd02be3749cccc71da9368ba',
+      'ab91b49cf77b5ba58260a6d871759824c81e5d0e25336b2fa940acdaaabf78dc',
+      'https://github.com/microsoft/project-telescope',
+      'e99388e80a4147f1ae84ac113d4af4eeccb2a40c',
+      'c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383',
+    ]) {
+      assert.ok(blockedRecord.includes(fact), `blocked record omitted ${fact}`);
+    }
+    for (const falsePrompt of [
+      'prompt:context_aware_prompt',
+      'prompt:prompt-line-1~3df38b',
+      'prompt:prompt-line-1~7621fb',
+      'prompt:wrap_model_call',
+    ]) {
+      assert.ok(blockedRecord.includes(falsePrompt), `blocked record omitted ${falsePrompt}`);
+    }
+    assert.match(blockedRecord, /decision was \*\*BLOCK\*\*/);
+    assert.match(blockedRecord, /wrong component identities[\s\S]*independently\s+satisfies/);
+    assert.match(blockedRecord, /reinforce the failure but were not required/);
+    assert.match(blockedRecord, /all 22 Rust source files as unsupported/);
+    assert.match(blockedRecord, /made no\s+absence-based positive claim/);
+    assert.match(
+      blockedRecord,
+      /does not establish that the repository contains no agent\s+implementation/,
+    );
+    for (const integrityFact of [
+      'installed checksum and reported `0.9.0` version matched',
+      '`doctor` reported zero warnings against both target checkouts',
+      'audit JSON and exported report documents parsed successfully',
+      'Forced-colour output contained ANSI escapes',
+      '`NO_COLOR` output contained none',
+      'target worktrees retained their pinned revisions and clean status',
+      'same-input positive semantic projection was identical on repeat',
+      'completed-results hash manifest verified without a mismatch',
+    ]) {
+      assert.ok(blockedRecord.includes(integrityFact), `blocked record omitted ${integrityFact}`);
+    }
+    assert.match(blockedRecord, /did not detect an agent system/);
+    assert.match(blockedRecord, /`agentSystemDetected: false`/);
+    assert.match(blockedRecord, /exclusion\s+clearance granted by the release owner/);
+    assert.match(blockedRecord, /No runtime audit was executed/);
+    assert.match(blockedRecord, /environment had no `OPENAI_API_KEY`/);
+    assert.match(
+      blockedRecord,
+      /Supplying a guessed credential or substituting a fake\s+model run/,
+    );
+  });
+
+  it('makes both used lineages permanently ineligible and requires a different unseen pair', () => {
+    assert.match(
+      blockedRecord,
+      /source lineages are permanently ineligible as blind holdouts at any revision/,
+    );
+    assert.match(blockedRecord, /different unseen positive and a different unseen negative/);
+    assert.match(
+      blockedRecord,
+      /does not change the frozen decision and cannot clear the blocked candidate/,
+    );
+    assert.match(
+      protocol,
+      /source\s+lineages, are permanently ineligible as blind holdouts at any revision/,
+    );
+    assert.match(protocol, /requires a different unseen positive and negative pair/);
+    assert.ok(protocol.includes('../research/a38ed43f-blocked-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/a38ed43f-blocked-blind-evaluation.md'));
   });
 
   it('keeps every documented metamorphic witness executable through the named gate', () => {

@@ -33,6 +33,14 @@ const isEvidenceAssertion = (value) =>
 
 const checkIdentities = (acceptance, problem) => {
   if (
+    acceptance.graphPopulation !== undefined &&
+    (!hasExactFields(acceptance.graphPopulation, ['components', 'edges']) ||
+      !isNonNegativeInteger(acceptance.graphPopulation.components) ||
+      !isNonNegativeInteger(acceptance.graphPopulation.edges))
+  ) {
+    problem('acceptance.graphPopulation has to state exact component and edge counts');
+  }
+  if (
     !isRecord(acceptance.exactIdsByKind) ||
     Object.keys(acceptance.exactIdsByKind).length === 0 ||
     Object.keys(acceptance.exactIdsByKind).length > MAX_ITEMS
@@ -194,12 +202,14 @@ const checkApplicability = (acceptance, problem) => {
 };
 
 const checkOutcome = (acceptance, problem) => {
+  const topologyFields = [
+    'status',
+    'unresolvedCount',
+    'conditionalDestinations',
+    ...(acceptance.topology?.requiredRefusals === undefined ? [] : ['requiredRefusals']),
+  ];
   if (
-    !hasExactFields(acceptance.topology, [
-      'status',
-      'unresolvedCount',
-      'conditionalDestinations',
-    ]) ||
+    !hasExactFields(acceptance.topology, topologyFields) ||
     !isBoundedString(acceptance.topology.status) ||
     !isNonNegativeInteger(acceptance.topology.unresolvedCount) ||
     !isNonNegativeInteger(acceptance.topology.conditionalDestinations)
@@ -207,13 +217,54 @@ const checkOutcome = (acceptance, problem) => {
     problem('acceptance.topology has to name status, unresolvedCount and conditionalDestinations');
   }
   if (
-    !hasExactFields(acceptance.findings, ['strengths', 'requiredRules']) ||
+    acceptance.topology?.requiredRefusals !== undefined &&
+    (!isBoundedList(acceptance.topology.requiredRefusals) ||
+      acceptance.topology.requiredRefusals.length === 0 ||
+      acceptance.topology.requiredRefusals.some(
+        (refusal) =>
+          !hasExactFields(refusal, ['kind', 'reason', 'sourceFile', 'startLine']) ||
+          !isBoundedString(refusal.kind) ||
+          !isBoundedString(refusal.reason) ||
+          !isRelativePath(refusal.sourceFile) ||
+          !Number.isInteger(refusal.startLine) ||
+          refusal.startLine <= 0,
+      ))
+  ) {
+    problem(
+      'acceptance.topology.requiredRefusals has to list exact source-located refusal reasons',
+    );
+  }
+  const findingFields = [
+    'strengths',
+    'requiredRules',
+    ...(acceptance.findings?.exactRisks === undefined ? [] : ['exactRisks']),
+  ];
+  if (
+    !hasExactFields(acceptance.findings, findingFields) ||
     !isNonNegativeInteger(acceptance.findings.strengths) ||
     !isBoundedList(acceptance.findings.requiredRules) ||
     acceptance.findings.requiredRules.length === 0 ||
     acceptance.findings.requiredRules.some((ruleId) => !isBoundedString(ruleId))
   ) {
     problem('acceptance.findings has to count strengths and list requiredRules');
+  }
+  if (
+    acceptance.findings?.exactRisks !== undefined &&
+    (!isBoundedList(acceptance.findings.exactRisks) ||
+      acceptance.findings.exactRisks.length === 0 ||
+      acceptance.findings.exactRisks.some(
+        (finding) =>
+          !hasExactFields(finding, ['ruleId', 'severity']) ||
+          !isBoundedString(finding.ruleId) ||
+          !['critical', 'high', 'medium', 'low', 'info'].includes(finding.severity),
+      ) ||
+      new Set(
+        acceptance.findings.exactRisks.map(
+          (finding) => `${finding.ruleId}\u0000${finding.severity}`,
+        ),
+      ).size !== acceptance.findings.exactRisks.length)
+  ) {
+    problem('acceptance.findings.exactRisks has to list distinct exact ruleId and severity pairs');
   }
 };
 
@@ -226,6 +277,7 @@ export const checkAcceptanceDefinition = (entry, problem) => {
     return;
   }
   const fields = [
+    ...(acceptance.graphPopulation === undefined ? [] : ['graphPopulation']),
     'exactIdsByKind',
     'absentKinds',
     'absentComponentTerms',
@@ -240,8 +292,8 @@ export const checkAcceptanceDefinition = (entry, problem) => {
   if (!hasExactFields(acceptance, fields)) {
     problem(`acceptance has to declare exactly ${fields.join(', ')}`);
   }
-  if (entry.requiredArchive === undefined || entry.exercise !== undefined) {
-    problem('acceptance belongs to a static required archive entry');
+  if (entry.source !== 'git' || entry.exercise !== undefined) {
+    problem('acceptance belongs to a static Git entry');
   }
   checkIdentities(acceptance, problem);
   checkRelations(acceptance, problem);

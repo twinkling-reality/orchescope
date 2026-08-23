@@ -18,6 +18,12 @@
       "filesInspected": 1,
       "status": "completed"
     },
+    "adapter:langchain-v1-create-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
     "adapter:langgraph": {
       "componentsFound": 0,
       "edgesFound": 0,
@@ -37,8 +43,8 @@
       "status": "completed"
     },
     "adapter:model-sdk": {
-      "componentsFound": 44,
-      "edgesFound": 6,
+      "componentsFound": 3,
+      "edgesFound": 2,
       "filesInspected": 35,
       "status": "completed"
     },
@@ -49,9 +55,9 @@
       "status": "completed"
     },
     "adapter:prompts": {
-      "componentsFound": 338,
-      "edgesFound": 2,
-      "filesInspected": 161,
+      "componentsFound": 180,
+      "edgesFound": 181,
+      "filesInspected": 115,
       "status": "completed"
     },
     "adapter:pydantic-ai": {
@@ -89,12 +95,12 @@
       "external_service": 4,
       "mcp_server": 6,
       "model": 18,
-      "prompt": 277,
+      "prompt": 180,
       "provider": 1,
       "tool": 237
     },
     "declaredInTest": 636,
-    "total": 1171
+    "total": 1074
   },
   "discardedRelations": [],
   "files": {
@@ -120,7 +126,7 @@
     "componentsByRule": {
       "model-call-without-timeout": 36,
       "observability-coverage": 5,
-      "prompt-injection-boundary": 17,
+      "prompt-injection-boundary": 16,
       "retry-around-non-idempotent-operation": 2,
       "topology-shape": 8
     },
@@ -140,9 +146,9 @@
       "provides_tool": 11,
       "queries_database": 4,
       "served_by_provider": 1,
-      "uses_prompt": 2,
+      "uses_prompt": 181,
       "validated_by": 2
     },
-    "total": 199
+    "total": 378
   }
 }

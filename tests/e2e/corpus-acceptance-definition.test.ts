@@ -63,12 +63,6 @@ const validEntry = {
   commit: '1'.repeat(40),
   kind: 'agent_system',
   why: 'It is a bounded real repository.',
-  requiredArchive: {
-    url: `https://api.github.com/repos/example/measured-repository/tarball/${'1'.repeat(40)}`,
-    treeSha256: '2'.repeat(64),
-    licensePath: 'LICENSE',
-    licenseSha256: '3'.repeat(64),
-  },
   acceptance,
 };
 
@@ -94,15 +88,33 @@ describe('corpus acceptance definitions', () => {
       name: string;
       exercise?: unknown;
       acceptance?: {
+        graphPopulation?: { components: number; edges: number };
         exactIdsByKind: Record<string, readonly string[]>;
         componentMetadata: Record<string, Record<string, string | number | boolean>>;
         sourceCitations: Record<string, readonly string[]>;
         adapterApplicability: Record<string, unknown>;
-        topology: Record<string, string | number>;
-        findings: { strengths: number };
+        topology: {
+          status: string;
+          unresolvedCount: number;
+          conditionalDestinations: number;
+          requiredRefusals?: readonly {
+            kind: string;
+            sourceFile: string;
+            startLine: number;
+            reason: string;
+          }[];
+        };
+        findings: {
+          strengths: number;
+          exactRisks?: readonly { ruleId: string; severity: string }[];
+        };
+        absentKinds: readonly string[];
+        absentComponentTerms: readonly string[];
+        requiredEdges: readonly { kind: string; from: string; to: string }[];
       };
     }[];
     const target = entries.find((entry) => entry.name === 'local-deep-researcher');
+    const exposedPositive = entries.find((entry) => entry.name === 'langchain-langgraph-agents');
     assert.equal(target?.exercise, undefined);
     assert.deepEqual(target?.acceptance?.exactIdsByKind['agent'], [
       'agent:finalize_summary',
@@ -131,10 +143,16 @@ describe('corpus acceptance definitions', () => {
       'src/ollama_deep_researcher/lmstudio.py',
     ]);
     assert.deepEqual(target?.acceptance?.adapterApplicability['adapter:model-sdk'], {
-      distinctFiles: 1,
+      distinctFiles: 2,
       omittedImports: 0,
-      relevantImports: 2,
+      relevantImports: 3,
       fileSample: [
+        {
+          imported: 'ChatOpenAI',
+          module: 'langchain_openai',
+          sourceFile: 'src/ollama_deep_researcher/lmstudio.py',
+          startLine: 12,
+        },
         {
           imported: 'ChatLMStudio',
           module: 'ollama_deep_researcher.lmstudio',
@@ -152,9 +170,61 @@ describe('corpus acceptance definitions', () => {
     assert.deepEqual(target?.acceptance?.topology, {
       conditionalDestinations: 2,
       status: 'incomplete',
-      unresolvedCount: 3,
+      unresolvedCount: 5,
     });
     assert.equal(target?.acceptance?.findings.strengths, 0);
+
+    assert.deepEqual(exposedPositive?.acceptance?.exactIdsByKind, {
+      agent: ['agent:assistant'],
+      agent_group: ['agent_group:graph.py-graph'],
+      model: ['model:openai/gpt-5-mini'],
+      provider: ['provider:openai'],
+    });
+    assert.deepEqual(exposedPositive?.acceptance?.graphPopulation, {
+      components: 4,
+      edges: 1,
+    });
+    assert.deepEqual(exposedPositive?.acceptance?.absentKinds, ['prompt']);
+    assert.deepEqual(exposedPositive?.acceptance?.absentComponentTerms, [
+      'context_aware_prompt',
+      'prompt-line-1~3df38b',
+      'prompt-line-1~7621fb',
+      'wrap_model_call',
+    ]);
+    assert.deepEqual(
+      exposedPositive?.acceptance?.requiredEdges.map(({ kind, from, to }) => ({ kind, from, to })),
+      [
+        {
+          kind: 'served_by_provider',
+          from: 'model:openai/gpt-5-mini',
+          to: 'provider:openai',
+        },
+      ],
+    );
+    assert.deepEqual(
+      exposedPositive?.acceptance?.topology.requiredRefusals?.map(
+        ({ kind, sourceFile, startLine }) => ({ kind, sourceFile, startLine }),
+      ),
+      [
+        { kind: 'adapter_input', sourceFile: 'src/agent/agents.py', startLine: 32 },
+        { kind: 'adapter_input', sourceFile: 'src/agent/agents.py', startLine: 33 },
+        { kind: 'explicit_relation', sourceFile: 'src/agent/agents.py', startLine: 48 },
+        { kind: 'explicit_relation', sourceFile: 'src/agent/agents.py', startLine: 49 },
+        { kind: 'prompt_input', sourceFile: 'src/agent/agents.py', startLine: 51 },
+      ],
+    );
+    assert.deepEqual(
+      {
+        conditionalDestinations: exposedPositive?.acceptance?.topology.conditionalDestinations,
+        status: exposedPositive?.acceptance?.topology.status,
+        unresolvedCount: exposedPositive?.acceptance?.topology.unresolvedCount,
+      },
+      { conditionalDestinations: 0, status: 'incomplete', unresolvedCount: 14 },
+    );
+    assert.equal(exposedPositive?.acceptance?.findings.strengths, 0);
+    assert.deepEqual(exposedPositive?.acceptance?.findings.exactRisks, [
+      { ruleId: 'observability-coverage', severity: 'info' },
+    ]);
   });
 
   it('accepts a complete bounded contract and rejects incomplete or unknown shapes', () => {
@@ -181,5 +251,29 @@ describe('corpus acceptance definitions', () => {
     ]) {
       assert.throws(() => readTemporary(test.entry), test.message);
     }
+  });
+
+  it('allows acceptance on static Git entries and rejects local or exercised populations', () => {
+    assert.equal('requiredArchive' in validEntry, false);
+    assert.equal(readTemporary(validEntry).repositories[0]?.source, 'git');
+
+    const localEntry = {
+      ...validEntry,
+      source: 'local',
+      path: 'fixtures/measured-repository',
+      url: undefined,
+      commit: undefined,
+    };
+    assert.throws(() => readTemporary(localEntry), /acceptance belongs to a static Git entry/);
+
+    const exercisedEntry = {
+      ...validEntry,
+      exercise: {
+        why: 'It supplies a bounded runtime population.',
+        script: 'corpus/runs/measured-repository/exercise.py',
+        pythonPackages: ['example==1.0.0'],
+      },
+    };
+    assert.throws(() => readTemporary(exercisedEntry), /acceptance belongs to a static Git entry/);
   });
 });

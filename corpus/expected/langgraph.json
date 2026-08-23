@@ -18,10 +18,16 @@
       "filesInspected": 0,
       "status": "completed"
     },
+    "adapter:langchain-v1-create-agent": {
+      "componentsFound": 2,
+      "edgesFound": 1,
+      "filesInspected": 1,
+      "status": "completed"
+    },
     "adapter:langgraph": {
       "componentsFound": 515,
       "edgesFound": 94,
-      "filesInspected": 230,
+      "filesInspected": 228,
       "status": "completed"
     },
     "adapter:manifest": {
@@ -37,10 +43,10 @@
       "status": "not_applicable"
     },
     "adapter:model-sdk": {
-      "componentsFound": 0,
-      "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "componentsFound": 3,
+      "edgesFound": 2,
+      "filesInspected": 7,
+      "status": "completed"
     },
     "adapter:openai-agents": {
       "componentsFound": 0,
@@ -49,9 +55,9 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 210,
-      "edgesFound": 0,
-      "filesInspected": 70,
+      "componentsFound": 1,
+      "edgesFound": 1,
+      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:pydantic-ai": {
@@ -82,16 +88,18 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 66,
+      "agent": 67,
       "agent_group": 137,
       "database": 1,
       "entrypoint": 7,
       "external_service": 4,
-      "prompt": 201,
-      "tool": 3
+      "model": 2,
+      "prompt": 1,
+      "provider": 1,
+      "tool": 4
     },
     "declaredInTest": 147,
-    "total": 419
+    "total": 224
   },
   "discardedRelations": [],
   "files": {
@@ -124,11 +132,13 @@
   "relations": {
     "byKind": {
       "calls_service": 4,
-      "calls_tool": 3,
+      "calls_tool": 4,
       "contains": 54,
       "hands_off_to": 34,
-      "queries_database": 3
+      "queries_database": 3,
+      "served_by_provider": 2,
+      "uses_prompt": 1
     },
-    "total": 98
+    "total": 102
   }
 }

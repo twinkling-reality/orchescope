@@ -43,10 +43,10 @@
       "status": "not_applicable"
     },
     "adapter:model-sdk": {
-      "componentsFound": 0,
-      "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "componentsFound": 2,
+      "edgesFound": 1,
+      "filesInspected": 1,
+      "status": "completed"
     },
     "adapter:openai-agents": {
       "componentsFound": 0,
@@ -57,7 +57,7 @@
     "adapter:prompts": {
       "componentsFound": 0,
       "edgesFound": 0,
-      "filesInspected": 0,
+      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:pydantic-ai": {
@@ -89,10 +89,12 @@
   "components": {
     "byKind": {
       "agent": 1,
-      "agent_group": 1
+      "agent_group": 1,
+      "model": 1,
+      "provider": 1
     },
     "declaredInTest": 0,
-    "total": 2
+    "total": 4
   },
   "discardedRelations": [],
   "files": {
@@ -110,7 +112,7 @@
       "info": 1
     },
     "componentsByRule": {
-      "observability-coverage": 2
+      "observability-coverage": 4
     },
     "strengths": 0,
     "total": 1
@@ -120,7 +122,9 @@
   "languagesNotAnalysed": [],
   "name": "langchain-langgraph-agents",
   "relations": {
-    "byKind": {},
-    "total": 0
+    "byKind": {
+      "served_by_provider": 1
+    },
+    "total": 1
   }
 }

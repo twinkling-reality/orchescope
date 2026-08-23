@@ -18,6 +18,12 @@
       "filesInspected": 1,
       "status": "completed"
     },
+    "adapter:langchain-v1-create-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
     "adapter:langgraph": {
       "componentsFound": 0,
       "edgesFound": 0,
@@ -37,9 +43,9 @@
       "status": "completed"
     },
     "adapter:model-sdk": {
-      "componentsFound": 82,
+      "componentsFound": 5,
       "edgesFound": 2,
-      "filesInspected": 66,
+      "filesInspected": 65,
       "status": "completed"
     },
     "adapter:openai-agents": {
@@ -49,9 +55,9 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 423,
-      "edgesFound": 1,
-      "filesInspected": 143,
+      "componentsFound": 17,
+      "edgesFound": 18,
+      "filesInspected": 22,
       "status": "completed"
     },
     "adapter:pydantic-ai": {
@@ -88,13 +94,13 @@
       "external_service": 9,
       "mcp_server": 5,
       "model": 21,
-      "prompt": 367,
+      "prompt": 17,
       "provider": 6,
       "retrieval": 1,
       "tool": 501
     },
     "declaredInTest": 948,
-    "total": 1406
+    "total": 1056
   },
   "discardedRelations": [],
   "files": {
@@ -119,7 +125,7 @@
     "componentsByRule": {
       "model-call-without-timeout": 25,
       "observability-coverage": 5,
-      "prompt-injection-boundary": 9,
+      "prompt-injection-boundary": 7,
       "topology-shape": 12
     },
     "strengths": 0,
@@ -137,8 +143,8 @@
       "provides_tool": 31,
       "queries_database": 2,
       "served_by_provider": 8,
-      "uses_prompt": 1
+      "uses_prompt": 18
     },
-    "total": 594
+    "total": 611
   }
 }

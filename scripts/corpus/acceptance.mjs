@@ -58,11 +58,26 @@ const citedSourceFiles = (subject, evidenceById) => {
 };
 
 const holdOutcome = (acceptance, bundle, hold) => {
-  for (const [key, expected] of Object.entries(acceptance.topology)) {
+  for (const [key, expected] of Object.entries(acceptance.topology).filter(
+    ([key]) => key !== 'requiredRefusals',
+  )) {
     const observed = bundle.graph.coverage.topology?.[key];
     hold(
       observed === expected,
       `topology.${key} was ${JSON.stringify(observed)}, expected ${JSON.stringify(expected)}`,
+    );
+  }
+  for (const expected of acceptance.topology.requiredRefusals ?? []) {
+    hold(
+      (bundle.graph.coverage.topology?.unresolved ?? []).some(
+        (refusal) =>
+          refusal.kind === expected.kind &&
+          refusal.reason === expected.reason &&
+          refusal.location?.file === expected.sourceFile &&
+          refusal.location?.startLine === expected.startLine &&
+          typeof refusal.location?.fileHash === 'string',
+      ),
+      `topology refusal ${expected.kind} at ${expected.sourceFile}:${expected.startLine} was absent`,
     );
   }
   const strengths = bundle.findings.filter((finding) => finding.polarity === 'strength').length;
@@ -74,6 +89,19 @@ const holdOutcome = (acceptance, bundle, hold) => {
     hold(
       bundle.findings.some((finding) => finding.ruleId === ruleId),
       `finding rule ${ruleId} was absent`,
+    );
+  }
+  if (acceptance.findings.exactRisks !== undefined) {
+    const observed = bundle.findings
+      .filter((finding) => finding.polarity === 'risk')
+      .map((finding) => ({ ruleId: finding.ruleId, severity: finding.severity }))
+      .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    const expected = [...acceptance.findings.exactRisks].sort((left, right) =>
+      JSON.stringify(left).localeCompare(JSON.stringify(right)),
+    );
+    hold(
+      JSON.stringify(observed) === JSON.stringify(expected),
+      `risk findings were ${JSON.stringify(observed)}, expected ${JSON.stringify(expected)}`,
     );
   }
 };
@@ -95,6 +123,17 @@ export const acceptanceVerdict = (entry, bundle) => {
     total += 1;
     if (!condition) broken.push(sentence);
   };
+
+  if (acceptance.graphPopulation !== undefined) {
+    hold(
+      components.length === acceptance.graphPopulation.components,
+      `the graph had ${components.length} components, expected ${acceptance.graphPopulation.components}`,
+    );
+    hold(
+      bundle.graph.edges.length === acceptance.graphPopulation.edges,
+      `the graph had ${bundle.graph.edges.length} edges, expected ${acceptance.graphPopulation.edges}`,
+    );
+  }
 
   for (const [kind, expected] of Object.entries(acceptance.exactIdsByKind)) {
     const observed = components

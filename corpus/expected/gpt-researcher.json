@@ -18,6 +18,12 @@
       "filesInspected": 0,
       "status": "not_applicable"
     },
+    "adapter:langchain-v1-create-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
     "adapter:langgraph": {
       "componentsFound": 13,
       "edgesFound": 14,
@@ -37,9 +43,9 @@
       "status": "completed"
     },
     "adapter:model-sdk": {
-      "componentsFound": 0,
+      "componentsFound": 1,
       "edgesFound": 0,
-      "filesInspected": 1,
+      "filesInspected": 7,
       "status": "completed"
     },
     "adapter:openai-agents": {
@@ -49,10 +55,10 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 91,
+      "componentsFound": 0,
       "edgesFound": 0,
-      "filesInspected": 34,
-      "status": "completed"
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:pydantic-ai": {
       "componentsFound": 0,
@@ -87,11 +93,11 @@
       "entrypoint": 51,
       "external_service": 51,
       "mcp_server": 1,
-      "prompt": 84,
+      "provider": 1,
       "retrieval": 1
     },
     "declaredInTest": 0,
-    "total": 201
+    "total": 118
   },
   "discardedRelations": [],
   "files": {
@@ -104,25 +110,20 @@
   "findings": {
     "byRule": {
       "observability-coverage": 1,
-      "prompt-injection-boundary": 1,
       "topology-shape": 1
     },
     "bySeverity": {
       "info": 1,
-      "low": 1,
-      "medium": 1
+      "low": 1
     },
     "componentsByRule": {
       "observability-coverage": 5,
-      "prompt-injection-boundary": 20,
       "topology-shape": 2
     },
     "strengths": 0,
-    "total": 3
+    "total": 2
   },
-  "foundNothing": [
-    "1 exact relevant import(s) for adapter:model-sdk produced no component"
-  ],
+  "foundNothing": [],
   "kind": "agent_system",
   "languagesNotAnalysed": [],
   "name": "gpt-researcher",

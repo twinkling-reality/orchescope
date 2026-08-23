@@ -18,6 +18,12 @@
       "filesInspected": 0,
       "status": "completed"
     },
+    "adapter:langchain-v1-create-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
     "adapter:langgraph": {
       "componentsFound": 0,
       "edgesFound": 0,
@@ -49,9 +55,9 @@
       "status": "completed"
     },
     "adapter:prompts": {
-      "componentsFound": 15,
-      "edgesFound": 0,
-      "filesInspected": 4,
+      "componentsFound": 1,
+      "edgesFound": 1,
+      "filesInspected": 2,
       "status": "completed"
     },
     "adapter:pydantic-ai": {
@@ -86,11 +92,11 @@
       "entrypoint": 2,
       "evaluator": 2,
       "external_service": 2,
-      "prompt": 14,
+      "prompt": 1,
       "tool": 11
     },
     "declaredInTest": 0,
-    "total": 39
+    "total": 26
   },
   "discardedRelations": [],
   "files": {
@@ -128,8 +134,9 @@
       "calls_service": 2,
       "calls_tool": 12,
       "hands_off_to": 15,
+      "uses_prompt": 1,
       "validated_by": 12
     },
-    "total": 41
+    "total": 42
   }
 }

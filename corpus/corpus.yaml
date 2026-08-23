@@ -575,6 +575,182 @@ repositories:
       LICENSE is a 1,072-byte MIT notice with SHA-256
       ab91b49cf77b5ba58260a6d871759824c81e5d0e25336b2fa940acdaaabf78dc. This is a full-static corpus entry with
       no required archive or exercise environment.
+    # Definition-backed semantic claims cannot be rewritten by corpus recording. This positive is a public
+    # regression input, not evidence that a release candidate generalizes to an unseen repository.
+    acceptance:
+      graphPopulation:
+        components: 4
+        edges: 1
+      exactIdsByKind:
+        agent:
+          - agent:assistant
+        agent_group:
+          - agent_group:graph.py-graph
+        model:
+          - model:openai/gpt-5-mini
+        provider:
+          - provider:openai
+      absentKinds:
+        - prompt
+      absentComponentTerms:
+        - context_aware_prompt
+        - prompt-line-1~3df38b
+        - prompt-line-1~7621fb
+        - wrap_model_call
+      requiredEdges:
+        - kind: served_by_provider
+          from: model:openai/gpt-5-mini
+          to: provider:openai
+          sourceFile: src/agent/agents.py
+          evidence:
+            - producer: adapter:model-sdk
+              symbol: ChatOpenAI provider settlement
+              sourceFile: src/agent/agents.py
+              startLine: 11
+              endLine: 11
+            - producer: adapter:model-sdk
+              symbol: ChatOpenAI provider settlement
+              sourceFile: src/agent/agents.py
+              startLine: 32
+              endLine: 36
+            - producer: adapter:model-sdk
+              symbol: ChatOpenAI provider settlement
+              sourceFile: src/core/constants.py
+              startLine: 29
+              endLine: 35
+      componentMetadata:
+        agent:assistant:
+          declaredName: assistant
+          factory: create_agent
+          framework: langchain-v1
+        agent_group:graph.py-graph:
+          framework: langgraph
+          receiver: graph
+        model:openai/gpt-5-mini:
+          configurationSelection: possible
+          framework: langchain-openai
+          modelValueBasis: static_default
+          providerBasis: library_default
+        provider:openai:
+          configurationSelection: possible
+          framework: langchain-openai
+          providerBasis: library_default
+      componentEvidence:
+        agent:assistant:
+          - producer: adapter:langchain-v1-create-agent
+            symbol: langchain.agents.create_agent import
+            sourceFile: src/agent/agents.py
+            startLine: 10
+            endLine: 10
+          - producer: adapter:langchain-v1-create-agent
+            symbol: langchain.agents.create_agent call
+            sourceFile: src/agent/agents.py
+            startLine: 47
+            endLine: 55
+          - producer: adapter:langchain-v1-create-agent
+            symbol: 'agent identity: assistant'
+            sourceFile: src/agent/agents.py
+            startLine: 45
+            endLine: 55
+        agent_group:graph.py-graph:
+          - producer: adapter:langgraph
+            symbol: StateGraph
+            sourceFile: src/agent/graph.py
+            startLine: 34
+            endLine: 34
+        model:openai/gpt-5-mini:
+          - producer: adapter:model-sdk
+            symbol: ChatOpenAI configuration
+            sourceFile: src/agent/agents.py
+            startLine: 11
+            endLine: 11
+          - producer: adapter:model-sdk
+            symbol: ChatOpenAI configuration
+            sourceFile: src/agent/agents.py
+            startLine: 32
+            endLine: 36
+          - producer: adapter:model-sdk
+            symbol: ChatOpenAI configuration
+            sourceFile: src/core/constants.py
+            startLine: 33
+            endLine: 33
+        provider:openai:
+          - producer: adapter:model-sdk
+            symbol: ChatOpenAI configuration
+            sourceFile: src/agent/agents.py
+            startLine: 11
+            endLine: 11
+          - producer: adapter:model-sdk
+            symbol: ChatOpenAI configuration
+            sourceFile: src/agent/agents.py
+            startLine: 32
+            endLine: 36
+      sourceCitations:
+        agent:assistant:
+          - src/agent/agents.py
+        agent_group:graph.py-graph:
+          - src/agent/graph.py
+        model:openai/gpt-5-mini:
+          - src/agent/agents.py
+          - src/core/constants.py
+        provider:openai:
+          - src/agent/agents.py
+      adapterApplicability:
+        adapter:langchain-v1-create-agent:
+          relevantImports: 1
+          distinctFiles: 1
+          omittedImports: 0
+          fileSample:
+            - module: langchain.agents
+              imported: create_agent
+              sourceFile: src/agent/agents.py
+              startLine: 10
+        adapter:model-sdk:
+          relevantImports: 1
+          distinctFiles: 1
+          omittedImports: 0
+          fileSample:
+            - module: langchain_openai
+              imported: ChatOpenAI
+              sourceFile: src/agent/agents.py
+              startLine: 11
+      topology:
+        status: incomplete
+        unresolvedCount: 14
+        conditionalDestinations: 0
+        requiredRefusals:
+          - kind: adapter_input
+            sourceFile: src/agent/agents.py
+            startLine: 32
+            reason: >-
+              ChatOpenAI can take an OpenAI-compatible base URL from runtime environment or keyword values; OpenAI is
+              only the library default.
+          - kind: adapter_input
+            sourceFile: src/agent/agents.py
+            startLine: 33
+            reason: >-
+              ChatOpenAI model selection retains a dynamic or unresolved source alternative; only settled alternatives
+              are possible identities.
+          - kind: explicit_relation
+            sourceFile: src/agent/agents.py
+            startLine: 48
+            reason: create_agent model is absent or computed rather than a source-settled literal reference.
+          - kind: explicit_relation
+            sourceFile: src/agent/agents.py
+            startLine: 49
+            reason: create_agent tools are computed rather than a direct bounded list.
+          - kind: prompt_input
+            sourceFile: src/agent/agents.py
+            startLine: 51
+            reason: >-
+              adapter:langchain-v1-create-agent system_prompt: prompt value is computed rather than source-settled text
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+        exactRisks:
+          - ruleId: observability-coverage
+            severity: info
 
   - name: local-deep-researcher
     source: git
@@ -926,10 +1102,14 @@ repositories:
           - src/ollama_deep_researcher/utils.py
       adapterApplicability:
         adapter:model-sdk:
-          relevantImports: 2
-          distinctFiles: 1
+          relevantImports: 3
+          distinctFiles: 2
           omittedImports: 0
           fileSample:
+            - module: langchain_openai
+              imported: ChatOpenAI
+              sourceFile: src/ollama_deep_researcher/lmstudio.py
+              startLine: 12
             - module: ollama_deep_researcher.lmstudio
               imported: ChatLMStudio
               sourceFile: src/ollama_deep_researcher/graph.py
@@ -961,7 +1141,7 @@ repositories:
               startLine: 9
       topology:
         status: incomplete
-        unresolvedCount: 3
+        unresolvedCount: 5
         conditionalDestinations: 2
       findings:
         strengths: 0

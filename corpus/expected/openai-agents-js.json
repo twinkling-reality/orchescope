@@ -18,6 +18,12 @@
       "filesInspected": 0,
       "status": "completed"
     },
+    "adapter:langchain-v1-create-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
     "adapter:langgraph": {
       "componentsFound": 0,
       "edgesFound": 0,
@@ -37,7 +43,7 @@
       "status": "completed"
     },
     "adapter:model-sdk": {
-      "componentsFound": 30,
+      "componentsFound": 1,
       "edgesFound": 0,
       "filesInspected": 30,
       "status": "completed"
@@ -49,9 +55,9 @@
       "status": "completed"
     },
     "adapter:prompts": {
-      "componentsFound": 211,
-      "edgesFound": 94,
-      "filesInspected": 136,
+      "componentsFound": 401,
+      "edgesFound": 404,
+      "filesInspected": 193,
       "status": "completed"
     },
     "adapter:pydantic-ai": {
@@ -88,12 +94,12 @@
       "external_service": 12,
       "mcp_server": 16,
       "model": 7,
-      "prompt": 195,
+      "prompt": 401,
       "provider": 1,
       "tool": 114
     },
     "declaredInTest": 35,
-    "total": 649
+    "total": 855
   },
   "discardedRelations": [],
   "files": {
@@ -119,7 +125,7 @@
     "componentsByRule": {
       "model-call-without-timeout": 45,
       "observability-coverage": 5,
-      "prompt-injection-boundary": 22,
+      "prompt-injection-boundary": 19,
       "retry-around-non-idempotent-operation": 2,
       "topology-shape": 3
     },
@@ -138,8 +144,8 @@
       "invokes_model": 40,
       "provides_tool": 8,
       "queries_database": 1,
-      "uses_prompt": 88
+      "uses_prompt": 404
     },
-    "total": 256
+    "total": 572
   }
 }
