@@ -48,6 +48,11 @@ const witnesses = [
       'rejects direct and module aliases from httpx, local and type-only Client definitions, and missing origin',
   },
   {
+    property: 'Documentation prose does not become an executable prompt.',
+    file: 'packages/discovery/test/documentation-strings.test.ts',
+    title: 'ignores prompt-like wording in formal Python documentation strings',
+  },
+  {
     property:
       'Runtime configuration can change an exact model without rewriting the static declaration.',
     file: 'tests/e2e/configurable-model-effects.test.ts',

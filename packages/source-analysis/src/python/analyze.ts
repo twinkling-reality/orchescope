@@ -149,6 +149,51 @@ type Context = {
   readonly environmentRefs: EnvironmentFact[];
   readonly texts: TextFact[];
   readonly controlFlow: ControlFlowFact[];
+  readonly documentationOffsets: Set<number>;
+};
+
+/**
+ * String leaves that make one Python documentation expression.
+ *
+ * Python gives a string a documentation role only when the first statement of a module, class or
+ * function suite is a string constant. That is syntax, not prose: a docstring may say "system prompt",
+ * while an assigned triple-quoted value may say the same words and still be a value the program uses.
+ * Parentheses and adjacent literals preserve the constant; byte strings and interpolated strings do not.
+ */
+const documentationStringLeaves = (node: Node): readonly Node[] | undefined => {
+  if (node.type === 'string') {
+    const prefix = /^[a-zA-Z]*/.exec(node.text)?.[0]?.toLowerCase() ?? '';
+    return prefix.includes('b') || prefix.includes('f') || hasInterpolation(node)
+      ? undefined
+      : [node];
+  }
+  if (node.type !== 'concatenated_string' && node.type !== 'parenthesized_expression') {
+    return undefined;
+  }
+  const children = namedChildren(node);
+  if (children.length === 0) return undefined;
+  const leaves: Node[] = [];
+  for (const child of children) {
+    const nested = documentationStringLeaves(child);
+    if (nested === undefined) return undefined;
+    leaves.push(...nested);
+  }
+  return leaves;
+};
+
+/** Every string node belonging to the formal docstring at the head of this suite. */
+const documentationStringsIn = (suite: Node): readonly Node[] => {
+  const first = namedChildren(suite)[0];
+  if (first?.type !== 'expression_statement') return [];
+  const expressions = namedChildren(first);
+  if (expressions.length !== 1 || expressions[0] === undefined) return [];
+  return documentationStringLeaves(expressions[0]) ?? [];
+};
+
+const recordDocumentationStrings = (suite: Node, context: Context): void => {
+  for (const string of documentationStringsIn(suite)) {
+    context.documentationOffsets.add(string.startIndex);
+  }
 };
 
 /**
@@ -764,6 +809,7 @@ const traverse = (
       return;
     }
     case 'string': {
+      if (context.documentationOffsets.has(node.startIndex)) return;
       const value = stringLiteralValue(node);
       if (value !== undefined && value.length >= TEXT_FACT_MIN_LENGTH) {
         context.texts.push({
@@ -1066,6 +1112,7 @@ const recordFunction = (
   });
   const body = childField(node, 'body');
   if (body !== undefined) {
+    recordDocumentationStrings(body, context);
     traverse(body, context, { name, awaited: false }, collecting);
   }
 };
@@ -1097,7 +1144,10 @@ const recordClass = (
     enclosing: frame.name,
   });
   const body = childField(node, 'body');
-  if (body !== undefined) traverse(body, context, { name, awaited: false }, collecting);
+  if (body !== undefined) {
+    recordDocumentationStrings(body, context);
+    traverse(body, context, { name, awaited: false }, collecting);
+  }
 };
 
 /**
@@ -1231,6 +1281,7 @@ export const analyzePython = async (input: {
     environmentRefs: [],
     texts: [],
     controlFlow: [],
+    documentationOffsets: new Set(),
   };
   const tree = parser.parse(input.text);
   if (tree === null) {
@@ -1251,6 +1302,7 @@ export const analyzePython = async (input: {
   }
   try {
     const root = tree.rootNode;
+    recordDocumentationStrings(root, context);
     for (const child of namedChildren(root)) {
       traverse(child, context, { name: undefined, awaited: false }, []);
     }

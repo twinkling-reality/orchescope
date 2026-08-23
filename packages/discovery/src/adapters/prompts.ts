@@ -178,7 +178,7 @@ const addPrompt = (
 
 export const promptsAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '1',
+  version: '2',
   // A prompt literal belongs to no package.
   packages: [],
   appliesTo: (context) => context.modules.some((module) => module.texts.length > 0),

@@ -269,6 +269,58 @@ SHORT = "hi"
     assert.match(facts.texts[0]?.value ?? '', /You are a support agent/);
   });
 
+  it('excludes formal documentation strings and retains value-bearing triple quotes', async () => {
+    const facts =
+      await analyze(`"""You are module documentation. Always answer every system question in this guide."""
+
+def marker(value):
+    return value
+
+def documented():
+    "You are function documentation with instructions. " "Always answer the user in this guide."
+    return None
+
+class Documented:
+    (r"""You are class documentation. Your task is to explain this assistant implementation.""")
+
+    @marker
+    def method(self):
+        u"""You are method documentation. Respond to the user by following these instructions."""
+        return None
+
+ASSIGNED = """You are an assigned system prompt. Always answer briefly and use verified context."""
+
+def returned():
+    return """You are a returned system prompt. Never invent an answer that is not in context."""
+
+def called(client):
+    return client.send(system_prompt="""You are a call argument prompt. Answer the user step by step.""")
+`);
+
+    assert.deepEqual(
+      facts.texts.map((text) => ({ value: text.value, enclosing: text.enclosing })),
+      [
+        {
+          value:
+            'You are an assigned system prompt. Always answer briefly and use verified context.',
+          enclosing: undefined,
+        },
+        {
+          value: 'You are a returned system prompt. Never invent an answer that is not in context.',
+          enclosing: 'returned',
+        },
+        {
+          value: 'You are a call argument prompt. Answer the user step by step.',
+          enclosing: 'called',
+        },
+      ],
+    );
+    assert.deepEqual(
+      facts.texts.map((text) => text.location.startLine),
+      [18, 21, 24],
+    );
+  });
+
   it('reports a syntax error without throwing', async () => {
     const facts = await analyze('def broken(:\n    pass\n');
     assert.ok(facts.parseErrors.length > 0);
