@@ -160,12 +160,21 @@ export const exercisedNotDeclaredRule: Rule = {
         ambiguous += 1;
         continue;
       }
+      const staticPopulation = context.graph.graph.components.filter(
+        (candidate) => candidate.presence.static,
+      ).length;
+      const unmatched = absenceEvidence({
+        producer: PRODUCER,
+        searched: `an exact static ${component.kind} identity matching ${component.id}`,
+        scope: 'the statically discovered component population used by reconciliation',
+        inspectedCount: staticPopulation,
+      });
       drafts.push({
         ruleId: 'exercised-not-declared',
         situation: 'observed-component-without-exact-declaration',
         occurrence: {
           key: 'exercised-not-declared',
-          groupedTitle: '{count} components ran without being declared anywhere in the repository',
+          groupedTitle: '{count} components ran without an exact matching static declaration',
         },
         category: 'architecture',
         polarity: 'risk',
@@ -173,17 +182,18 @@ export const exercisedNotDeclaredRule: Rule = {
           component.kind === 'model' || component.kind === 'external_service' ? 'high' : 'medium',
         confidence: CONFIDENCE_BANDS.deterministic,
         basis: 'observed',
-        title: `${component.displayName} runs without being declared anywhere in the repository`,
-        explanation: `A span attributed to the ${component.kind} ${componentLabel(componentId)} was observed, and static discovery found no matching declaration. The component is reached through a path Orchescope could not see in the source, for example a transitive dependency, a dynamically registered tool, or a name that differs between the code and the runtime.`,
+        title: `${component.displayName} ran without an exact matching static declaration`,
+        explanation: `A span attributed to the exact ${component.kind} identity ${componentLabel(componentId)} was observed, and reconciliation found no exact match among ${staticPopulation} statically discovered components. This does not establish that the repository declares no configurable provider path or related component; it establishes only that none carried this exact identity.`,
         impact:
-          'A component nobody declared is a component nobody reviews. Cost, permissions and failure behaviour for it are unmanaged.',
+          'Without an exact static match, runtime cost, permissions and failure behaviour cannot be attached to a specific reviewed declaration.',
         components: [componentId],
+        newEvidence: [unmatched],
         evidence: component.evidence.slice(0, 5) as EvidenceId[],
         recommendation: {
-          summary: `Declare ${component.displayName} in the source, or annotate it in .orchescope/manifest.yaml so the graph reflects reality.`,
+          summary: `Make the exact runtime identity ${component.displayName} match a static declaration or an explicit manifest mapping.`,
           steps: [
-            'Find the code path that reaches this component using the source location on the span, when one is present.',
-            'If the component is intentional, declare it or add it to the manifest with a runtimeName so future scans match it.',
+            'Find where runtime configuration selects this exact component, using the span source location when one is present.',
+            'If the selection is intentional, declare the exact identity or add a manifest runtimeName mapping so future scans match it.',
             'If it is not intentional, remove the path that reaches it.',
           ],
           effort: 'small',

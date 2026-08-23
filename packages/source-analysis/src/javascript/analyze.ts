@@ -13,6 +13,7 @@ import {
   isLiteralFact,
   type ModuleFacts,
   type ObjectEntryFact,
+  type ParameterFact,
   TEXT_FACT_MIN_LENGTH,
   type TextFact,
 } from '../facts.ts';
@@ -719,6 +720,7 @@ const traverse = (
           target: path,
           value: argumentFact(value, context),
           location: context.index.location(context.file, node.start, node.end),
+          ...(frame.name === undefined ? {} : { enclosing: frame.name }),
         });
       }
       for (const child of [target, value]) {
@@ -836,6 +838,22 @@ const recordCall = (
   }
 };
 
+const directParameters = (node: Node, context: Context): readonly ParameterFact[] =>
+  nodeArray(field(node, 'params')).flatMap((parameter) => {
+    const name =
+      identifierName(parameter) ??
+      identifierName(asNode(field(parameter, 'left'))) ??
+      identifierName(asNode(field(parameter, 'argument')));
+    return name === undefined
+      ? []
+      : [
+          {
+            name,
+            location: context.index.location(context.file, parameter.start, parameter.end),
+          },
+        ];
+  });
+
 const recordFunction = (
   node: Node,
   context: Context,
@@ -851,6 +869,9 @@ const recordFunction = (
     decorators: decoratorFacts(node, context),
     location: context.index.location(context.file, node.start, node.end),
     initializer: undefined,
+    ...(directParameters(node, context).length === 0
+      ? {}
+      : { parameters: directParameters(node, context) }),
     enclosing: frame.name,
   };
   context.definitions.push(definition);
@@ -893,6 +914,7 @@ const recordClassField = (
     decorators: decoratorFacts(member, context),
     location: context.index.location(context.file, member.start, member.end),
     initializer: initializerPath(value),
+    ...(value === undefined ? {} : { value: argumentFact(value, context) }),
     ...(aliasedFrom.length === 0 ? {} : { aliasedFrom }),
     ...(literals.length === 0 ? {} : { literals }),
     enclosing: className ?? frame.name,
@@ -930,6 +952,9 @@ const recordClass = (
         decorators: decoratorFacts(member, context),
         location: context.index.location(context.file, member.start, member.end),
         initializer: undefined,
+        ...(value === undefined || directParameters(value, context).length === 0
+          ? {}
+          : { parameters: directParameters(value, context) }),
         enclosing: name ?? frame.name,
       });
       if (value !== undefined) {
@@ -1057,6 +1082,10 @@ const recordVariables = (
         decorators: [],
         location: context.index.location(context.file, declarator.start, declarator.end),
         initializer,
+        ...(init === undefined ? {} : { value: argumentFact(init, context) }),
+        ...(init === undefined || directParameters(init, context).length === 0
+          ? {}
+          : { parameters: directParameters(init, context) }),
         ...(aliasedFrom.length === 0 ? {} : { aliasedFrom }),
         ...(literals.length === 0 ? {} : { literals }),
         enclosing: frame.name,

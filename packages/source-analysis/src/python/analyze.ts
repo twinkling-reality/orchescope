@@ -15,6 +15,7 @@ import {
   isLiteralFact,
   type ModuleFacts,
   type ObjectEntryFact,
+  type ParameterFact,
   type ReturnAnnotationFact,
   type ReturnFact,
   TEXT_FACT_MIN_LENGTH,
@@ -734,6 +735,11 @@ const traverse = (
       recordAssignment(node, context, frame, collecting);
       return;
     }
+    case 'with_statement': {
+      recordWithBindings(node, context, frame);
+      for (const child of namedChildren(node)) traverse(child, context, frame, collecting);
+      return;
+    }
     case 'await': {
       for (const child of namedChildren(node)) {
         traverse(child, context, { ...frame, awaited: true }, collecting);
@@ -996,6 +1002,42 @@ const returnsOf = (node: Node, context: Context): readonly ReturnFact[] => {
   return returns;
 };
 
+/** A simple dotted type name written on a parameter. Generic annotations remain outside this bound. */
+const parameterAnnotationPath = (annotation: Node | undefined): readonly string[] => {
+  if (annotation === undefined) return [];
+  if (annotation.type === 'identifier' || annotation.type === 'attribute') {
+    return attributePath(annotation);
+  }
+  if (annotation.type === 'type') {
+    const inner = namedChildren(annotation)[0];
+    return parameterAnnotationPath(inner);
+  }
+  return [];
+};
+
+/** Direct parameters declared by one function, with a simple annotation where one is written. */
+const parametersOf = (node: Node, context: Context): readonly ParameterFact[] => {
+  const parameters = childField(node, 'parameters');
+  if (parameters === undefined) return [];
+  const facts: ParameterFact[] = [];
+  for (const parameter of namedChildren(parameters)) {
+    const nameNode =
+      childField(parameter, 'name') ??
+      (parameter.type === 'identifier'
+        ? parameter
+        : namedChildren(parameter).find((child) => child.type === 'identifier'));
+    const annotation = childField(parameter, 'type');
+    const path = parameterAnnotationPath(annotation);
+    if (nameNode === undefined) continue;
+    facts.push({
+      name: nameNode.text,
+      ...(path.length === 0 ? {} : { annotation: path }),
+      location: location(context.file, annotation ?? nameNode),
+    });
+  }
+  return facts;
+};
+
 const recordFunction = (
   node: Node,
   context: Context,
@@ -1008,6 +1050,7 @@ const recordFunction = (
   const isAsync = node.children.some((child) => child !== null && child.type === 'async');
   const returnAnnotation = returnAnnotationOf(node, context);
   const returns = returnsOf(node, context);
+  const parameters = parametersOf(node, context);
   context.definitions.push({
     kind: frame.name === undefined ? 'function' : 'method',
     name: frame.name === undefined ? name : `${frame.name}.${name}`,
@@ -1018,6 +1061,7 @@ const recordFunction = (
     initializer: undefined,
     ...(returnAnnotation === undefined ? {} : { returnAnnotation }),
     ...(returns.length === 0 ? {} : { returns }),
+    ...(parameters.length === 0 ? {} : { parameters }),
     enclosing: frame.name,
   });
   const body = childField(node, 'body');
@@ -1088,6 +1132,40 @@ const boundLiterals = (right: Node, context: Context): readonly ArgumentFact[] =
   return isLiteralFact(fact) ? [fact] : [];
 };
 
+/**
+ * Variables introduced by a context manager.
+ *
+ * `with DDGS() as ddgs` gives subsequent member calls the same stable receiver fact as
+ * `ddgs = DDGS()`. Only a direct call and a single identifier alias are retained.
+ */
+const recordWithBindings = (node: Node, context: Context, frame: Frame): void => {
+  const clause = namedChildren(node).find((child) => child.type === 'with_clause');
+  if (clause === undefined) return;
+  for (const item of namedChildren(clause)) {
+    if (item.type !== 'with_item') continue;
+    const pattern = childField(item, 'value');
+    if (pattern?.type !== 'as_pattern') continue;
+    const value = namedChildren(pattern)[0];
+    const alias = childField(pattern, 'alias');
+    const nameNode = alias?.namedChildren.find((child) => child.type === 'identifier');
+    if (value?.type !== 'call' || nameNode === undefined) continue;
+    const callee = childField(value, 'function');
+    const initializer = callee === undefined ? [] : attributePath(callee);
+    if (initializer.length === 0) continue;
+    context.definitions.push({
+      kind: 'variable',
+      name: nameNode.text,
+      exported: !nameNode.text.startsWith('_'),
+      async: false,
+      decorators: [],
+      location: location(context.file, item),
+      initializer,
+      value: argumentFact(value, context),
+      enclosing: frame.name,
+    });
+  }
+};
+
 const recordAssignment = (
   node: Node,
   context: Context,
@@ -1109,6 +1187,7 @@ const recordAssignment = (
       target: path,
       value: argumentFact(right, context),
       location: location(context.file, node),
+      ...(frame.name === undefined ? {} : { enclosing: frame.name }),
     });
   }
   const name = left === undefined ? undefined : path.join('.');
@@ -1127,6 +1206,7 @@ const recordAssignment = (
       decorators: [],
       location: location(context.file, node),
       initializer: initializer !== undefined && initializer.length > 0 ? initializer : undefined,
+      ...(right === undefined ? {} : { value: argumentFact(right, context) }),
       ...(aliasedFrom.length === 0 ? {} : { aliasedFrom }),
       ...(literals.length === 0 ? {} : { literals }),
       enclosing: frame.name,

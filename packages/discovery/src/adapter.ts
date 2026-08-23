@@ -1,6 +1,11 @@
 import type { Deadline } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
-import type { CitationSnapshot, ManifestSet, ModuleFacts } from '@orchescope/source-analysis';
+import type {
+  CitationSnapshot,
+  ImportFact,
+  ManifestSet,
+  ModuleFacts,
+} from '@orchescope/source-analysis';
 import type { ComponentIdentity, SourceLocation } from '@orchescope/schema';
 import type { BindingRegistry } from './bindings.ts';
 import type { CallSiteEffects } from './call-site-effect.ts';
@@ -90,6 +95,13 @@ export type AdapterFindings = {
   readonly topology?: TopologyDiscovery;
 };
 
+/** Exact imported runtime symbols that make an adapter relevant to this source population. */
+export type AdapterApplicability = readonly {
+  readonly module: string;
+  readonly imported: string;
+  readonly location: ImportFact['location'];
+}[];
+
 export type TopologyDiscovery = {
   readonly status: 'complete' | 'incomplete';
   readonly inspectedInputs: number;
@@ -137,6 +149,13 @@ export type AgentSystemAdapter = {
    * side effects or prompt literals, claims nothing.
    */
   readonly packages: readonly string[];
+  /**
+   * Exact relevant source imports, when this adapter can state them.
+   *
+   * Discovery computes this once, persists its bounded projection, and uses that same result for
+   * completed-zero and topology accounting. Adapters without it retain the legacy package fallback.
+   */
+  readonly applicability?: (context: DiscoveryContext) => AdapterApplicability;
   /** Cheap applicability check. A false answer records `not_applicable` rather than a failure. */
   readonly appliesTo: (context: DiscoveryContext) => boolean;
   readonly discover: (context: DiscoveryContext, builder: SystemGraphBuilder) => AdapterFindings;

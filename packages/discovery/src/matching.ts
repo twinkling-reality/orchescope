@@ -92,6 +92,37 @@ export type RuntimeSymbolMatch = {
   readonly confidence: number;
 };
 
+/** Whether a lexical scope declares the receiver name and therefore blocks a module binding fallback. */
+export const hasLocalBinding = (
+  module: ModuleFacts,
+  enclosing: string | undefined,
+  name: string,
+): boolean => {
+  if (enclosing === undefined) return false;
+  const scope = module.definitions.find(
+    (definition) =>
+      (definition.kind === 'function' ||
+        definition.kind === 'method' ||
+        (definition.kind === 'variable' && definition.parameters !== undefined)) &&
+      (definition.name === enclosing || definition.name.endsWith(`.${enclosing}`)),
+  );
+  return (
+    scope?.parameters?.some((parameter) => parameter.name === name) === true ||
+    module.definitions.some(
+      (definition) =>
+        definition.kind === 'variable' &&
+        definition.name === name &&
+        definition.enclosing === enclosing,
+    ) ||
+    module.assignments.some(
+      (assignment) =>
+        assignment.target.length === 1 &&
+        assignment.target[0] === name &&
+        assignment.enclosing === enclosing,
+    )
+  );
+};
+
 /**
  * A local declaration that can replace the imported root binding makes the recorded origin unsafe.
  * The analyzers intentionally retain import origins as compact facts rather than a full scope graph, so
@@ -107,7 +138,10 @@ const hasExplicitLocalShadow = (module: ModuleFacts, symbol: RuntimeSymbol): boo
         (definition.enclosing === undefined || definition.enclosing === symbol.enclosing),
     ) ||
     module.assignments.some(
-      (assignment) => assignment.target.length === 1 && assignment.target[0] === root,
+      (assignment) =>
+        assignment.target.length === 1 &&
+        assignment.target[0] === root &&
+        (assignment.enclosing === undefined || assignment.enclosing === symbol.enclosing),
     )
   );
 };

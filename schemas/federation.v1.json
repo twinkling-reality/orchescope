@@ -3638,6 +3638,90 @@
                           "minLength": 1,
                           "type": "string"
                         },
+                        "applicability": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "distinctFiles": {
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "omittedImports": {
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "relevantImports": {
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "sample": {
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "imported": {
+                                    "minLength": 1,
+                                    "type": "string"
+                                  },
+                                  "location": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "endColumn": {
+                                        "minimum": 0,
+                                        "type": "integer"
+                                      },
+                                      "endLine": {
+                                        "minimum": 1,
+                                        "type": "integer"
+                                      },
+                                      "file": {
+                                        "description": "Repository relative POSIX path.",
+                                        "minLength": 1,
+                                        "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                                        "type": "string"
+                                      },
+                                      "fileHash": {
+                                        "description": "Lowercase hexadecimal SHA-256 digest.",
+                                        "pattern": "^[0-9a-f]{64}$",
+                                        "type": "string"
+                                      },
+                                      "startColumn": {
+                                        "minimum": 0,
+                                        "type": "integer"
+                                      },
+                                      "startLine": {
+                                        "minimum": 1,
+                                        "type": "integer"
+                                      }
+                                    },
+                                    "required": [
+                                      "file",
+                                      "startLine"
+                                    ],
+                                    "type": "object"
+                                  },
+                                  "module": {
+                                    "minLength": 1,
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "module",
+                                  "imported",
+                                  "location"
+                                ],
+                                "type": "object"
+                              },
+                              "maxItems": 10,
+                              "type": "array"
+                            }
+                          },
+                          "required": [
+                            "relevantImports",
+                            "distinctFiles",
+                            "sample",
+                            "omittedImports"
+                          ],
+                          "type": "object"
+                        },
                         "componentsFound": {
                           "minimum": 0,
                           "type": "integer"

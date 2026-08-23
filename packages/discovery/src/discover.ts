@@ -184,9 +184,12 @@ const adaptersThatFoundNothing = (
     const run = runs.find((entry) => entry.adapterId === adapter.id);
     if (run === undefined || run.status !== 'completed') continue;
     if (run.componentsFound > 0 || run.edgesFound > 0) continue;
-    const used = [...new Set(adapter.packages.map(distributionOf))].filter((name) =>
-      imported.has(name),
-    );
+    const structured = run.applicability;
+    const used =
+      structured === undefined
+        ? [...new Set(adapter.packages.map(distributionOf))].filter((name) => imported.has(name))
+        : [...new Set(structured.sample.map((entry) => `${entry.module}.${entry.imported}`))];
+    if (structured !== undefined && structured.relevantImports === 0) continue;
     if (used.length === 0) continue;
     areas.push({
       /*
@@ -194,9 +197,15 @@ const adaptersThatFoundNothing = (
        * the word this gap renders under produced "unread: mcp used in source, read by adapter:mcp",
        * which is a line that contradicts itself in the one place a reader is being told about a limit.
        */
-      area: `${used.join(', ')} is imported here and its adapter found nothing`,
+      area:
+        structured === undefined
+          ? `${used.join(', ')} is imported here and its adapter found nothing`
+          : `${structured.relevantImports} exact relevant import(s) for ${adapter.id} produced no component`,
       kind: 'adapter_found_nothing',
-      reason: `${adapter.id} claims this framework, ran and found no component. Either this build does not read the form this repository uses, or this repository imports the framework as a client and declares nothing an adapter could read.`,
+      reason:
+        structured === undefined
+          ? `${adapter.id} claims this framework, ran and found no component. Either this build does not read the form this repository uses, or this repository imports the framework as a client and declares nothing an adapter could read.`
+          : `${adapter.id} inspected ${structured.relevantImports} exact relevant import(s) across ${structured.distinctFiles} file(s), including ${used.join(', ')}, and found no component. ${structured.omittedImports} matching import(s) were omitted from the bounded sample. Either this build does not read the form this repository uses, or the imports are clients that declare nothing the adapter can model.`,
       remediation:
         'Declare the components in .orchescope/manifest.yaml so they appear in the graph. If the repository does declare components in source, report the form so an adapter can read it.',
     });
@@ -270,18 +279,42 @@ const runAdapter = (
   monotonicMs: () => number,
 ): AdapterExecution => {
   const startedAt = monotonicMs();
+  const exactApplicability = adapter.applicability?.(context);
+  const applicability =
+    exactApplicability === undefined
+      ? undefined
+      : (() => {
+          const sorted = [...exactApplicability].sort((left, right) => {
+            const leftKey = `${left.location.file}:${left.location.startLine}:${left.location.startColumn ?? 0}:${left.module}:${left.imported}`;
+            const rightKey = `${right.location.file}:${right.location.startLine}:${right.location.startColumn ?? 0}:${right.module}:${right.imported}`;
+            return leftKey.localeCompare(rightKey);
+          });
+          const sample = sorted.slice(0, 10);
+          return {
+            relevantImports: sorted.length,
+            distinctFiles: new Set(sorted.map((entry) => entry.location.file)).size,
+            sample,
+            omittedImports: sorted.length - sample.length,
+          };
+        })();
   const base = {
     adapterId: adapter.id,
     adapterVersion: adapter.version,
+    ...(applicability === undefined ? {} : { applicability }),
   };
-  if (!adapter.appliesTo(context)) {
+  const applicabilityFiles = [
+    ...new Set(exactApplicability?.map((entry) => entry.location.file) ?? []),
+  ];
+  if (
+    exactApplicability === undefined ? !adapter.appliesTo(context) : exactApplicability.length === 0
+  ) {
     return {
       run: {
         ...base,
         componentsFound: 0,
         edgesFound: 0,
-        filesInspected: 0,
-        languages: [],
+        filesInspected: applicabilityFiles.length,
+        languages: languagesOf(applicabilityFiles),
         durationMs: monotonicMs() - startedAt,
         status: 'not_applicable',
       },
@@ -298,17 +331,18 @@ const runAdapter = (
         ...base,
         componentsFound: 0,
         edgesFound: 0,
-        filesInspected: 0,
-        languages: [],
+        filesInspected: applicabilityFiles.length,
+        languages: languagesOf(applicabilityFiles),
         durationMs: monotonicMs() - startedAt,
         status: 'failed',
         detail: failure.message.slice(0, 500),
       },
     };
   }
+  const inspectedFiles = [...new Set([...findings.filesInspected, ...applicabilityFiles])];
   const read = {
-    filesInspected: findings.filesInspected.length,
-    languages: languagesOf(findings.filesInspected),
+    filesInspected: inspectedFiles.length,
+    languages: languagesOf(inspectedFiles),
   };
   if (findings.problem !== undefined) {
     return {
@@ -360,6 +394,11 @@ const firstAdapterInput = (
     return left.location.startLine - right.location.startLine;
   })[0]?.location;
 };
+
+const firstStructuredAdapterInput = (
+  execution: AdapterExecution,
+): ModuleFacts['imports'][number]['location'] | undefined =>
+  execution.run.applicability?.sample[0]?.location;
 
 const topologySampleKey = (sample: {
   readonly kind: string;
@@ -448,7 +487,11 @@ const aggregateTopology = (
       continue;
     }
 
-    const needsPopulation = adapter.packages.length > 0 || execution.run.edgesFound > 0;
+    const structured = execution.run.applicability;
+    const needsPopulation =
+      structured === undefined
+        ? adapter.packages.length > 0 || execution.run.edgesFound > 0
+        : structured.relevantImports > 0 || execution.run.edgesFound > 0;
     if (!needsPopulation) continue;
     producers.push({
       adapterId: adapter.id,
@@ -457,7 +500,10 @@ const aggregateTopology = (
       relationsFound: execution.run.edgesFound,
     });
     unresolvedCount += 1;
-    const location = firstAdapterInput(adapter, modules);
+    const location =
+      structured === undefined
+        ? firstAdapterInput(adapter, modules)
+        : firstStructuredAdapterInput(execution);
     unresolved.push({
       kind: 'adapter_input',
       reason:

@@ -64,8 +64,8 @@ const projectOf = (count: number): string => {
 };
 
 describe('the fact cache', () => {
-  it('invalidates facts produced before root reassignments were retained', () => {
-    assert.equal(ANALYZER_VERSION, '3');
+  it('invalidates facts produced before binding values and typed parameters were retained', () => {
+    assert.equal(ANALYZER_VERSION, '4');
     assert.match(
       cacheKey(
         {
@@ -76,7 +76,7 @@ describe('the fact cache', () => {
         },
         'a'.repeat(64),
       ),
-      /^3:python:src\/graph\.py:/,
+      /^4:python:src\/graph\.py:/,
     );
   });
 

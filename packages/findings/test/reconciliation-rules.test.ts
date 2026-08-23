@@ -153,7 +153,23 @@ describe('exercised-not-declared', () => {
     const outcome = exercisedNotDeclaredRule.evaluate(contextFor(['agent:planner']));
     assert.equal(outcome.status, 'fired');
     assert.equal(outcome.drafts.length, 1);
-    assert.match(outcome.drafts[0]?.title ?? '', /^planner runs without being declared/);
+    assert.match(outcome.drafts[0]?.title ?? '', /^planner ran without an exact matching/);
+    assert.match(outcome.drafts[0]?.explanation ?? '', /does not establish/);
+    assert.equal(outcome.drafts[0]?.newEvidence?.[0]?.kind, 'absence');
+    const claimText = [
+      outcome.drafts[0]?.title,
+      outcome.drafts[0]?.explanation,
+      outcome.drafts[0]?.impact,
+      outcome.drafts[0]?.recommendation?.summary,
+      ...(outcome.drafts[0]?.recommendation?.steps ?? []),
+    ]
+      .filter((value) => value !== undefined)
+      .join(' ');
+    assert.doesNotMatch(
+      claimText,
+      /anywhere|nobody|never declared|path unseen/i,
+      'the finding must not expand an exact-match refusal into a repository-wide absence',
+    );
   });
 
   /**

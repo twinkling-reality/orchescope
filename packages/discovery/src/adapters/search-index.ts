@@ -1,7 +1,7 @@
 import { CONFIDENCE_BANDS, INFERRED_ENTRY_POINT_TAG, isTestFile } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type { ComponentIdentity } from '@orchescope/schema';
-import type { CallFact, ModuleFacts } from '@orchescope/source-analysis';
+import type { ArgumentFact, CallFact, ImportFact, ModuleFacts } from '@orchescope/source-analysis';
 import {
   calleeName,
   dotted,
@@ -9,9 +9,21 @@ import {
   objectArgument,
   stringValue,
 } from '@orchescope/source-analysis';
-import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
+import type {
+  AdapterApplicability,
+  AdapterFindings,
+  AgentSystemAdapter,
+  DiscoveryContext,
+} from '../adapter.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
-import { importsAny, projectUses } from '../matching.ts';
+import { localModules, namesLocalModule } from '../local-modules.ts';
+import {
+  definitionForCall,
+  hasLocalBinding,
+  matchRuntimeSymbol,
+  moduleMatches,
+} from '../matching.ts';
+import { type ResolvedSourceValue, resolveSourceValue } from '../source-value.ts';
 
 /**
  * A search index a repository retrieves documents from.
@@ -41,8 +53,35 @@ const SEARCH_CLIENTS = [
     /** The keyword each client names its index with, which differs between the two. */
     indexKeys: ['index_name', 'indexName', 'knowledge_base_name', 'knowledgeBaseName'],
     methods: ['search', 'retrieve'],
+    configurableName: undefined,
+  },
+  {
+    service: 'duckduckgo',
+    packages: ['duckduckgo_search'],
+    clients: ['DDGS'],
+    indexKeys: [],
+    methods: ['text'],
+    configurableName: 'duckduckgo',
+  },
+  {
+    service: 'tavily',
+    packages: ['tavily'],
+    clients: ['TavilyClient'],
+    indexKeys: [],
+    methods: ['search'],
+    configurableName: 'tavily',
+  },
+  {
+    service: 'searxng',
+    packages: ['langchain_community.utilities'],
+    clients: ['SearxSearchWrapper'],
+    indexKeys: [],
+    methods: ['results'],
+    configurableName: 'searxng',
   },
 ] as const;
+
+const PERPLEXITY_URL = 'https://api.perplexity.ai/chat/completions';
 
 const ADAPTER_ID = 'adapter:search-index';
 const drafts = createDrafts(ADAPTER_ID);
@@ -70,14 +109,178 @@ const indexNamedBy = (call: CallFact, service: Service): string | undefined => {
 
 type Found = { components: number; edges: number; files: Set<string> };
 
+const receiverKey = (enclosing: string | undefined, name: string): string =>
+  `${enclosing ?? '<module>'}:${name}`;
+
+const importForRoot = (module: ModuleFacts, root: string): ImportFact | undefined => {
+  const matches = module.imports.filter((entry) => entry.local === root && !entry.isType);
+  return matches.length === 1 ? matches[0] : undefined;
+};
+
+const rowFor = (entry: ImportFact, imported = entry.imported): AdapterApplicability[number] => ({
+  module: entry.module,
+  imported,
+  location: entry.location,
+});
+
+const exactPerplexityCall = (
+  context: DiscoveryContext,
+  module: ModuleFacts,
+  call: CallFact,
+): ImportFact | undefined => {
+  const matched = matchRuntimeSymbol(
+    context.modules,
+    module,
+    { path: call.calleePath, origin: call.origin, enclosing: call.enclosing },
+    { names: ['post'], packages: ['requests'] },
+  );
+  if (matched === undefined) return undefined;
+  const url = call.args[0];
+  if (url?.kind !== 'string' || url.value !== PERPLEXITY_URL) return undefined;
+  const root = call.calleePath[0];
+  return root === undefined ? undefined : importForRoot(module, root);
+};
+
+const searchApplicability = (context: DiscoveryContext): AdapterApplicability => {
+  const local = localModules(context.modules);
+  const importRows = context.modules.flatMap((module) =>
+    module.imports.flatMap((entry) => {
+      if (entry.isType || namesLocalModule(local, module, entry.module)) return [];
+      const supported = SEARCH_CLIENTS.some(
+        (service) =>
+          moduleMatches(entry.module, service.packages) &&
+          service.clients.includes(entry.imported as never),
+      );
+      return supported ? [rowFor(entry)] : [];
+    }),
+  );
+  const callRows = context.modules.flatMap((module) =>
+    module.calls.flatMap((call) => {
+      const perplexity = exactPerplexityCall(context, module, call);
+      const sdk = SEARCH_CLIENTS.find(
+        (service) =>
+          matchRuntimeSymbol(
+            context.modules,
+            module,
+            { path: call.calleePath, origin: call.origin, enclosing: call.enclosing },
+            { names: service.clients, packages: service.packages },
+          ) !== undefined,
+      );
+      const root = sdk === undefined ? undefined : call.calleePath[0];
+      const imported = root === undefined ? undefined : importForRoot(module, root);
+      return [
+        ...(perplexity === undefined ? [] : [rowFor(perplexity, 'post')]),
+        ...(imported === undefined
+          ? []
+          : [
+              rowFor(
+                imported,
+                imported.imported === '*' ? call.calleePath.at(-1) : imported.imported,
+              ),
+            ]),
+      ];
+    }),
+  );
+  const rows = [...importRows, ...callRows];
+  return [
+    ...new Map(
+      rows.map((row) => [
+        `${row.location.file}:${row.location.startLine}:${row.module}:${row.imported}`,
+        row,
+      ]),
+    ).values(),
+  ];
+};
+
+const stableVariableHolding = (module: ModuleFacts, call: CallFact): string | undefined => {
+  const definition = definitionForCall(module, call);
+  if (definition?.kind !== 'variable') return undefined;
+  const sameName = module.definitions.filter(
+    (candidate) =>
+      candidate.kind === 'variable' &&
+      candidate.name === definition.name &&
+      candidate.enclosing === definition.enclosing,
+  );
+  if (sameName.length !== 1) return undefined;
+  if (
+    module.assignments.some(
+      (assignment) =>
+        assignment.target.length === 1 &&
+        assignment.target[0] === definition.name &&
+        assignment.enclosing === definition.enclosing,
+    )
+  ) {
+    return undefined;
+  }
+  return definition.name;
+};
+
+const searchDefaultsAt = (
+  context: DiscoveryContext,
+  module: ModuleFacts,
+  call: CallFact,
+): readonly ResolvedSourceValue[] =>
+  call.args.flatMap((argument) => {
+    const argumentValues: readonly ArgumentFact[] =
+      argument.kind === 'object' ? argument.entries.map((entry) => entry.value) : [argument];
+    return argumentValues.flatMap((candidate) => {
+      if (candidate.kind !== 'member' || candidate.path.at(-1) !== 'search_api') return [];
+      const resolved = resolveSourceValue({
+        context,
+        module,
+        value: candidate,
+        before: call.location,
+        enclosing: call.enclosing,
+      });
+      return resolved?.value.kind === 'string' && resolved.basis === 'configuration_default'
+        ? [resolved]
+        : [];
+    });
+  });
+
+const searchDefault = (context: DiscoveryContext): ResolvedSourceValue | undefined => {
+  const candidates: ResolvedSourceValue[] = [];
+  for (const module of context.modules) {
+    for (const call of module.calls) {
+      for (const resolved of searchDefaultsAt(context, module, call)) {
+        candidates.push(resolved);
+        if (candidates.length > 32) return undefined;
+      }
+    }
+  }
+  const values = new Set(
+    candidates.flatMap((candidate) =>
+      candidate.value.kind === 'string' ? [candidate.value.value] : [],
+    ),
+  );
+  if (values.size !== 1) return undefined;
+  const selected = candidates[0];
+  if (selected?.value.kind !== 'string') return undefined;
+  const locations = [
+    ...new Map(
+      candidates
+        .flatMap((candidate) => [...candidate.locations])
+        .sort((left, right) =>
+          `${left.file}:${left.startLine}:${left.startColumn ?? 0}`.localeCompare(
+            `${right.file}:${right.startLine}:${right.startColumn ?? 0}`,
+          ),
+        )
+        .map((location) => [
+          `${location.file}:${location.startLine}:${location.startColumn ?? 0}`,
+          location,
+        ]),
+    ).values(),
+  ];
+  return { value: selected.value, basis: 'configuration_default', locations };
+};
+
 /**
  * The variables holding a search client in this module, and the index each was built with.
  *
  * Resolved within the module that constructs the client, for the reason the model deadline is: an
  * application that builds its client once and passes it around gives a call site no syntactic route
  * back, and following a constructor parameter across files would answer a question the source has not
- * settled. A query through an unresolved client still produces a relation, against the service rather
- * than against a named index.
+ * settled. An unresolved client contributes no retrieval or relation.
  */
 const clientsIn = (
   module: ModuleFacts,
@@ -85,11 +288,30 @@ const clientsIn = (
   builder: SystemGraphBuilder,
   context: DiscoveryContext,
   found: Found,
+  configuredDefault: ResolvedSourceValue | undefined,
 ): ReadonlyMap<string, ComponentIdentity> => {
   const held = new Map<string, ComponentIdentity>();
   for (const call of module.calls) {
-    if (!service.clients.includes(calleeName(call) as never)) continue;
+    const matched = matchRuntimeSymbol(
+      context.modules,
+      module,
+      { path: call.calleePath, origin: call.origin, enclosing: call.enclosing },
+      { names: service.clients, packages: service.packages },
+    );
+    if (matched === undefined) continue;
     const identity = retrievalIdentity(indexNamedBy(call, service) ?? service.service);
+    const isPossible = service.configurableName !== undefined;
+    const isDefault =
+      isPossible &&
+      configuredDefault?.value.kind === 'string' &&
+      configuredDefault.value.value === service.configurableName;
+    const metadata = {
+      client: dotted(call.calleePath),
+      service: service.service,
+      ...(isPossible
+        ? { configurationSelection: 'possible', configurationDefault: isDefault }
+        : {}),
+    };
     builder.addComponent(
       drafts.sourceComponent({
         kind: 'retrieval',
@@ -101,21 +323,56 @@ const clientsIn = (
         confidence: CONFIDENCE_BANDS.deterministic,
         sideEffect: 'read_only',
         permissions: [{ kind: 'network', scope: service.service, mode: 'read' }],
-        metadata: { client: dotted(call.calleePath), service: service.service },
-        tags: ['retrieval'],
+        metadata,
+        tags: isPossible ? ['retrieval', 'configuration-possibility'] : ['retrieval'],
       }),
     );
+    const root = call.calleePath[0];
+    const imported = root === undefined ? undefined : importForRoot(module, root);
+    if (imported !== undefined) {
+      builder.addComponent(
+        drafts.sourceComponent({
+          kind: 'retrieval',
+          identity,
+          file: imported.location.file,
+          name: indexNamedBy(call, service) ?? service.service,
+          location: imported.location,
+          symbol: `${imported.module}.${imported.imported}`,
+          confidence: CONFIDENCE_BANDS.deterministic,
+          sideEffect: 'read_only',
+          permissions: [{ kind: 'network', scope: service.service, mode: 'read' }],
+          metadata,
+          tags: isPossible ? ['retrieval', 'configuration-possibility'] : ['retrieval'],
+        }),
+      );
+    }
     found.components += 1;
     found.files.add(module.file);
-    const variable = module.definitions.find(
-      (definition) =>
-        definition.kind === 'variable' &&
-        definition.initializer !== undefined &&
-        dotted(definition.initializer) === dotted(call.calleePath),
-    )?.name;
+    const variable = stableVariableHolding(module, call);
     if (variable !== undefined) {
-      held.set(variable, identity);
+      const definition = definitionForCall(module, call);
+      held.set(receiverKey(definition?.enclosing, variable), identity);
       context.bindings.register(module.file, variable, identity);
+    }
+    if (isDefault && configuredDefault !== undefined) {
+      for (const evidenceLocation of configuredDefault.locations) {
+        builder.addComponent(
+          drafts.sourceComponent({
+            kind: 'retrieval',
+            identity,
+            file: evidenceLocation.file,
+            name: service.service,
+            location: evidenceLocation,
+            symbol: `${service.configurableName} configuration default`,
+            confidence: CONFIDENCE_BANDS.deterministic,
+            sideEffect: 'read_only',
+            permissions: [{ kind: 'network', scope: service.service, mode: 'read' }],
+            metadata,
+            tags: ['retrieval', 'configuration-possibility'],
+          }),
+        );
+        found.files.add(evidenceLocation.file);
+      }
     }
   }
   return held;
@@ -162,38 +419,21 @@ const discoverQueries = (
   context: DiscoveryContext,
   builder: SystemGraphBuilder,
   found: Found,
+  configuredDefault: ResolvedSourceValue | undefined,
 ): void => {
   for (const service of SEARCH_CLIENTS) {
-    if (!importsAny(module, service.packages)) continue;
-    const held = clientsIn(module, service, builder, context, found);
+    const held = clientsIn(module, service, builder, context, found, configuredDefault);
     for (const call of module.calls) {
       if (!service.methods.includes(calleeName(call) as never)) continue;
       const receiver = dotted(call.calleePath.slice(0, -1));
-      const target = held.get(receiver);
-      /*
-       * A query through a client this module did not build reaches the service under its own name. The
-       * alternative is to drop the relation, which would report a retrieval application as one that
-       * retrieves nothing in exactly the repositories that inject their clients.
-       */
-      const identity = target ?? retrievalIdentity(service.service);
-      if (target === undefined) {
-        builder.addComponent(
-          drafts.sourceComponent({
-            kind: 'retrieval',
-            identity,
-            file: module.file,
-            name: service.service,
-            location: call.location,
-            symbol: dotted(call.calleePath),
-            confidence: CONFIDENCE_BANDS.structural,
-            sideEffect: 'read_only',
-            permissions: [{ kind: 'network', scope: service.service, mode: 'read' }],
-            metadata: { client: dotted(call.calleePath), service: service.service },
-            tags: ['retrieval'],
-          }),
-        );
-        found.components += 1;
-      }
+      const scoped = held.get(receiverKey(call.enclosing, receiver));
+      const target =
+        scoped ??
+        (hasLocalBinding(module, call.enclosing, receiver)
+          ? undefined
+          : held.get(receiverKey(undefined, receiver)));
+      if (target === undefined) continue;
+      const identity = target;
       found.files.add(module.file);
       context.callSiteEffects.record(module.file, call, identity, 'read_only');
       const caller = call.enclosing;
@@ -213,13 +453,86 @@ const discoverQueries = (
   }
 };
 
+const discoverPerplexity = (
+  module: ModuleFacts,
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+  found: Found,
+): void => {
+  for (const call of module.calls) {
+    const imported = exactPerplexityCall(context, module, call);
+    if (imported === undefined) continue;
+    const identity = retrievalIdentity('perplexity');
+    builder.addComponent(
+      drafts.sourceComponent({
+        kind: 'retrieval',
+        identity,
+        file: module.file,
+        name: 'perplexity',
+        location: call.location,
+        symbol: dotted(call.calleePath),
+        confidence: CONFIDENCE_BANDS.deterministic,
+        sideEffect: 'read_only',
+        permissions: [{ kind: 'network', scope: PERPLEXITY_URL, mode: 'read' }],
+        metadata: {
+          client: dotted(call.calleePath),
+          service: 'perplexity',
+          endpoint: PERPLEXITY_URL,
+          configurationSelection: 'possible',
+          configurationDefault: false,
+        },
+        tags: ['retrieval', 'configuration-possibility'],
+      }),
+    );
+    builder.addComponent(
+      drafts.sourceComponent({
+        kind: 'retrieval',
+        identity,
+        file: imported.location.file,
+        name: 'perplexity',
+        location: imported.location,
+        symbol: `${imported.module}.${imported.imported}`,
+        confidence: CONFIDENCE_BANDS.deterministic,
+        sideEffect: 'read_only',
+        permissions: [{ kind: 'network', scope: PERPLEXITY_URL, mode: 'read' }],
+        metadata: {
+          client: dotted(call.calleePath),
+          service: 'perplexity',
+          endpoint: PERPLEXITY_URL,
+          configurationSelection: 'possible',
+          configurationDefault: false,
+        },
+        tags: ['retrieval', 'configuration-possibility'],
+      }),
+    );
+    found.components += 1;
+    found.files.add(module.file);
+    context.callSiteEffects.record(module.file, call, identity, 'read_only');
+    const caller = call.enclosing;
+    if (caller === undefined) continue;
+    builder.addEdge(
+      drafts.edge({
+        kind: 'queries_retrieval',
+        from: callerOf(module, caller, context, builder, found, call),
+        to: identity,
+        location: call.location,
+        symbol: dotted(call.calleePath),
+        confidence: CONFIDENCE_BANDS.deterministic,
+      }),
+    );
+    found.edges += 1;
+  }
+};
+
 export const searchIndexAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '1',
+  version: '2',
   packages: ALL_PACKAGES,
-  appliesTo: (context) => projectUses(context, ALL_PACKAGES),
+  applicability: searchApplicability,
+  appliesTo: (context) => searchApplicability(context).length > 0,
   discover: (context, builder): AdapterFindings => {
     const found: Found = { components: 0, edges: 0, files: new Set() };
+    const configuredDefault = searchDefault(context);
     /*
      * A test harness reaches a real client at a fake, and an index discovered only there describes the
      * harness rather than the system under audit. `conftest.py` in one field report's target builds a
@@ -227,7 +540,8 @@ export const searchIndexAdapter: AgentSystemAdapter = {
      */
     for (const module of context.modules) {
       if (isTestFile(module.file)) continue;
-      discoverQueries(module, context, builder, found);
+      discoverQueries(module, context, builder, found, configuredDefault);
+      discoverPerplexity(module, context, builder, found);
     }
     return {
       componentsFound: found.components,

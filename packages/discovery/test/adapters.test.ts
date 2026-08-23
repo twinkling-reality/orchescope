@@ -1334,7 +1334,7 @@ export async function answer(prompt: string) {
     });
   });
 
-  it('carries nothing when the client was constructed in another module', async () => {
+  it('does not bind a model call through an injected client from another module', async () => {
     const { result } = await scan((workspace) => {
       writePythonProject(workspace, { name: 'injected-py', dependencies: ['openai>=1.40'] });
       workspace.write(
@@ -1360,11 +1360,18 @@ class Embedder:
 `,
       );
     });
-    assert.deepEqual(timeoutOf(result, 'agent:compute_embedding'), {
-      ms: undefined,
-      declaredAt: undefined,
-      readFrom: undefined,
-    });
+    assert.equal(
+      result.graph.components.some(
+        (component) => component.id === 'model:openai/text-embedding-3-large',
+      ),
+      false,
+    );
+    assert.equal(
+      result.graph.edges.some(
+        (edge) => edge.kind === 'invokes_model' && edge.from === 'agent:compute_embedding',
+      ),
+      false,
+    );
   });
 
   it('carries nothing when the timeout is not a number the source states', async () => {
@@ -3357,7 +3364,7 @@ async def retrieve(question: str):
     assert.equal(index?.sideEffect, 'read_only');
   });
 
-  it('reaches the service by name when the client was built somewhere else', async () => {
+  it('does not bind a search call through an injected client from another module', async () => {
     const { ids, edges } = await scan((workspace) => {
       writePythonProject(workspace, {
         name: 'injected-search',
@@ -3377,12 +3384,10 @@ class Approach:
 `,
       );
     });
-    assert.ok(
-      ids.includes('retrieval:azure-ai-search'),
-      `expected the service to stand in for an unresolved client, in ${ids.join(', ')}`,
-    );
-    assert.ok(
+    assert.equal(ids.includes('retrieval:azure-ai-search'), false, ids.join(', '));
+    assert.equal(
       edges.some((edge) => edge.startsWith('queries_retrieval:')),
+      false,
       edges.join(', '),
     );
   });

@@ -45,6 +45,31 @@ export const SkippedFile = Type.Object(
 );
 export type SkippedFile = Static<typeof SkippedFile>;
 
+const AdapterApplicabilitySample = Type.Object(
+  {
+    module: NonEmptyString(),
+    imported: NonEmptyString(),
+    location: SourceLocation,
+  },
+  { additionalProperties: false },
+);
+
+/**
+ * Exact source imports that made an adapter relevant, with bounded auditable evidence.
+ *
+ * Optional for version 1 compatibility. `relevantImports` and `distinctFiles` are full counts;
+ * `sample` is deterministic and `omittedImports` states the part outside its ceiling.
+ */
+const AdapterApplicability = Type.Object(
+  {
+    relevantImports: NonNegativeInt,
+    distinctFiles: NonNegativeInt,
+    sample: Type.Array(AdapterApplicabilitySample, { maxItems: 10 }),
+    omittedImports: NonNegativeInt,
+  },
+  { additionalProperties: false },
+);
+
 export const AdapterRun = Type.Object(
   {
     adapterId: NonEmptyString(),
@@ -64,6 +89,7 @@ export const AdapterRun = Type.Object(
     filesInspected: NonNegativeInt,
     durationMs: Type.Number({ minimum: 0 }),
     status: literals(['completed', 'not_applicable', 'failed'] as const),
+    applicability: Type.Optional(AdapterApplicability),
     detail: Type.Optional(Type.String({ maxLength: 500 })),
   },
   { additionalProperties: false },

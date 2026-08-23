@@ -110,6 +110,15 @@ export type DefinitionFact = {
   /** Dotted path of the initialiser call, when the definition is `const x = f(...)`. */
   readonly initializer: readonly string[] | undefined;
   /**
+   * Reduced right hand side of a variable binding.
+   *
+   * This is a source fact, not substitution. A consumer may follow it only after proving that the
+   * binding is unique and unchanged at the use site. Keeping the value here lets one bounded resolver
+   * treat an inline request object and the same object assigned one line above alike without teaching
+   * an adapter either language's syntax.
+   */
+  readonly value?: ArgumentFact;
+  /**
    * Names the initialiser takes its value from, when it takes it from a name rather than by calling one.
    *
    * `const fetchImpl = opts.fetchImpl ?? fetch` is how a module is written so that its network client can
@@ -151,7 +160,16 @@ export type DefinitionFact = {
    */
   readonly returnAnnotation?: ReturnAnnotationFact;
   readonly returns?: readonly ReturnFact[];
+  /** Direct parameters declared by a callable definition. An annotation is retained when it is written. */
+  readonly parameters?: readonly ParameterFact[];
   readonly enclosing: string | undefined;
+};
+
+export type ParameterFact = {
+  readonly name: string;
+  /** Dotted type name written in the annotation. Generic arguments are not inferred. */
+  readonly annotation?: readonly string[];
+  readonly location: SourceLocation;
 };
 
 export type LiteralDestinationFact = {
@@ -283,6 +301,8 @@ export type AssignmentFact = {
   readonly target: readonly string[];
   readonly value: ArgumentFact;
   readonly location: SourceLocation;
+  /** Nearest named lexical scope, absent for a module-level write. */
+  readonly enclosing?: string;
 };
 
 export type ModuleFacts = {

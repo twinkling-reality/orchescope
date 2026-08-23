@@ -114,19 +114,22 @@ const resolvePython = (
   const leadingDots = /^\.+/.exec(specifier)?.[0].length ?? 0;
   if (leadingDots === 0) {
     const asModule = specifier.replaceAll('.', '/');
-    for (const candidate of [`${asModule}.py`, `${asModule}/__init__.py`]) {
-      if (known.has(candidate)) return candidate;
-    }
-    return undefined;
+    const candidates = [
+      `${asModule}.py`,
+      `${asModule}/__init__.py`,
+      `src/${asModule}.py`,
+      `src/${asModule}/__init__.py`,
+    ].filter((candidate) => known.has(candidate));
+    return candidates.length === 1 ? candidates[0] : undefined;
   }
   let directory = dirnameOf(fromFile);
   for (let hop = 1; hop < leadingDots; hop += 1) directory = dirnameOf(directory);
   const rest = specifier.slice(leadingDots).replaceAll('.', '/');
   const base = normalizeSegments(rest.length === 0 ? directory : `${directory}/${rest}`);
-  for (const candidate of [`${base}.py`, `${base}/__init__.py`]) {
-    if (known.has(candidate)) return candidate;
-  }
-  return undefined;
+  const candidates = [`${base}.py`, `${base}/__init__.py`].filter((candidate) =>
+    known.has(candidate),
+  );
+  return candidates.length === 1 ? candidates[0] : undefined;
 };
 
 export const buildSymbolIndex = (modules: readonly ModuleFacts[]): SymbolIndex => {
@@ -174,6 +177,7 @@ export const buildSymbolIndex = (modules: readonly ModuleFacts[]): SymbolIndex =
     const module = byFile.get(fromFile);
     const binding = module?.imports.find((entry) => entry.local === localName);
     if (binding === undefined) return undefined;
+    if (resolveSpecifier(fromFile, binding.module) !== undefined) return undefined;
     if (isRelative(binding.module)) return undefined;
     return { module: binding.module, imported: binding.imported };
   };

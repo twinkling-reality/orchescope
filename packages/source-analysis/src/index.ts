@@ -48,6 +48,7 @@ export {
   numberValue,
   type ObjectEntryFact,
   objectArgument,
+  type ParameterFact,
   type ReturnAnnotationFact,
   type ReturnFact,
   stringValue,

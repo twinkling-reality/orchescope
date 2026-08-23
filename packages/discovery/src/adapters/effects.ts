@@ -67,6 +67,7 @@ import {
   sinkKey,
   sinkMetadata,
 } from '../sink-evidence.ts';
+import { resolveSourceValue } from '../source-value.ts';
 
 /**
  * External effects: network calls, datastores, queues, retries and the operations that change something
@@ -411,6 +412,39 @@ const ensureCaller = (
  */
 const MODEL_SEARCH_DEPTH = 4;
 
+type ResolvedRequestValue = {
+  readonly value: ArgumentFact;
+  readonly locations: readonly SourceLocation[];
+};
+
+type ResolvedModelName = {
+  readonly name: string;
+  readonly locations: readonly SourceLocation[];
+};
+
+const modelInValue = (
+  value: ArgumentFact,
+  depth: number,
+  resolveNamed: (value: ArgumentFact) => ResolvedRequestValue | undefined,
+): ResolvedModelName | undefined => {
+  if (value.kind === 'object') return modelInEntries(value.entries, depth, resolveNamed);
+  if (value.kind === 'call') {
+    for (const argument of value.args) {
+      if (argument.kind !== 'object') continue;
+      const nested = modelInEntries(argument.entries, depth, resolveNamed);
+      if (nested !== undefined) return nested;
+    }
+    return undefined;
+  }
+  if (value.kind !== 'identifier' && value.kind !== 'member') return undefined;
+  const resolved = resolveNamed(value);
+  if (resolved?.value.kind !== 'object') return undefined;
+  const nested = modelInEntries(resolved.value.entries, depth, resolveNamed);
+  return nested === undefined
+    ? undefined
+    : { ...nested, locations: [...resolved.locations, ...nested.locations] };
+};
+
 /**
  * Nested objects are followed and arrays are not.
  *
@@ -420,22 +454,20 @@ const MODEL_SEARCH_DEPTH = 4;
  * guessing, because the arrays in these documents hold messages and tool definitions, and a `model` field
  * inside one of those describes an element rather than the request.
  */
-const modelInEntries = (entries: readonly ObjectEntryFact[], depth: number): string | undefined => {
-  const direct = stringValue(findEntry(entries, 'model')?.value);
-  if (direct !== undefined) return direct;
+const modelInEntries = (
+  entries: readonly ObjectEntryFact[],
+  depth: number,
+  resolveNamed: (value: ArgumentFact) => ResolvedRequestValue | undefined,
+): ResolvedModelName | undefined => {
+  const modelEntry = findEntry(entries, 'model');
+  const direct = stringValue(modelEntry?.value);
+  if (direct !== undefined && modelEntry !== undefined) {
+    return { name: direct, locations: [modelEntry.location] };
+  }
   if (depth === 0) return undefined;
   for (const entry of entries) {
-    if (entry.value.kind === 'object') {
-      const nested = modelInEntries(entry.value.entries, depth - 1);
-      if (nested !== undefined) return nested;
-    }
-    if (entry.value.kind === 'call') {
-      for (const argument of entry.value.args) {
-        if (argument.kind !== 'object') continue;
-        const nested = modelInEntries(argument.entries, depth - 1);
-        if (nested !== undefined) return nested;
-      }
-    }
+    const nested = modelInValue(entry.value, depth - 1, resolveNamed);
+    if (nested !== undefined) return nested;
   }
   return undefined;
 };
@@ -447,10 +479,26 @@ const modelInEntries = (entries: readonly ObjectEntryFact[], depth: number): str
  * a bare `model` key readable as the model rather than as some field that happens to share the word. A
  * model nobody wrote down stays unnamed: inventing one would be worse than the gap it fills.
  */
-const modelNamedAt = (call: CallFact): string | undefined => {
+const modelNamedAt = (
+  context: DiscoveryContext,
+  module: ModuleFacts,
+  call: CallFact,
+): ResolvedModelName | undefined => {
+  const resolveNamed = (value: ArgumentFact): ResolvedRequestValue | undefined => {
+    const resolved = resolveSourceValue({
+      context,
+      module,
+      value,
+      before: call.location,
+      enclosing: call.enclosing,
+    });
+    return resolved === undefined
+      ? undefined
+      : { value: resolved.value, locations: resolved.locations };
+  };
   for (const argument of call.args) {
     if (argument.kind !== 'object') continue;
-    const found = modelInEntries(argument.entries, MODEL_SEARCH_DEPTH);
+    const found = modelInEntries(argument.entries, MODEL_SEARCH_DEPTH, resolveNamed);
     if (found !== undefined) return found;
   }
   return undefined;
@@ -462,8 +510,16 @@ const modelNamedAt = (call: CallFact): string | undefined => {
  * Shared by the pass that settles a relation's deadline and the pass that writes the relation, because
  * the two have to name the same model or the deadline is filed against a component nobody else produced.
  */
-const modelNameAt = (call: CallFact, url: string): string =>
-  modelNamedAt(call) ?? modelFromPath(pathOf(url)) ?? 'unspecified';
+const modelNameAt = (
+  context: DiscoveryContext,
+  module: ModuleFacts,
+  call: CallFact,
+  url: string,
+): ResolvedModelName =>
+  modelNamedAt(context, module, call) ?? {
+    name: modelFromPath(pathOf(url)) ?? 'unspecified',
+    locations: [],
+  };
 
 /**
  * Whether this request reaches a model, and which one it reaches.
@@ -492,6 +548,7 @@ const modelEndpointCalledAt = (
  * why it is computed here rather than left to whichever request was read last.
  */
 const modelRelationDeadlines = (
+  context: DiscoveryContext,
   module: ModuleFacts,
   aliases: ReadonlyMap<string, string>,
 ): ReadonlyMap<string, DeclaredDeadline> => {
@@ -501,7 +558,7 @@ const modelRelationDeadlines = (
     if (request === undefined) continue;
     const reached = modelEndpointCalledAt(request);
     if (reached === undefined) continue;
-    const key = modelRelationKey(call, reached.endpoint, reached.url);
+    const key = modelRelationKey(context, module, call, reached.endpoint, reached.url);
     const deadline = requestDeadline(optionsOf(call), module.language);
     const bucket = grouped.get(key);
     if (bucket === undefined) grouped.set(key, [deadline]);
@@ -516,8 +573,14 @@ const modelRelationDeadlines = (
 };
 
 /** The caller and model a relation joins, named the way `ensureCaller` names the scope it mints. */
-const modelRelationKey = (call: CallFact, endpoint: ModelEndpoint, url: string): string =>
-  `${call.enclosing ?? 'module-scope'} ${endpoint.provider}/${modelNameAt(call, url)}`;
+const modelRelationKey = (
+  context: DiscoveryContext,
+  module: ModuleFacts,
+  call: CallFact,
+  endpoint: ModelEndpoint,
+  url: string,
+): string =>
+  `${call.enclosing ?? 'module-scope'} ${endpoint.provider}/${modelNameAt(context, module, call, url).name}`;
 
 /**
  * A model call written as a plain HTTP request.
@@ -548,7 +611,8 @@ const discoverModelEndpoint = (input: {
 }): void => {
   const { module, context, builder, found, call, endpoint, url } = input;
   const path = pathOf(url);
-  const model = modelNameAt(call, url);
+  const modelResolution = modelNameAt(context, module, call, url);
+  const model = modelResolution.name;
   const providerIdentity = globalIdentity(
     'provider',
     GLOBAL_NAMESPACES.provider,
@@ -574,6 +638,41 @@ const discoverModelEndpoint = (input: {
       tags: ['model-endpoint'],
     }),
   );
+  const requestImport = module.imports.filter(
+    (entry) => !entry.isType && entry.local === call.calleePath[0],
+  );
+  const requestImportLocation = requestImport.length === 1 ? requestImport[0]?.location : undefined;
+  const supportingLocations = [
+    ...(requestImportLocation === undefined ? [] : [requestImportLocation]),
+    ...modelResolution.locations,
+  ];
+  for (const evidenceLocation of supportingLocations) {
+    builder.addComponent(
+      drafts.sourceComponent({
+        kind: 'model',
+        identity: modelIdentity,
+        file: evidenceLocation.file,
+        name: `${endpoint.provider}/${model}`,
+        location: evidenceLocation,
+        symbol: `${input.client} model request evidence`,
+        confidence:
+          model === 'unspecified' ? CONFIDENCE_BANDS.structural : CONFIDENCE_BANDS.strongStructural,
+        details: {
+          for: 'model',
+          provider: endpoint.provider,
+          modelId: model,
+          streaming: false,
+        },
+        metadata: {
+          callSite: input.client,
+          reachedOver: 'http',
+          language: module.language,
+          operation: modelOperationForPath(path),
+        },
+        tags: ['model-endpoint'],
+      }),
+    );
+  }
   builder.addComponent(
     drafts.sourceComponent({
       kind: 'model',
@@ -844,7 +943,7 @@ const discoverHttp = (
   found: Found,
 ): void => {
   const aliases = clientAliases(context, module);
-  const deadlines = modelRelationDeadlines(module, aliases);
+  const deadlines = modelRelationDeadlines(context, module, aliases);
   for (const call of module.calls) {
     const request = requestAt(call, aliases);
     if (request === undefined) continue;
@@ -865,7 +964,9 @@ const discoverHttp = (
         endpoint: reached.endpoint,
         url: reached.url,
         client: written,
-        deadline: deadlines.get(modelRelationKey(call, reached.endpoint, reached.url)),
+        deadline: deadlines.get(
+          modelRelationKey(context, module, call, reached.endpoint, reached.url),
+        ),
       });
       continue;
     }
@@ -1578,7 +1679,7 @@ const discoverDecoratedRetries = (
 
 export const effectsAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '2',
+  version: '3',
   // A side effect is a convention, not a package.
   packages: [],
   appliesTo: (context) => context.modules.length > 0,
