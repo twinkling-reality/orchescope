@@ -24,6 +24,38 @@ const sortedRows = (rows) =>
     .map(applicabilityRow)
     .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
 
+const sortedExactRows = (rows) =>
+  [...rows].sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+
+const configurationBoundRow = (fact) =>
+  fact.kind === 'invocation_ceiling'
+    ? {
+        kind: fact.kind,
+        name: fact.name,
+        value: fact.ceilingValue,
+        declarationFile: fact.declaration?.file,
+        declarationLine: fact.declaration?.startLine,
+        referenceFile: fact.reference?.file,
+        referenceLine: fact.reference?.startLine,
+      }
+    : {
+        kind: 'static_default',
+        name: fact.name,
+        value: fact.defaultValue,
+        declarationFile: fact.declaration?.file,
+        declarationLine: fact.declaration?.startLine,
+        referenceFile: fact.reference?.file,
+        referenceLine: fact.reference?.startLine,
+      };
+
+const topologyProducerRow = (producer) => ({
+  adapterId: producer.adapterId,
+  status: producer.status,
+  inspectedInputs: producer.inspectedInputs,
+  relationsFound: producer.relationsFound,
+  ...(producer.scope === undefined ? {} : { scope: producer.scope }),
+});
+
 const evidenceMatches = (subject, expected, evidenceById) =>
   (subject.evidence ?? []).some((id) => {
     const evidence = evidenceById.get(id);
@@ -60,8 +92,14 @@ const citedSourceFiles = (subject, evidenceById) => {
 };
 
 const holdOutcome = (acceptance, bundle, hold) => {
+  const structuredTopologyFields = new Set([
+    'configurationBoundFacts',
+    'producerPopulations',
+    'requiredRefusals',
+    'requiredUnlocatedRefusals',
+  ]);
   for (const [key, expected] of Object.entries(acceptance.topology).filter(
-    ([key]) => key !== 'requiredRefusals',
+    ([key]) => !structuredTopologyFields.has(key),
   )) {
     const observed = bundle.graph.coverage.topology?.[key];
     hold(
@@ -80,6 +118,35 @@ const holdOutcome = (acceptance, bundle, hold) => {
           typeof refusal.location?.fileHash === 'string',
       ),
       `topology refusal ${expected.kind} at ${expected.sourceFile}:${expected.startLine} was absent`,
+    );
+  }
+  for (const expected of acceptance.topology.requiredUnlocatedRefusals ?? []) {
+    hold(
+      (bundle.graph.coverage.topology?.unresolved ?? []).some(
+        (refusal) =>
+          refusal.kind === expected.kind &&
+          refusal.reason === expected.reason &&
+          refusal.location === undefined,
+      ),
+      `unlocated topology refusal ${expected.kind}: ${expected.reason} was absent`,
+    );
+  }
+  if (acceptance.topology.configurationBoundFacts !== undefined) {
+    const observed = (bundle.graph.coverage.topology?.configurationBoundFacts ?? []).map(
+      configurationBoundRow,
+    );
+    hold(
+      JSON.stringify(sortedExactRows(observed)) ===
+        JSON.stringify(sortedExactRows(acceptance.topology.configurationBoundFacts)),
+      `topology configuration bounds were ${JSON.stringify(sortedExactRows(observed))}, expected ${JSON.stringify(sortedExactRows(acceptance.topology.configurationBoundFacts))}`,
+    );
+  }
+  if (acceptance.topology.producerPopulations !== undefined) {
+    const observed = (bundle.graph.coverage.topology?.producers ?? []).map(topologyProducerRow);
+    hold(
+      JSON.stringify(sortedExactRows(observed)) ===
+        JSON.stringify(sortedExactRows(acceptance.topology.producerPopulations)),
+      `topology producer populations were ${JSON.stringify(sortedExactRows(observed))}, expected ${JSON.stringify(sortedExactRows(acceptance.topology.producerPopulations))}`,
     );
   }
   const strengths = bundle.findings.filter((finding) => finding.polarity === 'strength').length;

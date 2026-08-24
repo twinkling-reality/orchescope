@@ -97,6 +97,7 @@ dependencies = [
   "tenacity",
   "httpx",
   "langgraph>=1.1.0",
+  "agentflow",
 ]
 `,
   'package.json': `${JSON.stringify(
@@ -264,6 +265,17 @@ bounded.add_node("finish", finish)
 bounded.add_edge(START, "reflect")
 bounded.add_conditional_edges("reflect", route)
 bounded.add_edge("finish", END)
+`,
+  // An AgentFlow cycle whose exact invocation writes a ceiling distinct from a static configuration default.
+  'agentflow_graph.py': `from agentflow.core import Agent, StateGraph
+
+
+agent = Agent()
+graph = StateGraph()
+graph.add_node("MAIN", agent)
+graph.add_edge("MAIN", "MAIN")
+app = graph.compile()
+app.invoke(payload, {"recursion_limit": 4})
 `,
   // A retry whose sink deduplicates, which is the evidence that stops a rule asserting the absence of a key.
   'src/outbox.ts': `export const enqueueDelivery = async (): Promise<void> => {

@@ -1149,11 +1149,13 @@ const cycleDrafts = (graph: IndexedGraph): readonly FindingDraft[] =>
           const name = edge.metadata['conditionalBoundName'];
           const defaultValue = edge.metadata['conditionalBoundDefault'];
           const operator = edge.metadata['conditionalBoundOperator'];
+          const kind = edge.metadata['conditionalBoundKind'];
           return typeof name === 'string' && typeof defaultValue === 'number'
             ? {
                 name,
                 defaultValue,
                 operator: typeof operator === 'string' ? operator : undefined,
+                kind: typeof kind === 'string' ? kind : undefined,
               }
             : undefined;
         })
@@ -1174,11 +1176,15 @@ const cycleDrafts = (graph: IndexedGraph): readonly FindingDraft[] =>
         explanation:
           bound === undefined
             ? 'These components form a cycle in the declared control flow. A cycle is a legitimate pattern for a plan and act loop. This scan attached no deterministic source-declared ceiling to the cycle.'
-            : `These components form a cycle in the declared control flow. One conditional relation compares against ${bound.name}${bound.operator === undefined ? '' : ` with ${bound.operator}`}, whose source-declared static default is ${bound.defaultValue}. Runtime configuration can override that default, and this static scan did not observe which value a run selected.`,
+            : bound.kind === 'invocation_ceiling'
+              ? `These components form a cycle in the declared control flow. A source-settled invocation sets ${bound.name} to no more than ${bound.defaultValue}; this is a declared ceiling for that invocation, not an observed run length.`
+              : `These components form a cycle in the declared control flow. One conditional relation compares against ${bound.name}${bound.operator === undefined ? '' : ` with ${bound.operator}`}, whose source-declared static default is ${bound.defaultValue}. Runtime configuration can override that default, and this static scan did not observe which value a run selected.`,
         impact:
           bound === undefined
             ? 'Without evidence of a ceiling, the scan cannot establish a finite run bound.'
-            : 'The cycle remains cyclic, and its run length depends on the runtime-selected configuration rather than on the static default alone.',
+            : bound.kind === 'invocation_ceiling'
+              ? 'The cycle remains cyclic, but the source-settled invocation limits its maximum run length.'
+              : 'The cycle remains cyclic, and its run length depends on the runtime-selected configuration rather than on the static default alone.',
         components: [...new Set(cycle)],
         edges: cycleEdges.map((edge) => edge.id),
         claimEvidence: {

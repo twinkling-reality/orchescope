@@ -1,4 +1,5 @@
 import type { AgentSystemAdapter } from './adapter.ts';
+import { agentflowAdapter } from './adapters/agentflow.ts';
 import { browserUseAgentAdapter } from './adapters/browser-use-agent.ts';
 import { crewAiAdapter } from './adapters/crewai.ts';
 import { effectsAdapter } from './adapters/effects.ts';
@@ -35,6 +36,7 @@ export const DEFAULT_ADAPTERS: readonly AgentSystemAdapter[] = [
   openAiAgentsAdapter,
   langChainV1CreateAgentAdapter,
   langGraphAdapter,
+  agentflowAdapter,
   crewAiAdapter,
   pydanticAiAdapter,
   vercelAiSdkAdapter,

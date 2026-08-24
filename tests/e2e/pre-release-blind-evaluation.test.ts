@@ -36,6 +36,11 @@ const blockedBrowserUseRecord = readFileSync(
   join(repositoryRoot, blockedBrowserUseRecordPath),
   'utf8',
 );
+const blockedAgentFlowRecordPath = 'docs/research/63f31253-blocked-blind-evaluation.md';
+const blockedAgentFlowRecord = readFileSync(
+  join(repositoryRoot, blockedAgentFlowRecordPath),
+  'utf8',
+);
 const passedRecordPath = 'docs/research/95c7756c-passed-blind-evaluation.md';
 const passedRecord = readFileSync(join(repositoryRoot, passedRecordPath), 'utf8');
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
@@ -161,6 +166,48 @@ const witnesses = [
     file: 'packages/discovery/test/browser-use-agent.test.ts',
     title:
       'keeps factories, nested constructions and run receivers inside their exact source bindings',
+  },
+  {
+    property:
+      'An AgentFlow graph requires exact runtime provenance and settled source behavior, never a generic Agent, ToolNode or graph-shaped name.',
+    file: 'packages/discovery/test/agentflow.test.ts',
+    title: 'discovers the exact Agent, ToolNode, cyclic graph and compiled invocation boundary',
+  },
+  {
+    property:
+      'An AgentFlow graph requires exact runtime provenance and settled source behavior, never a generic Agent, ToolNode or graph-shaped name.',
+    file: 'packages/discovery/test/agentflow.test.ts',
+    title: 'recognizes renamed and namespace runtime imports',
+  },
+  {
+    property:
+      'An AgentFlow graph requires exact runtime provenance and settled source behavior, never a generic Agent, ToolNode or graph-shaped name.',
+    file: 'packages/discovery/test/agentflow.test.ts',
+    title: 'stays quiet for foreign, local, shadowed and rebound lookalikes',
+  },
+  {
+    property:
+      'An AgentFlow graph requires exact runtime provenance and settled source behavior, never a generic Agent, ToolNode or graph-shaped name.',
+    file: 'packages/discovery/test/agentflow.test.ts',
+    title: 'refuses endpoint populations changed through invoked local helpers and aliases',
+  },
+  {
+    property:
+      'An AgentFlow graph requires exact runtime provenance and settled source behavior, never a generic Agent, ToolNode or graph-shaped name.',
+    file: 'packages/discovery/test/agentflow.test.ts',
+    title: 'does not borrow a bound map through parameter shadowing or replacement',
+  },
+  {
+    property:
+      'An AgentFlow graph requires exact runtime provenance and settled source behavior, never a generic Agent, ToolNode or graph-shaped name.',
+    file: 'packages/discovery/test/agentflow.test.ts',
+    title: 'does not apply one bounded invocation to an unbounded invocation population',
+  },
+  {
+    property:
+      'Invocation ceilings, producer populations and refusal location boundaries cannot change behind stable corpus totals.',
+    file: 'tests/e2e/corpus-acceptance.test.ts',
+    title: 'rejects changed invocation ceilings, producer populations and unlocated refusals',
   },
   {
     property:
@@ -651,6 +698,49 @@ describe('the frozen pre-release blind evaluation protocol', () => {
         (entry) =>
           entry.name === 'claude-codex-usage-dashboard' ||
           entry.url === 'https://github.com/frankchiu-dev/claude-codex-usage-dashboard.git',
+      ),
+      false,
+    );
+  });
+
+  it('blocks silent AgentFlow graphs and promotes only the provenance-qualified positive', () => {
+    for (const fact of [
+      '63f31253d5ca58ea29661074561c833b01462fef',
+      '5a0e18d6d37c71d4d9ccd5f4d6a6f8f62bc804b2f01d186bcc105dcce778bfd9',
+      'https://github.com/Mothilal-M/agentic-browser',
+      'f6d83391a2f357bd806617492e469f3be28c0c8e',
+      '543f25e9ab865c20cb1507e5348a94d9dd20d174b20fd912f504abee7c1df131',
+      'https://github.com/H21465/claude-log-viewer',
+      '0f817d76e04ea88c4aa56f7515843ac56dfb5f86',
+      'ff9c8801e508ecfb75a5f393fdc56368007d6b65ec4fe3f19ed70bbf1cad8a3d',
+      'ee7a36ea35615f9ec30632c8c31c049c350ee0f9c3c243994383556a464cf064',
+    ]) {
+      assert.ok(blockedAgentFlowRecord.includes(fact), `AgentFlow block record omitted ${fact}`);
+    }
+    assert.match(blockedAgentFlowRecord, /release decision was \*\*BLOCK\*\*/);
+    assert.match(blockedAgentFlowRecord, /seven unrelated effect components/);
+    assert.match(
+      blockedAgentFlowRecord,
+      /no AgentFlow agent,\s+model, tool or workflow component or relation/,
+    );
+    assert.match(blockedAgentFlowRecord, /publication-blocking misleading silence/);
+    assert.match(blockedAgentFlowRecord, /No target runtime was executed/);
+    assert.match(blockedAgentFlowRecord, /negative contributes no additional precision invariant/);
+    assert.match(blockedAgentFlowRecord, /different unseen positive and negative pair/);
+    assert.doesNotMatch(
+      blockedAgentFlowRecord,
+      /\/Users\/|\/tmp\/|\brun_[0-9a-f]{8}\b|\bev_[0-9a-f]{8}\b|traceId|spanId/,
+    );
+    assert.ok(protocol.includes('../research/63f31253-blocked-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/63f31253-blocked-blind-evaluation.md'));
+
+    const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
+    assert.equal(entries.filter((entry) => entry.name === 'agentic-browser').length, 1);
+    assert.equal(
+      entries.some(
+        (entry) =>
+          entry.name === 'claude-log-viewer' ||
+          entry.url === 'https://github.com/H21465/claude-log-viewer.git',
       ),
       false,
     );

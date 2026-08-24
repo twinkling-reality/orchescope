@@ -481,7 +481,10 @@ type ConditionalDestination = {
   readonly branch?: string;
 };
 
-type ConfigurationBound = TopologyDiscovery['configurationBoundFacts'][number] & {
+type ConfigurationBound = Extract<
+  TopologyDiscovery['configurationBoundFacts'][number],
+  { readonly defaultValue: number }
+> & {
   readonly operator: string;
 };
 

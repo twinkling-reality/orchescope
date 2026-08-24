@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { indexGraph } from '@orchescope/graph';
 import type { EdgeDraft } from '@orchescope/graph';
+import { indexGraph } from '@orchescope/graph';
 import type { SystemGraph } from '@orchescope/schema';
 import { buildGraph, componentDraft, edgeDraft, TEST_TIMESTAMP } from '@orchescope/testkit';
 import { evaluateRules } from '../src/engine.ts';
@@ -327,6 +327,29 @@ describe('topology evidence completeness', () => {
     assert.match(cycle.explanation, /static default is 3/);
     assert.match(cycle.explanation, /Runtime configuration can override/);
     assert.doesNotMatch(cycle.explanation, /worth an explicit iteration ceiling/);
+  });
+
+  it('states an invocation ceiling without calling it a configuration default', () => {
+    const cycleEdges = [
+      edgeDraft('hands_off_to', agent, worker),
+      edgeDraft('hands_off_to', worker, agent, {
+        metadata: {
+          conditionalBoundName: 'recursion_limit',
+          conditionalBoundDefault: 10,
+          conditionalBoundOperator: '<=',
+          conditionalBoundKind: 'invocation_ceiling',
+        },
+      } as Partial<EdgeDraft>),
+    ];
+    const graph = withTopology(buildGraph([agent, worker], cycleEdges), 'complete');
+    const outcome = architectureShapeRule.evaluate(contextFor(graph));
+    const cycle = outcome.drafts.find((draft) => draft.tags?.includes('cycle'));
+    assert.ok(cycle);
+    assert.match(cycle.explanation, /declared ceiling for that invocation/);
+    assert.doesNotMatch(
+      cycle.explanation,
+      /static default|no deterministic source-declared ceiling/,
+    );
   });
 
   it('keeps semantic finding identity stable when relation input order changes', () => {

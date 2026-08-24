@@ -435,7 +435,9 @@ class Configuration(BaseModel):
         return cls()
 `,
     );
-    assert.equal(result.graph.coverage.topology?.configurationBoundFacts[0]?.defaultValue, -1);
+    const bound = result.graph.coverage.topology?.configurationBoundFacts[0];
+    assert.ok(bound && 'defaultValue' in bound);
+    assert.equal(bound.defaultValue, -1);
     assert.equal(
       result.graph.edges.find(
         (edge) => edge.from === 'workflow_step:first' && edge.to === 'workflow_step:first',

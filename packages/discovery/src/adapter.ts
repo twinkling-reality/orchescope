@@ -121,12 +121,21 @@ export type TopologyDiscovery = {
     readonly location: SourceLocation;
   }[];
   readonly configurationBounds: number;
-  readonly configurationBoundFacts: readonly {
-    readonly name: string;
-    readonly defaultValue: number;
-    readonly reference: SourceLocation;
-    readonly declaration: SourceLocation;
-  }[];
+  readonly configurationBoundFacts: readonly (
+    | {
+        readonly name: string;
+        readonly defaultValue: number;
+        readonly reference: SourceLocation;
+        readonly declaration: SourceLocation;
+      }
+    | {
+        readonly name: string;
+        readonly kind: 'invocation_ceiling';
+        readonly ceilingValue: number;
+        readonly reference: SourceLocation;
+        readonly declaration: SourceLocation;
+      }
+  )[];
   readonly unresolvedCount: number;
   /** Exact populations when one producer reports both control-flow and prompt-use refusals. */
   readonly controlFlowUnresolvedCount?: number;

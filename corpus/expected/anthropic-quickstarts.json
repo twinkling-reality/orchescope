@@ -1,5 +1,11 @@
 {
   "adapters": {
+    "adapter:agentflow": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
     "adapter:browser-use-agent": {
       "componentsFound": 0,
       "edgesFound": 0,

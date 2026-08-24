@@ -4132,97 +4132,200 @@
                       },
                       "configurationBoundFacts": {
                         "items": {
-                          "additionalProperties": false,
-                          "properties": {
-                            "declaration": {
+                          "anyOf": [
+                            {
                               "additionalProperties": false,
                               "properties": {
-                                "endColumn": {
-                                  "minimum": 0,
+                                "declaration": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "endColumn": {
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    },
+                                    "endLine": {
+                                      "minimum": 1,
+                                      "type": "integer"
+                                    },
+                                    "file": {
+                                      "description": "Repository relative POSIX path.",
+                                      "minLength": 1,
+                                      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                                      "type": "string"
+                                    },
+                                    "fileHash": {
+                                      "description": "Lowercase hexadecimal SHA-256 digest.",
+                                      "pattern": "^[0-9a-f]{64}$",
+                                      "type": "string"
+                                    },
+                                    "startColumn": {
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    },
+                                    "startLine": {
+                                      "minimum": 1,
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "file",
+                                    "startLine"
+                                  ],
+                                  "type": "object"
+                                },
+                                "defaultValue": {
                                   "type": "integer"
                                 },
-                                "endLine": {
-                                  "minimum": 1,
-                                  "type": "integer"
-                                },
-                                "file": {
-                                  "description": "Repository relative POSIX path.",
+                                "name": {
                                   "minLength": 1,
-                                  "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
                                   "type": "string"
                                 },
-                                "fileHash": {
-                                  "description": "Lowercase hexadecimal SHA-256 digest.",
-                                  "pattern": "^[0-9a-f]{64}$",
-                                  "type": "string"
-                                },
-                                "startColumn": {
-                                  "minimum": 0,
-                                  "type": "integer"
-                                },
-                                "startLine": {
-                                  "minimum": 1,
-                                  "type": "integer"
+                                "reference": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "endColumn": {
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    },
+                                    "endLine": {
+                                      "minimum": 1,
+                                      "type": "integer"
+                                    },
+                                    "file": {
+                                      "description": "Repository relative POSIX path.",
+                                      "minLength": 1,
+                                      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                                      "type": "string"
+                                    },
+                                    "fileHash": {
+                                      "description": "Lowercase hexadecimal SHA-256 digest.",
+                                      "pattern": "^[0-9a-f]{64}$",
+                                      "type": "string"
+                                    },
+                                    "startColumn": {
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    },
+                                    "startLine": {
+                                      "minimum": 1,
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "file",
+                                    "startLine"
+                                  ],
+                                  "type": "object"
                                 }
                               },
                               "required": [
-                                "file",
-                                "startLine"
+                                "name",
+                                "defaultValue",
+                                "reference",
+                                "declaration"
                               ],
                               "type": "object"
                             },
-                            "defaultValue": {
-                              "type": "integer"
-                            },
-                            "name": {
-                              "minLength": 1,
-                              "type": "string"
-                            },
-                            "reference": {
+                            {
                               "additionalProperties": false,
                               "properties": {
-                                "endColumn": {
-                                  "minimum": 0,
-                                  "type": "integer"
-                                },
-                                "endLine": {
+                                "ceilingValue": {
                                   "minimum": 1,
                                   "type": "integer"
                                 },
-                                "file": {
-                                  "description": "Repository relative POSIX path.",
+                                "declaration": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "endColumn": {
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    },
+                                    "endLine": {
+                                      "minimum": 1,
+                                      "type": "integer"
+                                    },
+                                    "file": {
+                                      "description": "Repository relative POSIX path.",
+                                      "minLength": 1,
+                                      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                                      "type": "string"
+                                    },
+                                    "fileHash": {
+                                      "description": "Lowercase hexadecimal SHA-256 digest.",
+                                      "pattern": "^[0-9a-f]{64}$",
+                                      "type": "string"
+                                    },
+                                    "startColumn": {
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    },
+                                    "startLine": {
+                                      "minimum": 1,
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "file",
+                                    "startLine"
+                                  ],
+                                  "type": "object"
+                                },
+                                "kind": {
+                                  "const": "invocation_ceiling",
+                                  "type": "string"
+                                },
+                                "name": {
                                   "minLength": 1,
-                                  "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
                                   "type": "string"
                                 },
-                                "fileHash": {
-                                  "description": "Lowercase hexadecimal SHA-256 digest.",
-                                  "pattern": "^[0-9a-f]{64}$",
-                                  "type": "string"
-                                },
-                                "startColumn": {
-                                  "minimum": 0,
-                                  "type": "integer"
-                                },
-                                "startLine": {
-                                  "minimum": 1,
-                                  "type": "integer"
+                                "reference": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "endColumn": {
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    },
+                                    "endLine": {
+                                      "minimum": 1,
+                                      "type": "integer"
+                                    },
+                                    "file": {
+                                      "description": "Repository relative POSIX path.",
+                                      "minLength": 1,
+                                      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                                      "type": "string"
+                                    },
+                                    "fileHash": {
+                                      "description": "Lowercase hexadecimal SHA-256 digest.",
+                                      "pattern": "^[0-9a-f]{64}$",
+                                      "type": "string"
+                                    },
+                                    "startColumn": {
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    },
+                                    "startLine": {
+                                      "minimum": 1,
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "file",
+                                    "startLine"
+                                  ],
+                                  "type": "object"
                                 }
                               },
                               "required": [
-                                "file",
-                                "startLine"
+                                "name",
+                                "kind",
+                                "ceilingValue",
+                                "reference",
+                                "declaration"
                               ],
                               "type": "object"
                             }
-                          },
-                          "required": [
-                            "name",
-                            "defaultValue",
-                            "reference",
-                            "declaration"
-                          ],
-                          "type": "object"
+                          ]
                         },
                         "maxItems": 10,
                         "type": "array"

@@ -19,8 +19,36 @@ The sixth candidate, commit `84c80b2e2ee1935c6925d12b585f02782358f122`, produced
 its correction changed only the evaluation protocol and corpus records; it was independently evaluated with a different
 pair and blocked too. The seventh candidate, commit `97ac6b4e48023ad6fa2e465a702abe4422a16a7d` with archive SHA-256
 `91c71ad094f13bf6f28f7a3798db43289c3e126bcc5d1b975ef4a87459956f39`, was independently evaluated and blocked as
-well. None was published, tagged, pushed or attached to a release. A corrected candidate cannot be
+well. The eighth candidate, commit `63f31253d5ca58ea29661074561c833b01462fef` with archive SHA-256
+`5a0e18d6d37c71d4d9ccd5f4d6a6f8f62bc804b2f01d186bcc105dcce778bfd9`, was independently evaluated and blocked too.
+None was published, tagged, pushed or attached to a release. A corrected candidate cannot be
 published until a different unseen positive and negative pair clears the blind gate.
+
+### AgentFlow graphs retain source identity, topology and invocation ceilings
+
+Exact `agentflow.core` runtime imports now have a dedicated source reader. Direct, renamed and namespace imports retain
+their runtime provenance; foreign packages, local lookalikes, shadows and rebindings do not acquire AgentFlow identity.
+Recognition does not match generic names such as `Agent`, `ToolNode` or `StateGraph`. The provenance reader is separate
+from the graph reader so another framework can supply its own runtime symbols without weakening this identity boundary.
+
+Stable source bindings establish Agent, ToolNode, workflow and workflow-step components. Graph construction, node and
+edge registration, compilation and invocation relations require matching lexical scope, source order and settled
+control flow. Aliases, container paths, returned locals and destructuring remain supported only while source facts prove
+the same value. Computed, escaped, mutated, branch-ambiguous or otherwise unsettled model, prompt, tool, graph or
+compiled-app populations become source-located refusals instead of borrowed relations. A ToolNode component can remain
+source-supported while its individual tool population is refused.
+
+A positive literal `recursion_limit` at an exact compiled-graph invocation is recorded as an `invocation_ceiling`. It
+is not an observed run count, a universal execution bound or a static configuration default. Corpus acceptance locks
+the exact configuration-bound facts, producer populations and source-located or deliberately unlocated refusals, so an
+aggregate-preserving substitution cannot weaken this boundary.
+
+The defect was found by the independently selected `agentic-browser` holdout. Its supported Python source constructs an
+AgentFlow Agent and ToolNode, registers cyclic MAIN/TOOL graph control flow, compiles the workflow and invokes it from a
+browser controller. The frozen candidate retained unrelated effects but reported no AgentFlow identity or relation and
+no agent system without naming the omitted population. The exact positive is pinned as a source-cited regression. The
+selected `claude-log-viewer` negative's no-agent polarity was correct and adds no distinct precision invariant. Both source
+lineages are permanently ineligible as future blind holdouts.
 
 ### Browser-use agents retain a source-settled execution boundary
 

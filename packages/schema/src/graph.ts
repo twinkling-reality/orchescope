@@ -9,6 +9,7 @@ import {
   Metadata,
   NonEmptyString,
   NonNegativeInt,
+  PositiveInt,
   RelativePath,
   SemverString,
   Sha256Hex,
@@ -164,16 +165,29 @@ const TopologyBoundaryFact = Type.Object(
   { additionalProperties: false },
 );
 
-const TopologyConfigurationBound = Type.Object(
-  {
-    name: NonEmptyString(),
-    /** Static literal default. It is not an observed value or proof that validation rejects negatives. */
-    defaultValue: Type.Integer(),
-    reference: SourceLocation,
-    declaration: SourceLocation,
-  },
-  { additionalProperties: false },
-);
+const TopologyConfigurationBound = Type.Union([
+  Type.Object(
+    {
+      name: NonEmptyString(),
+      /** Static literal default. It is not an observed value or proof that validation rejects negatives. */
+      defaultValue: Type.Integer(),
+      reference: SourceLocation,
+      declaration: SourceLocation,
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      name: NonEmptyString(),
+      kind: Type.Literal('invocation_ceiling'),
+      /** Exact maximum selected by this source-declared invocation population, never an observed run length. */
+      ceilingValue: PositiveInt,
+      reference: SourceLocation,
+      declaration: SourceLocation,
+    },
+    { additionalProperties: false },
+  ),
+]);
 
 const TopologyUnresolved = Type.Object(
   {

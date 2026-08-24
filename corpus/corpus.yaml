@@ -2015,6 +2015,397 @@ repositories:
           - ruleId: observability-coverage
             severity: info
 
+  - name: agentic-browser
+    source: git
+    url: https://github.com/Mothilal-M/agentic-browser.git
+    commit: f6d83391a2f357bd806617492e469f3be28c0c8e
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive application selected independently for the blind evaluation of candidate
+      63f31253. It imports Agent, StateGraph and ToolNode from `agentflow.core`, constructs two source-distinct agents
+      and cyclic MAIN/TOOL workflows, compiles both graphs and invokes each compiled result. The frozen candidate parsed
+      every supported source file but reported no agent system, no AgentFlow component or relation, and no evidence or
+      unsupported boundary for the omitted AgentFlow population. Unrelated effect components do not satisfy that
+      boundary.
+
+      The invariant requires exact AgentFlow import provenance rather than an Agent-shaped name, source-scoped Agent,
+      ToolNode, workflow and step identities, the declared cyclic relations, and both source-settled compiled invocation
+      ceilings. Computed model, provider and prompt inputs remain explicit refusals. The ToolNode identity is retained,
+      but individual tool identities are not expanded because its use through the Agent construction did not prove a
+      stable population; that source-located limitation remains explicit. The target supplies no credential-free
+      deterministic runtime path: its default requires an absent Gemini
+      credential, while its local alternative requires an independently running unpinned endpoint and ordinary GUI use
+      can navigate the network. Its MIT LICENSE has SHA-256
+      543f25e9ab865c20cb1507e5348a94d9dd20d174b20fd912f504abee7c1df131.
+    # The semantic contract cannot be changed by recording. Aggregate observations may move, but exact provenance,
+    # identities, graph relations, invocation ceilings and bounded refusals must continue to hold independently.
+    acceptance:
+      graphPopulation:
+        components: 21
+        edges: 20
+      exactIdsByKind:
+        agent:
+          - agent:agent
+          - agent:build_agent_graph.agent
+        workflow:
+          - workflow:build_agent_graph.graph
+          - workflow:graph
+        workflow_step:
+          - workflow_step:build_agent_graph.graph.main
+          - workflow_step:build_agent_graph.graph.tool
+          - workflow_step:graph.main
+          - workflow_step:graph.tool
+        tool:
+          - tool:build_agent_graph.tool_node
+          - tool:get_weather
+          - tool:tool_node
+        model:
+          - model:google/gemini-3-flash-preview
+        provider:
+          - provider:google
+      absentKinds:
+        - agent_group
+        - evaluator
+      absentComponentTerms:
+        - agentflow.core
+        - module-scope
+      requiredEdges:
+        - kind: calls_tool
+          from: agent:build_agent_graph.agent
+          to: tool:build_agent_graph.tool_node
+          sourceFile: browser_agent/agent/graph.py
+          evidence:
+            - producer: adapter:agentflow
+              symbol: tool_node
+              sourceFile: browser_agent/agent/graph.py
+              startLine: 121
+              endLine: 121
+        - kind: calls_tool
+          from: agent:agent
+          to: tool:tool_node
+          sourceFile: react_sync.py
+          evidence:
+            - producer: adapter:agentflow
+              symbol: tool_node
+              sourceFile: react_sync.py
+              startLine: 23
+              endLine: 23
+        - kind: calls_tool
+          from: tool:tool_node
+          to: tool:get_weather
+          sourceFile: react_sync.py
+          evidence:
+            - producer: adapter:agentflow
+              symbol: get_weather
+              sourceFile: react_sync.py
+              startLine: 15
+              endLine: 15
+        - kind: invokes_model
+          from: agent:agent
+          to: model:google/gemini-3-flash-preview
+          sourceFile: react_sync.py
+          evidence:
+            - producer: adapter:agentflow
+              symbol: 'model: google:gemini-3-flash-preview'
+              sourceFile: react_sync.py
+              startLine: 18
+              endLine: 18
+        - kind: served_by_provider
+          from: model:google/gemini-3-flash-preview
+          to: provider:google
+          sourceFile: react_sync.py
+          evidence:
+            - producer: adapter:agentflow
+              symbol: 'model: google:gemini-3-flash-preview'
+              sourceFile: react_sync.py
+              startLine: 18
+              endLine: 18
+        - kind: contains
+          from: workflow:build_agent_graph.graph
+          to: workflow_step:build_agent_graph.graph.main
+          sourceFile: browser_agent/agent/graph.py
+          evidence:
+            - producer: adapter:agentflow
+              symbol: 'add_node("MAIN")'
+              sourceFile: browser_agent/agent/graph.py
+              startLine: 128
+              endLine: 128
+        - kind: contains
+          from: workflow:build_agent_graph.graph
+          to: workflow_step:build_agent_graph.graph.tool
+          sourceFile: browser_agent/agent/graph.py
+          evidence:
+            - producer: adapter:agentflow
+              symbol: 'add_node("TOOL")'
+              sourceFile: browser_agent/agent/graph.py
+              startLine: 129
+              endLine: 129
+        - kind: contains
+          from: workflow:graph
+          to: workflow_step:graph.main
+          sourceFile: react_sync.py
+          evidence:
+            - producer: adapter:agentflow
+              symbol: 'add_node("MAIN")'
+              sourceFile: react_sync.py
+              startLine: 42
+              endLine: 42
+        - kind: contains
+          from: workflow:graph
+          to: workflow_step:graph.tool
+          sourceFile: react_sync.py
+          evidence:
+            - producer: adapter:agentflow
+              symbol: 'add_node("TOOL")'
+              sourceFile: react_sync.py
+              startLine: 43
+              endLine: 43
+        - kind: transitions_to
+          from: workflow_step:build_agent_graph.graph.main
+          to: workflow_step:build_agent_graph.graph.tool
+          sourceFile: browser_agent/agent/graph.py
+          evidence:
+            - producer: adapter:agentflow
+              symbol: add_conditional_edges
+              sourceFile: browser_agent/agent/graph.py
+              startLine: 130
+              endLine: 130
+            - producer: adapter:agentflow
+              symbol: recursion_limit
+              sourceFile: browser_agent/bridge/agent_controller.py
+              startLine: 189
+              endLine: 189
+        - kind: transitions_to
+          from: workflow_step:build_agent_graph.graph.tool
+          to: workflow_step:build_agent_graph.graph.main
+          sourceFile: browser_agent/agent/graph.py
+          evidence:
+            - producer: adapter:agentflow
+              symbol: add_edge
+              sourceFile: browser_agent/agent/graph.py
+              startLine: 131
+              endLine: 131
+            - producer: adapter:agentflow
+              symbol: recursion_limit
+              sourceFile: browser_agent/bridge/agent_controller.py
+              startLine: 189
+              endLine: 189
+        - kind: transitions_to
+          from: workflow_step:graph.main
+          to: workflow_step:graph.tool
+          sourceFile: react_sync.py
+          evidence:
+            - producer: adapter:agentflow
+              symbol: add_conditional_edges
+              sourceFile: react_sync.py
+              startLine: 44
+              endLine: 44
+            - producer: adapter:agentflow
+              symbol: recursion_limit
+              sourceFile: react_sync.py
+              startLine: 52
+              endLine: 52
+        - kind: transitions_to
+          from: workflow_step:graph.tool
+          to: workflow_step:graph.main
+          sourceFile: react_sync.py
+          evidence:
+            - producer: adapter:agentflow
+              symbol: add_edge
+              sourceFile: react_sync.py
+              startLine: 45
+              endLine: 45
+            - producer: adapter:agentflow
+              symbol: recursion_limit
+              sourceFile: react_sync.py
+              startLine: 52
+              endLine: 52
+      componentMetadata:
+        agent:build_agent_graph.agent:
+          framework: agentflow
+          sourceBinding: agent
+          runtimeType: Agent
+        workflow:build_agent_graph.graph:
+          framework: agentflow
+          sourceBinding: graph
+          runtimeType: StateGraph
+          compiled: true
+          invoked: true
+        workflow:graph:
+          framework: agentflow
+          sourceBinding: graph
+          runtimeType: StateGraph
+          compiled: true
+          invoked: true
+      componentEvidence:
+        agent:build_agent_graph.agent:
+          - producer: adapter:agentflow
+            symbol: Agent
+            sourceFile: browser_agent/agent/graph.py
+            startLine: 117
+            endLine: 125
+        agent:agent:
+          - producer: adapter:agentflow
+            symbol: Agent
+            sourceFile: react_sync.py
+            startLine: 17
+            endLine: 24
+        workflow:build_agent_graph.graph:
+          - producer: adapter:agentflow
+            symbol: StateGraph
+            sourceFile: browser_agent/agent/graph.py
+            startLine: 127
+            endLine: 127
+          - producer: adapter:agentflow
+            symbol: compile
+            sourceFile: browser_agent/agent/graph.py
+            startLine: 134
+            endLine: 134
+          - producer: adapter:agentflow
+            symbol: graph.ainvoke
+            sourceFile: browser_agent/bridge/agent_controller.py
+            startLine: 193
+            endLine: 193
+        workflow:graph:
+          - producer: adapter:agentflow
+            symbol: StateGraph
+            sourceFile: react_sync.py
+            startLine: 41
+            endLine: 41
+          - producer: adapter:agentflow
+            symbol: compile
+            sourceFile: react_sync.py
+            startLine: 48
+            endLine: 48
+          - producer: adapter:agentflow
+            symbol: app.invoke
+            sourceFile: react_sync.py
+            startLine: 53
+            endLine: 53
+      sourceCitations:
+        agent:build_agent_graph.agent:
+          - browser_agent/agent/graph.py
+        agent:agent:
+          - react_sync.py
+        workflow:build_agent_graph.graph:
+          - browser_agent/agent/graph.py
+          - browser_agent/bridge/agent_controller.py
+        workflow:graph:
+          - react_sync.py
+      adapterApplicability:
+        adapter:agentflow:
+          relevantImports: 6
+          distinctFiles: 2
+          omittedImports: 0
+          fileSample:
+            - module: agentflow.core
+              imported: Agent
+              sourceFile: browser_agent/agent/graph.py
+              startLine: 12
+            - module: agentflow.core
+              imported: StateGraph
+              sourceFile: browser_agent/agent/graph.py
+              startLine: 12
+            - module: agentflow.core
+              imported: ToolNode
+              sourceFile: browser_agent/agent/graph.py
+              startLine: 12
+            - module: agentflow.core
+              imported: Agent
+              sourceFile: react_sync.py
+              startLine: 2
+            - module: agentflow.core
+              imported: StateGraph
+              sourceFile: react_sync.py
+              startLine: 2
+            - module: agentflow.core
+              imported: ToolNode
+              sourceFile: react_sync.py
+              startLine: 2
+      adapterOutcomes:
+        adapter:agentflow:
+          status: completed
+          componentsFound: 13
+          edgesFound: 13
+          filesInspected: 3
+        adapter:effects:
+          status: completed
+          componentsFound: 12
+          edgesFound: 6
+          filesInspected: 6
+        adapter:prompts:
+          status: completed
+          componentsFound: 1
+          edgesFound: 1
+          filesInspected: 2
+      topology:
+        status: incomplete
+        unresolvedCount: 5
+        conditionalDestinations: 4
+        configurationBoundFacts:
+          - kind: invocation_ceiling
+            name: recursion_limit
+            value: 40
+            declarationFile: browser_agent/agent/tools.py
+            declarationLine: 51
+            referenceFile: browser_agent/bridge/agent_controller.py
+            referenceLine: 189
+          - kind: invocation_ceiling
+            name: recursion_limit
+            value: 10
+            declarationFile: react_sync.py
+            declarationLine: 52
+            referenceFile: react_sync.py
+            referenceLine: 52
+        producerPopulations:
+          - adapterId: adapter:agentflow
+            status: incomplete
+            inspectedInputs: 19
+            relationsFound: 13
+          - adapterId: adapter:effects
+            status: incomplete
+            inspectedInputs: 0
+            relationsFound: 6
+            scope: control_flow
+          - adapterId: adapter:prompts
+            status: incomplete
+            inspectedInputs: 2
+            relationsFound: 1
+            scope: prompt_use
+        requiredUnlocatedRefusals:
+          - kind: adapter_input
+            reason: adapter:effects did not state an inspected topology population for this applicable input.
+        requiredRefusals:
+          - kind: adapter_input
+            reason: AgentFlow ToolNode population did not prove stable through its declared graph use.
+            sourceFile: browser_agent/agent/graph.py
+            startLine: 117
+          - kind: adapter_input
+            reason: AgentFlow model input was computed, so no exact model identity was claimed.
+            sourceFile: browser_agent/agent/graph.py
+            startLine: 118
+          - kind: adapter_input
+            reason: AgentFlow provider input was computed, so no exact provider identity was claimed.
+            sourceFile: browser_agent/agent/graph.py
+            startLine: 119
+          - kind: prompt_input
+            reason: 'adapter:agentflow system_prompt: prompt value is computed rather than source-settled text'
+            sourceFile: browser_agent/agent/graph.py
+            startLine: 120
+      findings:
+        strengths: 0
+        requiredRules:
+          - model-call-without-timeout
+          - observability-coverage
+          - topology-shape
+        exactRisks:
+          - ruleId: model-call-without-timeout
+            severity: medium
+          - ruleId: observability-coverage
+            severity: info
+          - ruleId: topology-shape
+            severity: low
+
   - name: langchain-langgraph-agents
     source: git
     url: https://github.com/Chaitanya-Keyal/langchain-langgraph-agents.git

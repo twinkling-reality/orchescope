@@ -52,7 +52,36 @@ const acceptance = {
       ],
     },
   },
-  topology: { status: 'incomplete', unresolvedCount: 1, conditionalDestinations: 1 },
+  topology: {
+    status: 'incomplete',
+    unresolvedCount: 2,
+    conditionalDestinations: 1,
+    configurationBoundFacts: [
+      {
+        kind: 'invocation_ceiling',
+        name: 'recursion_limit',
+        value: 10,
+        declarationFile: 'src/graph.ts',
+        declarationLine: 1,
+        referenceFile: 'src/graph.ts',
+        referenceLine: 1,
+      },
+    ],
+    producerPopulations: [
+      {
+        adapterId: 'adapter:example',
+        status: 'incomplete',
+        inspectedInputs: 1,
+        relationsFound: 1,
+      },
+    ],
+    requiredUnlocatedRefusals: [
+      {
+        kind: 'adapter_input',
+        reason: 'The adapter did not state an inspected topology population.',
+      },
+    ],
+  },
   findings: { strengths: 0, requiredRules: ['topology-shape'] },
 };
 
@@ -97,6 +126,23 @@ describe('corpus acceptance definitions', () => {
           status: string;
           unresolvedCount: number;
           conditionalDestinations: number;
+          configurationBoundFacts?: readonly {
+            kind: string;
+            name: string;
+            value: number;
+            declarationFile: string;
+            declarationLine: number;
+            referenceFile: string;
+            referenceLine: number;
+          }[];
+          producerPopulations?: readonly {
+            adapterId: string;
+            status: string;
+            inspectedInputs: number;
+            relationsFound: number;
+            scope?: string;
+          }[];
+          requiredUnlocatedRefusals?: readonly { kind: string; reason: string }[];
           requiredRefusals?: readonly {
             kind: string;
             sourceFile: string;
@@ -115,6 +161,7 @@ describe('corpus acceptance definitions', () => {
     }[];
     const target = entries.find((entry) => entry.name === 'local-deep-researcher');
     const exposedPositive = entries.find((entry) => entry.name === 'langchain-langgraph-agents');
+    const agentFlowPositive = entries.find((entry) => entry.name === 'agentic-browser');
     assert.equal(target?.exercise, undefined);
     assert.deepEqual(target?.acceptance?.exactIdsByKind['workflow_step'], [
       'workflow_step:finalize_summary',
@@ -225,6 +272,33 @@ describe('corpus acceptance definitions', () => {
     assert.deepEqual(exposedPositive?.acceptance?.findings.exactRisks, [
       { ruleId: 'observability-coverage', severity: 'info' },
     ]);
+    assert.deepEqual(agentFlowPositive?.acceptance?.topology.configurationBoundFacts, [
+      {
+        kind: 'invocation_ceiling',
+        name: 'recursion_limit',
+        value: 40,
+        declarationFile: 'browser_agent/agent/tools.py',
+        declarationLine: 51,
+        referenceFile: 'browser_agent/bridge/agent_controller.py',
+        referenceLine: 189,
+      },
+      {
+        kind: 'invocation_ceiling',
+        name: 'recursion_limit',
+        value: 10,
+        declarationFile: 'react_sync.py',
+        declarationLine: 52,
+        referenceFile: 'react_sync.py',
+        referenceLine: 52,
+      },
+    ]);
+    assert.deepEqual(agentFlowPositive?.acceptance?.topology.requiredUnlocatedRefusals, [
+      {
+        kind: 'adapter_input',
+        reason:
+          'adapter:effects did not state an inspected topology population for this applicable input.',
+      },
+    ]);
   });
 
   it('accepts a complete bounded contract and rejects incomplete or unknown shapes', () => {
@@ -247,6 +321,39 @@ describe('corpus acceptance definitions', () => {
           },
         },
         message: /sourceFile and exact evidence/,
+      },
+      {
+        entry: {
+          ...validEntry,
+          acceptance: {
+            ...acceptance,
+            topology: {
+              ...acceptance.topology,
+              configurationBoundFacts: [
+                { ...acceptance.topology.configurationBoundFacts[0], value: 0 },
+              ],
+            },
+          },
+        },
+        message: /exact source-located static defaults or invocation ceilings/,
+      },
+      {
+        entry: {
+          ...validEntry,
+          acceptance: {
+            ...acceptance,
+            topology: {
+              ...acceptance.topology,
+              requiredUnlocatedRefusals: [
+                {
+                  ...acceptance.topology.requiredUnlocatedRefusals[0],
+                  sourceFile: 'src/graph.ts',
+                },
+              ],
+            },
+          },
+        },
+        message: /without invented locations/,
       },
     ]) {
       assert.throws(() => readTemporary(test.entry), test.message);

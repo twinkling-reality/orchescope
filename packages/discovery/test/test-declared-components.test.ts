@@ -157,6 +157,21 @@ browser_agent = Agent(task="Read the page", llm=model)
 `,
   },
   {
+    adapterId: 'adapter:agentflow',
+    fixed: { 'pyproject.toml': PYPROJECT('agentflow-app', ['agentflow']) },
+    sourcePath: 'src/graph.py',
+    testPath: 'tests/test_graph.py',
+    code: `from agentflow.core import Agent, StateGraph, ToolNode
+
+tools = ToolNode([])
+agent = Agent(model="gemini:flash", tool_node=tools)
+graph = StateGraph()
+graph.add_node("MAIN", agent)
+graph.add_node("TOOL", tools)
+graph.add_edge("MAIN", "TOOL")
+`,
+  },
+  {
     adapterId: 'adapter:crewai',
     fixed: { 'pyproject.toml': PYPROJECT('crew-app', ['crewai']) },
     sourcePath: 'src/team.py',

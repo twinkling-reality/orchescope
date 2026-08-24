@@ -1,10 +1,10 @@
 {
   "adapters": {
     "adapter:agentflow": {
-      "componentsFound": 0,
-      "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "componentsFound": 13,
+      "edgesFound": 13,
+      "filesInspected": 3,
+      "status": "completed"
     },
     "adapter:browser-use-agent": {
       "componentsFound": 0,
@@ -13,22 +13,22 @@
       "status": "not_applicable"
     },
     "adapter:crewai": {
-      "componentsFound": 1015,
-      "edgesFound": 432,
-      "filesInspected": 91,
-      "status": "completed"
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 144,
-      "edgesFound": 76,
-      "filesInspected": 46,
+      "componentsFound": 12,
+      "edgesFound": 6,
+      "filesInspected": 6,
       "status": "completed"
     },
     "adapter:implementation-reach": {
       "componentsFound": 0,
       "edgesFound": 0,
       "filesInspected": 0,
-      "status": "not_applicable"
+      "status": "completed"
     },
     "adapter:langchain-legacy-agent": {
       "componentsFound": 0,
@@ -58,13 +58,13 @@
       "componentsFound": 0,
       "edgesFound": 0,
       "filesInspected": 0,
-      "status": "completed"
+      "status": "not_applicable"
     },
     "adapter:model-sdk": {
-      "componentsFound": 3,
+      "componentsFound": 0,
       "edgesFound": 0,
-      "filesInspected": 9,
-      "status": "completed"
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:openai-agents": {
       "componentsFound": 0,
@@ -73,9 +73,9 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 33,
-      "edgesFound": 33,
-      "filesInspected": 11,
+      "componentsFound": 1,
+      "edgesFound": 1,
+      "filesInspected": 2,
       "status": "completed"
     },
     "adapter:pydantic-ai": {
@@ -85,10 +85,10 @@
       "status": "not_applicable"
     },
     "adapter:search-index": {
-      "componentsFound": 4,
+      "componentsFound": 0,
       "edgesFound": 0,
-      "filesInspected": 4,
-      "status": "completed"
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:vercel-ai-sdk": {
       "componentsFound": 0,
@@ -106,55 +106,60 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 249,
-      "agent_group": 94,
-      "database": 3,
-      "entrypoint": 70,
-      "external_service": 47,
-      "prompt": 33,
-      "provider": 2,
-      "retrieval": 1
+      "agent": 2,
+      "database": 1,
+      "entrypoint": 6,
+      "model": 1,
+      "prompt": 1,
+      "provider": 1,
+      "tool": 3,
+      "workflow": 2,
+      "workflow_step": 4
     },
-    "declaredInTest": 311,
-    "total": 499
+    "declaredInTest": 0,
+    "total": 21
   },
   "discardedRelations": [],
   "files": {
-    "discovered": 2027,
-    "inSupportedLanguages": 1272,
-    "parsed": 1272,
-    "skipped": 7,
+    "discovered": 74,
+    "inSupportedLanguages": 69,
+    "parsed": 69,
+    "skipped": 0,
     "truncated": false
   },
   "findings": {
     "byRule": {
+      "model-call-without-timeout": 1,
       "observability-coverage": 1,
-      "prompt-injection-boundary": 1
+      "topology-shape": 1
     },
     "bySeverity": {
       "info": 1,
+      "low": 1,
       "medium": 1
     },
     "componentsByRule": {
+      "model-call-without-timeout": 2,
       "observability-coverage": 5,
-      "prompt-injection-boundary": 9
+      "topology-shape": 4
     },
     "strengths": 0,
-    "total": 2
+    "total": 3
   },
-  "foundNothing": [
-    "mcp is imported here and its adapter found nothing"
-  ],
+  "foundNothing": [],
   "kind": "agent_system",
   "languagesNotAnalysed": [],
-  "name": "crewai",
+  "name": "agentic-browser",
   "relations": {
     "byKind": {
-      "calls_service": 48,
-      "contains": 106,
-      "queries_database": 22,
-      "uses_prompt": 33
+      "calls_tool": 3,
+      "contains": 4,
+      "invokes_model": 1,
+      "queries_database": 6,
+      "served_by_provider": 1,
+      "transitions_to": 4,
+      "uses_prompt": 1
     },
-    "total": 209
+    "total": 20
   }
 }

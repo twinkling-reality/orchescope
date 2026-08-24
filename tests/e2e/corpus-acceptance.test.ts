@@ -50,8 +50,33 @@ const entry = {
     },
     topology: {
       status: 'incomplete',
-      unresolvedCount: 1,
+      unresolvedCount: 2,
       conditionalDestinations: 1,
+      configurationBoundFacts: [
+        {
+          kind: 'invocation_ceiling',
+          name: 'recursion_limit',
+          value: 10,
+          declarationFile: 'src/graph.py',
+          declarationLine: 1,
+          referenceFile: 'src/graph.py',
+          referenceLine: 1,
+        },
+      ],
+      producerPopulations: [
+        {
+          adapterId: 'adapter:langgraph',
+          status: 'incomplete',
+          inspectedInputs: 1,
+          relationsFound: 1,
+        },
+      ],
+      requiredUnlocatedRefusals: [
+        {
+          kind: 'adapter_input',
+          reason: 'The adapter did not state an inspected topology population.',
+        },
+      ],
       requiredRefusals: [
         {
           kind: 'conditional_destination',
@@ -135,13 +160,34 @@ const bundle = () => ({
       ],
       topology: {
         status: 'incomplete',
-        unresolvedCount: 1,
+        unresolvedCount: 2,
         conditionalDestinations: 1,
+        configurationBoundFacts: [
+          {
+            kind: 'invocation_ceiling',
+            name: 'recursion_limit',
+            ceilingValue: 10,
+            declaration: source,
+            reference: source,
+          },
+        ],
+        producers: [
+          {
+            adapterId: 'adapter:langgraph',
+            status: 'incomplete',
+            inspectedInputs: 1,
+            relationsFound: 1,
+          },
+        ],
         unresolved: [
           {
             kind: 'conditional_destination',
             reason: 'A dynamic router has no settled destination.',
             location: source,
+          },
+          {
+            kind: 'adapter_input',
+            reason: 'The adapter did not state an inspected topology population.',
           },
         ],
       },
@@ -211,6 +257,19 @@ describe('corpus semantic acceptance', () => {
 
     const broken = acceptanceVerdict(entry, changed).broken.join('\n');
     assert.match(broken, /topology refusal conditional_destination/);
+    assert.doesNotMatch(broken, /topology.unresolvedCount/);
+  });
+
+  it('rejects changed invocation ceilings, producer populations and unlocated refusals', () => {
+    const changed = bundle();
+    changed.graph.coverage.topology.configurationBoundFacts[0]!.ceilingValue = 11;
+    changed.graph.coverage.topology.producers[0]!.inspectedInputs = 2;
+    changed.graph.coverage.topology.unresolved[1]!.reason = 'A substituted unlocated refusal.';
+
+    const broken = acceptanceVerdict(entry, changed).broken.join('\n');
+    assert.match(broken, /topology configuration bounds were/);
+    assert.match(broken, /topology producer populations were/);
+    assert.match(broken, /unlocated topology refusal adapter_input/);
     assert.doesNotMatch(broken, /topology.unresolvedCount/);
   });
 

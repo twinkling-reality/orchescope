@@ -256,26 +256,85 @@ const checkAdapterOutcomes = (acceptance, problem) => {
   }
 };
 
-const checkOutcome = (acceptance, problem) => {
-  const topologyFields = [
-    'status',
-    'unresolvedCount',
-    'conditionalDestinations',
-    ...(acceptance.topology?.requiredRefusals === undefined ? [] : ['requiredRefusals']),
-  ];
+const checkTopologyLists = (topology, problem) => {
   if (
-    !hasExactFields(acceptance.topology, topologyFields) ||
-    !isBoundedString(acceptance.topology.status) ||
-    !isNonNegativeInteger(acceptance.topology.unresolvedCount) ||
-    !isNonNegativeInteger(acceptance.topology.conditionalDestinations)
+    topology?.requiredUnlocatedRefusals !== undefined &&
+    (!isBoundedList(topology.requiredUnlocatedRefusals) ||
+      topology.requiredUnlocatedRefusals.length === 0 ||
+      topology.requiredUnlocatedRefusals.some(
+        (refusal) =>
+          !hasExactFields(refusal, ['kind', 'reason']) ||
+          !isBoundedString(refusal.kind) ||
+          !isBoundedString(refusal.reason),
+      ))
   ) {
-    problem('acceptance.topology has to name status, unresolvedCount and conditionalDestinations');
+    problem(
+      'acceptance.topology.requiredUnlocatedRefusals has to list exact refusal reasons without invented locations',
+    );
   }
   if (
-    acceptance.topology?.requiredRefusals !== undefined &&
-    (!isBoundedList(acceptance.topology.requiredRefusals) ||
-      acceptance.topology.requiredRefusals.length === 0 ||
-      acceptance.topology.requiredRefusals.some(
+    topology?.configurationBoundFacts !== undefined &&
+    (!isBoundedList(topology.configurationBoundFacts) ||
+      topology.configurationBoundFacts.length === 0 ||
+      topology.configurationBoundFacts.some(
+        (fact) =>
+          !hasExactFields(fact, [
+            'kind',
+            'name',
+            'value',
+            'declarationFile',
+            'declarationLine',
+            'referenceFile',
+            'referenceLine',
+          ]) ||
+          !['invocation_ceiling', 'static_default'].includes(fact.kind) ||
+          !isBoundedString(fact.name) ||
+          !Number.isInteger(fact.value) ||
+          (fact.kind === 'invocation_ceiling' && fact.value <= 0) ||
+          !isRelativePath(fact.declarationFile) ||
+          !Number.isInteger(fact.declarationLine) ||
+          fact.declarationLine <= 0 ||
+          !isRelativePath(fact.referenceFile) ||
+          !Number.isInteger(fact.referenceLine) ||
+          fact.referenceLine <= 0,
+      ))
+  ) {
+    problem(
+      'acceptance.topology.configurationBoundFacts has to list exact source-located static defaults or invocation ceilings',
+    );
+  }
+  if (
+    topology?.producerPopulations !== undefined &&
+    (!isBoundedList(topology.producerPopulations) ||
+      topology.producerPopulations.length === 0 ||
+      topology.producerPopulations.some((producer) => {
+        const fields = [
+          'adapterId',
+          'status',
+          'inspectedInputs',
+          'relationsFound',
+          ...(producer?.scope === undefined ? [] : ['scope']),
+        ];
+        return (
+          !hasExactFields(producer, fields) ||
+          !isBoundedString(producer.adapterId) ||
+          !producer.adapterId.startsWith('adapter:') ||
+          !['complete', 'incomplete'].includes(producer.status) ||
+          !isNonNegativeInteger(producer.inspectedInputs) ||
+          !isNonNegativeInteger(producer.relationsFound) ||
+          (producer.scope !== undefined && !['control_flow', 'prompt_use'].includes(producer.scope))
+        );
+      }))
+  ) {
+    problem(
+      'acceptance.topology.producerPopulations has to list exact inspected topology populations',
+    );
+  }
+  if (
+    topology?.requiredRefusals !== undefined &&
+    (!isBoundedList(topology.requiredRefusals) ||
+      topology.requiredRefusals.length === 0 ||
+      topology.requiredRefusals.some(
         (refusal) =>
           !hasExactFields(refusal, ['kind', 'reason', 'sourceFile', 'startLine']) ||
           !isBoundedString(refusal.kind) ||
@@ -289,6 +348,31 @@ const checkOutcome = (acceptance, problem) => {
       'acceptance.topology.requiredRefusals has to list exact source-located refusal reasons',
     );
   }
+};
+
+const checkOutcome = (acceptance, problem) => {
+  const topologyFields = [
+    'status',
+    'unresolvedCount',
+    'conditionalDestinations',
+    ...(acceptance.topology?.configurationBoundFacts === undefined
+      ? []
+      : ['configurationBoundFacts']),
+    ...(acceptance.topology?.producerPopulations === undefined ? [] : ['producerPopulations']),
+    ...(acceptance.topology?.requiredRefusals === undefined ? [] : ['requiredRefusals']),
+    ...(acceptance.topology?.requiredUnlocatedRefusals === undefined
+      ? []
+      : ['requiredUnlocatedRefusals']),
+  ];
+  if (
+    !hasExactFields(acceptance.topology, topologyFields) ||
+    !isBoundedString(acceptance.topology.status) ||
+    !isNonNegativeInteger(acceptance.topology.unresolvedCount) ||
+    !isNonNegativeInteger(acceptance.topology.conditionalDestinations)
+  ) {
+    problem('acceptance.topology has to name status, unresolvedCount and conditionalDestinations');
+  }
+  checkTopologyLists(acceptance.topology, problem);
   const findingFields = [
     'strengths',
     'requiredRules',
