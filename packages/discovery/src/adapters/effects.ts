@@ -165,18 +165,20 @@ const sqliteConnectionIsReadOnly = (
 ): boolean => {
   if (store.store !== 'sqlite') return false;
   if (store.packages.includes('sqlite3')) {
+    const uri = keywordArgument(call, 'uri');
     return (
-      keywordArgument(call, 'uri')?.kind === 'boolean' &&
-      keywordArgument(call, 'uri')?.value === true &&
+      uri?.kind === 'boolean' &&
+      uri.value === true &&
       sqliteUriIsReadOnly(positionalArguments(call)[0])
     );
   }
   const options = positionalArguments(call)[1];
+  const readOnly =
+    options?.kind === 'object' ? findEntry(options.entries, 'readOnly')?.value : undefined;
   return (
     store.packages.includes('node:sqlite') &&
-    options?.kind === 'object' &&
-    findEntry(options.entries, 'readOnly')?.value.kind === 'boolean' &&
-    findEntry(options.entries, 'readOnly')?.value.value === true
+    readOnly?.kind === 'boolean' &&
+    readOnly.value === true
   );
 };
 

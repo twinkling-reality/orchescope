@@ -298,6 +298,7 @@ describe('corpus semantic acceptance', () => {
       kind: 'tool',
       metadata: { configurationDefault: false },
       details: { interpolatesUntrustedInput: false },
+      permissions: [],
       sourceLocations: [source],
       evidence: ['ev_agent'],
     });
