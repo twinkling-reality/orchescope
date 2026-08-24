@@ -15,8 +15,10 @@ well. The fourth candidate, commit `d00a06b5c8c45ebfcd1ca75cb2bbdb0951c1e8a7` wi
 `9b2834897befd6a6f5288c973bea25a81f4389cff5de17a090545d421c12cfc6`, was independently evaluated and blocked too.
 The fifth candidate, commit `724a1abda9a1176b28b5633495d67a6b0e2bc194` with archive SHA-256
 `38981b8d9a6a6b626d74c7ae9ebb170cb550217528011270165a207cc5cfbcc5`, was independently evaluated and blocked as well.
-None was published, tagged, pushed or attached to a release. A corrected candidate cannot be published until a
-different unseen positive and negative pair clears the blind gate.
+The sixth candidate, commit `84c80b2e2ee1935c6925d12b585f02782358f122`, produced the same archive bytes because
+its correction changed only the evaluation protocol and corpus records; it was independently evaluated with a different
+pair and blocked too. None was published, tagged, pushed or attached to a release. A corrected candidate cannot be
+published until a different unseen positive and negative pair clears the blind gate.
 
 ### Blind negative roles are verified from acquired source
 
@@ -33,6 +35,39 @@ its setup path also downloads and executes Python in memory. It is retired but n
 The selected `email-agent` positive is pinned instead: one LangGraph workflow, eight source-cited steps, seven literal
 conditional transitions, the exact Ollama model/provider identity, three explicit topology refusals and no strengths
 or component metrics.
+
+### Legacy LangChain executors are an explicit agent population
+
+Exact `langchain.agents` imports of `create_openai_tools_agent` and `AgentExecutor` now have a dedicated source reader.
+It proves the factory-to-executor pair, follows a uniquely returned local factory to each stable assigned call site and
+uses the lexical source binding for agent identity. A direct exact factory/executor pair is also supported. Aliases and
+namespace imports retain their provider provenance; foreign packages, shadows, reassignments, repeated source bindings
+and computed constructions are refused rather than inferred.
+
+Model relations require one exact source-declared client already recognized by the model reader. Tool relations require
+a bounded list of unique local functions decorated by the exact LangChain tool export. A prompt passed directly through
+the local factory becomes a prompt input; a factory that transforms it beyond the retained facts names that boundary in
+a source-located refusal. The graph, JSON, terminal document and exports therefore cannot report a fully parsed
+LangGraph application while silently omitting its separate legacy agent layer.
+
+An async wrapper is refused because calling it produces a coroutine rather than an executor. Named tool lists and
+factory parameters must remain closed under aliases, containers, assignments and member mutation; an inline literal
+list remains bounded. After construction, direct assignments, augmented assignments, deletions and exact attribute
+setters on the executor's delegated agent or tools suppress only the affected relations and cite the mutation. Known
+executor read and invocation methods remain supported; an unrelated, descendant or otherwise unsettled source
+operation produces an endpoint-specific refusal without claiming that the endpoint itself was mutated.
+
+Python write facts retain direct-member versus subscript access and expand tuple, list, parenthesized and starred write
+targets to their individual members. A destructured member carries an explicit unknown value unless source facts prove
+its positional value; the whole right-hand side is never lent to every member. The fact-cache version changed with
+that contract so an audit cannot reuse a less precise write fact.
+
+The defect was found by the independently selected `MultiAgentDiscordBot` holdout. Its local factory returns an
+`AgentExecutor`, and four stable call sites create three persistent workers and one request-scoped personality worker
+that the active Discord workflow invokes. The frozen candidate reported the workflow but zero agents and no refusal for
+those imports. The exact positive is pinned as a source-cited regression. The selected `claude-jsonl-viewer` negative
+was correctly reported as a local viewer and contributes no distinct precision invariant. Both source lineages are
+permanently ineligible as future blind holdouts.
 
 ### Workflow topology is no longer presented as agent identity
 

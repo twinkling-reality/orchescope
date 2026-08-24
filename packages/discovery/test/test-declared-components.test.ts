@@ -132,6 +132,21 @@ support_agent = create_agent(model="openai:gpt-4.1-mini", tools=[], name="suppor
 `,
   },
   {
+    adapterId: 'adapter:langchain-legacy-agent',
+    fixed: {
+      'pyproject.toml': PYPROJECT('legacy-langchain-app', ['langchain<1.0', 'langchain-openai']),
+    },
+    sourcePath: 'src/support.py',
+    testPath: 'tests/test_support.py',
+    code: `from langchain.agents import AgentExecutor, create_openai_tools_agent
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(model="gpt-4.1-mini")
+raw = create_openai_tools_agent(llm, [], "Answer the customer.")
+support_agent = AgentExecutor(agent=raw, tools=[])
+`,
+  },
+  {
     adapterId: 'adapter:crewai',
     fixed: { 'pyproject.toml': PYPROJECT('crew-app', ['crewai']) },
     sourcePath: 'src/team.py',

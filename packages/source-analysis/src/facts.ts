@@ -374,8 +374,12 @@ export type ControlFlowFact = {
  */
 export type AssignmentFact = {
   readonly target: readonly string[];
+  /** True when any part of the written target used a subscript rather than direct member access. */
+  readonly targetIncludesSubscript?: true;
   readonly value: ArgumentFact;
   readonly location: SourceLocation;
+  /** A delete is retained as a write that removes the target rather than assigning the reduced value. */
+  readonly operation?: 'delete';
   /** Nearest named lexical scope, absent for a module-level write. */
   readonly enclosing?: string;
   /** Exact containing callable range, retained only for lexical binding settlement. */

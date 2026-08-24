@@ -71,6 +71,11 @@ log-analysis tooling. The positive is a permanent regression input, the invalid 
 neither exposed source lineage can be reused as an unseen holdout. Exclusion clearance is followed by independent
 source-role validation before a negative scan can support publication.
 
+The [blocked 84c80b2e evaluation](../research/84c80b2e-blocked-blind-evaluation.md) records a seventh completed block:
+an active legacy LangChain `create_openai_tools_agent` and `AgentExecutor` population disappeared without an agent
+identity or bounded refusal while its enclosing LangGraph workflow was reported. The positive is a permanent regression
+input, the negative adds no duplicate precision entry, and neither lineage can be reused as an unseen holdout.
+
 The [passed 95c7756c evaluation](../research/95c7756c-passed-blind-evaluation.md) records the same boundary for a
 completed passing gate. Its selected positive becomes a regression input, its negative adds no duplicate corpus entry,
 and neither source lineage can be reused as an unseen holdout.

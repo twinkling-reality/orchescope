@@ -1,12 +1,12 @@
 import type { Deadline } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
+import type { ComponentIdentity, SourceLocation } from '@orchescope/schema';
 import type {
   CitationSnapshot,
   ImportFact,
   ManifestSet,
   ModuleFacts,
 } from '@orchescope/source-analysis';
-import type { ComponentIdentity, SourceLocation } from '@orchescope/schema';
 import type { BindingRegistry } from './bindings.ts';
 import type { CallSiteEffects } from './call-site-effect.ts';
 import type { ConfigDocument } from './config-files.ts';
@@ -128,6 +128,9 @@ export type TopologyDiscovery = {
     readonly declaration: SourceLocation;
   }[];
   readonly unresolvedCount: number;
+  /** Exact populations when one producer reports both control-flow and prompt-use refusals. */
+  readonly controlFlowUnresolvedCount?: number;
+  readonly promptUseUnresolvedCount?: number;
   readonly unresolved: readonly {
     readonly kind:
       | 'node_registration'

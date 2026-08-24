@@ -1163,6 +1163,25 @@ const traverse = (
       recordAssignment(node, context, frame, collecting);
       return;
     }
+    case 'augmented_assignment': {
+      recordAssignment(node, context, frame, collecting, true);
+      return;
+    }
+    case 'delete_statement': {
+      for (const target of namedChildren(node).flatMap(assignmentTargets)) {
+        const path = assignmentPath(target);
+        if (path.length === 0) continue;
+        context.assignments.push({
+          target: path,
+          ...(targetIncludesSubscript(target) ? { targetIncludesSubscript: true } : {}),
+          value: { kind: 'unknown', nodeType: 'delete' },
+          location: location(context.file, node),
+          operation: 'delete',
+          ...(frame.name === undefined ? {} : { enclosing: frame.name }),
+        });
+      }
+      return;
+    }
     case 'with_statement': {
       recordWithBindings(node, context, frame);
       for (const child of namedChildren(node)) traverse(child, context, frame, collecting);
@@ -1625,10 +1644,60 @@ const recordWithBindings = (node: Node, context: Context, frame: Frame): void =>
 
 const assignmentPath = (left: Node | undefined): readonly string[] => {
   if (left === undefined) return [];
+  if (left.type === 'parenthesized_expression') {
+    return assignmentPath(namedChildren(left)[0]);
+  }
+  if (left.type === 'list_splat' || left.type === 'list_splat_pattern') {
+    return assignmentPath(namedChildren(left)[0]);
+  }
+  if (left.type === 'attribute') {
+    const object = childField(left, 'object');
+    const attribute = childField(left, 'attribute');
+    if (object === undefined || attribute === undefined) return [];
+    const prefix = assignmentPath(object);
+    return prefix.length === 0 ? [] : [...prefix, attribute.text];
+  }
   if (left.type !== 'subscript') return attributePath(left);
   const member = left?.type === 'subscript' ? subscriptPath(left) : undefined;
   if (member?.kind === 'member') return member.path;
-  return attributePath(childField(left, 'value') ?? left);
+  return assignmentPath(childField(left, 'value') ?? left);
+};
+
+const targetIncludesSubscript = (node: Node | undefined): boolean =>
+  node !== undefined &&
+  (node.type === 'subscript' ||
+    namedChildren(node).some((child) => targetIncludesSubscript(child)));
+
+const ASSIGNMENT_TARGET_CONTAINERS = new Set([
+  'expression_list',
+  'list',
+  'list_pattern',
+  'list_splat',
+  'list_splat_pattern',
+  'parenthesized_expression',
+  'pattern_list',
+  'tuple',
+  'tuple_pattern',
+]);
+
+const assignmentTargets = (node: Node): readonly Node[] =>
+  ASSIGNMENT_TARGET_CONTAINERS.has(node.type)
+    ? namedChildren(node).flatMap(assignmentTargets)
+    : [node];
+
+const directDefinitionTarget = (node: Node | undefined): Node | undefined => {
+  if (node?.type !== 'parenthesized_expression') return node;
+  const children = namedChildren(node);
+  return children.length === 1 ? directDefinitionTarget(children[0]) : undefined;
+};
+
+const isDestructuringTarget = (node: Node | undefined): boolean => {
+  if (node === undefined) return false;
+  if (node.type === 'parenthesized_expression') {
+    const children = namedChildren(node);
+    return children.length !== 1 || isDestructuringTarget(children[0]);
+  }
+  return ASSIGNMENT_TARGET_CONTAINERS.has(node.type);
 };
 
 const recordAssignmentWrite = (
@@ -1638,11 +1707,15 @@ const recordAssignmentWrite = (
   path: readonly string[],
   context: Context,
   frame: Frame,
+  destructured: boolean,
 ): void => {
   if ((path.length > 1 || (left?.type === 'subscript' && path.length > 0)) && right !== undefined) {
     context.assignments.push({
       target: path,
-      value: argumentFact(right, context),
+      ...(targetIncludesSubscript(left) ? { targetIncludesSubscript: true } : {}),
+      value: destructured
+        ? { kind: 'unknown', nodeType: 'destructuring_assignment' }
+        : argumentFact(right, context),
       location: location(context.file, node),
       ...(frame.name === undefined ? {} : { enclosing: frame.name }),
     });
@@ -1686,16 +1759,38 @@ const recordAssignment = (
   context: Context,
   frame: Frame,
   collecting: (readonly string[])[][],
+  augmented = false,
 ): void => {
   const left = childField(node, 'left');
   const right = childField(node, 'right');
-  const path = assignmentPath(left);
+  const targets = left === undefined ? [] : assignmentTargets(left);
+  const destructured = !augmented && isDestructuringTarget(left);
   /*
    * A plain root assignment is a definition. Member and subscript writes are retained separately so
    * consumers can refuse a stale value even when a computed key prevents exact member settlement.
    */
-  recordAssignmentWrite(node, left, right, path, context, frame);
-  recordAssignmentDefinition(node, left, right, path, context, frame);
+  for (const target of targets) {
+    recordAssignmentWrite(
+      node,
+      target,
+      right,
+      assignmentPath(target),
+      context,
+      frame,
+      destructured,
+    );
+  }
+  const definitionTarget = augmented ? undefined : directDefinitionTarget(left);
+  if (definitionTarget !== undefined && !ASSIGNMENT_TARGET_CONTAINERS.has(definitionTarget.type)) {
+    recordAssignmentDefinition(
+      node,
+      definitionTarget,
+      right,
+      assignmentPath(definitionTarget),
+      context,
+      frame,
+    );
+  }
   if (right !== undefined) traverse(right, context, frame, collecting);
 };
 

@@ -18,6 +18,12 @@
       "filesInspected": 0,
       "status": "not_applicable"
     },
+    "adapter:langchain-legacy-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
     "adapter:langchain-v1-create-agent": {
       "componentsFound": 0,
       "edgesFound": 0,

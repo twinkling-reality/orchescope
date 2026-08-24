@@ -393,6 +393,157 @@ def called(client):
     const facts = await analyze('def broken(:\n    pass\n');
     assert.ok(facts.parseErrors.length > 0);
   });
+
+  it('retains deletion of a member as a source write', async () => {
+    const facts = await analyze(`
+def reset(executor):
+    del executor.agent
+`);
+    assert.deepEqual(facts.assignments, [
+      {
+        target: ['executor', 'agent'],
+        value: { kind: 'unknown', nodeType: 'delete' },
+        location: {
+          file: 'src/agents/triage.py',
+          startLine: 3,
+          startColumn: 4,
+          endLine: 3,
+          endColumn: 22,
+        },
+        operation: 'delete',
+        enclosing: 'reset',
+      },
+    ]);
+  });
+
+  it('distinguishes subscript writes from direct member replacement', async () => {
+    const facts = await analyze(`
+def reset(executor, key, replacement):
+    executor.agent[key] = replacement
+    del executor.agent[key]
+`);
+    assert.equal(facts.assignments.length, 2);
+    for (const assignment of facts.assignments) {
+      assert.deepEqual(assignment.target, ['executor', 'agent']);
+      assert.equal(assignment.targetIncludesSubscript, true);
+    }
+    assert.equal(facts.assignments[0]?.operation, undefined);
+    assert.equal(facts.assignments[1]?.operation, 'delete');
+  });
+
+  it('retains augmented, tuple and list member writes separately', async () => {
+    const facts = await analyze(`
+def reset(executor, replacement, runtime_tool):
+    executor.tools += [runtime_tool]
+    executor.agent, executor.tools = replacement, []
+    [executor.agent, executor.tools] = [replacement, []]
+    del executor.agent, executor.tools
+    del (executor.agent, executor.tools)
+`);
+    assert.equal(facts.assignments.length, 9);
+    assert.deepEqual(facts.assignments[0]?.value, {
+      kind: 'array',
+      items: [{ kind: 'identifier', name: 'runtime_tool' }],
+      complete: true,
+    });
+    for (const assignment of facts.assignments.slice(1, 5)) {
+      assert.deepEqual(assignment.value, {
+        kind: 'unknown',
+        nodeType: 'destructuring_assignment',
+      });
+    }
+    assert.deepEqual(
+      facts.assignments.map((assignment) => ({
+        target: assignment.target,
+        operation: assignment.operation,
+      })),
+      [
+        { target: ['executor', 'tools'], operation: undefined },
+        { target: ['executor', 'agent'], operation: undefined },
+        { target: ['executor', 'tools'], operation: undefined },
+        { target: ['executor', 'agent'], operation: undefined },
+        { target: ['executor', 'tools'], operation: undefined },
+        { target: ['executor', 'agent'], operation: 'delete' },
+        { target: ['executor', 'tools'], operation: 'delete' },
+        { target: ['executor', 'agent'], operation: 'delete' },
+        { target: ['executor', 'tools'], operation: 'delete' },
+      ],
+    );
+    assert.equal(
+      facts.assignments.some((assignment) => assignment.targetIncludesSubscript === true),
+      false,
+    );
+  });
+
+  it('expands parenthesized, deletion-list and starred member targets', async () => {
+    const facts = await analyze(`
+def reset(support, values):
+    (support.agent, support.tools) = values
+    (support.agent, (support.tools, support.meta)) = values
+    del [support.agent, support.tools]
+    (support.agent, *support.tools) = values
+    [*support.tools, support.agent] = values
+`);
+    assert.deepEqual(
+      facts.assignments.map((assignment) => ({
+        target: assignment.target,
+        operation: assignment.operation,
+      })),
+      [
+        { target: ['support', 'agent'], operation: undefined },
+        { target: ['support', 'tools'], operation: undefined },
+        { target: ['support', 'agent'], operation: undefined },
+        { target: ['support', 'tools'], operation: undefined },
+        { target: ['support', 'meta'], operation: undefined },
+        { target: ['support', 'agent'], operation: 'delete' },
+        { target: ['support', 'tools'], operation: 'delete' },
+        { target: ['support', 'agent'], operation: undefined },
+        { target: ['support', 'tools'], operation: undefined },
+        { target: ['support', 'tools'], operation: undefined },
+        { target: ['support', 'agent'], operation: undefined },
+      ],
+    );
+    for (const assignment of facts.assignments.filter(
+      (candidate) => candidate.operation !== 'delete',
+    )) {
+      assert.deepEqual(assignment.value, {
+        kind: 'unknown',
+        nodeType: 'destructuring_assignment',
+      });
+    }
+  });
+
+  it('unwraps parenthesized receivers without inventing destructured definitions', async () => {
+    const facts = await analyze(`
+def reset(support, replacement, values):
+    (support).agent = replacement
+    (support).agent += replacement
+    del (support).agent
+    [x] = values
+    (x,) = values
+    [*x] = values
+    ((x,),) = values
+    (*support.tools,) = values
+`);
+    assert.deepEqual(
+      facts.assignments.map((assignment) => ({
+        target: assignment.target,
+        operation: assignment.operation,
+      })),
+      [
+        { target: ['support', 'agent'], operation: undefined },
+        { target: ['support', 'agent'], operation: undefined },
+        { target: ['support', 'agent'], operation: 'delete' },
+        { target: ['support', 'tools'], operation: undefined },
+      ],
+    );
+    assert.equal(
+      facts.definitions.some(
+        (definition) => definition.kind === 'variable' && definition.name === 'x',
+      ),
+      false,
+    );
+  });
 });
 
 /**

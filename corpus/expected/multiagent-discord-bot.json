@@ -7,9 +7,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 4,
-      "edgesFound": 2,
-      "filesInspected": 2,
+      "componentsFound": 10,
+      "edgesFound": 5,
+      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:implementation-reach": {
@@ -19,10 +19,10 @@
       "status": "not_applicable"
     },
     "adapter:langchain-legacy-agent": {
-      "componentsFound": 0,
-      "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "componentsFound": 6,
+      "edgesFound": 12,
+      "filesInspected": 1,
+      "status": "completed"
     },
     "adapter:langchain-v1-create-agent": {
       "componentsFound": 0,
@@ -31,10 +31,10 @@
       "status": "not_applicable"
     },
     "adapter:langgraph": {
-      "componentsFound": 0,
-      "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "componentsFound": 6,
+      "edgesFound": 8,
+      "filesInspected": 1,
+      "status": "completed"
     },
     "adapter:manifest": {
       "componentsFound": 0,
@@ -49,10 +49,10 @@
       "status": "not_applicable"
     },
     "adapter:model-sdk": {
-      "componentsFound": 0,
-      "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "componentsFound": 2,
+      "edgesFound": 1,
+      "filesInspected": 1,
+      "status": "completed"
     },
     "adapter:openai-agents": {
       "componentsFound": 0,
@@ -73,10 +73,10 @@
       "status": "not_applicable"
     },
     "adapter:search-index": {
-      "componentsFound": 0,
-      "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "componentsFound": 2,
+      "edgesFound": 1,
+      "filesInspected": 1,
+      "status": "completed"
     },
     "adapter:vercel-ai-sdk": {
       "componentsFound": 0,
@@ -91,46 +91,62 @@
       "status": "not_applicable"
     }
   },
-  "agentSystemDetected": false,
+  "agentSystemDetected": true,
   "components": {
     "byKind": {
+      "agent": 4,
       "database": 1,
-      "entrypoint": 2,
-      "queue": 1
+      "entrypoint": 6,
+      "external_service": 1,
+      "model": 1,
+      "provider": 1,
+      "retrieval": 1,
+      "tool": 2,
+      "workflow": 1,
+      "workflow_step": 5
     },
     "declaredInTest": 0,
-    "total": 4
+    "total": 23
   },
   "discardedRelations": [],
   "files": {
-    "discovered": 98,
-    "inSupportedLanguages": 83,
-    "parsed": 83,
+    "discovered": 1,
+    "inSupportedLanguages": 1,
+    "parsed": 1,
     "skipped": 0,
     "truncated": false
   },
   "findings": {
     "byRule": {
+      "model-call-without-timeout": 1,
       "observability-coverage": 1
     },
     "bySeverity": {
-      "info": 1
+      "info": 1,
+      "medium": 1
     },
     "componentsByRule": {
-      "observability-coverage": 4
+      "model-call-without-timeout": 5,
+      "observability-coverage": 5
     },
     "strengths": 0,
-    "total": 1
+    "total": 2
   },
   "foundNothing": [],
-  "kind": "not_agent_system",
+  "kind": "agent_system",
   "languagesNotAnalysed": [],
-  "name": "flask",
+  "name": "multiagent-discord-bot",
   "relations": {
     "byKind": {
-      "publishes_to_queue": 1,
-      "queries_database": 1
+      "calls_service": 1,
+      "calls_tool": 8,
+      "contains": 5,
+      "invokes_model": 4,
+      "queries_database": 4,
+      "queries_retrieval": 1,
+      "served_by_provider": 1,
+      "transitions_to": 3
     },
-    "total": 2
+    "total": 27
   }
 }

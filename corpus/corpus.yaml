@@ -1532,6 +1532,373 @@ repositories:
           - ruleId: observability-coverage
             severity: info
 
+  - name: multiagent-discord-bot
+    source: git
+    url: https://github.com/Womp-Womp/MultiAgentDiscordBot.git
+    commit: fded3337ba2daa9393ef7dea3977f76545de7a84
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive application selected independently for the blind evaluation of candidate
+      84c80b2e. It imports `create_openai_tools_agent` and `AgentExecutor` from `langchain.agents`, returns the executor
+      from a local factory, and calls that factory at four stable source bindings. The active Discord command wires
+      those workers into a per-request LangGraph. The regression prevents the workflow from being reported while its
+      separate source-proven agent layer disappears.
+
+      The invariant requires exact legacy factory and executor provenance, four source-scoped agent identities, the
+      literal ChatOpenAI model relation, the two exact decorated tools and a visible prompt-settlement boundary. It does
+      not turn workflow steps into agents or infer a provider from a generic Agent, executor or factory spelling. The
+      target supplies no fake or offline runtime path, and its ordinary execution requires absent Discord and OpenAI
+      credentials. Its MIT LICENSE has SHA-256
+      91f18277c312c18292bdb7871c9d213852966e790e0701a0951b25dcada7e3c0.
+    # The exact graph contract is not recordable. Recording may update aggregate observations, but it cannot
+    # teach this gate to accept a workflow whose separately constructed AgentExecutors disappeared again.
+    acceptance:
+      graphPopulation:
+        components: 23
+        edges: 27
+      exactIdsByKind:
+        agent:
+          - agent:generic_worker_agent
+          - agent:insight_researcher_agent
+          - agent:interact.personality_agent
+          - agent:web_searcher_agent
+        tool:
+          - tool:internet_search
+          - tool:process_content
+        workflow:
+          - workflow:main.py-graph
+        workflow_step:
+          - workflow_step:generic_worker
+          - workflow_step:insight_researcher
+          - workflow_step:personality_agent
+          - workflow_step:supervisor
+          - workflow_step:web_searcher
+        model:
+          - model:openai/gpt-3.5-turbo-0125
+        provider:
+          - provider:openai
+      absentKinds:
+        - agent_group
+        - prompt
+      absentComponentTerms:
+        - agentexecutor
+        - create_openai_tools_agent
+      requiredEdges:
+        - kind: invokes_model
+          from: agent:web_searcher_agent
+          to: model:openai/gpt-3.5-turbo-0125
+          sourceFile: main.py
+          evidence:
+            - producer: adapter:langchain-legacy-agent
+              symbol: create_openai_tools_agent model
+              sourceFile: main.py
+              startLine: 373
+              endLine: 373
+            - producer: adapter:langchain-legacy-agent
+              symbol: create_openai_tools_agent model
+              sourceFile: main.py
+              startLine: 415
+              endLine: 415
+        - kind: invokes_model
+          from: agent:insight_researcher_agent
+          to: model:openai/gpt-3.5-turbo-0125
+          sourceFile: main.py
+          evidence:
+            - producer: adapter:langchain-legacy-agent
+              symbol: create_openai_tools_agent model
+              sourceFile: main.py
+              startLine: 373
+              endLine: 373
+            - producer: adapter:langchain-legacy-agent
+              symbol: create_openai_tools_agent model
+              sourceFile: main.py
+              startLine: 416
+              endLine: 418
+        - kind: invokes_model
+          from: agent:generic_worker_agent
+          to: model:openai/gpt-3.5-turbo-0125
+          sourceFile: main.py
+          evidence:
+            - producer: adapter:langchain-legacy-agent
+              symbol: create_openai_tools_agent model
+              sourceFile: main.py
+              startLine: 373
+              endLine: 373
+            - producer: adapter:langchain-legacy-agent
+              symbol: create_openai_tools_agent model
+              sourceFile: main.py
+              startLine: 420
+              endLine: 422
+        - kind: invokes_model
+          from: agent:interact.personality_agent
+          to: model:openai/gpt-3.5-turbo-0125
+          sourceFile: main.py
+          evidence:
+            - producer: adapter:langchain-legacy-agent
+              symbol: create_openai_tools_agent model
+              sourceFile: main.py
+              startLine: 373
+              endLine: 373
+            - producer: adapter:langchain-legacy-agent
+              symbol: create_openai_tools_agent model
+              sourceFile: main.py
+              startLine: 855
+              endLine: 855
+        - kind: calls_tool
+          from: agent:web_searcher_agent
+          to: tool:internet_search
+          sourceFile: main.py
+          evidence:
+            - producer: adapter:langchain-legacy-agent
+              symbol: 'AgentExecutor tools: internet_search'
+              sourceFile: main.py
+              startLine: 415
+              endLine: 415
+            - producer: adapter:langchain-legacy-agent
+              symbol: 'AgentExecutor tools: internet_search'
+              sourceFile: main.py
+              startLine: 296
+              endLine: 303
+        - kind: calls_tool
+          from: agent:web_searcher_agent
+          to: tool:process_content
+          sourceFile: main.py
+          evidence:
+            - producer: adapter:langchain-legacy-agent
+              symbol: 'AgentExecutor tools: process_content'
+              sourceFile: main.py
+              startLine: 415
+              endLine: 415
+            - producer: adapter:langchain-legacy-agent
+              symbol: 'AgentExecutor tools: process_content'
+              sourceFile: main.py
+              startLine: 306
+              endLine: 329
+        - kind: calls_tool
+          from: agent:insight_researcher_agent
+          to: tool:internet_search
+          sourceFile: main.py
+          evidence:
+            - producer: adapter:langchain-legacy-agent
+              symbol: 'AgentExecutor tools: internet_search'
+              sourceFile: main.py
+              startLine: 416
+              endLine: 418
+            - producer: adapter:langchain-legacy-agent
+              symbol: 'AgentExecutor tools: internet_search'
+              sourceFile: main.py
+              startLine: 296
+              endLine: 303
+        - kind: calls_tool
+          from: agent:insight_researcher_agent
+          to: tool:process_content
+          sourceFile: main.py
+          evidence:
+            - producer: adapter:langchain-legacy-agent
+              symbol: 'AgentExecutor tools: process_content'
+              sourceFile: main.py
+              startLine: 416
+              endLine: 418
+            - producer: adapter:langchain-legacy-agent
+              symbol: 'AgentExecutor tools: process_content'
+              sourceFile: main.py
+              startLine: 306
+              endLine: 329
+        - kind: calls_tool
+          from: agent:generic_worker_agent
+          to: tool:internet_search
+          sourceFile: main.py
+          evidence:
+            - producer: adapter:langchain-legacy-agent
+              symbol: 'AgentExecutor tools: internet_search'
+              sourceFile: main.py
+              startLine: 420
+              endLine: 422
+            - producer: adapter:langchain-legacy-agent
+              symbol: 'AgentExecutor tools: internet_search'
+              sourceFile: main.py
+              startLine: 296
+              endLine: 303
+        - kind: calls_tool
+          from: agent:generic_worker_agent
+          to: tool:process_content
+          sourceFile: main.py
+          evidence:
+            - producer: adapter:langchain-legacy-agent
+              symbol: 'AgentExecutor tools: process_content'
+              sourceFile: main.py
+              startLine: 420
+              endLine: 422
+            - producer: adapter:langchain-legacy-agent
+              symbol: 'AgentExecutor tools: process_content'
+              sourceFile: main.py
+              startLine: 306
+              endLine: 329
+        - kind: calls_tool
+          from: agent:interact.personality_agent
+          to: tool:internet_search
+          sourceFile: main.py
+          evidence:
+            - producer: adapter:langchain-legacy-agent
+              symbol: 'AgentExecutor tools: internet_search'
+              sourceFile: main.py
+              startLine: 855
+              endLine: 855
+            - producer: adapter:langchain-legacy-agent
+              symbol: 'AgentExecutor tools: internet_search'
+              sourceFile: main.py
+              startLine: 296
+              endLine: 303
+        - kind: calls_tool
+          from: agent:interact.personality_agent
+          to: tool:process_content
+          sourceFile: main.py
+          evidence:
+            - producer: adapter:langchain-legacy-agent
+              symbol: 'AgentExecutor tools: process_content'
+              sourceFile: main.py
+              startLine: 855
+              endLine: 855
+            - producer: adapter:langchain-legacy-agent
+              symbol: 'AgentExecutor tools: process_content'
+              sourceFile: main.py
+              startLine: 306
+              endLine: 329
+      componentMetadata:
+        agent:web_searcher_agent:
+          declaredName: web_searcher_agent
+          executor: AgentExecutor
+          factory: create_openai_tools_agent
+          framework: langchain-legacy
+        agent:insight_researcher_agent:
+          declaredName: insight_researcher_agent
+          executor: AgentExecutor
+          factory: create_openai_tools_agent
+          framework: langchain-legacy
+        agent:generic_worker_agent:
+          declaredName: generic_worker_agent
+          executor: AgentExecutor
+          factory: create_openai_tools_agent
+          framework: langchain-legacy
+        agent:interact.personality_agent:
+          declaredName: interact.personality_agent
+          executor: AgentExecutor
+          factory: create_openai_tools_agent
+          framework: langchain-legacy
+      componentEvidence:
+        agent:web_searcher_agent:
+          - producer: adapter:langchain-legacy-agent
+            symbol: 'legacy LangChain agent: web_searcher_agent'
+            sourceFile: main.py
+            startLine: 415
+            endLine: 415
+        agent:insight_researcher_agent:
+          - producer: adapter:langchain-legacy-agent
+            symbol: 'legacy LangChain agent: insight_researcher_agent'
+            sourceFile: main.py
+            startLine: 416
+            endLine: 418
+        agent:generic_worker_agent:
+          - producer: adapter:langchain-legacy-agent
+            symbol: 'legacy LangChain agent: generic_worker_agent'
+            sourceFile: main.py
+            startLine: 420
+            endLine: 422
+        agent:interact.personality_agent:
+          - producer: adapter:langchain-legacy-agent
+            symbol: 'legacy LangChain agent: interact.personality_agent'
+            sourceFile: main.py
+            startLine: 855
+            endLine: 855
+        tool:internet_search:
+          - producer: adapter:langchain-legacy-agent
+            symbol: 'LangChain tool: internet_search'
+            sourceFile: main.py
+            startLine: 296
+            endLine: 303
+        tool:process_content:
+          - producer: adapter:langchain-legacy-agent
+            symbol: 'LangChain tool: process_content'
+            sourceFile: main.py
+            startLine: 306
+            endLine: 329
+      sourceCitations:
+        agent:web_searcher_agent:
+          - main.py
+        agent:insight_researcher_agent:
+          - main.py
+        agent:generic_worker_agent:
+          - main.py
+        agent:interact.personality_agent:
+          - main.py
+        tool:internet_search:
+          - main.py
+        tool:process_content:
+          - main.py
+      adapterApplicability:
+        adapter:langchain-legacy-agent:
+          relevantImports: 2
+          distinctFiles: 1
+          omittedImports: 0
+          fileSample:
+            - module: langchain.agents
+              imported: AgentExecutor
+              sourceFile: main.py
+              startLine: 5
+            - module: langchain.agents
+              imported: create_openai_tools_agent
+              sourceFile: main.py
+              startLine: 5
+      adapterOutcomes:
+        adapter:langchain-legacy-agent:
+          status: completed
+          componentsFound: 6
+          edgesFound: 12
+          filesInspected: 1
+      topology:
+        status: incomplete
+        unresolvedCount: 9
+        conditionalDestinations: 0
+        requiredRefusals:
+          - kind: prompt_input
+            reason: The prompt passed through a local legacy LangChain factory was not source-settled to the factory call site.
+            sourceFile: main.py
+            startLine: 415
+          - kind: prompt_input
+            reason: The prompt passed through a local legacy LangChain factory was not source-settled to the factory call site.
+            sourceFile: main.py
+            startLine: 416
+          - kind: prompt_input
+            reason: The prompt passed through a local legacy LangChain factory was not source-settled to the factory call site.
+            sourceFile: main.py
+            startLine: 420
+          - kind: prompt_input
+            reason: The prompt passed through a local legacy LangChain factory was not source-settled to the factory call site.
+            sourceFile: main.py
+            startLine: 855
+          - kind: adapter_input
+            reason: ChatOpenAI can take an OpenAI-compatible base URL from runtime environment or keyword values; OpenAI is only the library default.
+            sourceFile: main.py
+            startLine: 373
+          - kind: entry_boundary
+            reason: No supported entry boundary was found for this LangGraph construction.
+            sourceFile: main.py
+            startLine: 861
+          - kind: conditional_destination
+            reason: add_conditional_edges received a destination map or list containing no bounded literal destination.
+            sourceFile: main.py
+            startLine: 879
+      findings:
+        strengths: 0
+        requiredRules:
+          - model-call-without-timeout
+          - observability-coverage
+        exactRisks:
+          - ruleId: model-call-without-timeout
+            severity: medium
+          - ruleId: observability-coverage
+            severity: info
+
   - name: langchain-langgraph-agents
     source: git
     url: https://github.com/Chaitanya-Keyal/langchain-langgraph-agents.git

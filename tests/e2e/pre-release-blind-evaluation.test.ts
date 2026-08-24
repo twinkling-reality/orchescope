@@ -26,6 +26,11 @@ const blockedObjectMethodRecord = readFileSync(
 );
 const blockedRoleRecordPath = 'docs/research/724a1abd-blocked-blind-evaluation.md';
 const blockedRoleRecord = readFileSync(join(repositoryRoot, blockedRoleRecordPath), 'utf8');
+const blockedLegacyLangChainRecordPath = 'docs/research/84c80b2e-blocked-blind-evaluation.md';
+const blockedLegacyLangChainRecord = readFileSync(
+  join(repositoryRoot, blockedLegacyLangChainRecordPath),
+  'utf8',
+);
 const passedRecordPath = 'docs/research/95c7756c-passed-blind-evaluation.md';
 const passedRecord = readFileSync(join(repositoryRoot, passedRecordPath), 'utf8');
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
@@ -108,6 +113,24 @@ const witnesses = [
     file: 'packages/discovery/test/configurable-producers.test.ts',
     title:
       'persists exact completed-zero applicability and uses it for the existing gap accounting',
+  },
+  {
+    property:
+      'A legacy LangChain agent requires exact factory and executor provenance, and a local wrapper cannot disappear silently.',
+    file: 'packages/discovery/test/langchain-legacy-agent.test.ts',
+    title: 'settles returned AgentExecutor factories at each exact assigned call site',
+  },
+  {
+    property:
+      'A legacy LangChain agent requires exact factory and executor provenance, and a local wrapper cannot disappear silently.',
+    file: 'packages/discovery/test/langchain-legacy-agent.test.ts',
+    title: 'refuses unsettled exact imports and computed model or tool populations',
+  },
+  {
+    property:
+      'A legacy LangChain agent requires exact factory and executor provenance, and a local wrapper cannot disappear silently.',
+    file: 'packages/discovery/test/langchain-legacy-agent.test.ts',
+    title: 'does not grant legacy identity to a foreign lookalike',
   },
   {
     property: 'Input order does not change semantic identity or selected evidence.',
@@ -506,6 +529,53 @@ describe('the frozen pre-release blind evaluation protocol', () => {
       entries.some(
         (entry) =>
           entry.name === 'tokentab' || entry.url === 'https://github.com/wzchav/tokentab.git',
+      ),
+      false,
+    );
+  });
+
+  it('blocks silent legacy LangChain agents and promotes only the positive invariant', () => {
+    for (const fact of [
+      '84c80b2e2ee1935c6925d12b585f02782358f122',
+      '38981b8d9a6a6b626d74c7ae9ebb170cb550217528011270165a207cc5cfbcc5',
+      'https://github.com/Womp-Womp/MultiAgentDiscordBot',
+      'fded3337ba2daa9393ef7dea3977f76545de7a84',
+      '91f18277c312c18292bdb7871c9d213852966e790e0701a0951b25dcada7e3c0',
+      'https://github.com/aichain-tw/claude-jsonl-viewer',
+      'ce6dd5c5cfba3c26887b5619e4b4cff75bb2074a',
+      '72380798af61d6131287b0dd3c8dc5345535df641002fece3a02d7ef109c5f8e',
+      '85288c0f7831d72c32b083c4eeb09ac2de1601170d36e40097b752bc8d229693',
+    ]) {
+      assert.ok(
+        blockedLegacyLangChainRecord.includes(fact),
+        `legacy LangChain block record omitted ${fact}`,
+      );
+    }
+    assert.match(blockedLegacyLangChainRecord, /release decision was \*\*BLOCK\*\*/);
+    assert.match(blockedLegacyLangChainRecord, /zero `agent` components/);
+    assert.match(blockedLegacyLangChainRecord, /`create_openai_tools_agent` and `AgentExecutor`/);
+    assert.match(blockedLegacyLangChainRecord, /publication-blocking misleading silence/);
+    assert.match(blockedLegacyLangChainRecord, /three persistent workers plus one request-scoped/);
+    assert.match(blockedLegacyLangChainRecord, /No runtime audit was executed/);
+    assert.match(
+      blockedLegacyLangChainRecord,
+      /negative contributes no additional precision invariant/,
+    );
+    assert.match(blockedLegacyLangChainRecord, /different unseen positive and negative pair/);
+    assert.doesNotMatch(
+      blockedLegacyLangChainRecord,
+      /\/Users\/|\/tmp\/|\brun_[0-9a-f]{8}\b|\bev_[0-9a-f]{8}\b|traceId|spanId/,
+    );
+    assert.ok(protocol.includes('../research/84c80b2e-blocked-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/84c80b2e-blocked-blind-evaluation.md'));
+
+    const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
+    assert.equal(entries.filter((entry) => entry.name === 'multiagent-discord-bot').length, 1);
+    assert.equal(
+      entries.some(
+        (entry) =>
+          entry.name === 'claude-jsonl-viewer' ||
+          entry.url === 'https://github.com/aichain-tw/claude-jsonl-viewer.git',
       ),
       false,
     );

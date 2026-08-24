@@ -16,31 +16,31 @@ import {
   type DiscardedEdge,
   SystemGraphBuilder,
 } from '@orchescope/graph';
-import { MAX_MANIFEST_COMPONENTS } from '@orchescope/schema';
 import type {
   AdapterRun,
   Evidence,
+  GraphProvenance,
   ScanCoverage,
   Sha256Hex,
   SkippedFile,
   SystemGraph,
-  GraphProvenance,
-  UnsupportedArea,
   TopologyCoverage,
+  UnsupportedArea,
 } from '@orchescope/schema';
+import { MAX_MANIFEST_COMPONENTS } from '@orchescope/schema';
 import {
   analyzeFileSet,
+  boundSkipped,
   type CitationSnapshot,
   collectFiles,
   type DeclinedDirectory,
   type FactCache,
-  boundSkipped,
   isSupportedLanguage,
   type Language,
   languageOf,
   type ModuleFacts,
-  readManifests,
   readCitationSnapshots,
+  readManifests,
   type TraversalOptions,
 } from '@orchescope/source-analysis';
 import type {
@@ -58,11 +58,11 @@ import {
   readConfigDocuments,
 } from './config-files.ts';
 import { createImplementationSpanRegistry } from './implementation-span.ts';
-import { createPromptInputRegistry } from './prompt-input.ts';
 import { localModules, namesLocalModule } from './local-modules.ts';
 import { manifestCitationRequests } from './manifest-citations.ts';
-import { DEFAULT_ADAPTERS } from './registry.ts';
 import { moduleMatches } from './matching.ts';
+import { createPromptInputRegistry } from './prompt-input.ts';
+import { DEFAULT_ADAPTERS } from './registry.ts';
 import { buildSymbolIndex } from './symbol-index.ts';
 
 /**
@@ -431,6 +431,23 @@ const aggregateTopologyComplete = (
   unresolvedCount === 0 &&
   producers.every((producer) => producer.status === 'complete');
 
+const topologyRefusalPopulations = (
+  topology: TopologyDiscovery,
+): { readonly controlFlow: number; readonly promptUse: number } => {
+  if (
+    topology.controlFlowUnresolvedCount !== undefined ||
+    topology.promptUseUnresolvedCount !== undefined
+  ) {
+    return {
+      controlFlow: topology.controlFlowUnresolvedCount ?? 0,
+      promptUse: topology.promptUseUnresolvedCount ?? 0,
+    };
+  }
+  return topology.scope === 'prompt_use'
+    ? { controlFlow: 0, promptUse: topology.unresolvedCount }
+    : { controlFlow: topology.unresolvedCount, promptUse: 0 };
+};
+
 /**
  * One closed-world answer requires every applicable relation producer to state its population.
  *
@@ -488,11 +505,9 @@ const aggregateTopology = (
       terminalBoundaries += topology.terminalBoundaries;
       configurationBounds += topology.configurationBounds;
       unresolvedCount += topology.unresolvedCount;
-      if (topology.scope === 'prompt_use') {
-        promptUseUnresolvedCount += topology.unresolvedCount;
-      } else {
-        controlFlowUnresolvedCount += topology.unresolvedCount;
-      }
+      const refusalPopulations = topologyRefusalPopulations(topology);
+      controlFlowUnresolvedCount += refusalPopulations.controlFlow;
+      promptUseUnresolvedCount += refusalPopulations.promptUse;
       boundaryFacts.push(
         ...topology.boundaryFacts.map((fact) => ({ ...fact, location: stamp(fact.location) })),
       );
