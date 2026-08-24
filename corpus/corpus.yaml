@@ -1023,10 +1023,10 @@ repositories:
       componentMetadata:
         agent:llm_call:
           inferredFrom: model call site
-          modelBoundary: provider and model selected at run time
+          modelBoundary: provider ownership and model identity are not source-settled
         agent:vision_call:
           inferredFrom: model call site
-          modelBoundary: provider and model selected at run time
+          modelBoundary: provider ownership and model identity are not source-settled
       componentEvidence:
         agent:llm_call:
           - producer: adapter:model-sdk
@@ -3387,6 +3387,200 @@ repositories:
         - opentelemetry-exporter-otlp-proto-http
       requiresEnvironment:
         - OPENAI_API_KEY
+
+  - name: gitizens
+    source: git
+    url: https://github.com/ordinary9843/gitizens.git
+    commit: d8bef45359fbe5ccaa7e134d4708202489b7bb36
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive application selected by the independent frozen holdout at candidate 78c62410.
+      Its hourly GitHub Actions loop gives OpenAI's compatible Python client the literal
+      models.inference.ai.azure.com endpoint, a GitHub token and models:read permission, then lets model output drive
+      bounded issue creation and world-state changes. The client class identifies a wire protocol, not the operator of
+      a custom endpoint. This entry prevents provider:openai, a provider-qualified model, or served_by_provider from
+      returning without exact endpoint-provider evidence.
+
+      The source-reviewed boundary retains the hand-written validate agent, the unqualified gpt-4o-mini model, their
+      invokes_model relation, its runtime-interpolated messages prompt and uses_prompt relation. The model SDK remains
+      visibly applicable over all three exact OpenAI imports, reports the custom endpoint as a source-located
+      provider-ownership refusal, keeps topology incomplete and awards no strengths. The pinned tree contains 285 files
+      and 2,890,667 blob bytes. The scan discovers 75 files and parses all 35 supported Python files, covering 593,724
+      source bytes. LICENSE is MIT with SHA-256
+      10ecb0524d9bc8391cdb26f905578e96089ace6207c1877b08d25b99eb3ab741. This is a full-static corpus entry with no
+      required archive or runtime exercise.
+    # The holdout is now a regression population. These claims were read against the exact source and corrected output.
+    acceptance:
+      graphPopulation:
+        components: 3
+        edges: 2
+      exactIdsByKind:
+        agent:
+          - agent:validate
+        model:
+          - model:gpt-4o-mini
+        prompt:
+          - prompt:validate-messages-validate-277-39
+      absentKinds:
+        - provider
+      absentComponentTerms:
+        - github
+        - openai
+      absentEdgeKinds:
+        - served_by_provider
+      requiredEdges:
+        - kind: invokes_model
+          from: agent:validate
+          to: model:gpt-4o-mini
+          sourceFile: scripts/validate_proposal.py
+          evidence:
+            - producer: adapter:model-sdk
+              symbol: client.chat.completions.create
+              sourceFile: scripts/validate_proposal.py
+              startLine: 275
+              endLine: 294
+        - kind: uses_prompt
+          from: agent:validate
+          to: prompt:validate-messages-validate-277-39
+          sourceFile: scripts/validate_proposal.py
+          evidence:
+            - producer: adapter:prompts
+              symbol: messages
+              sourceFile: scripts/validate_proposal.py
+              startLine: 277
+              endLine: 291
+            - producer: adapter:prompts
+              symbol: messages
+              sourceFile: scripts/validate_proposal.py
+              startLine: 274
+              endLine: 274
+            - producer: adapter:prompts
+              symbol: messages
+              sourceFile: scripts/validate_proposal.py
+              startLine: 275
+              endLine: 294
+      componentMetadata:
+        agent:validate:
+          inferredFrom: model call site
+          modelBoundary: provider ownership unresolved for a source-settled model
+        model:gpt-4o-mini:
+          callSite: client.chat.completions.create
+          compatibleClient: openai
+          operation: chat.completions.create
+          providerBasis: unresolved_custom_endpoint
+        prompt:validate-messages-validate-277-39:
+          channel: messages
+          characters: 680
+          hasSubstitutions: true
+          sourceProducer: adapter:model-sdk
+      componentDetails:
+        agent:validate:
+          framework: hand-written
+          role: unspecified
+        model:gpt-4o-mini:
+          maxOutputTokens: 120
+          modelId: gpt-4o-mini
+          streaming: false
+          temperature: 0
+        prompt:validate-messages-validate-277-39:
+          approximateTokens: 88
+          interpolatesUntrustedInput: true
+          textHash: 8e92316195e3bb7da4bba1b6df66e742b90d55f12118895beda95960705b7bb8
+      componentEvidence:
+        agent:validate:
+          - producer: adapter:model-sdk
+            symbol: validate
+            sourceFile: scripts/validate_proposal.py
+            startLine: 275
+            endLine: 294
+        model:gpt-4o-mini:
+          - producer: adapter:model-sdk
+            symbol: client.chat.completions.create
+            sourceFile: scripts/validate_proposal.py
+            startLine: 275
+            endLine: 294
+        prompt:validate-messages-validate-277-39:
+          - producer: adapter:prompts
+            symbol: messages
+            sourceFile: scripts/validate_proposal.py
+            startLine: 277
+            endLine: 291
+          - producer: adapter:prompts
+            symbol: messages
+            sourceFile: scripts/validate_proposal.py
+            startLine: 274
+            endLine: 274
+          - producer: adapter:prompts
+            symbol: messages
+            sourceFile: scripts/validate_proposal.py
+            startLine: 275
+            endLine: 294
+      sourceCitations:
+        agent:validate:
+          - scripts/validate_proposal.py
+        model:gpt-4o-mini:
+          - scripts/validate_proposal.py
+        prompt:validate-messages-validate-277-39:
+          - scripts/validate_proposal.py
+      adapterApplicability:
+        adapter:model-sdk:
+          relevantImports: 3
+          distinctFiles: 3
+          omittedImports: 0
+          fileSample:
+            - module: openai
+              imported: OpenAI
+              sourceFile: scripts/auto_propose.py
+              startLine: 10
+            - module: openai
+              imported: OpenAI
+              sourceFile: scripts/engine/content.py
+              startLine: 8
+            - module: openai
+              imported: OpenAI
+              sourceFile: scripts/validate_proposal.py
+              startLine: 14
+      adapterOutcomes:
+        adapter:model-sdk:
+          status: completed
+          componentsFound: 2
+          edgesFound: 1
+          filesInspected: 3
+        adapter:prompts:
+          status: completed
+          componentsFound: 1
+          edgesFound: 1
+          filesInspected: 1
+      topology:
+        status: incomplete
+        unresolvedCount: 9
+        conditionalDestinations: 0
+        requiredRefusals:
+          - kind: adapter_input
+            sourceFile: scripts/engine/content.py
+            startLine: 18
+            reason: >-
+              OpenAI uses a compatible endpoint outside the bounded recognized model-provider host table; the client
+              class does not establish provider ownership.
+          - kind: adapter_input
+            sourceFile: scripts/validate_proposal.py
+            startLine: 274
+            reason: >-
+              OpenAI uses a compatible endpoint outside the bounded recognized model-provider host table; the client
+              class does not establish provider ownership.
+          - kind: conditional_destination
+            sourceFile: scripts/engine/content.py
+            startLine: 203
+            reason: client has no provider client settled on every path through this control-flow join.
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+        exactRisks:
+          - ruleId: model-call-without-timeout
+            severity: medium
+          - ruleId: observability-coverage
+            severity: info
 
   - name: flask
     source: git

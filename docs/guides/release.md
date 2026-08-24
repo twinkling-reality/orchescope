@@ -99,6 +99,11 @@ The [passed 95c7756c evaluation](../research/95c7756c-passed-blind-evaluation.md
 completed passing gate. Its selected positive becomes a regression input, its negative adds no duplicate corpus entry,
 and neither source lineage can be reused as an unseen holdout.
 
+The [blocked 78c62410 evaluation](../research/78c62410-blocked-blind-evaluation.md) records an eleventh completed block:
+an OpenAI-compatible client aimed at the exact GitHub Models endpoint was misreported as an OpenAI-owned provider and
+provider-qualified model. The positive is pinned as an endpoint-provenance regression, the correctly classified
+negative adds no duplicate precision entry, and all exposed lineages are permanently ineligible as unseen holdouts.
+
 `pnpm package` writes `release/release-summary.json`. Read it rather than trusting the exit code:
 
 | Field | What it has to say |

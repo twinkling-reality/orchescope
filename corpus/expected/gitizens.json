@@ -13,15 +13,15 @@
       "status": "not_applicable"
     },
     "adapter:crewai": {
-      "componentsFound": 1020,
-      "edgesFound": 437,
-      "filesInspected": 91,
-      "status": "completed"
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 144,
-      "edgesFound": 76,
-      "filesInspected": 46,
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
       "status": "completed"
     },
     "adapter:implementation-reach": {
@@ -58,12 +58,12 @@
       "componentsFound": 0,
       "edgesFound": 0,
       "filesInspected": 0,
-      "status": "completed"
+      "status": "not_applicable"
     },
     "adapter:model-sdk": {
-      "componentsFound": 4,
-      "edgesFound": 0,
-      "filesInspected": 9,
+      "componentsFound": 2,
+      "edgesFound": 1,
+      "filesInspected": 3,
       "status": "completed"
     },
     "adapter:openai-agents": {
@@ -73,9 +73,9 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 36,
-      "edgesFound": 36,
-      "filesInspected": 11,
+      "componentsFound": 1,
+      "edgesFound": 1,
+      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:pydantic-ai": {
@@ -85,10 +85,10 @@
       "status": "not_applicable"
     },
     "adapter:search-index": {
-      "componentsFound": 4,
+      "componentsFound": 0,
       "edgesFound": 0,
-      "filesInspected": 4,
-      "status": "completed"
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:vercel-ai-sdk": {
       "componentsFound": 0,
@@ -106,55 +106,46 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 249,
-      "agent_group": 94,
-      "database": 3,
-      "entrypoint": 70,
-      "external_service": 47,
-      "prompt": 36,
-      "provider": 3,
-      "retrieval": 1
+      "agent": 1,
+      "model": 1,
+      "prompt": 1
     },
-    "declaredInTest": 311,
-    "total": 503
+    "declaredInTest": 0,
+    "total": 3
   },
   "discardedRelations": [],
   "files": {
-    "discovered": 2027,
-    "inSupportedLanguages": 1272,
-    "parsed": 1272,
-    "skipped": 7,
+    "discovered": 75,
+    "inSupportedLanguages": 35,
+    "parsed": 35,
+    "skipped": 0,
     "truncated": false
   },
   "findings": {
     "byRule": {
-      "observability-coverage": 1,
-      "prompt-injection-boundary": 1
+      "model-call-without-timeout": 1,
+      "observability-coverage": 1
     },
     "bySeverity": {
       "info": 1,
       "medium": 1
     },
     "componentsByRule": {
-      "observability-coverage": 5,
-      "prompt-injection-boundary": 9
+      "model-call-without-timeout": 2,
+      "observability-coverage": 3
     },
     "strengths": 0,
     "total": 2
   },
-  "foundNothing": [
-    "mcp is imported here and its adapter found nothing"
-  ],
+  "foundNothing": [],
   "kind": "agent_system",
   "languagesNotAnalysed": [],
-  "name": "crewai",
+  "name": "gitizens",
   "relations": {
     "byKind": {
-      "calls_service": 48,
-      "contains": 108,
-      "queries_database": 22,
-      "uses_prompt": 36
+      "invokes_model": 1,
+      "uses_prompt": 1
     },
-    "total": 214
+    "total": 2
   }
 }

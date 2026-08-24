@@ -23,8 +23,27 @@ well. The eighth candidate, commit `63f31253d5ca58ea29661074561c833b01462fef` wi
 `5a0e18d6d37c71d4d9ccd5f4d6a6f8f62bc804b2f01d186bcc105dcce778bfd9`, was independently evaluated and blocked too.
 The ninth candidate, commit `1f5fe556db5abd762c43c5d35f0b15e15f7df6df` with archive SHA-256
 `1b11e56ba50ece693191d4f1b03e5da9cb2e7492be71b037990af0db7d3b45bc`, was independently evaluated and blocked as
-well. None was published, tagged, pushed or attached to a release. A corrected candidate cannot be published until a
-different unseen positive and negative pair clears the blind gate.
+well. After a different pair cleared that candidate, the next candidate, commit
+`78c624105fee8f0b4c127cbdbeade583bc5cbdb4` with archive SHA-256
+`dc6853a6cc1ec289faeca0cf51ea4afbd8ccaba649394cc05ea7ef6a613112fd`, was independently evaluated and blocked by a
+wrong provider identity. None was published, tagged, pushed or attached to a release. A corrected candidate cannot be
+published until a different unseen positive and negative pair clears the blind gate.
+
+### Compatible clients do not establish endpoint-provider ownership
+
+An exact runtime SDK import establishes the SDK's documented default only when no endpoint override is present. An
+explicit literal endpoint now resolves provider identity through the bounded shared endpoint-host table. A recognized
+alternate endpoint receives its exact provider identity; an unknown custom or dynamic endpoint receives a
+source-located provider-ownership refusal. The compatible client class, constructor name and model name do not establish
+service ownership. Exact provider-specific SDK exports such as Azure OpenAI retain their own provider identity instead
+of inheriting the package vendor's default.
+
+A source-settled model name remains available as an unqualified model component when provider ownership is unresolved,
+but it receives no provider-qualified identity or provider-serving relation. The independently selected `gitizens`
+holdout exposed the defect by using an OpenAI-compatible client with the exact GitHub Models endpoint and
+`GITHUB_TOKEN`; the frozen candidate incorrectly emitted `provider:openai`. The positive is pinned with 74 semantic
+assertions covering the agent, model, prompt, relations, endpoint refusals, findings and topology. The selected
+`agent-logs-extractor` negative remained correctly empty and adds no distinct precision invariant.
 
 ### LangChain chat prompts retain exact provenance and bounded runtime settlement
 

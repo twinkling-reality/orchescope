@@ -48,6 +48,11 @@ const blockedLangChainPromptRecord = readFileSync(
 );
 const passedRecordPath = 'docs/research/95c7756c-passed-blind-evaluation.md';
 const passedRecord = readFileSync(join(repositoryRoot, passedRecordPath), 'utf8');
+const blockedCompatibleProviderRecordPath = 'docs/research/78c62410-blocked-blind-evaluation.md';
+const blockedCompatibleProviderRecord = readFileSync(
+  join(repositoryRoot, blockedCompatibleProviderRecordPath),
+  'utf8',
+);
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
   readonly scripts: Readonly<Record<string, string>>;
 };
@@ -111,6 +116,27 @@ const witnesses = [
     file: 'packages/discovery/test/provider-qualified-effects.test.ts',
     title:
       'rejects direct and module aliases from httpx, local and type-only Client definitions, and missing origin',
+  },
+  {
+    property: 'A compatible client class cannot establish endpoint-provider ownership.',
+    file: 'packages/discovery/test/compatible-client-provider-identity.test.ts',
+    title: 'names an alternate provider only from its exact recognized endpoint',
+  },
+  {
+    property: 'A compatible client class cannot establish endpoint-provider ownership.',
+    file: 'packages/discovery/test/compatible-client-provider-identity.test.ts',
+    title:
+      'refuses provider ownership for a literal compatible endpoint outside the bounded host table',
+  },
+  {
+    property: 'A compatible client class cannot establish endpoint-provider ownership.',
+    file: 'packages/discovery/test/compatible-client-provider-identity.test.ts',
+    title: 'keeps the imported client default when no endpoint override is declared',
+  },
+  {
+    property: 'A compatible client class cannot establish endpoint-provider ownership.',
+    file: 'packages/discovery/test/compatible-client-provider-identity.test.ts',
+    title: 'keeps exact client-specific provider identities distinct from the SDK vendor',
   },
   {
     property: 'Documentation prose does not become an executable prompt.',
@@ -864,6 +890,56 @@ describe('the frozen pre-release blind evaluation protocol', () => {
     assert.equal(
       entries.some(
         (entry) => entry.name === 'a2a' || entry.url === 'https://github.com/a2aproject/A2A.git',
+      ),
+      false,
+    );
+  });
+
+  it('blocks compatible-client provider ownership and promotes only the exact positive', () => {
+    for (const fact of [
+      '78c624105fee8f0b4c127cbdbeade583bc5cbdb4',
+      'dc6853a6cc1ec289faeca0cf51ea4afbd8ccaba649394cc05ea7ef6a613112fd',
+      'https://github.com/davidreko/spore',
+      'a40729131a67ea2df5f88f14365973ada5b20dca',
+      'https://github.com/prabhavalabs/agentmeter',
+      '89688516d896feea605e2e335e3945531115fd9e',
+      'https://github.com/ordinary9843/gitizens',
+      'd8bef45359fbe5ccaa7e134d4708202489b7bb36',
+      '10ecb0524d9bc8391cdb26f905578e96089ace6207c1877b08d25b99eb3ab741',
+      'https://github.com/mattjmcnaughton/agent-logs-extractor',
+      '79123f59da3730721dbdbc22dc50899063590f18',
+      'a8560d7833492e0003b13de93491a830c30fbacfe8f40fe6e9a80becc0d34102',
+      '12249506dc0f14e4212fe763bb9b42406ddb297a340f86212be195a7ea873075',
+    ]) {
+      assert.ok(
+        blockedCompatibleProviderRecord.includes(fact),
+        `compatible-provider block record omitted ${fact}`,
+      );
+    }
+    assert.match(blockedCompatibleProviderRecord, /release decision was \*\*BLOCK\*\*/);
+    assert.match(
+      blockedCompatibleProviderRecord,
+      /Measurement stopped before an\s+Orchescope scan/,
+    );
+    assert.match(blockedCompatibleProviderRecord, /`provider:openai`/);
+    assert.match(blockedCompatibleProviderRecord, /material wrong provider identity/);
+    assert.match(blockedCompatibleProviderRecord, /No target runtime was executed/);
+    assert.match(blockedCompatibleProviderRecord, /All 74 semantic assertions held/);
+    assert.match(blockedCompatibleProviderRecord, /different unseen positive and negative pair/);
+    assert.doesNotMatch(
+      blockedCompatibleProviderRecord,
+      /\/Users\/|\/tmp\/|orchescope-blind-|\brun_[0-9a-f]{8}|\bev_[0-9a-f]{8}|traceId|spanId/,
+    );
+    assert.ok(protocol.includes('../research/78c62410-blocked-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/78c62410-blocked-blind-evaluation.md'));
+
+    const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
+    assert.equal(entries.filter((entry) => entry.name === 'gitizens').length, 1);
+    assert.equal(
+      entries.some(
+        (entry) =>
+          entry.name === 'agent-logs-extractor' ||
+          entry.url === 'https://github.com/mattjmcnaughton/agent-logs-extractor.git',
       ),
       false,
     );

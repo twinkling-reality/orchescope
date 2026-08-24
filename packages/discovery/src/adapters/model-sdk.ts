@@ -2,6 +2,7 @@ import { CONFIDENCE_BANDS } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type { ComponentIdentity, SourceLocation } from '@orchescope/schema';
 import type { ArgumentFact, CallFact, ImportFact, ModuleFacts } from '@orchescope/source-analysis';
+import { modelEndpointForHost } from '@orchescope/traces/model-endpoints';
 import {
   dotted,
   findEntry,
@@ -86,6 +87,9 @@ const providerIdentity = (provider: string): ComponentIdentity =>
 
 const modelIdentity = (provider: string, model: string): ComponentIdentity =>
   globalIdentity('model', GLOBAL_NAMESPACES.model, `${provider}/${model}`);
+
+const unqualifiedModelIdentity = (model: string): ComponentIdentity =>
+  globalIdentity('model', GLOBAL_NAMESPACES.model, model);
 
 /** Matches a call path against a provider method suffix, ignoring the client variable name. */
 const matchesMethod = (call: CallFact, methods: readonly string[]): string | undefined => {
@@ -455,11 +459,48 @@ const receiverKey = (enclosing: string | undefined, receiver: string): string =>
 
 type ProviderClient = {
   readonly provider: (typeof PROVIDERS)[number];
-  readonly providerResolved: boolean;
+  readonly endpointProvider: string | undefined;
   readonly deadline: number | undefined;
   readonly supportingLocations: readonly SourceLocation[];
   readonly bindingLocation: SourceLocation;
   readonly bindingBranches: NonNullable<CallFact['branches']>;
+};
+
+const providerForBaseUrl = (value: string): string | undefined => {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
+    return modelEndpointForHost(url.hostname)?.provider;
+  } catch {
+    return undefined;
+  }
+};
+
+const CLIENT_SPECIFIC_PROVIDERS: Readonly<Record<string, string>> = {
+  AzureOpenAI: 'azure-openai',
+  AsyncAzureOpenAI: 'azure-openai',
+  AnthropicBedrock: 'bedrock',
+};
+
+const documentedProviderForClient = (call: CallFact, sdkProvider: string): string => {
+  const imported = call.origin?.imported;
+  const clientName =
+    imported !== undefined && imported !== '*' && imported !== 'default'
+      ? imported
+      : call.calleePath[call.calleePath.length - 1];
+  return (
+    (clientName === undefined ? undefined : CLIENT_SPECIFIC_PROVIDERS[clientName]) ?? sdkProvider
+  );
+};
+
+const endpointProviderForClient = (input: {
+  readonly sdkProvider: string;
+  readonly hasEndpointOverride: boolean;
+  readonly endpoint: string | undefined;
+}): string | undefined => {
+  if (!input.hasEndpointOverride) return input.sdkProvider;
+  if (input.endpoint === undefined) return undefined;
+  return providerForBaseUrl(input.endpoint);
 };
 
 const sameBranch = (
@@ -514,69 +555,71 @@ const registerProviderClientAt = (input: {
   const baseUrlFromConfig =
     stringValue(findEntry(entries, 'baseURL')?.value) ??
     stringValue(findEntry(entries, 'base_url')?.value);
-  const providerResolved = baseUrlEntry === undefined || baseUrlFromConfig !== undefined;
+  const endpointProvider = endpointProviderForClient({
+    sdkProvider: documentedProviderForClient(call, provider.provider),
+    hasEndpointOverride: baseUrlEntry !== undefined,
+    endpoint: baseUrlFromConfig,
+  });
   const metadata = {
     client: dotted(call.calleePath),
     ...(baseUrlFromConfig === undefined ? {} : { baseUrl: baseUrlFromConfig }),
     ...(timeout === undefined ? {} : { timeoutMs: timeout }),
   };
   const imported = importForProviderCall(module, call);
-  if (providerResolved) {
-    builder.addComponent(
-      drafts.sourceComponent({
-        kind: 'provider',
-        identity: providerIdentity(provider.provider),
-        file: module.file,
-        name: provider.provider,
-        location: call.location,
-        symbol: dotted(call.calleePath),
-        confidence: CONFIDENCE_BANDS.deterministic,
-        permissions: [
-          { kind: 'network', scope: baseUrlFromConfig ?? provider.provider, mode: 'write' },
-        ],
-        metadata,
-        tags: ['model-sdk'],
-      }),
-    );
-    if (imported !== undefined) {
+  if (endpointProvider !== undefined) {
+    const identity = providerIdentity(endpointProvider);
+    const providerEvidence =
+      baseUrlEntry === undefined ? [imported?.location, call.location] : [call.location];
+    for (const location of providerEvidence) {
+      if (location === undefined) continue;
       builder.addComponent(
         drafts.sourceComponent({
           kind: 'provider',
-          identity: providerIdentity(provider.provider),
-          file: imported.location.file,
-          name: provider.provider,
-          location: imported.location,
-          symbol: `${imported.module}.${imported.imported}`,
+          identity,
+          file: location.file,
+          name: endpointProvider,
+          location,
+          symbol: dotted(call.calleePath),
           confidence: CONFIDENCE_BANDS.deterministic,
           permissions: [
-            { kind: 'network', scope: baseUrlFromConfig ?? provider.provider, mode: 'write' },
+            { kind: 'network', scope: baseUrlFromConfig ?? endpointProvider, mode: 'write' },
           ],
-          metadata,
+          metadata: {
+            ...metadata,
+            compatibleClient: provider.provider,
+            providerBasis: baseUrlEntry === undefined ? 'library_default' : 'explicit_endpoint',
+          },
           tags: ['model-sdk'],
         }),
       );
     }
-    recordComponent(found, providerIdentity(provider.provider));
+    recordComponent(found, identity);
   } else {
     found.unresolved.push({
       kind: 'adapter_input',
-      reason: `${dotted(call.calleePath)} receives a base URL whose provider identity is selected at run time.`,
+      reason:
+        baseUrlFromConfig === undefined
+          ? `${dotted(call.calleePath)} receives a base URL whose provider identity is selected at run time.`
+          : `${dotted(call.calleePath)} uses a compatible endpoint outside the bounded recognized model-provider host table; the client class does not establish provider ownership.`,
       location: baseUrlEntry?.location ?? call.location,
     });
   }
   found.files.add(module.file);
   const definition = variableHolding(module, call);
   if (definition === undefined) return undefined;
-  if (providerResolved && definition.unique) {
-    context.bindings.register(module.file, definition.name, providerIdentity(provider.provider));
+  if (endpointProvider !== undefined && definition.unique) {
+    context.bindings.register(module.file, definition.name, providerIdentity(endpointProvider));
   }
   return {
     key: receiverKey(definition.enclosing, definition.name),
     client: {
       provider,
-      providerResolved,
+      endpointProvider,
       deadline: timeout,
-      supportingLocations: [...(imported === undefined ? [] : [imported.location]), call.location],
+      supportingLocations:
+        baseUrlEntry === undefined
+          ? [...(imported === undefined ? [] : [imported.location]), call.location]
+          : [call.location],
       bindingLocation: definition.location,
       bindingBranches: definition.branches,
     },
@@ -626,7 +669,7 @@ const clientReceiver = (call: CallFact, method: string): string =>
 type ModelCall = {
   readonly call: CallFact;
   readonly provider: (typeof PROVIDERS)[number];
-  readonly providerResolved: boolean;
+  readonly endpointProvider: string | undefined;
   readonly method: string;
   readonly model: string;
   readonly deadline: DeclaredDeadline | undefined;
@@ -794,7 +837,7 @@ const modelCallsIn = (
       calls.push({
         call,
         provider,
-        providerResolved: settlement.client.providerResolved,
+        endpointProvider: settlement.client.endpointProvider,
         method,
         model: stringValue(findEntry(objectArgument(call), 'model')?.value) ?? 'unspecified',
         deadline: modelCallDeadline(call, module.language, settlement.client.deadline),
@@ -816,7 +859,7 @@ const relationDeadlines = (calls: readonly ModelCall[]): ReadonlyMap<string, Dec
   const grouped = new Map<string, (DeclaredDeadline | undefined)[]>();
   for (const entry of calls) {
     if (entry.call.enclosing === undefined) continue;
-    const key = `${entry.call.enclosing} ${entry.provider.provider}/${entry.model}`;
+    const key = `${entry.call.enclosing} ${entry.endpointProvider ?? '<unresolved>'}/${entry.model}`;
     const bucket = grouped.get(key);
     if (bucket === undefined) grouped.set(key, [entry.deadline]);
     else bucket.push(entry.deadline);
@@ -833,17 +876,12 @@ const registerModelPromptInput = (input: {
   readonly module: ModuleFacts;
   readonly context: DiscoveryContext;
   readonly call: CallFact;
-  readonly provider: (typeof PROVIDERS)[number];
+  readonly consumer: ComponentIdentity;
   readonly method: string;
-  readonly model: string;
   readonly entries: readonly import('@orchescope/source-analysis').ObjectEntryFact[];
   readonly supportingLocations: readonly SourceLocation[];
 }): void => {
-  const { module, context, call, provider, method, model, entries, supportingLocations } = input;
-  const consumer =
-    call.enclosing === undefined
-      ? modelIdentity(provider.provider, model)
-      : sourceIdentity('agent', module.file, call.enclosing);
+  const { module, context, call, consumer, method, entries, supportingLocations } = input;
   const channels = method.includes('embeddings')
     ? []
     : method.includes('responses')
@@ -931,6 +969,216 @@ const registerUnsettledModelCallers = (input: {
   }
 };
 
+const registerUnqualifiedModelCall = (input: {
+  readonly module: ModuleFacts;
+  readonly builder: SystemGraphBuilder;
+  readonly context: DiscoveryContext;
+  readonly found: Discovered;
+  readonly call: CallFact;
+  readonly compatibleClient: string;
+  readonly method: string;
+  readonly model: string;
+  readonly streaming: boolean;
+  readonly temperature: number | undefined;
+  readonly maxTokens: number | undefined;
+  readonly deadline: DeclaredDeadline | undefined;
+}): void => {
+  const identity = unqualifiedModelIdentity(input.model);
+  input.builder.addComponent(
+    drafts.sourceComponent({
+      kind: 'model',
+      identity,
+      file: input.module.file,
+      name: input.model,
+      displayName: input.model,
+      location: input.call.location,
+      symbol: dotted(input.call.calleePath),
+      confidence: CONFIDENCE_BANDS.deterministic,
+      details: {
+        for: 'model',
+        modelId: input.model,
+        streaming: input.streaming,
+        ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
+        ...(input.maxTokens === undefined ? {} : { maxOutputTokens: input.maxTokens }),
+      },
+      metadata: {
+        callSite: dotted(input.call.calleePath),
+        operation: input.method,
+        compatibleClient: input.compatibleClient,
+        providerBasis: 'unresolved_custom_endpoint',
+      },
+      tags: ['model-sdk', 'configuration-possibility'],
+    }),
+  );
+  recordComponent(input.found, identity);
+  input.found.files.add(input.module.file);
+  input.context.callSiteEffects.record(input.module.file, input.call, identity);
+
+  const enclosing = input.call.enclosing;
+  if (enclosing === undefined) return;
+  const callerIdentity = sourceIdentity('agent', input.module.file, enclosing);
+  input.builder.addComponent(
+    drafts.sourceComponent({
+      kind: 'agent',
+      file: input.module.file,
+      name: enclosing,
+      location: input.call.location,
+      symbol: enclosing,
+      confidence: CONFIDENCE_BANDS.heuristic,
+      details: { for: 'agent', role: 'unspecified', framework: 'hand-written' },
+      metadata: {
+        inferredFrom: 'model call site',
+        modelBoundary: 'provider ownership unresolved for a source-settled model',
+      },
+      tags: ['hand-written-loop'],
+    }),
+  );
+  recordComponent(input.found, callerIdentity);
+  input.builder.addEdge(
+    drafts.edge({
+      kind: 'invokes_model',
+      from: callerIdentity,
+      to: identity,
+      location: input.call.location,
+      symbol: dotted(input.call.calleePath),
+      confidence: CONFIDENCE_BANDS.structural,
+      ...deadlineOnRelation(input.deadline),
+    }),
+  );
+  recordEdge(input.found, 'invokes_model', callerIdentity, identity);
+};
+
+type ModelCallConfiguration = {
+  readonly entries: ReturnType<typeof objectArgument>;
+  readonly maxTokens: number | undefined;
+  readonly temperature: number | undefined;
+  readonly streaming: boolean;
+};
+
+const modelCallConfiguration = (entry: ModelCall): ModelCallConfiguration => {
+  const entries = objectArgument(entry.call);
+  return {
+    entries,
+    maxTokens:
+      numberValue(findEntry(entries, 'max_tokens')?.value) ??
+      numberValue(findEntry(entries, 'maxTokens')?.value) ??
+      numberValue(findEntry(entries, 'max_output_tokens')?.value),
+    temperature: numberValue(findEntry(entries, 'temperature')?.value),
+    streaming: entry.method.includes('stream') || findEntry(entries, 'stream') !== undefined,
+  };
+};
+
+const promptConsumerForModelCall = (
+  module: ModuleFacts,
+  entry: ModelCall,
+): ComponentIdentity | undefined => {
+  if (entry.call.enclosing !== undefined) {
+    return sourceIdentity('agent', module.file, entry.call.enclosing);
+  }
+  if (entry.endpointProvider !== undefined) {
+    return modelIdentity(entry.endpointProvider, entry.model);
+  }
+  return entry.model === 'unspecified' ? undefined : unqualifiedModelIdentity(entry.model);
+};
+
+const registerQualifiedModelComponent = (input: {
+  readonly module: ModuleFacts;
+  readonly builder: SystemGraphBuilder;
+  readonly context: DiscoveryContext;
+  readonly found: Discovered;
+  readonly entry: ModelCall & { readonly endpointProvider: string };
+  readonly configuration: ModelCallConfiguration;
+}): ComponentIdentity => {
+  const { module, builder, context, found, entry, configuration } = input;
+  const { call, provider, endpointProvider, method, model, supportingLocations } = entry;
+  const identity = modelIdentity(endpointProvider, model);
+  const component = (location: SourceLocation, symbol: string) =>
+    drafts.sourceComponent({
+      kind: 'model',
+      identity,
+      file: location.file,
+      name: `${endpointProvider}/${model}`,
+      location,
+      symbol,
+      confidence: CONFIDENCE_BANDS.deterministic,
+      details: {
+        for: 'model',
+        provider: endpointProvider,
+        modelId: model,
+        streaming: configuration.streaming,
+        ...(configuration.temperature === undefined
+          ? {}
+          : { temperature: configuration.temperature }),
+        ...(configuration.maxTokens === undefined
+          ? {}
+          : { maxOutputTokens: configuration.maxTokens }),
+      },
+      metadata: { callSite: dotted(call.calleePath), operation: method },
+      tags: ['model-sdk'],
+    });
+  builder.addComponent(component(call.location, dotted(call.calleePath)));
+  for (const location of supportingLocations) {
+    builder.addComponent(component(location, `${provider.provider} compatible client binding`));
+  }
+  recordComponent(found, identity);
+  found.files.add(module.file);
+  context.callSiteEffects.record(module.file, call, identity);
+  return identity;
+};
+
+const registerQualifiedModelRelations = (input: {
+  readonly module: ModuleFacts;
+  readonly builder: SystemGraphBuilder;
+  readonly found: Discovered;
+  readonly entry: ModelCall & { readonly endpointProvider: string };
+  readonly modelComponent: ComponentIdentity;
+  readonly declared: ReadonlyMap<string, DeclaredDeadline>;
+}): void => {
+  const { module, builder, found, entry, modelComponent, declared } = input;
+  const { call, endpointProvider, model } = entry;
+  const providerComponent = providerIdentity(endpointProvider);
+  builder.addEdge(
+    drafts.edge({
+      kind: 'served_by_provider',
+      from: modelComponent,
+      to: providerComponent,
+      location: call.location,
+      symbol: dotted(call.calleePath),
+    }),
+  );
+  recordEdge(found, 'served_by_provider', modelComponent, providerComponent);
+
+  const enclosing = call.enclosing;
+  if (enclosing === undefined) return;
+  const callerIdentity = sourceIdentity('agent', module.file, enclosing);
+  builder.addComponent(
+    drafts.sourceComponent({
+      kind: 'agent',
+      file: module.file,
+      name: enclosing,
+      location: call.location,
+      symbol: enclosing,
+      confidence: CONFIDENCE_BANDS.heuristic,
+      details: { for: 'agent', role: 'unspecified', framework: 'hand-written' },
+      metadata: { inferredFrom: 'model call site' },
+      tags: ['hand-written-loop'],
+    }),
+  );
+  recordComponent(found, callerIdentity);
+  builder.addEdge(
+    drafts.edge({
+      kind: 'invokes_model',
+      from: callerIdentity,
+      to: modelComponent,
+      location: call.location,
+      symbol: dotted(call.calleePath),
+      confidence: CONFIDENCE_BANDS.structural,
+      ...deadlineOnRelation(declared.get(`${enclosing} ${endpointProvider}/${model}`)),
+    }),
+  );
+  recordEdge(found, 'invokes_model', callerIdentity, modelComponent);
+};
+
 const registerModelCalls = (
   module: ModuleFacts,
   builder: SystemGraphBuilder,
@@ -939,149 +1187,69 @@ const registerModelCalls = (
   clients: ReadonlyMap<string, readonly ProviderClient[]>,
 ): void => {
   const discovered = modelCallsIn(module, clients);
-  const modelCalls = discovered.calls;
   found.unresolved.push(
     ...discovered.unresolved.slice(0, Math.max(0, 10 - found.unresolved.length)),
   );
   registerUnsettledModelCallers({ module, builder, found, calls: discovered.unsettledCallers });
-  const declared = relationDeadlines(modelCalls);
-  for (const {
-    call,
-    provider,
-    providerResolved,
-    method,
-    model,
-    supportingLocations,
-  } of modelCalls) {
-    const entries = objectArgument(call);
-    const maxTokens =
-      numberValue(findEntry(entries, 'max_tokens')?.value) ??
-      numberValue(findEntry(entries, 'maxTokens')?.value) ??
-      numberValue(findEntry(entries, 'max_output_tokens')?.value);
-    const temperature = numberValue(findEntry(entries, 'temperature')?.value);
-    const streaming = method.includes('stream') || findEntry(entries, 'stream') !== undefined;
-    if (providerResolved || call.enclosing !== undefined) {
+  const declared = relationDeadlines(discovered.calls);
+  for (const entry of discovered.calls) {
+    const configuration = modelCallConfiguration(entry);
+    const consumer = promptConsumerForModelCall(module, entry);
+    if (consumer !== undefined) {
       registerModelPromptInput({
         module,
         context,
-        call,
-        provider,
-        method,
-        model,
-        entries,
-        supportingLocations,
+        call: entry.call,
+        consumer,
+        method: entry.method,
+        entries: configuration.entries,
+        supportingLocations: entry.supportingLocations,
       });
     }
-    if (!providerResolved) {
-      registerUnresolvedModelCaller({ module, builder, found, call });
+    if (entry.endpointProvider === undefined) {
+      if (entry.model === 'unspecified') {
+        registerUnresolvedModelCaller({
+          module,
+          builder,
+          found,
+          call: entry.call,
+          boundary: 'provider ownership and model identity are not source-settled',
+        });
+      } else {
+        registerUnqualifiedModelCall({
+          module,
+          builder,
+          context,
+          found,
+          call: entry.call,
+          compatibleClient: entry.provider.provider,
+          method: entry.method,
+          model: entry.model,
+          streaming: configuration.streaming,
+          temperature: configuration.temperature,
+          maxTokens: configuration.maxTokens,
+          deadline: declared.get(`${entry.call.enclosing} <unresolved>/${entry.model}`),
+        });
+      }
       continue;
     }
-
-    builder.addComponent(
-      drafts.sourceComponent({
-        kind: 'model',
-        identity: modelIdentity(provider.provider, model),
-        file: module.file,
-        name: `${provider.provider}/${model}`,
-        location: call.location,
-        symbol: dotted(call.calleePath),
-        confidence: CONFIDENCE_BANDS.deterministic,
-        details: {
-          for: 'model',
-          provider: provider.provider,
-          modelId: model,
-          streaming,
-          ...(temperature === undefined ? {} : { temperature }),
-          ...(maxTokens === undefined ? {} : { maxOutputTokens: maxTokens }),
-        },
-        metadata: { callSite: dotted(call.calleePath), operation: method },
-        tags: ['model-sdk'],
-      }),
-    );
-    for (const evidenceLocation of supportingLocations) {
-      builder.addComponent(
-        drafts.sourceComponent({
-          kind: 'model',
-          identity: modelIdentity(provider.provider, model),
-          file: evidenceLocation.file,
-          name: `${provider.provider}/${model}`,
-          location: evidenceLocation,
-          symbol: `${provider.provider} client binding`,
-          confidence: CONFIDENCE_BANDS.deterministic,
-          details: {
-            for: 'model',
-            provider: provider.provider,
-            modelId: model,
-            streaming,
-            ...(temperature === undefined ? {} : { temperature }),
-            ...(maxTokens === undefined ? {} : { maxOutputTokens: maxTokens }),
-          },
-          metadata: { callSite: dotted(call.calleePath), operation: method },
-          tags: ['model-sdk'],
-        }),
-      );
-    }
-    const modelComponent = modelIdentity(provider.provider, model);
-    recordComponent(found, modelComponent);
-    found.files.add(module.file);
-    /*
-     * What this call site produced, for whatever asks later what a line of code reaches.
-     *
-     * The index is documented as complete and this adapter had never written to it, so a retry around
-     * `client.embeddings.create(...)` resolved to nothing: the callee is a method path no binding stands
-     * for, and the model component it produced was recorded nowhere a second reader could find it. Three
-     * retry rules reported that no retry had been examined on a repository that wraps fifteen attempts
-     * around exactly that call.
-     *
-     * No effect class travels with it. A model invocation is not a write and nobody has classified it,
-     * and absent is the answer that says so.
-     */
-    context.callSiteEffects.record(module.file, call, modelIdentity(provider.provider, model));
-
-    builder.addEdge(
-      drafts.edge({
-        kind: 'served_by_provider',
-        from: modelIdentity(provider.provider, model),
-        to: providerIdentity(provider.provider),
-        location: call.location,
-        symbol: dotted(call.calleePath),
-      }),
-    );
-    recordEdge(found, 'served_by_provider', modelComponent, providerIdentity(provider.provider));
-
-    // The caller is attributed to its enclosing function, recorded as an entry point when the
-    // repository has no framework declared agent to attach the call to.
-    const enclosing = call.enclosing;
-    if (enclosing !== undefined) {
-      const callerIdentity = sourceIdentity('agent', module.file, enclosing);
-      const deadline = declared.get(`${enclosing} ${provider.provider}/${model}`);
-      builder.addComponent(
-        drafts.sourceComponent({
-          kind: 'agent',
-          file: module.file,
-          name: enclosing,
-          location: call.location,
-          symbol: enclosing,
-          confidence: CONFIDENCE_BANDS.heuristic,
-          details: { for: 'agent', role: 'unspecified', framework: 'hand-written' },
-          metadata: { inferredFrom: 'model call site' },
-          tags: ['hand-written-loop'],
-        }),
-      );
-      recordComponent(found, callerIdentity);
-      builder.addEdge(
-        drafts.edge({
-          kind: 'invokes_model',
-          from: callerIdentity,
-          to: modelIdentity(provider.provider, model),
-          location: call.location,
-          symbol: dotted(call.calleePath),
-          confidence: CONFIDENCE_BANDS.structural,
-          ...deadlineOnRelation(deadline),
-        }),
-      );
-      recordEdge(found, 'invokes_model', callerIdentity, modelComponent);
-    }
+    const qualifiedEntry = { ...entry, endpointProvider: entry.endpointProvider };
+    const modelComponent = registerQualifiedModelComponent({
+      module,
+      builder,
+      context,
+      found,
+      entry: qualifiedEntry,
+      configuration,
+    });
+    registerQualifiedModelRelations({
+      module,
+      builder,
+      found,
+      entry: qualifiedEntry,
+      modelComponent,
+      declared,
+    });
   }
 };
 
@@ -1308,7 +1476,7 @@ const registerLangChainWrappers = (
 
 export const modelSdkAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '4',
+  version: '5',
   packages: ALL_PACKAGES,
   applicability: modelSdkApplicability,
   appliesTo: (context) => modelSdkApplicability(context).length > 0,

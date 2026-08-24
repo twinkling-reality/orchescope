@@ -1278,31 +1278,34 @@ export async function answer(prompt: string) {
     );
   };
 
-  it('discovers a provider per client, and the model each call names', async () => {
-    const { ids, adapters } = await scan(build);
+  it('keeps an unrecognized compatible endpoint visible as a bounded provider refusal', async () => {
+    const { result, ids, adapters } = await scan(build);
     assert.ok(
       adapters.some(
         (entry) => entry.adapterId === 'adapter:model-sdk' && entry.status === 'completed',
       ),
       'the model sdk adapter did not apply',
     );
-    assert.ok(ids.includes('provider:openai'), `expected provider:openai in ${ids.join(', ')}`);
+    assert.equal(ids.includes('provider:openai'), false, ids.join(', '));
     assert.ok(ids.includes('provider:anthropic'));
+    assert.equal(ids.includes('model:openai/gpt-4o-mini'), false, ids.join(', '));
+    assert.ok(ids.includes('model:gpt-4o-mini'), ids.join(', '));
+    assert.ok(ids.includes('agent:answer'));
     assert.ok(
-      ids.includes('model:openai/gpt-4o-mini'),
-      `expected the model named in the call, in ${ids.join(', ')}`,
+      result.graph.coverage.topology?.unresolved.some((entry) =>
+        entry.reason.includes('client class does not establish provider ownership'),
+      ),
     );
   });
 
-  it('records a base URL override as the network scope, not the provider name', async () => {
+  it('does not turn the compatible client import into endpoint-provider evidence', async () => {
     const { result } = await scan(build);
     const openai = result.graph.components.find((component) => component.id === 'provider:openai');
-    assert.ok(openai !== undefined);
-    assert.equal(openai.metadata['baseUrl'], 'https://gateway.internal/v1');
-    assert.equal(openai.metadata['timeoutMs'], 20000);
-    assert.deepEqual(openai.permissions, [
-      { kind: 'network', scope: 'https://gateway.internal/v1', mode: 'write' },
-    ]);
+    assert.equal(openai, undefined);
+    assert.equal(
+      result.graph.edges.some((edge) => edge.kind === 'served_by_provider'),
+      false,
+    );
   });
 
   it('records a client with no override against the provider itself', async () => {
