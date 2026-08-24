@@ -8,6 +8,17 @@ import {
 
 const MAX_ITEMS = 64;
 const MAX_TEXT = 256;
+const PERMISSION_KINDS = new Set([
+  'filesystem',
+  'network',
+  'process',
+  'model',
+  'secret',
+  'database',
+  'queue',
+  'mcp',
+]);
+const PERMISSION_MODES = new Set(['read', 'write', 'execute']);
 
 const isRecord = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 const isNonNegativeInteger = (value) => Number.isInteger(value) && value >= 0;
@@ -202,6 +213,39 @@ const checkComponents = (acceptance, problem) => {
     )
   ) {
     problem('acceptance.sourceCitations has to use distinct normalized repository-relative files');
+  }
+};
+
+const checkComponentPermissions = (acceptance, problem) => {
+  if (acceptance.componentPermissions === undefined) return;
+  if (
+    !isRecord(acceptance.componentPermissions) ||
+    Object.keys(acceptance.componentPermissions).length === 0 ||
+    Object.keys(acceptance.componentPermissions).length > MAX_ITEMS
+  ) {
+    problem('acceptance.componentPermissions has to hold exact permission populations');
+    return;
+  }
+  for (const [id, permissions] of Object.entries(acceptance.componentPermissions)) {
+    if (
+      !isBoundedString(id) ||
+      !isBoundedList(permissions) ||
+      permissions.length === 0 ||
+      permissions.some(
+        (permission) =>
+          !hasExactFields(permission, ['kind', 'scope', 'mode']) ||
+          !PERMISSION_KINDS.has(permission.kind) ||
+          !isBoundedString(permission.scope) ||
+          !PERMISSION_MODES.has(permission.mode),
+      ) ||
+      new Set(
+        permissions.map(
+          (permission) => `${permission.kind}\u0000${permission.scope}\u0000${permission.mode}`,
+        ),
+      ).size !== permissions.length
+    ) {
+      problem(`acceptance.componentPermissions.${id} has to list distinct exact permission claims`);
+    }
   }
 };
 
@@ -454,6 +498,7 @@ export const checkAcceptanceDefinition = (entry, problem) => {
     'requiredEdges',
     'componentMetadata',
     ...(acceptance.componentDetails === undefined ? [] : ['componentDetails']),
+    ...(acceptance.componentPermissions === undefined ? [] : ['componentPermissions']),
     'componentEvidence',
     'sourceCitations',
     ...(acceptance.adapterApplicability === undefined ? [] : ['adapterApplicability']),
@@ -494,6 +539,7 @@ export const checkAcceptanceDefinition = (entry, problem) => {
   checkIdentities(acceptance, problem);
   checkRelations(acceptance, problem);
   checkComponents(acceptance, problem);
+  checkComponentPermissions(acceptance, problem);
   checkApplicability(acceptance, problem);
   checkAdapterOutcomes(acceptance, problem);
   checkOutcome(acceptance, problem);

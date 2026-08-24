@@ -53,6 +53,11 @@ const blockedCompatibleProviderRecord = readFileSync(
   join(repositoryRoot, blockedCompatibleProviderRecordPath),
   'utf8',
 );
+const blockedReadOnlyPermissionRecordPath = 'docs/research/13383b88-blocked-blind-evaluation.md';
+const blockedReadOnlyPermissionRecord = readFileSync(
+  join(repositoryRoot, blockedReadOnlyPermissionRecordPath),
+  'utf8',
+);
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
   readonly scripts: Readonly<Record<string, string>>;
 };
@@ -137,6 +142,26 @@ const witnesses = [
     property: 'A compatible client class cannot establish endpoint-provider ownership.',
     file: 'packages/discovery/test/compatible-client-provider-identity.test.ts',
     title: 'keeps exact client-specific provider identities distinct from the SDK vendor',
+  },
+  {
+    property: 'An exact read-only datastore boundary cannot become a write permission.',
+    file: 'packages/discovery/test/provider-qualified-effects.test.ts',
+    title: 'reads an exact Python SQLite URI boundary as read-only',
+  },
+  {
+    property: 'An exact read-only datastore boundary cannot become a write permission.',
+    file: 'packages/discovery/test/provider-qualified-effects.test.ts',
+    title: 'does not treat a URI-shaped filename as read-only when URI handling is absent',
+  },
+  {
+    property: 'An exact read-only datastore boundary cannot become a write permission.',
+    file: 'packages/discovery/test/provider-qualified-effects.test.ts',
+    title: 'reads the exact Node SQLite constructor option and preserves the writable default',
+  },
+  {
+    property: 'An exact read-only datastore boundary cannot become a write permission.',
+    file: 'tests/e2e/corpus-acceptance.test.ts',
+    title: 'rejects same-sized semantic substitutions and evidence-free claims',
   },
   {
     property: 'Documentation prose does not become an executable prompt.',
@@ -943,6 +968,44 @@ describe('the frozen pre-release blind evaluation protocol', () => {
       ),
       false,
     );
+  });
+
+  it('blocks an unsupported SQLite write permission and pins both distinct regressions', () => {
+    for (const fact of [
+      '13383b88c22cfa7c1bb6035ff6a184ad60f61295',
+      'b7c9b14ffffbb1109f713bdea2518f2181ec8931d7de4a7318f745ee60cb8441',
+      'https://github.com/tanish-jain-225/job-hunter',
+      'dc69eab54408e1bfa2f927a776a565d750cb6152',
+      'c4cac1531ab80eda19398d9341c71ee73b9987e1',
+      '43c1bc84cd012163f1e3fd8ed320a46c0a809746254b504c932a56fb57942b78',
+      'https://github.com/pixle-codes/fenceline',
+      '7c614800b85849c5d0d4a61a7ea754e4261e120b',
+      'd2a0b24bd4d68e4d44843ad5523851a4294ba88f',
+      '5f6123e6eee6f1853bbe96e2f1e47d485901e4cb4c730a333e1c82cb9b562baf',
+      'f38a36d6ce98571f62d48387e81dfdc7b58f98cd3f87ddadbe2d94af8e35d85b',
+    ]) {
+      assert.ok(
+        blockedReadOnlyPermissionRecord.includes(fact),
+        `read-only permission block record omitted ${fact}`,
+      );
+    }
+    assert.match(blockedReadOnlyPermissionRecord, /release decision was \*\*BLOCK\*\*/);
+    assert.match(blockedReadOnlyPermissionRecord, /35 components and 17 relations/);
+    assert.match(blockedReadOnlyPermissionRecord, /mode=ro/);
+    assert.match(blockedReadOnlyPermissionRecord, /literal `uri=True`/);
+    assert.match(blockedReadOnlyPermissionRecord, /material\s+write-permission claim/);
+    assert.match(blockedReadOnlyPermissionRecord, /No target runtime was executed/);
+    assert.match(blockedReadOnlyPermissionRecord, /different unseen positive and negative pair/);
+    assert.doesNotMatch(
+      blockedReadOnlyPermissionRecord,
+      /\/Users\/|\/tmp\/|orchescope-blind-|\brun_[0-9a-f]{8}|\bev_[0-9a-f]{8}|traceId|spanId/,
+    );
+    assert.ok(protocol.includes('../research/13383b88-blocked-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/13383b88-blocked-blind-evaluation.md'));
+
+    const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
+    assert.equal(entries.filter((entry) => entry.name === 'job-hunter').length, 1);
+    assert.equal(entries.filter((entry) => entry.name === 'fenceline').length, 1);
   });
 
   it('keeps every documented metamorphic witness executable through the named gate', () => {

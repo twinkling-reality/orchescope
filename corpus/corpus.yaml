@@ -3582,6 +3582,268 @@ repositories:
           - ruleId: observability-coverage
             severity: info
 
+  - name: job-hunter
+    source: git
+    url: https://github.com/tanish-jain-225/job-hunter.git
+    commit: dc69eab54408e1bfa2f927a776a565d750cb6152
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive selected independently for the blind evaluation of candidate 13383b88. Its
+      scheduled fixed workflow fetches public ATS postings, passes candidate and job facts through an exact provider
+      interface, writes returned fit scores onto the jobs, selects the shortlist from those scores, generates a second
+      application kit for every selected job, persists the result and can send the digest. The model output therefore
+      governs the workflow rather than decorating a conventional scraper.
+
+      No framework-specific adapter recognizes that hand-written composition. The regression preserves the bounded
+      unsupported result rather than inventing a generic Agent identity: the effects and model readers remain visible,
+      every supported file is parsed, topology remains incomplete, and no strength or absence claim is inferred from
+      the missing agent identity. Its exact Git tree has 85 blobs and 1,298,559 blob bytes. The root MIT LICENSE has
+      SHA-256 43c1bc84cd012163f1e3fd8ed320a46c0a809746254b504c932a56fb57942b78. No runtime is attempted: its ordinary path
+      reaches public ATS services and model providers, persists local state and may send email, and no credential,
+      external population, model response or substitute execution is invented.
+    acceptance:
+      expectedAgentSystemDetected: false
+      graphPopulation:
+        components: 35
+        edges: 17
+      exactIdsByKind:
+        entrypoint:
+          - entrypoint:_post
+          - entrypoint:addcustomjobfrominput
+          - entrypoint:api_run
+          - entrypoint:api_sync
+          - entrypoint:authfetch
+          - entrypoint:check_company
+          - entrypoint:complete
+          - entrypoint:deletejobdirect
+          - entrypoint:fetch_board
+          - entrypoint:fetchandrenderjobs
+          - entrypoint:initauth
+          - entrypoint:loadstats
+          - entrypoint:markappliedfrominput
+          - entrypoint:run_multi_user_pipeline
+          - entrypoint:runpipeline
+          - entrypoint:toggleapplieddirect
+          - entrypoint:verify_token
+        external_service:
+          - external_service:same-origin-addcustomjobfrominput
+          - external_service:same-origin-deletejobdirect
+          - external_service:same-origin-initauth
+          - external_service:same-origin-loadstats
+          - external_service:same-origin-markappliedfrominput
+          - external_service:same-origin-runpipeline
+          - external_service:same-origin-toggleapplieddirect
+          - external_service:unresolved-host-_post
+          - external_service:unresolved-host-api_run
+          - external_service:unresolved-host-api_sync
+          - external_service:unresolved-host-authfetch
+          - external_service:unresolved-host-check_company
+          - external_service:unresolved-host-complete
+          - external_service:unresolved-host-fetch_board
+          - external_service:unresolved-host-fetchandrenderjobs
+          - external_service:unresolved-host-run_multi_user_pipeline
+          - external_service:unresolved-host-verify_token
+        provider:
+          - provider:anthropic
+      absentKinds:
+        - agent
+        - group
+        - model
+        - prompt
+        - tool
+        - workflow
+      absentComponentTerms:
+        - agent
+      requiredEdges:
+        - kind: calls_service
+          from: entrypoint:_post
+          to: external_service:unresolved-host-_post
+          sourceFile: jobhunt/providers.py
+          evidence:
+            - producer: adapter:effects
+              symbol: requests.post
+              sourceFile: jobhunt/providers.py
+              startLine: 147
+              endLine: 152
+            - producer: adapter:effects
+              symbol: retry loop around requests.post
+              sourceFile: jobhunt/providers.py
+              startLine: 145
+              endLine: 197
+      componentMetadata:
+        provider:anthropic:
+          client: Anthropic
+          compatibleClient: anthropic
+          providerBasis: library_default
+      componentPermissions:
+        provider:anthropic:
+          - kind: network
+            scope: anthropic
+            mode: write
+      componentEvidence:
+        provider:anthropic:
+          - producer: adapter:model-sdk
+            symbol: Anthropic
+            sourceFile: jobhunt/providers.py
+            startLine: 75
+            endLine: 75
+          - producer: adapter:model-sdk
+            symbol: Anthropic
+            sourceFile: jobhunt/providers.py
+            startLine: 78
+            endLine: 78
+      sourceCitations:
+        provider:anthropic:
+          - jobhunt/providers.py
+      adapterApplicability:
+        adapter:model-sdk:
+          relevantImports: 1
+          distinctFiles: 1
+          omittedImports: 0
+          fileSample:
+            - module: anthropic
+              imported: Anthropic
+              sourceFile: jobhunt/providers.py
+              startLine: 75
+      adapterOutcomes:
+        adapter:model-sdk:
+          status: completed
+          componentsFound: 1
+          edgesFound: 0
+          filesInspected: 1
+        adapter:effects:
+          status: completed
+          componentsFound: 35
+          edgesFound: 21
+          filesInspected: 8
+      topology:
+        status: incomplete
+        unresolvedCount: 2
+        conditionalDestinations: 0
+        producerPopulations:
+          - adapterId: adapter:model-sdk
+            status: incomplete
+            inspectedInputs: 1
+            relationsFound: 0
+          - adapterId: adapter:effects
+            status: incomplete
+            inspectedInputs: 0
+            relationsFound: 21
+            scope: control_flow
+        requiredRefusals:
+          - kind: adapter_input
+            reason: >-
+              adapter:model-sdk recognized a raw client or wrapper but has not stated a closed topology population for
+              that producer.
+            sourceFile: jobhunt/providers.py
+            startLine: 75
+        requiredUnlocatedRefusals:
+          - kind: adapter_input
+            reason: adapter:effects did not state an inspected topology population for this applicable input.
+      findings:
+        strengths: 0
+        requiredRules:
+          - retry-around-non-idempotent-operation
+          - observability-coverage
+        exactRisks:
+          - ruleId: retry-around-non-idempotent-operation
+            severity: high
+          - ruleId: observability-coverage
+            severity: info
+
+  - name: fenceline
+    source: git
+    url: https://github.com/pixle-codes/fenceline.git
+    commit: 7c614800b85849c5d0d4a61a7ea754e4261e120b
+    kind: not_agent_system
+    why: >-
+      The exact MIT-licensed negative control selected independently for the blind evaluation of candidate 13383b88.
+      Its executable Python reads completed Claude, Codex, generic JSONL and local SQLite session records into inert
+      events, applies deterministic policy predicates and renders findings. It neither constructs nor drives an agent,
+      selects tools or actions for a goal, nor delegates execution to downloaded agent code.
+
+      This negative contributes a distinct precision invariant. Its SQLite reader calls
+      sqlite3.connect(f"file:{path}?mode=ro", uri=True); the frozen candidate cited that exact source while claiming a
+      database write permission. The corrected effects adapter retains the database and query relation but reports
+      read permission and a zero write-permission overlay. A URI-shaped filename without literal uri=True and a Node
+      DatabaseSync without literal readOnly: true remain writable defaults in generalized fixtures. The exact Git tree
+      has 15 blobs and 64,474 blob bytes. The root MIT LICENSE has SHA-256
+      5f6123e6eee6f1853bbe96e2f1e47d485901e4cb4c730a333e1c82cb9b562baf.
+    acceptance:
+      graphPopulation:
+        components: 2
+        edges: 1
+      exactIdsByKind:
+        database:
+          - database:sqlite
+        entrypoint:
+          - entrypoint:read_db
+      absentKinds:
+        - agent
+        - group
+        - model
+        - prompt
+        - tool
+        - workflow
+      absentComponentTerms:
+        - agent
+        - model
+      requiredEdges:
+        - kind: queries_database
+          from: entrypoint:read_db
+          to: database:sqlite
+          sourceFile: fenceline/readers.py
+          evidence:
+            - producer: adapter:effects
+              symbol: sqlite3.connect
+              sourceFile: fenceline/readers.py
+              startLine: 342
+              endLine: 342
+      componentMetadata:
+        database:sqlite:
+          client: sqlite3.connect
+      componentPermissions:
+        database:sqlite:
+          - kind: database
+            scope: sqlite
+            mode: read
+      componentEvidence:
+        database:sqlite:
+          - producer: adapter:effects
+            symbol: sqlite3.connect
+            sourceFile: fenceline/readers.py
+            startLine: 342
+            endLine: 342
+      sourceCitations:
+        database:sqlite:
+          - fenceline/readers.py
+      adapterOutcomes:
+        adapter:effects:
+          status: completed
+          componentsFound: 2
+          edgesFound: 1
+          filesInspected: 1
+      topology:
+        status: incomplete
+        unresolvedCount: 1
+        conditionalDestinations: 0
+        producerPopulations:
+          - adapterId: adapter:effects
+            status: incomplete
+            inspectedInputs: 0
+            relationsFound: 1
+            scope: control_flow
+        requiredUnlocatedRefusals:
+          - kind: adapter_input
+            reason: adapter:effects did not state an inspected topology population for this applicable input.
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+        exactRisks:
+          - ruleId: observability-coverage
+            severity: info
+
   - name: flask
     source: git
     url: https://github.com/pallets/flask.git

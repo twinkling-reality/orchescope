@@ -104,6 +104,12 @@ an OpenAI-compatible client aimed at the exact GitHub Models endpoint was misrep
 provider-qualified model. The positive is pinned as an endpoint-provenance regression, the correctly classified
 negative adds no duplicate precision entry, and all exposed lineages are permanently ineligible as unseen holdouts.
 
+The [blocked 13383b88 evaluation](../research/13383b88-blocked-blind-evaluation.md) records a twelfth completed block:
+an exact SQLite connection opened with `mode=ro` and literal `uri=True` was assigned write permission, and the write
+overlay repeated that unsupported claim. The positive is pinned as a bounded hand-written-agent support boundary; the
+negative is pinned as a distinct exact read-only permission regression; and neither lineage can be reused as an unseen
+holdout.
+
 `pnpm package` writes `release/release-summary.json`. Read it rather than trusting the exit code:
 
 | Field | What it has to say |

@@ -26,8 +26,26 @@ The ninth candidate, commit `1f5fe556db5abd762c43c5d35f0b15e15f7df6df` with arch
 well. After a different pair cleared that candidate, the next candidate, commit
 `78c624105fee8f0b4c127cbdbeade583bc5cbdb4` with archive SHA-256
 `dc6853a6cc1ec289faeca0cf51ea4afbd8ccaba649394cc05ea7ef6a613112fd`, was independently evaluated and blocked by a
-wrong provider identity. None was published, tagged, pushed or attached to a release. A corrected candidate cannot be
-published until a different unseen positive and negative pair clears the blind gate.
+wrong provider identity. Candidate `13383b88c22cfa7c1bb6035ff6a184ad60f61295` with archive SHA-256
+`b7c9b14ffffbb1109f713bdea2518f2181ec8931d7de4a7318f745ee60cb8441` was independently evaluated and blocked by an
+unsupported database write-permission claim over an exact read-only SQLite connection. None was published, tagged,
+pushed or attached to a release. A corrected candidate cannot be published until a different unseen positive and
+negative pair clears the blind gate.
+
+### Exact datastore access boundaries determine permission mode
+
+Provider-qualified SQLite clients retain their exact source-declared access boundary. Python `sqlite3.connect` is
+read-only only when an exact URI contains `mode=ro` and the call also supplies literal `uri=True`; a URI-shaped filename
+without URI handling retains the writable default. Node's exact `node:sqlite.DatabaseSync` constructor is read-only
+only with literal `readOnly: true`. Dynamic options establish neither boundary.
+
+The independently selected Fenceline negative exposed the defect: the frozen package cited
+`sqlite3.connect(f"file:{path}?mode=ro", uri=True)` while assigning `database:sqlite` write permission and counting one
+write in the permissions overlay. The corrected component carries read permission and the overlay consequently counts
+zero writes. Corpus acceptance pins exact component permission populations, so a same-count permission substitution is
+a semantic failure. Fenceline contributes 33 assertions over its identity, read permission, query relation, evidence,
+topology and findings. The selected Job Hunter positive contributes 49 assertions preserving its bounded hand-written
+agent support boundary without guessing a generic Agent identity.
 
 ### Compatible clients do not establish endpoint-provider ownership
 

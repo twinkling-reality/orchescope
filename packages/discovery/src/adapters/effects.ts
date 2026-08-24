@@ -136,6 +136,50 @@ const DATASTORE_CLIENTS: readonly {
   { names: ['DatabaseSync'], packages: ['node:sqlite'], store: 'sqlite' },
 ];
 
+const positionalArguments = (call: CallFact): readonly ArgumentFact[] =>
+  call.args.filter((argument) => argument.kind !== 'object' || argument.role !== 'keywords');
+
+const keywordArgument = (call: CallFact, name: string): ArgumentFact | undefined => {
+  const keywords = call.args.find(
+    (argument) => argument.kind === 'object' && argument.role === 'keywords',
+  );
+  return keywords?.kind === 'object' ? findEntry(keywords.entries, name)?.value : undefined;
+};
+
+const sqliteUriIsReadOnly = (value: ArgumentFact | undefined): boolean => {
+  if (value?.kind !== 'string' && value?.kind !== 'template') return false;
+  return /(?:[?&])mode=ro(?:[&#]|$)/u.test(value.value);
+};
+
+/**
+ * Whether a SQLite constructor's own exact options restrict the connection to reads.
+ *
+ * Python only interprets URI query parameters when `uri=True`; without that keyword, `?mode=ro` is part
+ * of an ordinary filename and proves no access boundary. Node exposes the same boundary as the exact
+ * `readOnly` constructor option. Dynamic options establish neither form, so the default capability
+ * remains write rather than being weakened from a name or an incidental string.
+ */
+const sqliteConnectionIsReadOnly = (
+  store: (typeof DATASTORE_CLIENTS)[number],
+  call: CallFact,
+): boolean => {
+  if (store.store !== 'sqlite') return false;
+  if (store.packages.includes('sqlite3')) {
+    return (
+      keywordArgument(call, 'uri')?.kind === 'boolean' &&
+      keywordArgument(call, 'uri')?.value === true &&
+      sqliteUriIsReadOnly(positionalArguments(call)[0])
+    );
+  }
+  const options = positionalArguments(call)[1];
+  return (
+    store.packages.includes('node:sqlite') &&
+    options?.kind === 'object' &&
+    findEntry(options.entries, 'readOnly')?.value.kind === 'boolean' &&
+    findEntry(options.entries, 'readOnly')?.value.value === true
+  );
+};
+
 /** Whether the call resolves to the candidate's exact runtime provider. */
 const datastoreCallMatches = (
   context: DiscoveryContext,
@@ -1106,6 +1150,7 @@ const discoverStores = (
     );
     if (store !== undefined) {
       const identity = globalIdentity('database', GLOBAL_NAMESPACES.datastore, store.store);
+      const permissionMode = sqliteConnectionIsReadOnly(store, call) ? 'read' : 'write';
       builder.addComponent(
         drafts.sourceComponent({
           kind: 'database',
@@ -1116,7 +1161,7 @@ const discoverStores = (
           symbol: dotted(call.calleePath),
           confidence: CONFIDENCE_BANDS.structural,
           sideEffect: 'unknown',
-          permissions: [{ kind: 'database', scope: store.store, mode: 'write' }],
+          permissions: [{ kind: 'database', scope: store.store, mode: permissionMode }],
           metadata: { client: dotted(call.calleePath) },
           tags: ['datastore'],
         }),
@@ -1776,7 +1821,7 @@ const discoverDecoratedRetries = (
 
 export const effectsAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '4',
+  version: '5',
   // A side effect is a convention, not a package.
   packages: [],
   appliesTo: (context) => context.modules.length > 0,

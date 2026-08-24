@@ -28,6 +28,9 @@ const entry = {
     ],
     componentMetadata: { 'agent:a': { configurationDefault: true } },
     componentDetails: { 'agent:a': { interpolatesUntrustedInput: true } },
+    componentPermissions: {
+      'agent:a': [{ kind: 'network', scope: 'models.example.com', mode: 'write' }],
+    },
     componentEvidence: {
       'agent:a': [
         {
@@ -130,6 +133,7 @@ const bundle = () => ({
         kind: 'agent',
         metadata: { configurationDefault: true },
         details: { interpolatesUntrustedInput: true },
+        permissions: [{ kind: 'network', scope: 'models.example.com', mode: 'write' }],
         sourceLocations: [source],
         evidence: ['ev_agent'],
       },
@@ -214,6 +218,7 @@ describe('corpus semantic acceptance', () => {
         kind: 'database',
         metadata: { configurationDefault: false },
         details: { interpolatesUntrustedInput: false },
+        permissions: [{ kind: 'network', scope: 'models.example.com', mode: 'read' }],
         sourceLocations: [source],
         evidence: [],
       },
@@ -237,6 +242,7 @@ describe('corpus semantic acceptance', () => {
     assert.match(broken, /edge kind uses_prompt was present/);
     assert.match(broken, /agent:a -> agent:a was absent/);
     assert.match(broken, /component agent:a was absent/);
+    assert.match(broken, /agent:a permissions/);
     assert.match(broken, /applicability.relevantImports/);
     assert.match(broken, /topology.status/);
     assert.match(broken, /reported 1 strengths/);

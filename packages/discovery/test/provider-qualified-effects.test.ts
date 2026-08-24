@@ -263,3 +263,62 @@ new Queue();
     );
   });
 });
+
+describe('source-settled datastore permissions', () => {
+  it('reads an exact Python SQLite URI boundary as read-only', async () => {
+    const created = workspace();
+    created.write(
+      'src/read_only.py',
+      `import sqlite3
+
+def open_read_only(path: str):
+    return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+`,
+    );
+    const result = await scan(created);
+    assert.deepEqual(component(result, 'database', 'sqlite')?.permissions, [
+      { kind: 'database', scope: 'sqlite', mode: 'read' },
+    ]);
+  });
+
+  it('does not treat a URI-shaped filename as read-only when URI handling is absent', async () => {
+    const created = workspace();
+    created.write(
+      'src/filename.py',
+      `import sqlite3
+
+sqlite3.connect("file:records.db?mode=ro")
+`,
+    );
+    const result = await scan(created);
+    assert.deepEqual(component(result, 'database', 'sqlite')?.permissions, [
+      { kind: 'database', scope: 'sqlite', mode: 'write' },
+    ]);
+  });
+
+  it('reads the exact Node SQLite constructor option and preserves the writable default', async () => {
+    const readOnly = workspace();
+    readOnly.write(
+      'src/read-only.ts',
+      `import { DatabaseSync } from 'node:sqlite';
+new DatabaseSync('records.db', { readOnly: true });
+`,
+    );
+    const readOnlyResult = await scan(readOnly);
+    assert.deepEqual(component(readOnlyResult, 'database', 'sqlite')?.permissions, [
+      { kind: 'database', scope: 'sqlite', mode: 'read' },
+    ]);
+
+    const writable = workspace();
+    writable.write(
+      'src/writable.ts',
+      `import { DatabaseSync } from 'node:sqlite';
+new DatabaseSync('records.db');
+`,
+    );
+    const writableResult = await scan(writable);
+    assert.deepEqual(component(writableResult, 'database', 'sqlite')?.permissions, [
+      { kind: 'database', scope: 'sqlite', mode: 'write' },
+    ]);
+  });
+});

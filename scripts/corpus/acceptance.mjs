@@ -27,6 +27,12 @@ const sortedRows = (rows) =>
 const sortedExactRows = (rows) =>
   [...rows].sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
 
+const permissionRow = (permission) => ({
+  kind: permission.kind,
+  scope: permission.scope,
+  mode: permission.mode,
+});
+
 const configurationBoundRow = (fact) =>
   fact.kind === 'invocation_ceiling'
     ? {
@@ -288,6 +294,13 @@ const graphAcceptanceVerdict = (acceptance, bundle) => {
   }
   holdComponentValues('metadata', acceptance.componentMetadata, componentById, hold);
   holdComponentValues('details', acceptance.componentDetails, componentById, hold);
+  for (const [id, expected] of Object.entries(acceptance.componentPermissions ?? {})) {
+    const observed = (componentById.get(id)?.permissions ?? []).map(permissionRow);
+    hold(
+      JSON.stringify(sortedExactRows(observed)) === JSON.stringify(sortedExactRows(expected)),
+      `${id} permissions were ${JSON.stringify(sortedExactRows(observed))}, expected ${JSON.stringify(sortedExactRows(expected))}`,
+    );
+  }
   for (const [id, expected] of Object.entries(acceptance.componentEvidence)) {
     const component = componentById.get(id);
     for (const evidence of expected) {
