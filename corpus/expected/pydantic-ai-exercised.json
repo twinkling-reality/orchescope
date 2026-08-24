@@ -61,7 +61,7 @@
       "status": "completed"
     },
     "adapter:model-sdk": {
-      "componentsFound": 5,
+      "componentsFound": 7,
       "edgesFound": 2,
       "filesInspected": 65,
       "status": "completed"
@@ -113,12 +113,12 @@
       "mcp_server": 5,
       "model": 21,
       "prompt": 28,
-      "provider": 6,
+      "provider": 8,
       "retrieval": 1,
       "tool": 501
     },
     "declaredInTest": 948,
-    "total": 1068
+    "total": 1070
   },
   "discardedRelations": [],
   "files": {
