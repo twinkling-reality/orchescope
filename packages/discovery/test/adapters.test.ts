@@ -2770,6 +2770,300 @@ def business_hours() -> str:
     );
   });
 
+  it('keeps a decorated tool when another scope destructures the same variable name', async () => {
+    const { ids, edges } = await scan((workspace) => {
+      writePythonProject(workspace, { name: 'scoped-pai', dependencies: ['pydantic-ai>=1.0'] });
+      workspace.write(
+        'src/scoped.py',
+        `from pydantic_ai import Agent
+
+def build():
+    agent = Agent('openai:gpt-4.1-mini')
+
+    @agent.tool_plain
+    def lookup() -> str:
+        return 'ok'
+
+    return agent
+
+def unrelated(values):
+    agent, other = values
+    return agent, other
+`,
+      );
+    });
+    assert.ok(ids.includes('tool:build.lookup'));
+    assert.ok(
+      edges.includes('calls_tool:agent:agent->tool:build.lookup'),
+      `expected the scoped tool relation in ${edges.join(', ')}`,
+    );
+  });
+
+  it('does not attach a decorated tool after an explicit outer-scope Agent replacement', async () => {
+    for (const source of [
+      `from pydantic_ai import Agent
+
+agent = Agent('openai:gpt-4.1-mini')
+
+def replace():
+    global agent
+    agent = foreign
+
+replace()
+
+@agent.tool_plain
+def lookup() -> str:
+    return 'ok'
+`,
+      `from pydantic_ai import Agent
+
+def outer():
+    agent = Agent('openai:gpt-4.1-mini')
+
+    def replace():
+        nonlocal agent
+        agent = foreign
+
+    replace()
+
+    @agent.tool_plain
+    def lookup() -> str:
+        return 'ok'
+
+    return agent
+`,
+    ]) {
+      const { edges } = await scan((workspace) => {
+        writePythonProject(workspace, {
+          name: 'outer-scope-pai',
+          dependencies: ['pydantic-ai>=1.0'],
+        });
+        workspace.write('src/scoped.py', source);
+      });
+      assert.equal(
+        edges.some((edge) => edge.startsWith('calls_tool:')),
+        false,
+        `an outer-scope replacement retained a tool edge in ${edges.join(', ')}`,
+      );
+    }
+  });
+
+  it('does not lend a global or nonlocal write to an unrelated same-named Agent', async () => {
+    for (const source of [
+      `from pydantic_ai import Agent
+
+def build():
+    agent = Agent('openai:gpt-4.1-mini')
+
+    @agent.tool_plain
+    def lookup() -> str:
+        return 'ok'
+
+    return agent
+
+def replace_module_binding():
+    global agent
+    agent = foreign
+`,
+      `from pydantic_ai import Agent
+
+def first():
+    agent = Agent('openai:gpt-4.1-mini')
+
+    @agent.tool_plain
+    def first_tool() -> str:
+        return 'ok'
+
+    return agent
+
+def second():
+    agent = Agent('openai:gpt-4.1-mini')
+    def replace():
+        nonlocal agent
+        agent = foreign
+    replace()
+    return agent
+`,
+    ]) {
+      const { edges } = await scan((workspace) => {
+        writePythonProject(workspace, {
+          name: 'unrelated-outer-scope-pai',
+          dependencies: ['pydantic-ai>=1.0'],
+        });
+        workspace.write('src/scoped.py', source);
+      });
+      assert.ok(
+        edges.some(
+          (edge) =>
+            edge === 'calls_tool:agent:agent->tool:build.lookup' ||
+            edge === 'calls_tool:agent:agent->tool:first.first_tool',
+        ),
+        `an unrelated outer-scope write removed a tool edge from ${edges.join(', ')}`,
+      );
+    }
+  });
+
+  it('does not lend an unresolved nonlocal write to a module Agent', async () => {
+    const { edges } = await scan((workspace) => {
+      writePythonProject(workspace, {
+        name: 'loop-target-scope-pai',
+        dependencies: ['pydantic-ai>=1.0'],
+      });
+      workspace.write(
+        'src/scoped.py',
+        `from pydantic_ai import Agent
+
+agent = Agent('openai:gpt-4.1-mini')
+
+@agent.tool_plain
+def module_tool() -> str:
+    return 'ok'
+
+def outer(values):
+    for agent in values:
+        pass
+    def replace():
+        nonlocal agent
+        agent = foreign
+    replace()
+`,
+      );
+    });
+    assert.ok(
+      edges.includes('calls_tool:agent:agent->tool:module_tool'),
+      `a loop-local nonlocal write removed the module tool edge from ${edges.join(', ')}`,
+    );
+  });
+
+  it('settles nonlocal writes by exact nested owner rather than a repeated callable name', async () => {
+    const siblingScopes = await scan((workspace) => {
+      writePythonProject(workspace, {
+        name: 'same-nested-scope-pai',
+        dependencies: ['pydantic-ai>=1.0'],
+      });
+      workspace.write(
+        'src/scoped.py',
+        `from pydantic_ai import Agent
+
+def first():
+    def build():
+        agent = Agent('openai:gpt-4.1-mini')
+        @agent.tool_plain
+        def first_tool() -> str:
+            return 'ok'
+        return agent
+    return build()
+
+def second():
+    def build():
+        agent = Agent('openai:gpt-4.1-mini')
+        def replace():
+            nonlocal agent
+            agent = foreign
+        replace()
+        return agent
+    return build()
+`,
+      );
+    });
+    assert.ok(
+      siblingScopes.edges.some(
+        (edge) => edge.startsWith('calls_tool:') && edge.endsWith('->tool:build.first_tool'),
+      ),
+      `a same-named sibling scope removed first_tool from ${siblingScopes.edges.join(', ')}`,
+    );
+
+    const grandparent = await scan((workspace) => {
+      writePythonProject(workspace, {
+        name: 'grandparent-scope-pai',
+        dependencies: ['pydantic-ai>=1.0'],
+      });
+      workspace.write(
+        'src/scoped.py',
+        `from pydantic_ai import Agent
+
+def outer():
+    agent = Agent('openai:gpt-4.1-mini')
+    def middle():
+        def replace():
+            nonlocal agent
+            agent = foreign
+        replace()
+    middle()
+    @agent.tool_plain
+    def lookup() -> str:
+        return 'ok'
+    return agent
+`,
+      );
+    });
+    assert.equal(
+      grandparent.edges.some((edge) => edge.startsWith('calls_tool:')),
+      false,
+      `a grandparent replacement retained a tool edge in ${grandparent.edges.join(', ')}`,
+    );
+  });
+
+  it('keeps class namespaces distinct while nonlocal skips the class closure', async () => {
+    const siblings = await scan((workspace) => {
+      writePythonProject(workspace, {
+        name: 'class-scope-pai',
+        dependencies: ['pydantic-ai>=1.0'],
+      });
+      workspace.write(
+        'src/scoped.py',
+        `from pydantic_ai import Agent
+
+class First:
+    agent = Agent('openai:gpt-4.1-mini')
+    @agent.tool_plain
+    def first_tool() -> str:
+        return 'first'
+
+class Second:
+    agent = Agent('openai:gpt-4.1-mini')
+    @agent.tool_plain
+    def second_tool() -> str:
+        return 'second'
+`,
+      );
+    });
+    assert.equal(
+      siblings.edges.filter((edge) => edge.startsWith('calls_tool:')).length,
+      2,
+      `sibling class namespaces collapsed in ${siblings.edges.join(', ')}`,
+    );
+
+    const classClosure = await scan((workspace) => {
+      writePythonProject(workspace, {
+        name: 'class-closure-pai',
+        dependencies: ['pydantic-ai>=1.0'],
+      });
+      workspace.write(
+        'src/scoped.py',
+        `from pydantic_ai import Agent
+
+def outer():
+    agent = Agent('openai:gpt-4.1-mini')
+    class Mutator:
+        def replace(self):
+            nonlocal agent
+            agent = foreign
+    Mutator().replace()
+    @agent.tool_plain
+    def lookup() -> str:
+        return 'ok'
+    return agent
+`,
+      );
+    });
+    assert.equal(
+      classClosure.edges.some((edge) => edge.startsWith('calls_tool:')),
+      false,
+      `a class method nonlocal replacement retained a tool edge in ${classClosure.edges.join(', ')}`,
+    );
+  });
+
   it('records the retry ceiling on the relation and never claims the effect is safe to repeat', async () => {
     const { result } = await scan(build);
     const edge = result.graph.edges.find(

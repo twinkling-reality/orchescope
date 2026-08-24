@@ -31,6 +31,11 @@ const blockedLegacyLangChainRecord = readFileSync(
   join(repositoryRoot, blockedLegacyLangChainRecordPath),
   'utf8',
 );
+const blockedBrowserUseRecordPath = 'docs/research/97ac6b4e-blocked-blind-evaluation.md';
+const blockedBrowserUseRecord = readFileSync(
+  join(repositoryRoot, blockedBrowserUseRecordPath),
+  'utf8',
+);
 const passedRecordPath = 'docs/research/95c7756c-passed-blind-evaluation.md';
 const passedRecord = readFileSync(join(repositoryRoot, passedRecordPath), 'utf8');
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
@@ -131,6 +136,37 @@ const witnesses = [
       'A legacy LangChain agent requires exact factory and executor provenance, and a local wrapper cannot disappear silently.',
     file: 'packages/discovery/test/langchain-legacy-agent.test.ts',
     title: 'does not grant legacy identity to a foreign lookalike',
+  },
+  {
+    property:
+      'A browser-use Agent requires exact runtime provenance and a stable source identity; an unsettled run remains an explicit source-located refusal.',
+    file: 'packages/discovery/test/browser-use-agent.test.ts',
+    title: 'settles a returned Agent factory and preserves its exact run boundary',
+  },
+  {
+    property:
+      'A browser-use Agent requires exact runtime provenance and a stable source identity; an unsettled run remains an explicit source-located refusal.',
+    file: 'packages/discovery/test/browser-use-agent.test.ts',
+    title: 'supports direct, renamed and namespace Agent imports without guessing a provider',
+  },
+  {
+    property:
+      'A browser-use Agent requires exact runtime provenance and a stable source identity; an unsettled run remains an explicit source-located refusal.',
+    file: 'packages/discovery/test/browser-use-agent.test.ts',
+    title: 'refuses foreign, local and shadowed lookalikes and a rebound run receiver',
+  },
+  {
+    property:
+      'A browser-use Agent requires exact runtime provenance and a stable source identity; an unsettled run remains an explicit source-located refusal.',
+    file: 'packages/discovery/test/browser-use-agent.test.ts',
+    title:
+      'keeps factories, nested constructions and run receivers inside their exact source bindings',
+  },
+  {
+    property:
+      'A Pydantic AI assignment can destabilize only its exact local, global or nonlocal Agent binding.',
+    file: 'packages/discovery/test/adapters.test.ts',
+    title: 'keeps a decorated tool when another scope destructures the same variable name',
   },
   {
     property: 'Input order does not change semantic identity or selected evidence.',
@@ -576,6 +612,45 @@ describe('the frozen pre-release blind evaluation protocol', () => {
         (entry) =>
           entry.name === 'claude-jsonl-viewer' ||
           entry.url === 'https://github.com/aichain-tw/claude-jsonl-viewer.git',
+      ),
+      false,
+    );
+  });
+
+  it('blocks silent browser-use agents and promotes only the source-settled positive invariant', () => {
+    for (const fact of [
+      '97ac6b4e48023ad6fa2e465a702abe4422a16a7d',
+      '91c71ad094f13bf6f28f7a3798db43289c3e126bcc5d1b975ef4a87459956f39',
+      'https://github.com/Arfazrll/Browser-Automation-Agent',
+      'd139df4234b8953e82fa4b635e07e68387ffa1a3',
+      '7d0a21635bfbdf0b1b29ba95056f018e42d5de912446a430e58f4e94b09db039',
+      'https://github.com/frankchiu-dev/claude-codex-usage-dashboard',
+      '96fcb981327bc86b15c8b3fb9be3fd8836eb2a7f',
+      '33a6ae5ff8d5d779db2776f5293e6922b07064bdd42274aaef9da21c3fe34bf0',
+      '54d342dbe0ca4900cbf01e84f397de503eed83682df6bbd147b5f96b65b364c7',
+    ]) {
+      assert.ok(blockedBrowserUseRecord.includes(fact), `browser-use block record omitted ${fact}`);
+    }
+    assert.match(blockedBrowserUseRecord, /release decision was \*\*BLOCK\*\*/);
+    assert.match(blockedBrowserUseRecord, /zero components, zero relations, zero evidence/);
+    assert.match(blockedBrowserUseRecord, /publication-blocking misleading silence/);
+    assert.match(blockedBrowserUseRecord, /No target runtime was executed/);
+    assert.match(blockedBrowserUseRecord, /negative contributes no additional precision invariant/);
+    assert.match(blockedBrowserUseRecord, /different unseen positive and negative pair/);
+    assert.doesNotMatch(
+      blockedBrowserUseRecord,
+      /\/Users\/|\/tmp\/|\brun_[0-9a-f]{8}\b|\bev_[0-9a-f]{8}\b|traceId|spanId/,
+    );
+    assert.ok(protocol.includes('../research/97ac6b4e-blocked-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/97ac6b4e-blocked-blind-evaluation.md'));
+
+    const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
+    assert.equal(entries.filter((entry) => entry.name === 'browser-automation-agent').length, 1);
+    assert.equal(
+      entries.some(
+        (entry) =>
+          entry.name === 'claude-codex-usage-dashboard' ||
+          entry.url === 'https://github.com/frankchiu-dev/claude-codex-usage-dashboard.git',
       ),
       false,
     );

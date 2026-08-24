@@ -17,8 +17,43 @@ The fifth candidate, commit `724a1abda9a1176b28b5633495d67a6b0e2bc194` with arch
 `38981b8d9a6a6b626d74c7ae9ebb170cb550217528011270165a207cc5cfbcc5`, was independently evaluated and blocked as well.
 The sixth candidate, commit `84c80b2e2ee1935c6925d12b585f02782358f122`, produced the same archive bytes because
 its correction changed only the evaluation protocol and corpus records; it was independently evaluated with a different
-pair and blocked too. None was published, tagged, pushed or attached to a release. A corrected candidate cannot be
+pair and blocked too. The seventh candidate, commit `97ac6b4e48023ad6fa2e465a702abe4422a16a7d` with archive SHA-256
+`91c71ad094f13bf6f28f7a3798db43289c3e126bcc5d1b975ef4a87459956f39`, was independently evaluated and blocked as
+well. None was published, tagged, pushed or attached to a release. A corrected candidate cannot be
 published until a different unseen positive and negative pair clears the blind gate.
+
+### Browser-use agents retain a source-settled execution boundary
+
+Exact `browser_use.Agent` imports now have a dedicated source reader. Direct, renamed and namespace imports preserve
+their runtime provenance; foreign modules, local lookalikes and shadows do not acquire browser-use
+identity. A direct stable assignment supplies source identity, and one exact Agent returned by a local factory may be
+joined to the stable result binding at its call site. Ownerless constructions and repeated factories become
+source-located identity refusals. A retained construction whose receiver is rebound, mutated, captured, destructured
+or passed through an unsettled operation before a run keeps its construction evidence but does not acquire that run
+boundary. Writes after the run cannot be presented as though they preceded it.
+
+The exact `Agent(...)` construction supports the retained agent component. A stable `agent.run(...)` call adds its
+execution boundary; an intervening operation instead produces a source-located refusal without erasing the agent. A
+computed or factory-carried `llm` input does not become an exact model or provider relation. Dynamic tasks remain
+prompt-use refusals, and a runtime-configured `max_steps` value does not become a universal execution bound. Browser
+actions selected at runtime do not become a closed source topology. A positive literal run limit is exact only for its
+call and is not mislabeled as a configuration default.
+
+Python callable facts distinguish a generator from an ordinary function without lending a nested generator to its
+owner, and keep destructuring source references without lending the whole right-hand side to any target. The
+fact-cache version is 22 so a scan cannot reuse an earlier callable, assignment or binding-scope fact that omitted
+those execution boundaries. A Pydantic AI agent is destabilized only by assignments in its own lexical scope or an
+explicit Python `global`/`nonlocal` target; a same-named
+destructuring write in another function cannot erase its decorated tools or relations. Nonlocal targets carry the
+exact owning callable range, so repeated nested function names do not collapse distinct bindings.
+Class-body bindings carry the class namespace range while `nonlocal` lookup continues through the surrounding
+function chain, matching Python's closure boundary.
+
+The defect was found by the independently selected `Browser-Automation-Agent` holdout. All 13 supported Python files
+parsed, yet the frozen candidate reported zero parts, no agent system and no unsupported input despite its exact
+browser-use construction and run call. The positive is pinned as a source-cited component-and-refusal regression.
+The selected `claude-codex-usage-dashboard` negative was correctly reported as adjacent local usage tooling and adds no
+distinct precision invariant. Both source lineages are permanently ineligible as future blind holdouts.
 
 ### Blind negative roles are verified from acquired source
 

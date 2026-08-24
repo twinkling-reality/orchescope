@@ -76,6 +76,12 @@ an active legacy LangChain `create_openai_tools_agent` and `AgentExecutor` popul
 identity or bounded refusal while its enclosing LangGraph workflow was reported. The positive is a permanent regression
 input, the negative adds no duplicate precision entry, and neither lineage can be reused as an unseen holdout.
 
+The [blocked 97ac6b4e evaluation](../research/97ac6b4e-blocked-blind-evaluation.md) records an eighth completed block:
+an exact `browser_use.Agent` construction disappeared and its candidate run call received no bounded refusal even though every supported Python file
+parsed, and the terminal document claimed that no agent system was present without a bounded refusal. The positive is a
+permanent source-cited regression, the negative adds no duplicate precision entry, and neither lineage can be reused as
+an unseen holdout.
+
 The [passed 95c7756c evaluation](../research/95c7756c-passed-blind-evaluation.md) records the same boundary for a
 completed passing gate. Its selected positive becomes a regression input, its negative adds no duplicate corpus entry,
 and neither source lineage can be reused as an unseen holdout.

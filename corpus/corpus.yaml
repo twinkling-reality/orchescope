@@ -1899,6 +1899,122 @@ repositories:
           - ruleId: observability-coverage
             severity: info
 
+  - name: browser-automation-agent
+    source: git
+    url: https://github.com/Arfazrll/Browser-Automation-Agent.git
+    commit: d139df4234b8953e82fa4b635e07e68387ffa1a3
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive application selected independently for the blind evaluation of candidate
+      97ac6b4e. It imports `Agent` from `browser_use`, returns one exact construction from a local `build_agent`
+      factory, assigns that factory result in the runner and later awaits `agent.run`. The regression prevents a fully
+      parsed browser-use application from being reported as having no agent system and no unsupported boundary.
+
+      The invariant requires exact browser-use runtime provenance, a stable assigned-call-site agent identity, source
+      evidence at the import, construction and factory result, and bounded refusals for the computed model client,
+      runtime-selected browser topology, dynamic task prompt and the run receiver after an intervening clock call. It does not infer a
+      model/provider identity, prompt value, browser action graph or universal max-step value from configuration. The
+      target supplies no fake or offline runtime path and ordinary execution requires an absent Google provider
+      credential. Its MIT LICENSE has SHA-256
+      7d0a21635bfbdf0b1b29ba95056f018e42d5de912446a430e58f4e94b09db039.
+    # The exact semantic contract is not recordable. Aggregate observations may be refreshed, but this
+    # application cannot again become a completed zero or lose its construction evidence and run-boundary refusal.
+    acceptance:
+      graphPopulation:
+        components: 1
+        edges: 0
+      exactIdsByKind:
+        agent:
+          - agent:run_task.agent
+      absentKinds:
+        - agent_group
+        - workflow
+        - workflow_step
+        - model
+        - provider
+        - prompt
+        - tool
+      absentComponentTerms:
+        - browser_use.agent
+        - google
+        - gemini
+        - groq
+      requiredEdges: []
+      componentMetadata:
+        agent:run_task.agent:
+          framework: browser-use
+          sourceBinding: run_task.agent
+      componentEvidence:
+        agent:run_task.agent:
+          - producer: adapter:browser-use-agent
+            symbol: browser_use.Agent import
+            sourceFile: src/agentbrowser/core/agent.py
+            startLine: 15
+            endLine: 15
+          - producer: adapter:browser-use-agent
+            symbol: browser_use.Agent
+            sourceFile: src/agentbrowser/core/agent.py
+            startLine: 101
+            endLine: 105
+          - producer: adapter:browser-use-agent
+            symbol: build_agent result
+            sourceFile: src/agentbrowser/core/runner.py
+            startLine: 14
+            endLine: 14
+      sourceCitations:
+        agent:run_task.agent:
+          - src/agentbrowser/core/agent.py
+          - src/agentbrowser/core/runner.py
+      adapterApplicability:
+        adapter:browser-use-agent:
+          relevantImports: 1
+          distinctFiles: 1
+          omittedImports: 0
+          fileSample:
+            - module: browser_use
+              imported: Agent
+              sourceFile: src/agentbrowser/core/agent.py
+              startLine: 15
+      adapterOutcomes:
+        adapter:browser-use-agent:
+          status: completed
+          componentsFound: 1
+          edgesFound: 0
+          filesInspected: 2
+        adapter:prompts:
+          status: completed
+          componentsFound: 0
+          edgesFound: 0
+          filesInspected: 1
+      topology:
+        status: incomplete
+        unresolvedCount: 4
+        conditionalDestinations: 0
+        requiredRefusals:
+          - kind: explicit_relation
+            reason: Browser-use selects browser actions at runtime, so source does not establish a closed internal control-flow topology.
+            sourceFile: src/agentbrowser/core/agent.py
+            startLine: 101
+          - kind: prompt_input
+            reason: 'adapter:browser-use-agent task: prompt binding is ambiguous, shadowed, reassigned or computed'
+            sourceFile: src/agentbrowser/core/agent.py
+            startLine: 102
+          - kind: adapter_input
+            reason: The browser-use Agent llm input was not linked to an exact supported model identity, so no model or provider relation was added.
+            sourceFile: src/agentbrowser/core/agent.py
+            startLine: 103
+          - kind: entry_boundary
+            reason: Source did not prove that a browser-use run receiver remained stable through an intervening operation, so the run boundary was not attached to an agent identity.
+            sourceFile: src/agentbrowser/core/runner.py
+            startLine: 15
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+        exactRisks:
+          - ruleId: observability-coverage
+            severity: info
+
   - name: langchain-langgraph-agents
     source: git
     url: https://github.com/Chaitanya-Keyal/langchain-langgraph-agents.git

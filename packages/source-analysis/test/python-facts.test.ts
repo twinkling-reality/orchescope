@@ -14,6 +14,30 @@ const analyze = (text: string, file = 'src/agents/triage.py') =>
   analyzePython({ file, text, contentHash: 'b'.repeat(64) });
 
 describe('python fact extraction', () => {
+  it('distinguishes a generator from an ordinary or nested-generator factory', async () => {
+    const facts = await analyze(`
+def ordinary():
+    return Agent()
+
+def generated():
+    yield other
+    return Agent()
+
+def outer():
+    def nested():
+        yield other
+    return Agent()
+
+`);
+    const definitions = new Map(
+      facts.definitions.map((definition) => [definition.name, definition]),
+    );
+    assert.equal(definitions.get('ordinary')?.generator, undefined);
+    assert.equal(definitions.get('generated')?.generator, true);
+    assert.equal(definitions.get('outer')?.generator, undefined);
+    assert.equal(definitions.get('outer.nested')?.generator, true);
+  });
+
   it('records plain, aliased and from imports', async () => {
     const facts = await analyze(`
 import openai
@@ -69,6 +93,77 @@ def outer():
     assert.equal(calls[1]?.origin, undefined);
     assert.equal(calls[2]?.origin, undefined);
     assert.equal(calls[3]?.origin?.module, 'openai');
+  });
+
+  it('retains global and nonlocal ownership on Python writes', async () => {
+    const facts = await analyze(`
+agent = Agent()
+
+def replace_global():
+    global agent
+    agent = foreign
+    del agent
+
+def outer():
+    worker = Agent()
+    def replace_nonlocal():
+        nonlocal worker
+        worker = foreign
+        worker += foreign
+    return worker
+`);
+    const writes = new Map(
+      facts.definitions
+        .filter((definition) => definition.bindingScope !== undefined)
+        .map((definition) => [definition.name, definition.bindingScope]),
+    );
+    assert.equal(writes.get('agent'), 'global');
+    assert.equal(writes.get('worker'), 'nonlocal');
+    assert.equal(
+      facts.definitions.find(
+        (definition) => definition.name === 'worker' && definition.bindingScope === 'nonlocal',
+      )?.bindingOwner,
+      'outer',
+    );
+    assert.deepEqual(
+      facts.definitions.find(
+        (definition) => definition.name === 'worker' && definition.bindingScope === 'nonlocal',
+      )?.bindingOwnerLocation,
+      facts.definitions.find(
+        (definition) => definition.kind === 'function' && definition.name === 'outer',
+      )?.location,
+    );
+    assert.ok(
+      facts.assignments.some(
+        (assignment) =>
+          assignment.target[0] === 'agent' &&
+          assignment.operation === 'delete' &&
+          assignment.bindingScope === 'global',
+      ),
+    );
+    assert.ok(
+      facts.assignments.some(
+        (assignment) => assignment.target[0] === 'worker' && assignment.bindingScope === 'nonlocal',
+      ),
+    );
+  });
+
+  it('resolves a nonlocal write to an enclosing loop-target binding', async () => {
+    const facts = await analyze(`
+def outer(values):
+    for agent in values:
+        pass
+    def replace():
+        nonlocal agent
+        agent = foreign
+`);
+    const outer = facts.definitions.find(
+      (definition) => definition.kind === 'function' && definition.name === 'outer',
+    );
+    const replacement = facts.definitions.find(
+      (definition) => definition.name === 'agent' && definition.bindingScope === 'nonlocal',
+    );
+    assert.deepEqual(replacement?.bindingOwnerLocation, outer?.location);
   });
 
   it('retains branch ownership on client definitions and their uses', async () => {
@@ -411,6 +506,13 @@ def reset(executor):
           endColumn: 22,
         },
         operation: 'delete',
+        lexicalOwnerLocation: {
+          file: 'src/agents/triage.py',
+          startLine: 2,
+          startColumn: 0,
+          endLine: 3,
+          endColumn: 22,
+        },
         enclosing: 'reset',
       },
     ]);
@@ -534,6 +636,10 @@ def reset(support, replacement, values):
         { target: ['support', 'agent'], operation: undefined },
         { target: ['support', 'agent'], operation: undefined },
         { target: ['support', 'agent'], operation: 'delete' },
+        { target: ['x'], operation: undefined },
+        { target: ['x'], operation: undefined },
+        { target: ['x'], operation: undefined },
+        { target: ['x'], operation: undefined },
         { target: ['support', 'tools'], operation: undefined },
       ],
     );
@@ -542,6 +648,11 @@ def reset(support, replacement, values):
         (definition) => definition.kind === 'variable' && definition.name === 'x',
       ),
       false,
+    );
+    assert.ok(
+      facts.assignments
+        .filter((assignment) => assignment.target[0] === 'x')
+        .every((assignment) => assignment.sourceReferences?.[0]?.[0] === 'values'),
     );
   });
 });

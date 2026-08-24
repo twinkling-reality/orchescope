@@ -1,6 +1,6 @@
 import { CONFIDENCE_BANDS, identityKey } from '@orchescope/domain';
 import type { SystemGraphBuilder } from '@orchescope/graph';
-import type { ComponentIdentity, EdgePolicy } from '@orchescope/schema';
+import type { ComponentIdentity, EdgePolicy, SourceLocation } from '@orchescope/schema';
 import type {
   CallFact,
   DefinitionFact,
@@ -54,10 +54,27 @@ type DiscoveredAgent = {
   readonly file: string;
   readonly variable: string | undefined;
   readonly enclosing: string | undefined;
+  readonly ownerLocation: SourceLocation | undefined;
   readonly supportingLocations: readonly import('@orchescope/schema').SourceLocation[];
   /** Retries the agent declares, which a tool inherits when it declares none of its own. */
   readonly retries: number | undefined;
 };
+
+const locationKey = (location: SourceLocation): string =>
+  `${location.file}:${location.startLine}:${location.startColumn ?? 0}:${location.endLine ?? location.startLine}:${location.endColumn ?? 0}`;
+
+const sameOwnerLocation = (
+  left: SourceLocation | undefined,
+  right: SourceLocation | undefined,
+): boolean =>
+  left === undefined || right === undefined
+    ? left === undefined && right === undefined
+    : locationKey(left) === locationKey(right);
+
+const sameResolvedOwnerLocation = (
+  left: SourceLocation | undefined,
+  right: SourceLocation | undefined,
+): boolean => left !== undefined && right !== undefined && sameOwnerLocation(left, right);
 
 const instructionsOf = (entries: readonly ObjectEntryFact[]): string | undefined =>
   stringValue(findEntry(entries, 'instructions')?.value) ??
@@ -160,16 +177,39 @@ const addAgents = (
       definition?.kind === 'variable' &&
       match.module.definitions.filter(
         (candidate) =>
-          candidate.name === definition.name && candidate.enclosing === definition.enclosing,
+          candidate.name === definition.name &&
+          sameOwnerLocation(candidate.lexicalOwnerLocation, definition.lexicalOwnerLocation),
       ).length === 1 &&
       !match.module.assignments.some(
-        (assignment) => assignment.target.length === 1 && assignment.target[0] === definition.name,
+        (assignment) =>
+          ((assignment.bindingScope === undefined &&
+            sameOwnerLocation(assignment.lexicalOwnerLocation, definition.lexicalOwnerLocation)) ||
+            (assignment.bindingScope === 'global' && definition.enclosing === undefined) ||
+            (assignment.bindingScope === 'nonlocal' &&
+              sameResolvedOwnerLocation(
+                assignment.bindingOwnerLocation,
+                definition.lexicalOwnerLocation,
+              ))) &&
+          assignment.target.length === 1 &&
+          assignment.target[0] === definition.name,
+      ) &&
+      !match.module.definitions.some(
+        (candidate) =>
+          candidate !== definition &&
+          candidate.name === definition.name &&
+          ((candidate.bindingScope === 'global' && definition.enclosing === undefined) ||
+            (candidate.bindingScope === 'nonlocal' &&
+              sameResolvedOwnerLocation(
+                candidate.bindingOwnerLocation,
+                definition.lexicalOwnerLocation,
+              ))),
       );
     agents.push({
       identity,
       file: match.module.file,
       variable: stableVariable ? definition.name : undefined,
       enclosing: definition?.enclosing,
+      ownerLocation: definition?.lexicalOwnerLocation,
       supportingLocations,
       retries: numberValue(findEntry(entries, 'retries')?.value),
     });
@@ -349,7 +389,7 @@ const addTools = (
           (candidate) =>
             candidate.file === module.file &&
             candidate.variable === owner &&
-            candidate.enclosing === definition.enclosing,
+            sameOwnerLocation(candidate.ownerLocation, definition.lexicalOwnerLocation),
         );
         if (agent === undefined) continue;
 

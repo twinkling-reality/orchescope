@@ -11,12 +11,12 @@ import { DEFAULT_ADAPTERS } from '../src/registry.ts';
  * What each adapter does with a repository whose only source is a test file.
  *
  * The invariant that a developer's tooling is not the system under audit was honoured by four adapters
- * out of thirteen, and the nine that ignored it were most of the graph on every framework this build
+ * out of thirteen before the registry gained another source reader, and the nine that ignored it were most of the graph on every framework this build
  * reads: 835 of 903 `pydantic-ai` components, 662 of 899 `openai-agents` ones, 448 of 526 on `langgraph`.
  * On one application built with `pydantic-ai` it was ten of the sixteen agents reported, three of them
  * copies of one `_make_test_agent` helper and two of them local variables in a test about teams.
  *
- * The thirteen reach the invariant two ways and both are correct for what they read. An adapter that
+ * The registered adapters reach the invariant two ways and both are correct for what they read. An adapter that
  * would record a false fact declines to read the file at all: a test harness reaches the same clients the
  * system reaches and it reaches them at fakes, so a `FakeD1` over `node:sqlite` is not a database the
  * repository has. An adapter that would record a true fact about something out of scope reads it and
@@ -144,6 +144,16 @@ from langchain_openai import ChatOpenAI
 llm = ChatOpenAI(model="gpt-4.1-mini")
 raw = create_openai_tools_agent(llm, [], "Answer the customer.")
 support_agent = AgentExecutor(agent=raw, tools=[])
+`,
+  },
+  {
+    adapterId: 'adapter:browser-use-agent',
+    fixed: { 'pyproject.toml': PYPROJECT('browser-app', ['browser-use']) },
+    sourcePath: 'src/browser.py',
+    testPath: 'tests/test_browser.py',
+    code: `from browser_use import Agent
+
+browser_agent = Agent(task="Read the page", llm=model)
 `,
   },
   {
@@ -356,7 +366,7 @@ describe('a repository whose only source is a test file', () => {
 
   /*
    * The half that makes this a check rather than a list. An adapter added without a repository here is an
-   * adapter nothing asks, which is the position nine of the thirteen were in.
+   * adapter nothing asks, which is the position nine source readers once occupied.
    */
   it('has a repository for every adapter that declares a component', () => {
     const covered = new Set([...FIXTURES.map((entry) => entry.adapterId), ...NOTHING_TO_DECLARE]);

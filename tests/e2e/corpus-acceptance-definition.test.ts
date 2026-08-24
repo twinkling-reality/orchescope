@@ -253,6 +253,89 @@ describe('corpus acceptance definitions', () => {
     }
   });
 
+  it('permits no required relations only for an exact zero-edge graph with cited refusals', () => {
+    const componentOnly = {
+      ...acceptance,
+      graphPopulation: { components: 1, edges: 0 },
+      requiredEdges: [],
+      topology: {
+        status: 'incomplete',
+        unresolvedCount: 1,
+        conditionalDestinations: 0,
+        requiredRefusals: [
+          {
+            kind: 'explicit_relation',
+            reason: 'Runtime selection prevents a source-declared relation.',
+            sourceFile: 'src/graph.ts',
+            startLine: 1,
+          },
+        ],
+      },
+    };
+    assert.equal(
+      readTemporary({ ...validEntry, acceptance: componentOnly }).repositories[0]?.name,
+      'measured-repository',
+    );
+    assert.throws(
+      () =>
+        readTemporary({
+          ...validEntry,
+          acceptance: {
+            ...componentOnly,
+            graphPopulation: { components: 1, edges: 1 },
+          },
+        }),
+      /empty acceptance.requiredEdges requires an exact zero-edge graphPopulation/,
+    );
+    assert.throws(
+      () =>
+        readTemporary({
+          ...validEntry,
+          acceptance: {
+            ...componentOnly,
+            topology: {
+              status: 'incomplete',
+              unresolvedCount: 1,
+              conditionalDestinations: 0,
+            },
+          },
+        }),
+      /empty acceptance.requiredEdges requires an exact zero-edge graphPopulation/,
+    );
+    for (const topology of [
+      {
+        status: 'complete',
+        unresolvedCount: 1,
+        conditionalDestinations: 0,
+        requiredRefusals: componentOnly.topology.requiredRefusals,
+      },
+      {
+        status: 'incomplete',
+        unresolvedCount: 0,
+        conditionalDestinations: 0,
+        requiredRefusals: componentOnly.topology.requiredRefusals,
+      },
+      {
+        status: 'incomplete',
+        unresolvedCount: 1,
+        conditionalDestinations: 0,
+        requiredRefusals: [
+          {
+            kind: 'config_backed_bound',
+            reason: 'A runtime setting did not establish a universal bound.',
+            sourceFile: 'src/graph.ts',
+            startLine: 1,
+          },
+        ],
+      },
+    ]) {
+      assert.throws(
+        () => readTemporary({ ...validEntry, acceptance: { ...componentOnly, topology } }),
+        /incomplete positive-unresolved topology and a source-located explicit_relation refusal/,
+      );
+    }
+  });
+
   it('allows acceptance on static Git entries and rejects local or exercised populations', () => {
     assert.equal('requiredArchive' in validEntry, false);
     assert.equal(readTemporary(validEntry).repositories[0]?.source, 'git');

@@ -582,6 +582,16 @@ type Frame = {
   readonly typeOnly: boolean;
   /** Conditional branches owning the source being traversed, outermost first. */
   readonly branches: readonly BranchPredicateFact[];
+  /** Function-wide Python global/nonlocal declarations for the callable being traversed. */
+  readonly bindingScopes?: ReadonlyMap<string, 'global' | 'nonlocal'>;
+  /** Exact function or class namespace range that owns local facts in this frame. */
+  readonly localOwnerLocation?: SourceLocation;
+  /** Lexically enclosing callable bindings, outermost first and including the current callable. */
+  readonly lexicalBindings?: readonly {
+    readonly owner: string;
+    readonly names: ReadonlySet<string>;
+    readonly location: SourceLocation;
+  }[];
 };
 
 const TYPING_MODULES = new Set(['typing', 'typing_extensions']);
@@ -1122,6 +1132,25 @@ const traverseMatchStatement = (
   }
 };
 
+const recordDelete = (node: Node, context: Context, frame: Frame): void => {
+  const lexicalOwnerLocation = frame.localOwnerLocation;
+  for (const target of namedChildren(node).flatMap(assignmentTargets)) {
+    const path = assignmentPath(target);
+    if (path.length === 0) continue;
+    const binding = bindingOwnership(frame, path[0]);
+    context.assignments.push({
+      target: path,
+      ...(targetIncludesSubscript(target) ? { targetIncludesSubscript: true } : {}),
+      value: { kind: 'unknown', nodeType: 'delete' },
+      location: location(context.file, node),
+      operation: 'delete',
+      ...binding,
+      ...(lexicalOwnerLocation === undefined ? {} : { lexicalOwnerLocation }),
+      ...(frame.name === undefined ? {} : { enclosing: frame.name }),
+    });
+  }
+};
+
 const traverse = (
   node: Node,
   context: Context,
@@ -1168,18 +1197,7 @@ const traverse = (
       return;
     }
     case 'delete_statement': {
-      for (const target of namedChildren(node).flatMap(assignmentTargets)) {
-        const path = assignmentPath(target);
-        if (path.length === 0) continue;
-        context.assignments.push({
-          target: path,
-          ...(targetIncludesSubscript(target) ? { targetIncludesSubscript: true } : {}),
-          value: { kind: 'unknown', nodeType: 'delete' },
-          location: location(context.file, node),
-          operation: 'delete',
-          ...(frame.name === undefined ? {} : { enclosing: frame.name }),
-        });
-      }
+      recordDelete(node, context, frame);
       return;
     }
     case 'with_statement': {
@@ -1494,6 +1512,111 @@ const parametersOf = (node: Node, context: Context): readonly ParameterFact[] =>
   return facts;
 };
 
+const containsOwnYield = (node: Node): boolean => {
+  for (const child of namedChildren(node)) {
+    if (child.type === 'yield') return true;
+    if (
+      child.type === 'function_definition' ||
+      child.type === 'class_definition' ||
+      child.type === 'lambda' ||
+      child.type === 'decorated_definition'
+    ) {
+      continue;
+    }
+    if (containsOwnYield(child)) return true;
+  }
+  return false;
+};
+
+const functionBindingScopes = (body: Node): ReadonlyMap<string, 'global' | 'nonlocal'> => {
+  const scopes = new Map<string, 'global' | 'nonlocal'>();
+  const visit = (node: Node): void => {
+    if (node.type === 'global_statement' || node.type === 'nonlocal_statement') {
+      const scope = node.type === 'global_statement' ? 'global' : 'nonlocal';
+      for (const child of namedChildren(node)) {
+        if (child.type === 'identifier') scopes.set(child.text, scope);
+      }
+      return;
+    }
+    if (
+      node !== body &&
+      (node.type === 'function_definition' ||
+        node.type === 'class_definition' ||
+        node.type === 'lambda' ||
+        node.type === 'decorated_definition')
+    ) {
+      return;
+    }
+    for (const child of namedChildren(node)) visit(child);
+  };
+  visit(body);
+  return scopes;
+};
+
+const functionLocalBindings = (
+  body: Node,
+  parameters: readonly ParameterFact[],
+): ReadonlySet<string> => {
+  const names = new Set(parameters.map((parameter) => parameter.name));
+  const callableDefinition = (node: Node): Node | undefined => {
+    if (node.type === 'function_definition' || node.type === 'class_definition') return node;
+    if (node.type !== 'decorated_definition') return undefined;
+    return namedChildren(node).find(
+      (child) => child.type === 'function_definition' || child.type === 'class_definition',
+    );
+  };
+  const addTargetBindings = (left: Node | undefined): void => {
+    if (left === undefined) return;
+    for (const target of assignmentTargets(left)) {
+      const root = assignmentPath(target)[0];
+      if (root !== undefined) names.add(root);
+    }
+  };
+  const visit = (node: Node): void => {
+    if (node !== body) {
+      const definition = callableDefinition(node);
+      if (definition !== undefined) {
+        const name = childField(definition, 'name')?.text;
+        if (name !== undefined) names.add(name);
+        return;
+      }
+    }
+    if (node.type === 'assignment' || node.type === 'augmented_assignment') {
+      addTargetBindings(childField(node, 'left'));
+    }
+    if (node.type === 'for_statement') {
+      addTargetBindings(childField(node, 'left'));
+    }
+    for (const child of namedChildren(node)) visit(child);
+  };
+  visit(body);
+  return names;
+};
+
+const bindingOwnership = (
+  frame: Frame,
+  root: string | undefined,
+): {
+  readonly bindingScope?: 'global' | 'nonlocal';
+  readonly bindingOwner?: string;
+  readonly bindingOwnerLocation?: SourceLocation;
+} => {
+  if (root === undefined) return {};
+  const bindingScope = frame.bindingScopes?.get(root);
+  if (bindingScope === undefined) return {};
+  if (bindingScope === 'global') return { bindingScope };
+  const owner = frame.lexicalBindings
+    ?.slice(0, -1)
+    .toReversed()
+    .find((scope) => scope.names.has(root));
+  return {
+    bindingScope,
+    ...(owner === undefined
+      ? {}
+      : { bindingOwner: owner.owner, bindingOwnerLocation: owner.location }),
+  };
+};
+
 const recordFunction = (
   node: Node,
   context: Context,
@@ -1507,28 +1630,47 @@ const recordFunction = (
   const returnAnnotation = returnAnnotationOf(node, context);
   const returns = returnsOf(node, context);
   const parameters = parametersOf(node, context);
+  const body = childField(node, 'body');
+  const callableLocation = location(context.file, node);
+  const lexicalOwnerLocation = frame.localOwnerLocation;
+  const generator = body !== undefined && containsOwnYield(body);
   context.definitions.push({
     kind: frame.name === undefined ? 'function' : 'method',
     name: frame.name === undefined ? name : `${frame.name}.${name}`,
     exported: !name.startsWith('_'),
     async: isAsync,
+    ...(generator ? { generator: true as const } : {}),
     decorators,
-    location: location(context.file, node),
+    location: callableLocation,
     initializer: undefined,
     ...(returnAnnotation === undefined ? {} : { returnAnnotation }),
     ...(returns.length === 0 ? {} : { returns }),
     ...(parameters.length === 0 ? {} : { parameters }),
     enclosing: frame.name,
+    ...(lexicalOwnerLocation === undefined ? {} : { lexicalOwnerLocation }),
     ...(frame.branches.length === 0 ? {} : { branches: frame.branches }),
   });
-  const body = childField(node, 'body');
   if (body !== undefined) {
     const savedBindings = new Map(context.bindings);
+    const bindingScopes = functionBindingScopes(body);
+    const localBindings = new Set(functionLocalBindings(body, parameters));
+    for (const name of bindingScopes.keys()) localBindings.delete(name);
     recordDocumentationStrings(body, context);
     traverse(
       body,
       context,
-      { name, awaited: false, typeOnly: frame.typeOnly, branches: [] },
+      {
+        name,
+        awaited: false,
+        typeOnly: frame.typeOnly,
+        branches: [],
+        bindingScopes,
+        localOwnerLocation: callableLocation,
+        lexicalBindings: [
+          ...(frame.lexicalBindings ?? []),
+          { owner: name, names: localBindings, location: callableLocation },
+        ],
+      },
       collecting,
     );
     restoreBindings(context, savedBindings);
@@ -1544,6 +1686,7 @@ const recordClass = (
 ): void => {
   const nameNode = childField(node, 'name');
   const name = nameNode?.text ?? '(anonymous)';
+  const classLocation = location(context.file, node);
   const superclasses = childField(node, 'superclasses');
   const bases =
     superclasses === undefined
@@ -1557,19 +1700,31 @@ const recordClass = (
     exported: !name.startsWith('_'),
     async: false,
     decorators,
-    location: location(context.file, node),
+    location: classLocation,
     initializer: bases.length > 0 ? bases : undefined,
     enclosing: frame.name,
+    ...(frame.localOwnerLocation === undefined
+      ? {}
+      : { lexicalOwnerLocation: frame.localOwnerLocation }),
     ...(frame.branches.length === 0 ? {} : { branches: frame.branches }),
   });
   const body = childField(node, 'body');
   if (body !== undefined) {
     const savedBindings = new Map(context.bindings);
+    const bindingScopes = functionBindingScopes(body);
     recordDocumentationStrings(body, context);
     traverse(
       body,
       context,
-      { name, awaited: false, typeOnly: frame.typeOnly, branches: frame.branches },
+      {
+        name,
+        awaited: false,
+        typeOnly: frame.typeOnly,
+        branches: frame.branches,
+        bindingScopes,
+        localOwnerLocation: classLocation,
+        ...(frame.lexicalBindings === undefined ? {} : { lexicalBindings: frame.lexicalBindings }),
+      },
       collecting,
     );
     restoreBindings(context, savedBindings);
@@ -1708,14 +1863,27 @@ const recordAssignmentWrite = (
   context: Context,
   frame: Frame,
   destructured: boolean,
+  augmented: boolean,
 ): void => {
-  if ((path.length > 1 || (left?.type === 'subscript' && path.length > 0)) && right !== undefined) {
+  if (
+    (path.length > 1 ||
+      (left?.type === 'subscript' && path.length > 0) ||
+      (destructured && path.length > 0) ||
+      (augmented && path.length > 0)) &&
+    right !== undefined
+  ) {
+    const sourceReferences = destructured ? predicateReferences(right) : [];
+    const binding = bindingOwnership(frame, path[0]);
+    const lexicalOwnerLocation = frame.localOwnerLocation;
     context.assignments.push({
       target: path,
       ...(targetIncludesSubscript(left) ? { targetIncludesSubscript: true } : {}),
       value: destructured
         ? { kind: 'unknown', nodeType: 'destructuring_assignment' }
         : argumentFact(right, context),
+      ...(sourceReferences.length === 0 ? {} : { sourceReferences }),
+      ...binding,
+      ...(lexicalOwnerLocation === undefined ? {} : { lexicalOwnerLocation }),
       location: location(context.file, node),
       ...(frame.name === undefined ? {} : { enclosing: frame.name }),
     });
@@ -1738,6 +1906,8 @@ const recordAssignmentDefinition = (
       : undefined;
   const aliasedFrom = right === undefined ? [] : aliasedNames(right);
   const literals = right === undefined ? [] : boundLiterals(right, context);
+  const binding = bindingOwnership(frame, path[0]);
+  const lexicalOwnerLocation = frame.localOwnerLocation;
   context.definitions.push({
     kind: 'variable',
     name,
@@ -1749,7 +1919,9 @@ const recordAssignmentDefinition = (
     ...(right === undefined ? {} : { value: argumentFact(right, context) }),
     ...(aliasedFrom.length === 0 ? {} : { aliasedFrom }),
     ...(literals.length === 0 ? {} : { literals }),
+    ...binding,
     enclosing: frame.name,
+    ...(lexicalOwnerLocation === undefined ? {} : { lexicalOwnerLocation }),
     ...(frame.branches.length === 0 ? {} : { branches: frame.branches }),
   });
 };
@@ -1778,6 +1950,7 @@ const recordAssignment = (
       context,
       frame,
       destructured,
+      augmented,
     );
   }
   const definitionTarget = augmented ? undefined : directDefinitionTarget(left);

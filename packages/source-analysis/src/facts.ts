@@ -161,6 +161,16 @@ export type DefinitionFact = {
   readonly name: string;
   readonly exported: boolean;
   readonly async: boolean;
+  /** True when the callable contains a yield in its own body and therefore returns a generator. */
+  readonly generator?: true;
+  /** Python binding directive governing this definition when it writes an outer scope. */
+  readonly bindingScope?: 'global' | 'nonlocal';
+  /** Named callable scope targeted by `nonlocal`; absent for a `global` module binding. */
+  readonly bindingOwner?: string;
+  /** Exact callable range that owns this local binding; absent for a module binding. */
+  readonly lexicalOwnerLocation?: SourceLocation;
+  /** Exact callable range targeted by `nonlocal`; absent for a `global` module binding. */
+  readonly bindingOwnerLocation?: SourceLocation;
   readonly decorators: readonly DecoratorFact[];
   readonly location: SourceLocation;
   /** Dotted path of the initialiser call, when the definition is `const x = f(...)`. */
@@ -377,6 +387,16 @@ export type AssignmentFact = {
   /** True when any part of the written target used a subscript rather than direct member access. */
   readonly targetIncludesSubscript?: true;
   readonly value: ArgumentFact;
+  /** Names read by a destructuring right-hand side whose per-target value cannot be settled exactly. */
+  readonly sourceReferences?: readonly (readonly string[])[];
+  /** Python binding directive governing this write when it targets an outer scope. */
+  readonly bindingScope?: 'global' | 'nonlocal';
+  /** Named callable scope targeted by `nonlocal`; absent for a `global` module binding. */
+  readonly bindingOwner?: string;
+  /** Exact callable range that owns this write; absent for a module-level write. */
+  readonly lexicalOwnerLocation?: SourceLocation;
+  /** Exact callable range targeted by `nonlocal`; absent for a `global` module binding. */
+  readonly bindingOwnerLocation?: SourceLocation;
   readonly location: SourceLocation;
   /** A delete is retained as a write that removes the target rather than assigning the reduced value. */
   readonly operation?: 'delete';

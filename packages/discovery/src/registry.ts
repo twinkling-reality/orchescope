@@ -1,4 +1,5 @@
 import type { AgentSystemAdapter } from './adapter.ts';
+import { browserUseAgentAdapter } from './adapters/browser-use-agent.ts';
 import { crewAiAdapter } from './adapters/crewai.ts';
 import { effectsAdapter } from './adapters/effects.ts';
 import { implementationReachAdapter } from './adapters/implementation-reach.ts';
@@ -38,6 +39,7 @@ export const DEFAULT_ADAPTERS: readonly AgentSystemAdapter[] = [
   pydanticAiAdapter,
   vercelAiSdkAdapter,
   modelSdkAdapter,
+  browserUseAgentAdapter,
   langChainLegacyAgentAdapter,
   searchIndexAdapter,
   effectsAdapter,

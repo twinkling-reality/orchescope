@@ -74,7 +74,7 @@ framework adapters; then the cross cutting adapters that attach effects and prom
 
 ```
 mcp → manifest → workers-bindings → openai-agents → langchain-v1-create-agent → langgraph → crewai → pydantic-ai → vercel-ai-sdk
-  → model-sdk → langchain-legacy-agent → search-index → effects → prompts
+  → model-sdk → browser-use-agent → langchain-legacy-agent → search-index → effects → prompts
   → implementation-reach
 ```
 

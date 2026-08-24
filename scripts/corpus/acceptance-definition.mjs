@@ -83,9 +83,26 @@ const checkIdentities = (acceptance, problem) => {
 };
 
 const checkRelations = (acceptance, problem) => {
-  if (!isBoundedList(acceptance.requiredEdges) || acceptance.requiredEdges.length === 0) {
-    problem('acceptance.requiredEdges has to list source-cited relations');
+  if (!isBoundedList(acceptance.requiredEdges)) {
+    problem('acceptance.requiredEdges has to be a bounded list of source-cited relations');
     return;
+  }
+  if (
+    acceptance.requiredEdges.length === 0 &&
+    (acceptance.graphPopulation?.edges !== 0 ||
+      acceptance.topology?.status !== 'incomplete' ||
+      !Number.isInteger(acceptance.topology?.unresolvedCount) ||
+      acceptance.topology.unresolvedCount <= 0 ||
+      !isBoundedList(acceptance.topology?.requiredRefusals) ||
+      acceptance.topology.requiredRefusals.length === 0 ||
+      acceptance.topology.unresolvedCount < acceptance.topology.requiredRefusals.length ||
+      !acceptance.topology.requiredRefusals.some(
+        (refusal) => refusal?.kind === 'explicit_relation',
+      ))
+  ) {
+    problem(
+      'an empty acceptance.requiredEdges requires an exact zero-edge graphPopulation, incomplete positive-unresolved topology and a source-located explicit_relation refusal',
+    );
   }
   for (const edge of acceptance.requiredEdges) {
     if (
