@@ -418,6 +418,87 @@ describe('a relation whose endpoint the adapter never added', () => {
   });
 });
 
+describe('bounded topology refusal evidence', () => {
+  it('retains both control-flow and prompt-use populations when their combined sample is full', async () => {
+    const workspace = createTempWorkspace('orchescope-topology-sample-');
+    workspaces.push(workspace);
+    writeNodeProject(workspace, { name: 'sample-app' });
+    workspace.write('src/index.ts', 'export const value = 1;\n');
+    const location = (startLine: number) => ({
+      file: 'src/index.ts',
+      startLine,
+      startColumn: 0,
+      endLine: startLine,
+      endColumn: 1,
+    });
+    const topologyAdapter = (
+      id: string,
+      scope: 'control_flow' | 'prompt_use',
+      lines: readonly number[],
+    ): AgentSystemAdapter => ({
+      id,
+      version: '1',
+      packages: [],
+      appliesTo: () => true,
+      discover: () => ({
+        componentsFound: 0,
+        edgesFound: 0,
+        filesInspected: ['src/index.ts'],
+        topology: {
+          scope,
+          status: 'incomplete',
+          inspectedInputs: lines.length,
+          explicitRelations: 0,
+          conditionalConstructs: 0,
+          conditionalDestinations: 0,
+          entryBoundaries: 0,
+          entryTargets: [],
+          terminalBoundaries: 0,
+          boundaryFacts: [],
+          configurationBounds: 0,
+          configurationBoundFacts: [],
+          unresolvedCount: lines.length,
+          unresolved: lines.map((line) => ({
+            kind: scope === 'control_flow' ? 'conditional_destination' : 'prompt_input',
+            reason: `${scope}:${line}`,
+            location: location(line),
+          })),
+        },
+      }),
+    });
+    const clock = fixedClock(0, 1);
+    const handle = createDeadline(30_000, clock.monotonicMs);
+    try {
+      const result = await discover({
+        root: workspace.root,
+        orchescopeVersion: '0.1.0',
+        clock,
+        deadline: handle,
+        traversal,
+        concurrency: 2,
+        adapters: [
+          topologyAdapter('adapter:control-sample', 'control_flow', [1, 3, 5, 7, 879]),
+          topologyAdapter('adapter:prompt-sample', 'prompt_use', [2, 4, 6, 8, 10, 12]),
+        ],
+      });
+      const topology = result.graph.coverage.topology;
+      assert.equal(topology?.unresolvedCount, 11);
+      assert.equal(topology?.unresolved.length, 10);
+      assert.equal(
+        topology?.unresolved.filter((entry) => entry.scope === 'control_flow').length,
+        5,
+      );
+      assert.equal(topology?.unresolved.filter((entry) => entry.scope === 'prompt_use').length, 5);
+      assert.ok(
+        topology?.unresolved.some((entry) => entry.reason === 'control_flow:879'),
+        'a later control-flow refusal was hidden by earlier prompt-use samples',
+      );
+    } finally {
+      handle.dispose();
+    }
+  });
+});
+
 /**
  * `filesParsed` over `filesDiscovered` reads as a coverage rate and measures something else. A repository of 1233
  * test fixtures and 598 Python files reported a third when every Python file in it had been read, so the coverage

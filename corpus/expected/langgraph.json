@@ -43,7 +43,7 @@
       "status": "completed"
     },
     "adapter:langgraph": {
-      "componentsFound": 515,
+      "componentsFound": 868,
       "edgesFound": 94,
       "filesInspected": 228,
       "status": "completed"
@@ -61,8 +61,8 @@
       "status": "not_applicable"
     },
     "adapter:model-sdk": {
-      "componentsFound": 3,
-      "edgesFound": 2,
+      "componentsFound": 4,
+      "edgesFound": 3,
       "filesInspected": 7,
       "status": "completed"
     },
@@ -73,9 +73,9 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 1,
+      "componentsFound": 12,
       "edgesFound": 1,
-      "filesInspected": 1,
+      "filesInspected": 5,
       "status": "completed"
     },
     "adapter:pydantic-ai": {
@@ -110,15 +110,15 @@
       "database": 1,
       "entrypoint": 7,
       "external_service": 4,
-      "model": 2,
-      "prompt": 1,
+      "model": 3,
+      "prompt": 12,
       "provider": 1,
       "tool": 4,
-      "workflow": 137,
+      "workflow": 204,
       "workflow_step": 54
     },
-    "declaredInTest": 147,
-    "total": 224
+    "declaredInTest": 214,
+    "total": 303
   },
   "discardedRelations": [],
   "files": {
@@ -154,10 +154,10 @@
       "calls_tool": 4,
       "contains": 54,
       "queries_database": 3,
-      "served_by_provider": 2,
+      "served_by_provider": 3,
       "transitions_to": 34,
       "uses_prompt": 1
     },
-    "total": 102
+    "total": 103
   }
 }

@@ -13,8 +13,8 @@
       "status": "not_applicable"
     },
     "adapter:crewai": {
-      "componentsFound": 1015,
-      "edgesFound": 432,
+      "componentsFound": 1020,
+      "edgesFound": 437,
       "filesInspected": 91,
       "status": "completed"
     },
@@ -73,8 +73,8 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 33,
-      "edgesFound": 33,
+      "componentsFound": 36,
+      "edgesFound": 36,
       "filesInspected": 11,
       "status": "completed"
     },
@@ -111,12 +111,12 @@
       "database": 3,
       "entrypoint": 70,
       "external_service": 47,
-      "prompt": 33,
+      "prompt": 36,
       "provider": 2,
       "retrieval": 1
     },
     "declaredInTest": 311,
-    "total": 499
+    "total": 502
   },
   "discardedRelations": [],
   "files": {
@@ -151,10 +151,10 @@
   "relations": {
     "byKind": {
       "calls_service": 48,
-      "contains": 106,
+      "contains": 108,
       "queries_database": 22,
-      "uses_prompt": 33
+      "uses_prompt": 36
     },
-    "total": 209
+    "total": 214
   }
 }

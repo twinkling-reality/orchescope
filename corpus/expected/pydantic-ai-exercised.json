@@ -73,14 +73,14 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 17,
-      "edgesFound": 18,
+      "componentsFound": 28,
+      "edgesFound": 30,
       "filesInspected": 22,
       "status": "completed"
     },
     "adapter:pydantic-ai": {
-      "componentsFound": 2678,
-      "edgesFound": 655,
+      "componentsFound": 2724,
+      "edgesFound": 660,
       "filesInspected": 201,
       "status": "completed"
     },
@@ -112,13 +112,13 @@
       "external_service": 9,
       "mcp_server": 5,
       "model": 21,
-      "prompt": 17,
+      "prompt": 28,
       "provider": 6,
       "retrieval": 1,
       "tool": 501
     },
     "declaredInTest": 948,
-    "total": 1057
+    "total": 1068
   },
   "discardedRelations": [],
   "files": {
@@ -146,7 +146,7 @@
       "model-call-without-timeout": 25,
       "observability-coverage": 10,
       "observed-name-carries-no-identity": 1,
-      "prompt-injection-boundary": 7,
+      "prompt-injection-boundary": 8,
       "topology-shape": 12
     },
     "strengths": 0,
@@ -160,13 +160,13 @@
     "byKind": {
       "calls_service": 9,
       "calls_tool": 472,
-      "invokes_model": 73,
+      "invokes_model": 76,
       "provides_tool": 31,
       "queries_database": 2,
       "served_by_provider": 8,
-      "uses_prompt": 18
+      "uses_prompt": 30
     },
-    "total": 613
+    "total": 628
   },
   "runtime": {
     "ambiguousNames": [
@@ -174,7 +174,7 @@
     ],
     "contradictions": 0,
     "declaredComponents": 76,
-    "declaredEdges": 611,
+    "declaredEdges": 626,
     "duplicateSideEffects": 0,
     "exercisedComponents": 1,
     "exercisedEdges": 0,

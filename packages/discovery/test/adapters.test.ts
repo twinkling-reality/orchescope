@@ -2259,7 +2259,7 @@ export {
     );
   });
 
-  it('refuses a Python Agent clone when the fact retains only the chained call', async () => {
+  it('retains a Python base Agent while refusing its chained clone', async () => {
     const { result, ids } = await scan((workspace) => {
       writePythonProject(workspace, {
         name: 'chained-agent-construction-python',
@@ -2275,7 +2275,7 @@ def build():
       );
     });
     assert.equal(ids.includes('agent:build.agent'), false);
-    assert.equal(ids.includes('agent:build.base'), false);
+    assert.equal(ids.includes('agent:build.base'), true);
     assert.ok(
       result.graph.coverage.topology?.unresolved.some((entry) =>
         entry.reason.includes('call chained from an Agent constructor'),

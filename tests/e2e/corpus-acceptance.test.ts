@@ -8,6 +8,7 @@ const entry = {
     exactIdsByKind: { agent: ['agent:a'] },
     absentKinds: ['database'],
     absentComponentTerms: ['postgres'],
+    absentEdgeKinds: ['uses_prompt'],
     requiredEdges: [
       {
         kind: 'hands_off_to',
@@ -26,6 +27,7 @@ const entry = {
       },
     ],
     componentMetadata: { 'agent:a': { configurationDefault: true } },
+    componentDetails: { 'agent:a': { interpolatesUntrustedInput: true } },
     componentEvidence: {
       'agent:a': [
         {
@@ -127,6 +129,7 @@ const bundle = () => ({
         id: 'agent:a',
         kind: 'agent',
         metadata: { configurationDefault: true },
+        details: { interpolatesUntrustedInput: true },
         sourceLocations: [source],
         evidence: ['ev_agent'],
       },
@@ -210,11 +213,19 @@ describe('corpus semantic acceptance', () => {
         id: 'database:postgres',
         kind: 'database',
         metadata: { configurationDefault: false },
+        details: { interpolatesUntrustedInput: false },
         sourceLocations: [source],
         evidence: [],
       },
     ];
     changed.graph.edges = [];
+    changed.graph.edges.push({
+      kind: 'uses_prompt',
+      from: 'database:postgres',
+      to: 'database:postgres',
+      sourceLocations: [source],
+      evidence: [],
+    });
     changed.graph.coverage.adapters[0]!.applicability.relevantImports = 1;
     changed.graph.coverage.topology.status = 'complete';
     changed.findings = [{ polarity: 'strength', ruleId: 'acyclic-topology', severity: 'info' }];
@@ -223,6 +234,7 @@ describe('corpus semantic acceptance', () => {
     assert.match(broken, /agent identities/);
     assert.match(broken, /component kind database/);
     assert.match(broken, /contained postgres/);
+    assert.match(broken, /edge kind uses_prompt was present/);
     assert.match(broken, /agent:a -> agent:a was absent/);
     assert.match(broken, /component agent:a was absent/);
     assert.match(broken, /applicability.relevantImports/);
@@ -279,6 +291,7 @@ describe('corpus semantic acceptance', () => {
       id: 'tool:extra',
       kind: 'tool',
       metadata: { configurationDefault: false },
+      details: { interpolatesUntrustedInput: false },
       sourceLocations: [source],
       evidence: ['ev_agent'],
     });

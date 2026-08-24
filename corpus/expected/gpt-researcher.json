@@ -19,9 +19,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 104,
-      "edgesFound": 54,
-      "filesInspected": 31,
+      "componentsFound": 106,
+      "edgesFound": 55,
+      "filesInspected": 32,
       "status": "completed"
     },
     "adapter:implementation-reach": {
@@ -106,8 +106,8 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "entrypoint": 50,
-      "external_service": 50,
+      "entrypoint": 51,
+      "external_service": 51,
       "mcp_server": 1,
       "provider": 1,
       "retrieval": 1,
@@ -115,7 +115,7 @@
       "workflow_step": 11
     },
     "declaredInTest": 0,
-    "total": 116
+    "total": 118
   },
   "discardedRelations": [],
   "files": {
@@ -147,10 +147,10 @@
   "name": "gpt-researcher",
   "relations": {
     "byKind": {
-      "calls_service": 50,
+      "calls_service": 51,
       "contains": 11,
       "transitions_to": 3
     },
-    "total": 64
+    "total": 65
   }
 }

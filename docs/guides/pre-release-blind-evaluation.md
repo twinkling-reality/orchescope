@@ -25,7 +25,8 @@ The [blocked a38ed43f evaluation](../research/a38ed43f-blocked-blind-evaluation.
 [blocked 724a1abd evaluation](../research/724a1abd-blocked-blind-evaluation.md), and the
 [blocked 84c80b2e evaluation](../research/84c80b2e-blocked-blind-evaluation.md), the
 [blocked 97ac6b4e evaluation](../research/97ac6b4e-blocked-blind-evaluation.md), the
-[blocked 63f31253 evaluation](../research/63f31253-blocked-blind-evaluation.md), and the
+[blocked 63f31253 evaluation](../research/63f31253-blocked-blind-evaluation.md), the
+[blocked 1f5fe556 evaluation](../research/1f5fe556-blocked-blind-evaluation.md), and the
 [passed 95c7756c evaluation](../research/95c7756c-passed-blind-evaluation.md) are durable records of completed
 applications of this protocol. Every repository selected in a completed evaluation, and its source lineage, is
 part of a used population. Those repositories and their source lineages are permanently ineligible as blind holdouts
@@ -119,6 +120,7 @@ inside `pnpm verify`; the named command makes the release boundary reviewable wi
 | Import aliases do not change component kind. | `packages/discovery/test/framework-provider-identity.test.ts`, `preserves imported aliases and registrations on verified local framework receivers`; `packages/discovery/test/provider-qualified-effects.test.ts`, `preserves direct, renamed, namespace, default-member and Pool Postgres constructions` |
 | A generic constructor name cannot establish provider identity. | `packages/discovery/test/runtime-symbol-matching.test.ts`, `rejects wrong providers, type-only origins, missing origins and explicit shadows`; `packages/discovery/test/provider-qualified-effects.test.ts`, `rejects direct and module aliases from httpx, local and type-only Client definitions, and missing origin` |
 | Documentation prose does not become an executable prompt. | `packages/discovery/test/documentation-strings.test.ts`, `ignores prompt-like wording in formal Python documentation strings` |
+| A prompt constructor requires exact runtime provenance, and callable or branch uncertainty cannot become a settled interpolation or consumer relation. | `packages/discovery/test/langchain-prompt-template.test.ts`, `uses exact direct, renamed and namespace import provenance`; `stays quiet for foreign, local, shadowed, rebound and type-only lookalikes`; `refuses mutated, escaped and captured prompt bindings before invocation`; `does not borrow dead or pre-construction nested mutations` |
 | Runtime configuration can change an exact model without rewriting the static declaration. | `tests/e2e/configurable-model-effects.test.ts`, `keeps static llama3.2 possibilities distinct from an exact observed smollm2 model` |
 | Completed-zero applicable adapters remain visible. | `packages/discovery/test/configurable-producers.test.ts`, `persists exact completed-zero applicability and uses it for the existing gap accounting` |
 | Input order does not change semantic identity or selected evidence. | `packages/findings/test/semantic-identity.test.ts`, `ignores component, edge and evidence order as well as prose, severity and time`; `packages/report/test/evidence-selection.test.ts`, `is invariant to evidence and citation permutations` |

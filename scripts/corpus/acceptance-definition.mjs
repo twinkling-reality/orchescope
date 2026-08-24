@@ -1,5 +1,6 @@
 /** Validates the bounded, non-recordable semantic acceptance contract on a corpus entry. */
 
+import { EDGE_KINDS } from '../../packages/schema/src/index.ts';
 import {
   checkCompletedZeroAcceptanceDefinition,
   isCompletedZeroAcceptance,
@@ -75,6 +76,17 @@ const checkIdentities = (acceptance, problem) => {
     }
   }
   if (
+    acceptance.absentEdgeKinds !== undefined &&
+    (!isBoundedList(acceptance.absentEdgeKinds) ||
+      acceptance.absentEdgeKinds.length === 0 ||
+      acceptance.absentEdgeKinds.some(
+        (value) => !isBoundedString(value) || !EDGE_KINDS.includes(value),
+      ) ||
+      new Set(acceptance.absentEdgeKinds).size !== acceptance.absentEdgeKinds.length)
+  ) {
+    problem('acceptance.absentEdgeKinds has to list distinct schema edge kinds');
+  }
+  if (
     Array.isArray(acceptance.absentComponentTerms) &&
     acceptance.absentComponentTerms.some((term) => term !== term.toLowerCase())
   ) {
@@ -120,29 +132,40 @@ const checkRelations = (acceptance, problem) => {
   }
 };
 
-const checkComponents = (acceptance, problem) => {
+const checkScalarComponentMap = (value, field, problem) => {
   if (
-    !isRecord(acceptance.componentMetadata) ||
-    Object.keys(acceptance.componentMetadata).length === 0 ||
-    Object.keys(acceptance.componentMetadata).length > MAX_ITEMS
+    !isRecord(value) ||
+    Object.keys(value).length === 0 ||
+    Object.keys(value).length > MAX_ITEMS
   ) {
-    problem('acceptance.componentMetadata has to hold expected component metadata');
-  } else {
-    for (const [id, metadata] of Object.entries(acceptance.componentMetadata)) {
-      const invalid =
-        !isBoundedString(id) ||
-        !isRecord(metadata) ||
-        Object.keys(metadata).length === 0 ||
-        Object.keys(metadata).length > MAX_ITEMS ||
-        Object.values(metadata).some(
-          (value) =>
-            !['string', 'number', 'boolean'].includes(typeof value) ||
-            (typeof value === 'string' && !isBoundedString(value)),
-        );
-      if (invalid) {
-        problem(`acceptance.componentMetadata.${id} has to hold scalar metadata values`);
-      }
+    problem(
+      `acceptance.${field} has to hold expected component ${field.slice('component'.length).toLowerCase()}`,
+    );
+    return;
+  }
+  for (const [id, values] of Object.entries(value)) {
+    const invalid =
+      !isBoundedString(id) ||
+      !isRecord(values) ||
+      Object.keys(values).length === 0 ||
+      Object.keys(values).length > MAX_ITEMS ||
+      Object.values(values).some(
+        (item) =>
+          !['string', 'number', 'boolean'].includes(typeof item) ||
+          (typeof item === 'string' && !isBoundedString(item)),
+      );
+    if (invalid) {
+      problem(
+        `acceptance.${field}.${id} has to hold scalar ${field === 'componentMetadata' ? 'metadata' : 'detail'} values`,
+      );
     }
+  }
+};
+
+const checkComponents = (acceptance, problem) => {
+  checkScalarComponentMap(acceptance.componentMetadata, 'componentMetadata', problem);
+  if (acceptance.componentDetails !== undefined) {
+    checkScalarComponentMap(acceptance.componentDetails, 'componentDetails', problem);
   }
   if (
     !isRecord(acceptance.componentEvidence) ||
@@ -427,8 +450,10 @@ export const checkAcceptanceDefinition = (entry, problem) => {
     'exactIdsByKind',
     'absentKinds',
     'absentComponentTerms',
+    ...(acceptance.absentEdgeKinds === undefined ? [] : ['absentEdgeKinds']),
     'requiredEdges',
     'componentMetadata',
+    ...(acceptance.componentDetails === undefined ? [] : ['componentDetails']),
     'componentEvidence',
     'sourceCitations',
     ...(acceptance.adapterApplicability === undefined ? [] : ['adapterApplicability']),

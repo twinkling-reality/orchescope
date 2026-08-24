@@ -14,12 +14,22 @@ export type PromptInput =
       readonly producer: string;
       readonly module: ModuleFacts;
       readonly call: CallFact;
-      readonly consumer: ComponentIdentity;
+      readonly consumer?: ComponentIdentity;
+      /** Stable semantic source binding used when the consumer is not authoritative. */
+      readonly identityName?: string;
       readonly channel: string;
       readonly slot?: number;
       readonly value: ArgumentFact;
       readonly location: SourceLocation;
       readonly supportingLocations: readonly SourceLocation[];
+      /** Exact result of framework template/invocation settlement when one was possible. */
+      readonly runtimeInterpolation?: boolean;
+      /** Why template interpolation could not be classified from the retained source facts. */
+      readonly interpolationRefusal?: string;
+      /** Exact operation that prevented interpolation settlement. */
+      readonly interpolationRefusalLocation?: SourceLocation;
+      /** Why no exact consumer relation can be drawn for this source prompt. */
+      readonly relationRefusal?: string;
     }
   | {
       readonly kind: 'config';
@@ -31,6 +41,8 @@ export type PromptInput =
       readonly pointer: string;
       readonly supportingPointers?: readonly string[];
     };
+
+export type SourcePromptInput = Exclude<PromptInput, { readonly kind: 'config' }>;
 
 export type PromptInputRegistry = {
   readonly register: (input: PromptInput) => void;

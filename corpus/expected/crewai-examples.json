@@ -73,8 +73,8 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 188,
-      "edgesFound": 188,
+      "componentsFound": 189,
+      "edgesFound": 189,
       "filesInspected": 30,
       "status": "completed"
     },
@@ -111,13 +111,13 @@
       "entrypoint": 9,
       "external_service": 9,
       "model": 3,
-      "prompt": 188,
+      "prompt": 189,
       "provider": 1,
       "workflow": 1,
       "workflow_step": 3
     },
     "declaredInTest": 0,
-    "total": 320
+    "total": 321
   },
   "discardedRelations": [],
   "files": {
@@ -153,8 +153,8 @@
       "contains": 8,
       "served_by_provider": 3,
       "transitions_to": 4,
-      "uses_prompt": 188
+      "uses_prompt": 189
     },
-    "total": 212
+    "total": 213
   }
 }

@@ -9,14 +9,16 @@ import type {
   TopologyDiscovery,
 } from '../adapter.ts';
 import { configIdentity, createDrafts, sourceIdentity } from '../drafts.ts';
-import type { PromptInput } from '../prompt-input.ts';
+import type { PromptInput, SourcePromptInput } from '../prompt-input.ts';
 import { type PromptLeaf, settlePromptInput } from '../prompt-settlement.ts';
+import {
+  discoverLangChainPromptTemplates,
+  hasLangChainPromptTemplateImport,
+} from './langchain-prompt-template.ts';
 
 const ADAPTER_ID = 'adapter:prompts';
 const drafts = createDrafts(ADAPTER_ID);
 const MAX_REFUSALS = 10;
-
-type SourcePromptInput = Exclude<PromptInput, { readonly kind: 'config' }>;
 
 const settleSourcePrompt = (context: DiscoveryContext, input: SourcePromptInput) =>
   settlePromptInput(
@@ -34,12 +36,124 @@ const promptIdentity = (input: SourcePromptInput, leaf: PromptLeaf): ComponentId
   sourceIdentity(
     'prompt',
     leaf.file,
-    leaf.name === undefined
-      ? `${input.consumer.localName}-${input.channel}-${input.call.lexicalEnclosing ?? input.call.enclosing ?? 'call'}-${leaf.location.startLine}-${leaf.location.startColumn ?? 0}`
-      : leaf.enclosing === undefined
-        ? leaf.name
-        : `${leaf.enclosing}.${leaf.name}`,
+    input.identityName ??
+      (leaf.name === undefined
+        ? `${input.consumer?.localName ?? 'prompt'}-${input.channel}-${input.call.lexicalEnclosing ?? input.call.enclosing ?? 'call'}-${leaf.location.startLine}-${leaf.location.startColumn ?? 0}`
+        : leaf.enclosing === undefined
+          ? leaf.name
+          : `${leaf.enclosing}.${leaf.name}`),
   );
+
+const promptName = (input: SourcePromptInput, leaf: PromptLeaf): string =>
+  leaf.name ?? input.identityName ?? `${input.consumer?.localName ?? 'prompt'} ${input.channel}`;
+
+const addSourcePrompt = (
+  context: DiscoveryContext,
+  builder: SystemGraphBuilder,
+  input: SourcePromptInput,
+): {
+  readonly components: readonly string[];
+  readonly edges: readonly string[];
+  readonly refusal?: TopologyDiscovery['unresolved'][number];
+} => {
+  const settlement = settleSourcePrompt(context, input);
+  const refusalReasons = [
+    settlement.reason,
+    input.interpolationRefusal,
+    input.relationRefusal ??
+      (input.consumer === undefined
+        ? 'the source establishes this prompt but not one authoritative consuming component'
+        : undefined),
+  ].filter((reason): reason is string => reason !== undefined);
+  const components = new Set<string>();
+  const edges = new Set<string>();
+  for (const leaf of settlement.leaves) {
+    const identity = promptIdentity(input, leaf);
+    const text = leaf.value.value;
+    const componentKey = identityKey(identity);
+    const interpolation =
+      input.runtimeInterpolation ??
+      (input.interpolationRefusal === undefined ? leaf.interpolates : undefined);
+    const details = {
+      for: 'prompt' as const,
+      textHash: sha256Hex(text),
+      approximateTokens: approximateTokens(text),
+      ...(interpolation === undefined ? {} : { interpolatesUntrustedInput: interpolation }),
+    };
+    builder.addComponent(
+      drafts.sourceComponent({
+        kind: 'prompt',
+        identity,
+        file: leaf.file,
+        name: promptName(input, leaf),
+        location: leaf.location,
+        symbol: leaf.name ?? input.channel,
+        confidence: CONFIDENCE_BANDS.deterministic,
+        details,
+        metadata: {
+          channel: input.channel,
+          sourceProducer: input.producer,
+          characters: text.length,
+          hasSubstitutions: leaf.value.kind === 'template' && leaf.value.hasSubstitutions,
+          ...(leaf.name !== undefined && interpolation === true
+            ? { assembledElsewhere: true }
+            : {}),
+        },
+        tags: ['prompt'],
+      }),
+    );
+    for (const location of [...leaf.locations, ...input.supportingLocations]) {
+      builder.addComponent(
+        drafts.sourceComponent({
+          kind: 'prompt',
+          identity,
+          file: location.file,
+          name: promptName(input, leaf),
+          location,
+          symbol: input.channel,
+          confidence: CONFIDENCE_BANDS.deterministic,
+          details,
+          tags: ['prompt'],
+        }),
+      );
+    }
+    components.add(componentKey);
+    if (input.consumer === undefined) continue;
+    const edgeLocations = new Map(
+      [input.location, ...input.supportingLocations].map((candidate) => [
+        `${candidate.file}:${candidate.startLine}:${candidate.startColumn ?? 0}:${candidate.endLine ?? candidate.startLine}:${candidate.endColumn ?? 0}`,
+        candidate,
+      ]),
+    );
+    for (const location of edgeLocations.values()) {
+      builder.addEdge(
+        drafts.edge({
+          kind: 'uses_prompt',
+          from: input.consumer,
+          to: identity,
+          location,
+          symbol: input.channel,
+          confidence: CONFIDENCE_BANDS.deterministic,
+        }),
+      );
+    }
+    edges.add(`${identityKey(input.consumer)}\u0000${componentKey}`);
+  }
+  return {
+    components: [...components],
+    edges: [...edges],
+    ...(refusalReasons.length === 0
+      ? {}
+      : {
+          refusal: {
+            kind: 'prompt_input',
+            scope: 'prompt_use',
+            reason: `${input.producer} ${input.channel}: ${refusalReasons.join('; ')}`,
+            location: input.interpolationRefusalLocation ?? input.location,
+          },
+        }),
+  };
+};
 
 const approximateTokens = (value: string): number =>
   Math.max(1, value.trim().split(/\s+/u).filter(Boolean).length);
@@ -97,15 +211,18 @@ const addConfigPrompt = (
 
 export const promptsAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '3',
+  version: '4',
   packages: [],
   appliesTo: (context) =>
+    hasLangChainPromptTemplateImport(context) ||
     context.promptInputs
       .inputs()
       .some((input) =>
         input.kind === 'config' ? !isTestFile(input.configFile) : !isTestFile(input.module.file),
       ),
   discover: (context, builder): AdapterFindings => {
+    const templates = discoverLangChainPromptTemplates(context);
+    for (const input of templates.inputs) context.promptInputs.register(input);
     const registered = context.promptInputs.inputs();
     const inputs = registered.filter(
       (input): input is SourcePromptInput =>
@@ -117,9 +234,18 @@ export const promptsAdapter: AgentSystemAdapter = {
     );
     const components = new Set<string>();
     const edges = new Set<string>();
-    const files = new Set<string>();
-    const unresolved: TopologyDiscovery['unresolved'][number][] = [];
-    let unresolvedCount = 0;
+    const files = new Set<string>(templates.files);
+    const templateRefusals: TopologyDiscovery['unresolved'] = templates.refusals.map((refusal) => ({
+      kind: 'prompt_input',
+      scope: 'prompt_use',
+      reason: `adapter:prompts chat_prompt_template: ${refusal.reason}`,
+      location: refusal.location,
+    }));
+    const unresolved: TopologyDiscovery['unresolved'][number][] = templateRefusals.slice(
+      0,
+      MAX_REFUSALS,
+    );
+    let unresolvedCount = templateRefusals.length;
 
     for (const input of configInputs) {
       files.add(input.configFile);
@@ -130,82 +256,12 @@ export const promptsAdapter: AgentSystemAdapter = {
 
     for (const input of inputs) {
       files.add(input.module.file);
-      const settlement = settleSourcePrompt(context, input);
-      if (settlement.reason !== undefined) {
+      const added = addSourcePrompt(context, builder, input);
+      for (const component of added.components) components.add(component);
+      for (const edge of added.edges) edges.add(edge);
+      if (added.refusal !== undefined) {
         unresolvedCount += 1;
-        if (unresolved.length < MAX_REFUSALS) {
-          unresolved.push({
-            kind: 'prompt_input',
-            scope: 'prompt_use',
-            reason: `${input.producer} ${input.channel}: ${settlement.reason}`,
-            location: input.location,
-          });
-        }
-      }
-      for (const leaf of settlement.leaves) {
-        const identity = promptIdentity(input, leaf);
-        const text = leaf.value.value;
-        const componentKey = identityKey(identity);
-        const details = {
-          for: 'prompt' as const,
-          textHash: sha256Hex(text),
-          approximateTokens: approximateTokens(text),
-          interpolatesUntrustedInput: leaf.interpolates,
-        };
-        builder.addComponent(
-          drafts.sourceComponent({
-            kind: 'prompt',
-            identity,
-            file: leaf.file,
-            name: leaf.name ?? `${input.consumer.localName} ${input.channel}`,
-            location: leaf.location,
-            symbol: leaf.name ?? input.channel,
-            confidence: CONFIDENCE_BANDS.deterministic,
-            details,
-            metadata: {
-              channel: input.channel,
-              sourceProducer: input.producer,
-              characters: text.length,
-              hasSubstitutions: leaf.value.kind === 'template' && leaf.value.hasSubstitutions,
-              ...(leaf.name !== undefined && leaf.interpolates ? { assembledElsewhere: true } : {}),
-            },
-            tags: ['prompt'],
-          }),
-        );
-        for (const location of [...leaf.locations, ...input.supportingLocations]) {
-          builder.addComponent(
-            drafts.sourceComponent({
-              kind: 'prompt',
-              identity,
-              file: location.file,
-              name: leaf.name ?? `${input.consumer.localName} ${input.channel}`,
-              location,
-              symbol: input.channel,
-              confidence: CONFIDENCE_BANDS.deterministic,
-              details,
-              tags: ['prompt'],
-            }),
-          );
-        }
-        components.add(componentKey);
-        for (const location of new Map(
-          [input.location, ...input.supportingLocations].map((candidate) => [
-            `${candidate.file}:${candidate.startLine}:${candidate.startColumn ?? 0}:${candidate.endLine ?? candidate.startLine}:${candidate.endColumn ?? 0}`,
-            candidate,
-          ]),
-        ).values()) {
-          builder.addEdge(
-            drafts.edge({
-              kind: 'uses_prompt',
-              from: input.consumer,
-              to: identity,
-              location,
-              symbol: input.channel,
-              confidence: CONFIDENCE_BANDS.deterministic,
-            }),
-          );
-        }
-        edges.add(`${identityKey(input.consumer)}\u0000${componentKey}`);
+        if (unresolved.length < MAX_REFUSALS) unresolved.push(added.refusal);
       }
     }
 
@@ -219,7 +275,7 @@ export const promptsAdapter: AgentSystemAdapter = {
           unresolvedCount === 0 && inputs.length + configInputs.length > 0
             ? 'complete'
             : 'incomplete',
-        inspectedInputs: inputs.length + configInputs.length,
+        inspectedInputs: inputs.length + configInputs.length + templates.refusals.length,
         explicitRelations: edges.size,
         conditionalConstructs: 0,
         conditionalDestinations: 0,

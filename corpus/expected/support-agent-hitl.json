@@ -73,10 +73,10 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 0,
+      "componentsFound": 1,
       "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "filesInspected": 1,
+      "status": "completed"
     },
     "adapter:pydantic-ai": {
       "componentsFound": 0,
@@ -107,12 +107,13 @@
   "components": {
     "byKind": {
       "model": 1,
+      "prompt": 1,
       "provider": 1,
       "workflow": 1,
       "workflow_step": 4
     },
     "declaredInTest": 0,
-    "total": 7
+    "total": 8
   },
   "discardedRelations": [],
   "files": {

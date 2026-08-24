@@ -57,6 +57,13 @@ const sameRange = (left: SourceLocation, right: SourceLocation): boolean =>
   left.endLine === right.endLine &&
   left.endColumn === right.endColumn;
 
+const definitionOwner = (definition: DefinitionFact): SourceLocation | undefined =>
+  definition.enclosingLocation ?? definition.lexicalOwnerLocation;
+
+const assignmentOwner = (
+  assignment: ModuleFacts['assignments'][number],
+): SourceLocation | undefined => assignment.enclosingLocation ?? assignment.lexicalOwnerLocation;
+
 const exactLexicalDefinition = (
   module: ModuleFacts,
   name: string,
@@ -68,8 +75,8 @@ const exactLexicalDefinition = (
       (definition) =>
         definition.kind === 'variable' &&
         definition.name === name &&
-        definition.enclosingLocation !== undefined &&
-        sameRange(definition.enclosingLocation, scope.location) &&
+        definitionOwner(definition) !== undefined &&
+        sameRange(definitionOwner(definition) as SourceLocation, scope.location) &&
         beforeUse(definition, before),
     );
     if (candidates.length > 1) return { blocked: true };
@@ -79,8 +86,8 @@ const exactLexicalDefinition = (
         (assignment) =>
           assignment.target.length === 1 &&
           assignment.target[0] === name &&
-          assignment.enclosingLocation !== undefined &&
-          sameRange(assignment.enclosingLocation, scope.location),
+          assignmentOwner(assignment) !== undefined &&
+          sameRange(assignmentOwner(assignment) as SourceLocation, scope.location),
       );
       return changed ? { blocked: true } : { definition: candidate, blocked: false };
     }

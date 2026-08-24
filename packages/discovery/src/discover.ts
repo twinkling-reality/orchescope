@@ -413,6 +413,38 @@ const topologySampleKey = (sample: {
 }): string =>
   `${sample.location?.file ?? ''}:${sample.location?.startLine ?? 0}:${sample.kind}:${sample.reason ?? ''}`;
 
+/** Keep both closed-world populations visible when their combined refusal sample exceeds the bound. */
+const boundedTopologyRefusals = <
+  T extends {
+    readonly kind: string;
+    readonly scope?: 'control_flow' | 'prompt_use';
+    readonly reason?: string;
+    readonly location?: { readonly file: string; readonly startLine: number };
+  },
+>(
+  refusals: readonly T[],
+  limit: number,
+): T[] => {
+  if (refusals.length <= limit) return [...refusals];
+  const controlFlow = refusals.filter((entry) => entry.scope !== 'prompt_use');
+  const promptUse = refusals.filter((entry) => entry.scope === 'prompt_use');
+  if (controlFlow.length === 0 || promptUse.length === 0) return refusals.slice(0, limit);
+
+  const controlLimit = Math.min(controlFlow.length, Math.ceil(limit / 2));
+  const promptLimit = Math.min(promptUse.length, Math.floor(limit / 2));
+  const selected = [...controlFlow.slice(0, controlLimit), ...promptUse.slice(0, promptLimit)];
+  let remaining = limit - selected.length;
+  if (remaining > 0) {
+    const extraControl = controlFlow.slice(controlLimit, controlLimit + remaining);
+    selected.push(...extraControl);
+    remaining -= extraControl.length;
+  }
+  if (remaining > 0) selected.push(...promptUse.slice(promptLimit, promptLimit + remaining));
+  return selected.sort((left, right) =>
+    topologySampleKey(left).localeCompare(topologySampleKey(right)),
+  );
+};
+
 const topologyLocationStamp =
   (digests: ReadonlyMap<string, Sha256Hex>) =>
   <T extends { readonly file: string }>(location: T): T => {
@@ -588,7 +620,7 @@ const aggregateTopology = (
     unresolvedCount,
     controlFlowUnresolvedCount,
     promptUseUnresolvedCount,
-    unresolved: unresolved.slice(0, MAX_TOPOLOGY_SAMPLES),
+    unresolved: boundedTopologyRefusals(unresolved, MAX_TOPOLOGY_SAMPLES),
   };
 };
 

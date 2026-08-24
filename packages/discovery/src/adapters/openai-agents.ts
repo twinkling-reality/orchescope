@@ -56,6 +56,13 @@ type ScopedBinding = {
   readonly location: SourceLocation;
 };
 
+const definitionScope = (definition: DefinitionFact | undefined): SourceLocation | undefined =>
+  definition?.enclosingLocation ?? definition?.lexicalOwnerLocation;
+
+const assignmentScope = (
+  assignment: ModuleFacts['assignments'][number],
+): SourceLocation | undefined => assignment.enclosingLocation ?? assignment.lexicalOwnerLocation;
+
 const registerScopedBinding = (
   context: DiscoveryContext,
   bindings: ScopedBinding[],
@@ -81,7 +88,7 @@ const registerDefinitionAliases = (
       name,
       identity,
       enclosing: definition.enclosing,
-      enclosingLocation: definition.enclosingLocation,
+      enclosingLocation: definitionScope(definition),
       location: definition.location,
     });
   }
@@ -161,7 +168,7 @@ const registerTools = (
         name: definition.name,
         identity,
         enclosing: definition.enclosing,
-        enclosingLocation: definition.enclosingLocation,
+        enclosingLocation: definitionScope(definition),
         location: match.call.location,
       });
     }
@@ -170,7 +177,7 @@ const registerTools = (
       name: declaredName,
       identity,
       enclosing: definition?.enclosing ?? match.call.enclosing,
-      enclosingLocation: definition?.enclosingLocation,
+      enclosingLocation: definitionScope(definition),
       location: match.call.location,
     });
     // The call holds the tool's `execute`, so what runs when the tool is invoked is written inside it.
@@ -421,7 +428,7 @@ const registerMcpServers = (
         name: definition.name,
         identity,
         enclosing: definition.enclosing,
-        enclosingLocation: definition.enclosingLocation,
+        enclosingLocation: definitionScope(definition),
         location: match.call.location,
       });
       registerScopedBinding(context, bindings, {
@@ -429,7 +436,7 @@ const registerMcpServers = (
         name: declared,
         identity,
         enclosing: definition.enclosing,
-        enclosingLocation: definition.enclosingLocation,
+        enclosingLocation: definitionScope(definition),
         location: match.call.location,
       });
     }
@@ -507,7 +514,7 @@ const bindingAtLocation = (
         assignment.target.length === 1 &&
         assignment.target[0] === name &&
         assignment.enclosing === enclosing &&
-        sameOptionalRange(assignment.enclosingLocation, enclosingLocation) &&
+        sameOptionalRange(assignmentScope(assignment), enclosingLocation) &&
         endsBefore(binding.location, assignment.location) &&
         (captured || endsBefore(assignment.location, useLocation)),
     ),
@@ -573,14 +580,14 @@ const resolveScopedBinding = (
         (definition) =>
           definition.name === name &&
           definition.enclosing === agent.enclosing &&
-          definition.enclosingLocation === undefined,
+          definitionScope(definition) === undefined,
       ) ||
       agent.module.assignments.some(
         (assignment) =>
           assignment.target.length === 1 &&
           assignment.target[0] === name &&
           assignment.enclosing === agent.enclosing &&
-          assignment.enclosingLocation === undefined,
+          assignmentScope(assignment) === undefined,
       );
     if (localNamedBinding) return { blocked: true };
   }
@@ -599,14 +606,14 @@ const resolveScopedBinding = (
       (definition) =>
         definition.name === name &&
         definition.enclosing === undefined &&
-        definition.enclosingLocation === undefined,
+        definitionScope(definition) === undefined,
     ) ||
     agent.module.assignments.some(
       (assignment) =>
         assignment.target.length === 1 &&
         assignment.target[0] === name &&
         assignment.enclosing === undefined &&
-        assignment.enclosingLocation === undefined,
+        assignmentScope(assignment) === undefined,
     );
   if (localModuleBinding) return { blocked: true };
   const imported = context.bindings.lookup(agent.module.file, name);
@@ -852,7 +859,7 @@ const addAgents = (
         name: definition.name,
         identity,
         enclosing: definition.enclosing,
-        enclosingLocation: definition.enclosingLocation,
+        enclosingLocation: definitionScope(definition),
         location: match.call.location,
       });
     }
@@ -861,7 +868,7 @@ const addAgents = (
       name: declared,
       identity,
       enclosing: definition?.enclosing ?? match.call.enclosing,
-      enclosingLocation: definition?.enclosingLocation,
+      enclosingLocation: definitionScope(definition),
       location: match.call.location,
     });
     const supportingLocations = [
@@ -884,14 +891,14 @@ const addAgents = (
         (candidate) =>
           candidate.name === definition.name &&
           candidate.enclosing === definition.enclosing &&
-          sameOptionalRange(candidate.enclosingLocation, definition.enclosingLocation),
+          sameOptionalRange(definitionScope(candidate), definitionScope(definition)),
       ).length === 1 &&
       !match.module.assignments.some(
         (assignment) =>
           assignment.target.length === 1 &&
           assignment.target[0] === definition.name &&
           assignment.enclosing === definition.enclosing &&
-          sameOptionalRange(assignment.enclosingLocation, definition.enclosingLocation),
+          sameOptionalRange(assignmentScope(assignment), definitionScope(definition)),
       );
     pending.push({
       identity,
@@ -900,7 +907,7 @@ const addAgents = (
       entries,
       variable: stableVariable ? definition.name : undefined,
       enclosing: definition?.enclosing ?? match.call.enclosing,
-      enclosingLocation: definition?.enclosingLocation ?? match.call.enclosingLocation,
+      enclosingLocation: definitionScope(definition) ?? match.call.enclosingLocation,
       supportingLocations,
     });
 
@@ -1146,7 +1153,7 @@ const addAssignedHandoffs = (
         assignment.location,
         'handoffs',
         assignment.enclosing,
-        assignment.enclosingLocation,
+        assignmentScope(assignment),
       );
     }
     for (const call of module.calls) {

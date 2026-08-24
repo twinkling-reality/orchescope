@@ -75,8 +75,8 @@
     "adapter:prompts": {
       "componentsFound": 0,
       "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "filesInspected": 1,
+      "status": "completed"
     },
     "adapter:pydantic-ai": {
       "componentsFound": 0,

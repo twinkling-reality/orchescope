@@ -21,8 +21,37 @@ pair and blocked too. The seventh candidate, commit `97ac6b4e48023ad6fa2e465a702
 `91c71ad094f13bf6f28f7a3798db43289c3e126bcc5d1b975ef4a87459956f39`, was independently evaluated and blocked as
 well. The eighth candidate, commit `63f31253d5ca58ea29661074561c833b01462fef` with archive SHA-256
 `5a0e18d6d37c71d4d9ccd5f4d6a6f8f62bc804b2f01d186bcc105dcce778bfd9`, was independently evaluated and blocked too.
-None was published, tagged, pushed or attached to a release. A corrected candidate cannot be
-published until a different unseen positive and negative pair clears the blind gate.
+The ninth candidate, commit `1f5fe556db5abd762c43c5d35f0b15e15f7df6df` with archive SHA-256
+`1b11e56ba50ece693191d4f1b03e5da9cb2e7492be71b037990af0db7d3b45bc`, was independently evaluated and blocked as
+well. None was published, tagged, pushed or attached to a release. A corrected candidate cannot be published until a
+different unseen positive and negative pair clears the blind gate.
+
+### LangChain chat prompts retain exact provenance and bounded runtime settlement
+
+Exact `langchain_core.prompts.ChatPromptTemplate`, legacy `langchain.prompts.ChatPromptTemplate` and
+`@langchain/core/prompts.ChatPromptTemplate` runtime imports now supply prompt-constructor provenance. Direct, renamed
+and namespace imports retain their origin; foreign packages, local lookalikes, type-only imports, shadows and rebindings
+do not acquire prompt identity. Recognition does not match generic prompt-like class names, so another framework must
+supply its own provenance declaration without weakening this boundary.
+
+Direct construction and exact `from_template`, `fromTemplate`, `from_messages` and `fromMessages` factories retain
+template, system and human roles. Static text, formal parameters, partial bindings and invocation bindings are settled
+in runtime precedence order. Computed formats, unsupported template dialects, mutations, escapes, decorators,
+destructuring and unsettled consumers become source-located refusals. No `uses_prompt` relation is emitted merely
+because a prompt and workflow step occur in the same callable.
+
+The callable-flow analysis is shared source infrastructure rather than a LangChain exception. It follows bounded
+aliases, parameters, defaults, wrappers and nested calls; respects lexical ownership and source order; treats calls of
+returned callables as unknown; and proves complete conditional settlement over the whole branch-path tree. One-sided,
+nested or overly complex paths preserve reachable prior bindings instead of being cleared by an unrelated branch.
+
+The defect was found by the independently selected `AI-Article-Writer` holdout. The frozen candidate reported its four
+LangGraph workflows and 38 relations but silently missed six exact chat prompt components, including prompts receiving
+search and retrieved page content, while both the prompt adapter and prompt-injection rule reported not applicable. The
+positive is pinned with 59 semantic corpus assertions: six exact prompt identities, their roles and evidence, two
+settled interpolation results, no invented `uses_prompt` relation and five exact prompt-use refusals. The selected
+`claude-usage` negative was correctly classified as fixed-purpose usage tooling and adds no distinct precision entry.
+Both source lineages are permanently ineligible as future blind holdouts.
 
 ### AgentFlow graphs retain source identity, topology and invocation ceilings
 

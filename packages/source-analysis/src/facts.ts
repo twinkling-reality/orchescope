@@ -110,6 +110,8 @@ export type CallFact = {
   readonly kind: CallKind;
   /** Callee as a dotted path, for example `["client","chat","completions","create"]`. */
   readonly calleePath: readonly string[];
+  /** True when this call invokes the result of another call, such as `factory()()`. */
+  readonly invokesReturnedCallable?: true;
   readonly origin: CalleeOrigin | undefined;
   readonly args: readonly ArgumentFact[];
   readonly location: SourceLocation;
@@ -241,6 +243,8 @@ export type ParameterFact = {
   readonly name: string;
   /** Dotted type name written in the annotation. Generic arguments are not inferred. */
   readonly annotation?: readonly string[];
+  /** Reduced default expression when the declaration captures one. */
+  readonly defaultValue?: ArgumentFact;
   readonly location: SourceLocation;
 };
 

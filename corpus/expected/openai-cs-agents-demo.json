@@ -73,8 +73,8 @@
       "status": "completed"
     },
     "adapter:prompts": {
-      "componentsFound": 1,
-      "edgesFound": 1,
+      "componentsFound": 4,
+      "edgesFound": 4,
       "filesInspected": 2,
       "status": "completed"
     },
@@ -110,11 +110,11 @@
       "entrypoint": 2,
       "evaluator": 2,
       "external_service": 2,
-      "prompt": 1,
+      "prompt": 4,
       "tool": 11
     },
     "declaredInTest": 0,
-    "total": 26
+    "total": 29
   },
   "discardedRelations": [],
   "files": {
@@ -137,7 +137,7 @@
     },
     "componentsByRule": {
       "observability-coverage": 5,
-      "prompt-injection-boundary": 6,
+      "prompt-injection-boundary": 7,
       "topology-shape": 6
     },
     "strengths": 0,
@@ -152,9 +152,9 @@
       "calls_service": 2,
       "calls_tool": 12,
       "hands_off_to": 15,
-      "uses_prompt": 1,
+      "uses_prompt": 4,
       "validated_by": 12
     },
-    "total": 42
+    "total": 45
   }
 }

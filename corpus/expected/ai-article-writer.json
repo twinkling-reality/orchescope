@@ -19,9 +19,9 @@
       "status": "not_applicable"
     },
     "adapter:effects": {
-      "componentsFound": 0,
-      "edgesFound": 0,
-      "filesInspected": 0,
+      "componentsFound": 2,
+      "edgesFound": 1,
+      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:implementation-reach": {
@@ -43,10 +43,10 @@
       "status": "not_applicable"
     },
     "adapter:langgraph": {
-      "componentsFound": 0,
-      "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "componentsFound": 24,
+      "edgesFound": 36,
+      "filesInspected": 4,
+      "status": "completed"
     },
     "adapter:manifest": {
       "componentsFound": 0,
@@ -61,10 +61,10 @@
       "status": "not_applicable"
     },
     "adapter:model-sdk": {
-      "componentsFound": 0,
-      "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "componentsFound": 2,
+      "edgesFound": 1,
+      "filesInspected": 3,
+      "status": "completed"
     },
     "adapter:openai-agents": {
       "componentsFound": 0,
@@ -73,10 +73,10 @@
       "status": "not_applicable"
     },
     "adapter:prompts": {
-      "componentsFound": 0,
+      "componentsFound": 6,
       "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "filesInspected": 3,
+      "status": "completed"
     },
     "adapter:pydantic-ai": {
       "componentsFound": 0,
@@ -103,33 +103,52 @@
       "status": "not_applicable"
     }
   },
-  "agentSystemDetected": false,
+  "agentSystemDetected": true,
   "components": {
-    "byKind": {},
+    "byKind": {
+      "entrypoint": 1,
+      "external_service": 1,
+      "model": 1,
+      "prompt": 6,
+      "provider": 1,
+      "workflow": 4,
+      "workflow_step": 20
+    },
     "declaredInTest": 0,
-    "total": 0
+    "total": 34
   },
   "discardedRelations": [],
   "files": {
-    "discovered": 97,
-    "inSupportedLanguages": 96,
-    "parsed": 96,
+    "discovered": 5,
+    "inSupportedLanguages": 5,
+    "parsed": 5,
     "skipped": 0,
     "truncated": false
   },
   "findings": {
-    "byRule": {},
-    "bySeverity": {},
-    "componentsByRule": {},
+    "byRule": {
+      "observability-coverage": 1
+    },
+    "bySeverity": {
+      "info": 1
+    },
+    "componentsByRule": {
+      "observability-coverage": 5
+    },
     "strengths": 0,
-    "total": 0
+    "total": 1
   },
   "foundNothing": [],
-  "kind": "not_agent_system",
+  "kind": "agent_system",
   "languagesNotAnalysed": [],
-  "name": "orchescope-discovery",
+  "name": "ai-article-writer",
   "relations": {
-    "byKind": {},
-    "total": 0
+    "byKind": {
+      "calls_service": 1,
+      "contains": 20,
+      "served_by_provider": 1,
+      "transitions_to": 16
+    },
+    "total": 38
   }
 }

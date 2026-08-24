@@ -89,6 +89,12 @@ file parsed, and the terminal document claimed that no agent system was present 
 is a permanent source-cited regression, the negative adds no duplicate precision entry, and neither lineage can be
 reused as an unseen holdout.
 
+The [blocked 1f5fe556 evaluation](../research/1f5fe556-blocked-blind-evaluation.md) records a tenth completed block:
+exact LangChain `ChatPromptTemplate` constructions and runtime interpolation disappeared while the prompt adapter and
+prompt-injection rule reported not applicable. The positive is pinned as a six-prompt, source-cited regression with
+explicit consumer refusals; the correctly classified negative adds no duplicate precision entry, and neither lineage
+can be reused as an unseen holdout.
+
 The [passed 95c7756c evaluation](../research/95c7756c-passed-blind-evaluation.md) records the same boundary for a
 completed passing gate. Its selected positive becomes a regression input, its negative adds no duplicate corpus entry,
 and neither source lineage can be reused as an unseen holdout.

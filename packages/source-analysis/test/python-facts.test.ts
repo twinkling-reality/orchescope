@@ -655,6 +655,43 @@ def reset(support, replacement, values):
         .every((assignment) => assignment.sourceReferences?.[0]?.[0] === 'values'),
     );
   });
+
+  it('retains parameter default captures as reduced source values', async () => {
+    const facts = await analyze(`
+def outer(prompt):
+    def mutate(alias=prompt, fixed="system"):
+        return alias
+    return mutate()
+`);
+    const mutate = facts.definitions.find(
+      (definition) =>
+        (definition.kind === 'function' || definition.kind === 'method') &&
+        definition.name.endsWith('.mutate'),
+    );
+    assert.deepEqual(
+      mutate?.parameters?.map((parameter) => ({
+        name: parameter.name,
+        defaultValue: parameter.defaultValue,
+      })),
+      [
+        { name: 'alias', defaultValue: { kind: 'identifier', name: 'prompt' } },
+        { name: 'fixed', defaultValue: { kind: 'string', value: 'system' } },
+      ],
+    );
+  });
+
+  it('marks a call that invokes a returned callable', async () => {
+    const facts = await analyze(`
+def factory():
+    return operation
+
+factory()()
+factory()
+`);
+    const calls = facts.calls.filter((call) => call.calleePath[0] === 'factory');
+    assert.equal(calls[0]?.invokesReturnedCallable, true);
+    assert.equal(calls[1]?.invokesReturnedCallable, undefined);
+  });
 });
 
 /**

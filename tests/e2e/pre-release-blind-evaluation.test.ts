@@ -41,6 +41,11 @@ const blockedAgentFlowRecord = readFileSync(
   join(repositoryRoot, blockedAgentFlowRecordPath),
   'utf8',
 );
+const blockedLangChainPromptRecordPath = 'docs/research/1f5fe556-blocked-blind-evaluation.md';
+const blockedLangChainPromptRecord = readFileSync(
+  join(repositoryRoot, blockedLangChainPromptRecordPath),
+  'utf8',
+);
 const passedRecordPath = 'docs/research/95c7756c-passed-blind-evaluation.md';
 const passedRecord = readFileSync(join(repositoryRoot, passedRecordPath), 'utf8');
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
@@ -111,6 +116,30 @@ const witnesses = [
     property: 'Documentation prose does not become an executable prompt.',
     file: 'packages/discovery/test/documentation-strings.test.ts',
     title: 'ignores prompt-like wording in formal Python documentation strings',
+  },
+  {
+    property:
+      'A prompt constructor requires exact runtime provenance, and callable or branch uncertainty cannot become a settled interpolation or consumer relation.',
+    file: 'packages/discovery/test/langchain-prompt-template.test.ts',
+    title: 'uses exact direct, renamed and namespace import provenance',
+  },
+  {
+    property:
+      'A prompt constructor requires exact runtime provenance, and callable or branch uncertainty cannot become a settled interpolation or consumer relation.',
+    file: 'packages/discovery/test/langchain-prompt-template.test.ts',
+    title: 'stays quiet for foreign, local, shadowed, rebound and type-only lookalikes',
+  },
+  {
+    property:
+      'A prompt constructor requires exact runtime provenance, and callable or branch uncertainty cannot become a settled interpolation or consumer relation.',
+    file: 'packages/discovery/test/langchain-prompt-template.test.ts',
+    title: 'refuses mutated, escaped and captured prompt bindings before invocation',
+  },
+  {
+    property:
+      'A prompt constructor requires exact runtime provenance, and callable or branch uncertainty cannot become a settled interpolation or consumer relation.',
+    file: 'packages/discovery/test/langchain-prompt-template.test.ts',
+    title: 'does not borrow dead or pre-construction nested mutations',
   },
   {
     property:
@@ -741,6 +770,49 @@ describe('the frozen pre-release blind evaluation protocol', () => {
         (entry) =>
           entry.name === 'claude-log-viewer' ||
           entry.url === 'https://github.com/H21465/claude-log-viewer.git',
+      ),
+      false,
+    );
+  });
+
+  it('blocks silent LangChain prompts and promotes only the exact positive invariant', () => {
+    for (const fact of [
+      '1f5fe556db5abd762c43c5d35f0b15e15f7df6df',
+      '1b11e56ba50ece693191d4f1b03e5da9cb2e7492be71b037990af0db7d3b45bc',
+      'https://github.com/manohar42/AI-Article-Writer',
+      'a81ea1e0a4d8b3724fc9acd8f01ec71aee5ccea6',
+      '4938b79666d260b2fa82054b029acbcce953d1cd2fbe89ce02bda39a279920bd',
+      'https://github.com/riigait/claude-usage',
+      'e459579fc1020b75d43f80dbbf0d6b822f9c0a22',
+      'face49146cdd2a94cee94680f566ff47c3920d8169d8a2c71e6306a6fa648428',
+      'ce0d413edb83da4a4a6896d716e970662de953f0df530d2687cc69146902bdd7',
+    ]) {
+      assert.ok(
+        blockedLangChainPromptRecord.includes(fact),
+        `LangChain prompt block record omitted ${fact}`,
+      );
+    }
+    assert.match(blockedLangChainPromptRecord, /release decision was \*\*BLOCK\*\*/);
+    assert.match(blockedLangChainPromptRecord, /prompt adapter as not applicable/);
+    assert.match(blockedLangChainPromptRecord, /six exact prompt components/);
+    assert.match(blockedLangChainPromptRecord, /five source-located prompt-use\s+refusals/);
+    assert.match(blockedLangChainPromptRecord, /No target runtime was executed/);
+    assert.match(blockedLangChainPromptRecord, /negative adds no distinct precision invariant/);
+    assert.match(blockedLangChainPromptRecord, /different unseen positive and negative pair/);
+    assert.doesNotMatch(
+      blockedLangChainPromptRecord,
+      /\/Users\/|\/tmp\/|\brun_[0-9a-f]{8}\b|\bev_[0-9a-f]{8}\b|traceId|spanId/,
+    );
+    assert.ok(protocol.includes('../research/1f5fe556-blocked-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/1f5fe556-blocked-blind-evaluation.md'));
+
+    const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
+    assert.equal(entries.filter((entry) => entry.name === 'ai-article-writer').length, 1);
+    assert.equal(
+      entries.some(
+        (entry) =>
+          entry.name === 'claude-usage' ||
+          entry.url === 'https://github.com/riigait/claude-usage.git',
       ),
       false,
     );

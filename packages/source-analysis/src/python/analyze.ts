@@ -251,6 +251,38 @@ const stringArgumentFact = (node: Node): ArgumentFact => {
   };
 };
 
+const concatenatedStringArgumentFact = (node: Node): ArgumentFact => {
+  const parts = namedChildren(node).map((child) =>
+    child.type === 'string'
+      ? stringArgumentFact(child)
+      : child.type === 'concatenated_string'
+        ? concatenatedStringArgumentFact(child)
+        : ({ kind: 'unknown', nodeType: child.type } as const),
+  );
+  if (
+    parts.length === 0 ||
+    parts.some((part) => part.kind !== 'string' && part.kind !== 'template')
+  ) {
+    return { kind: 'unknown', nodeType: node.type };
+  }
+  const text = parts.map((part) => ('value' in part ? part.value : '')).join('');
+  const templates = parts.filter(
+    (part): part is Extract<ArgumentFact, { readonly kind: 'template' }> =>
+      part.kind === 'template',
+  );
+  if (templates.length === 0) return { kind: 'string', value: text };
+  const names = [...new Set(templates.flatMap((part) => part.substitutedNames ?? []))];
+  const complete =
+    templates.every((part) => part.substitutionsComplete !== false) && names.length <= 8;
+  return {
+    kind: 'template',
+    value: text,
+    hasSubstitutions: true,
+    substitutedNames: names.slice(0, 8),
+    substitutionsComplete: complete,
+  };
+};
+
 const numberArgumentFact = (node: Node): ArgumentFact => {
   const value = Number(node.text);
   return Number.isFinite(value)
@@ -365,6 +397,14 @@ const argumentFact = (node: Node, context: Context): ArgumentFact => {
   switch (node.type) {
     case 'string':
       return stringArgumentFact(node);
+    case 'concatenated_string':
+      return concatenatedStringArgumentFact(node);
+    case 'parenthesized_expression': {
+      const inner = namedChildren(node);
+      return inner.length === 1 && inner[0] !== undefined
+        ? argumentFact(inner[0], context)
+        : { kind: 'unknown', nodeType: node.type };
+    }
     case 'integer':
     case 'float':
       return numberArgumentFact(node);
@@ -1283,11 +1323,23 @@ const recordCall = (
   context.calls.push({
     kind: 'call',
     calleePath: path,
+    ...(callee?.type === 'call' ? { invokesReturnedCallable: true as const } : {}),
     origin: path[0] === undefined ? undefined : context.bindings.get(path[0]),
     args,
     location: location(context.file, node),
     offset: node.startIndex,
     enclosing: frame.name,
+    ...(frame.localOwnerLocation === undefined
+      ? {}
+      : { enclosingLocation: frame.localOwnerLocation }),
+    ...(frame.lexicalBindings === undefined
+      ? {}
+      : {
+          lexicalScopes: frame.lexicalBindings.map((scope) => ({
+            location: scope.location,
+            bindings: [...scope.names],
+          })),
+        }),
     ...(frame.branches.length === 0 ? {} : { branches: frame.branches }),
     awaited: frame.awaited,
   });
@@ -1297,6 +1349,11 @@ const recordCall = (
   const list = childField(node, 'arguments');
   if (list !== undefined) {
     for (const child of namedChildren(list)) {
+      traverse(child, context, { ...frame, awaited: false }, collecting);
+    }
+  }
+  if (callee !== undefined && callee.type !== 'identifier') {
+    for (const child of namedChildren(callee)) {
       traverse(child, context, { ...frame, awaited: false }, collecting);
     }
   }
@@ -1501,11 +1558,13 @@ const parametersOf = (node: Node, context: Context): readonly ParameterFact[] =>
         ? parameter
         : namedChildren(parameter).find((child) => child.type === 'identifier'));
     const annotation = childField(parameter, 'type');
+    const defaultValue = childField(parameter, 'value');
     const path = parameterAnnotationPath(annotation);
     if (nameNode === undefined) continue;
     facts.push({
       name: nameNode.text,
       ...(path.length === 0 ? {} : { annotation: path }),
+      ...(defaultValue === undefined ? {} : { defaultValue: argumentFact(defaultValue, context) }),
       location: location(context.file, annotation ?? nameNode),
     });
   }

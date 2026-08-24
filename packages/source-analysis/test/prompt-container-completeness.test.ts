@@ -59,4 +59,34 @@ Agent(**options)
       assert.equal(input?.kind === 'template' ? input.substitutedNames?.length : undefined, 8);
     }
   });
+
+  it('retains adjacent Python strings and calls nested in a fluent receiver', async () => {
+    const facts = await analyzePython({
+      file: 'src/app.py',
+      contentHash: 'e'.repeat(64),
+      text: `from langchain_core.prompts import ChatPromptTemplate
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", ("First sentence. " "Second sentence.")),
+    ("human", "Question: {question}"),
+]).partial(role="assistant")
+`,
+    });
+    const templateCall = facts.calls.find(
+      (candidate) => candidate.calleePath.at(-1) === 'from_messages',
+    );
+    const chained = facts.calls.find((candidate) => candidate.calleePath.at(-1) === 'partial');
+    assert.ok(templateCall !== undefined);
+    assert.ok(chained !== undefined);
+    const messages = templateCall.args[0];
+    assert.equal(messages?.kind, 'array');
+    assert.deepEqual(messages?.kind === 'array' ? messages.items[0] : undefined, {
+      kind: 'array',
+      items: [
+        { kind: 'string', value: 'system' },
+        { kind: 'string', value: 'First sentence. Second sentence.' },
+      ],
+      complete: true,
+    });
+  });
 });

@@ -12,6 +12,7 @@ const acceptance = {
   exactIdsByKind: { agent: ['agent:measured'] },
   absentKinds: ['database'],
   absentComponentTerms: ['postgres'],
+  absentEdgeKinds: ['uses_prompt'],
   requiredEdges: [
     {
       kind: 'hands_off_to',
@@ -30,6 +31,7 @@ const acceptance = {
     },
   ],
   componentMetadata: { 'agent:measured': { framework: 'example' } },
+  componentDetails: { 'agent:measured': { interpolatesUntrustedInput: true } },
   componentEvidence: {
     'agent:measured': [
       {
@@ -311,6 +313,25 @@ describe('corpus acceptance definitions', () => {
       {
         entry: { ...validEntry, acceptance: { ...acceptance, unknown: true } },
         message: /acceptance has to declare exactly/,
+      },
+      {
+        entry: { ...validEntry, acceptance: { ...acceptance, absentEdgeKinds: [] } },
+        message: /absentEdgeKinds has to list distinct schema edge kinds/,
+      },
+      {
+        entry: { ...validEntry, acceptance: { ...acceptance, absentEdgeKinds: ['uses_promt'] } },
+        message: /absentEdgeKinds has to list distinct schema edge kinds/,
+      },
+      {
+        entry: {
+          ...validEntry,
+          acceptance: { ...acceptance, absentEdgeKinds: ['uses_prompt', 'uses_prompt'] },
+        },
+        message: /absentEdgeKinds has to list distinct schema edge kinds/,
+      },
+      {
+        entry: { ...validEntry, acceptance: { ...acceptance, componentDetails: {} } },
+        message: /componentDetails has to hold expected component details/,
       },
       {
         entry: {

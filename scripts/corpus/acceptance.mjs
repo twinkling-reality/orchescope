@@ -208,6 +208,19 @@ const holdAdapters = (acceptance, bundle, hold) => {
   }
 };
 
+const holdComponentValues = (field, expectedById, componentById, hold) => {
+  for (const [id, values] of Object.entries(expectedById ?? {})) {
+    const component = componentById.get(id);
+    hold(component !== undefined, `component ${id} was absent`);
+    for (const [key, expected] of Object.entries(values)) {
+      hold(
+        component?.[field]?.[key] === expected,
+        `${id} ${field}.${key} was ${JSON.stringify(component?.[field]?.[key])}, expected ${JSON.stringify(expected)}`,
+      );
+    }
+  }
+};
+
 const graphAcceptanceVerdict = (acceptance, bundle) => {
   const components = bundle.graph.components;
   const componentById = new Map(components.map((component) => [component.id, component]));
@@ -251,6 +264,9 @@ const graphAcceptanceVerdict = (acceptance, bundle) => {
       `a component identity contained ${term}`,
     );
   }
+  for (const kind of acceptance.absentEdgeKinds ?? []) {
+    hold(!bundle.graph.edges.some((edge) => edge.kind === kind), `edge kind ${kind} was present`);
+  }
   for (const expected of acceptance.requiredEdges) {
     const edge = bundle.graph.edges.find(
       (candidate) =>
@@ -270,16 +286,8 @@ const graphAcceptanceVerdict = (acceptance, bundle) => {
       );
     }
   }
-  for (const [id, metadata] of Object.entries(acceptance.componentMetadata)) {
-    const component = componentById.get(id);
-    hold(component !== undefined, `component ${id} was absent`);
-    for (const [key, expected] of Object.entries(metadata)) {
-      hold(
-        component?.metadata?.[key] === expected,
-        `${id} metadata.${key} was ${JSON.stringify(component?.metadata?.[key])}, expected ${JSON.stringify(expected)}`,
-      );
-    }
-  }
+  holdComponentValues('metadata', acceptance.componentMetadata, componentById, hold);
+  holdComponentValues('details', acceptance.componentDetails, componentById, hold);
   for (const [id, expected] of Object.entries(acceptance.componentEvidence)) {
     const component = componentById.get(id);
     for (const evidence of expected) {

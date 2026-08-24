@@ -328,6 +328,13 @@ export const build = (retrieved: string) => \`\${INSTRUCTIONS}
 Context:
 \${retrieved}\`;
 `,
+  'src/template_prompt.py': `from langchain_core.prompts import ChatPromptTemplate
+
+
+def answer(retrieved):
+    prompt = ChatPromptTemplate.from_template("Use this context: {retrieved}")
+    return prompt.invoke({"retrieved": retrieved})
+`,
 };
 
 type Produced = {

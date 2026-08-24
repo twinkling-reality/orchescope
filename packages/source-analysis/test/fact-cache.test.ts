@@ -64,8 +64,8 @@ const projectOf = (count: number): string => {
 };
 
 describe('the fact cache', () => {
-  it('invalidates facts produced before Python binding-scope directives were retained', () => {
-    assert.equal(ANALYZER_VERSION, '22');
+  it('keys nested-call, binding-scope and parameter-default facts by analyzer version', () => {
+    assert.equal(ANALYZER_VERSION, '23');
     assert.match(
       cacheKey(
         {
@@ -76,7 +76,7 @@ describe('the fact cache', () => {
         },
         'a'.repeat(64),
       ),
-      /^22:python:src\/graph\.py:/,
+      /^23:python:src\/graph\.py:/,
     );
   });
 
