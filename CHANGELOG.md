@@ -4,7 +4,23 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## 0.9.2
 
-Unreleased. Discovery now records an imported construction whose distribution no adapter claims when the call
+Released 2026-08-25 from npm as `orchescope@0.9.2`, published locally with `npm publish --no-provenance`, so this
+release carries no registry attestation. The archive published is the one the blind gate was measured against, taken
+from the continuous integration `release-candidate` artifact for the frozen commit rather than rebuilt at publication
+time. Downloading the published package and comparing confirms the registry serves those exact bytes:
+
+```
+sha256  f8debfc991451547349feb6d980579220e8c18dae1d4fdb94af4939102f434c1
+```
+
+A local `pnpm package` on macOS with Node 24.15.0 reproduces `dist/orchescope.mjs` byte for byte against the Linux
+build that produced this archive, and differs only in `dist/build-info.json`, which records the Node version that
+built it. The archive checksum therefore carries the builder's Node patch version, and only the evaluated artifact
+was published.
+
+Installed from the registry, the binary reports `0.9.2` and `orchescope doctor` passes every required check.
+
+Discovery now records an imported construction whose distribution no adapter claims when the call
 carries both a tools-shaped argument and a model-shaped argument. The graph still does not invent an agent
 identity from those names, from `Agent`, or from `CodeAgent`. The terminal document no longer says "no agent
 system was detected" for that case: adapter silence is a coverage fact, not an empty repository.
@@ -23,7 +39,8 @@ Candidate `fdb11aa207039252524aca368164a00d31b283b8` with archive SHA-256
 `f8debfc991451547349feb6d980579220e8c18dae1d4fdb94af4939102f434c1` then passed an independent evaluation against
 a different unseen positive and negative pair and cleared the 0.9.2 blind gate. The passing positive is pinned with
 74 source-reviewed semantic assertions; the negative remained non-agent and adds no duplicate precision entry.
-Nothing has been published, tagged, pushed or attached to a release.
+That archive is what this release publishes; it is attached to the `v0.9.2` GitHub release with its
+sha256 beside it.
 
 ## 0.9.1
 
