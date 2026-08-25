@@ -53,6 +53,7 @@ const entry = {
         ],
       },
     },
+    requiredUnclaimedImportedConstructions: [{ sourceFile: 'src/graph.py', startLine: 1 }],
     topology: {
       status: 'incomplete',
       unresolvedCount: 2,
@@ -163,6 +164,13 @@ const bundle = () => ({
               },
             ],
           },
+        },
+      ],
+      unsupported: [
+        {
+          kind: 'unclaimed_imported_construction',
+          area: 'example.Factory is constructed at src/graph.py:1 and no adapter claims that distribution',
+          location: source,
         },
       ],
       topology: {
@@ -289,6 +297,22 @@ describe('corpus semantic acceptance', () => {
     assert.match(broken, /topology producer populations were/);
     assert.match(broken, /unlocated topology refusal adapter_input/);
     assert.doesNotMatch(broken, /topology.unresolvedCount/);
+  });
+
+  it('rejects a missing unclaimed imported construction while graph totals stay fixed', () => {
+    const changed = bundle();
+    changed.graph.coverage.unsupported = [
+      {
+        kind: 'adapter_found_nothing',
+        area: 'example is imported here and its adapter found nothing',
+        location: source,
+      },
+    ];
+
+    const broken = acceptanceVerdict(entry, changed).broken.join('\n');
+    assert.match(broken, /unclaimed imported construction at src\/graph.py:1 was absent/);
+    assert.doesNotMatch(broken, /graph had 2 components/);
+    assert.doesNotMatch(broken, /graph had 2 edges/);
   });
 
   it('rejects extra components or relations outside the declared exact populations', () => {

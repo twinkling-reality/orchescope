@@ -14,6 +14,12 @@ negative of that shape. This release generalizes the coverage boundary rather th
 for the target that exposed it. Claimed frameworks stay on `adapter_found_nothing`. Local modules, type-only
 imports, test files, model-identifier wrappers and OpenAI-style tool-schema payloads stay quiet.
 
+The used positive is pinned in the regression corpus at the exact revision that exposed the silence, with
+`agentSystemDetected: false` and a required source-located `unclaimed_imported_construction`. The used
+negative repeated an exact read-only SQLite URI already held by an earlier pin and adds no corpus entry.
+Neither lineage can be reused as an unseen holdout. Nothing has been published, tagged, pushed or attached
+to a release.
+
 ## 0.9.1
 
 Unreleased. `orchescope@0.9.1` is not on the registry and carries no registry attestation. The first frozen candidate,

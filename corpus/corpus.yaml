@@ -4310,6 +4310,117 @@ repositories:
           - ruleId: observability-coverage
             severity: info
 
+  - name: smol-jobscout
+    source: git
+    url: https://github.com/danindiana/smol-jobscout.git
+    commit: 332dcdaac21627b4fc39680bd54643761517a542
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive used in the independent 0.9.1 acceptance check that exposed a silent
+      imported construction. Its production package imports CodeAgent and constructs it with a tools argument
+      and a model argument. No adapter in this build claims that distribution, and inventing an agent from the
+      factory name or those keys is the widening already refused.
+
+      The generalized correction records a source-located unclaimed imported construction and withholds the
+      closed-world sentence that no agent system was detected. This pin holds that coverage fact at the exact
+      construction, keeps detection false, and forbids an invented agent identity. The effects reader still
+      reports the writable SQLite connection that has no read-only URI boundary. The 0.9.1 passing pair and
+      this target remain permanently ineligible as unseen holdouts.
+
+      The pinned Git tree is 15b3d24618e668899ac7ae81ca629c995d1c06f5 and contains 52 regular files and
+      791,835 blob bytes. The scan discovers 20 files and parses all 17 supported Python files, covering
+      34,517 source bytes. LICENSE is MIT with SHA-256
+      313d9298fcf4479ca680626b4a747d8a2f42e4f4a28acaa4f9447ee31e51491a. No runtime is attempted: ordinary
+      invocation needs a local model, writes a job corpus and executes model-authored Python.
+    acceptance:
+      expectedAgentSystemDetected: false
+      graphPopulation:
+        components: 2
+        edges: 1
+      exactIdsByKind:
+        database:
+          - database:sqlite
+        entrypoint:
+          - entrypoint:load_jobs
+      absentKinds:
+        - agent
+        - group
+        - model
+        - prompt
+        - tool
+        - workflow
+      absentComponentTerms:
+        - agent
+        - codeagent
+      requiredEdges:
+        - kind: queries_database
+          from: entrypoint:load_jobs
+          to: database:sqlite
+          sourceFile: src/smol_jobscout/data.py
+          evidence:
+            - producer: adapter:effects
+              symbol: sqlite3.connect
+              sourceFile: src/smol_jobscout/data.py
+              startLine: 93
+              endLine: 93
+      componentMetadata:
+        database:sqlite:
+          client: sqlite3.connect
+        entrypoint:load_jobs:
+          inferredFrom: enclosing scope of an external effect
+      componentPermissions:
+        database:sqlite:
+          - kind: database
+            scope: sqlite
+            mode: write
+      componentEvidence:
+        database:sqlite:
+          - producer: adapter:effects
+            symbol: sqlite3.connect
+            sourceFile: src/smol_jobscout/data.py
+            startLine: 93
+            endLine: 93
+        entrypoint:load_jobs:
+          - producer: adapter:effects
+            symbol: load_jobs
+            sourceFile: src/smol_jobscout/data.py
+            startLine: 93
+            endLine: 93
+      sourceCitations:
+        database:sqlite:
+          - src/smol_jobscout/data.py
+        entrypoint:load_jobs:
+          - src/smol_jobscout/data.py
+      adapterOutcomes:
+        adapter:effects:
+          status: completed
+          componentsFound: 2
+          edgesFound: 1
+          filesInspected: 1
+      requiredUnclaimedImportedConstructions:
+        - sourceFile: src/smol_jobscout/agent.py
+          startLine: 35
+      topology:
+        status: incomplete
+        unresolvedCount: 1
+        conditionalDestinations: 0
+        producerPopulations:
+          - adapterId: adapter:effects
+            status: incomplete
+            inspectedInputs: 0
+            relationsFound: 1
+            scope: control_flow
+        requiredUnlocatedRefusals:
+          - kind: adapter_input
+            reason: adapter:effects did not state an inspected topology population for this applicable input.
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+        exactRisks:
+          - ruleId: observability-coverage
+            severity: info
+
   - name: fenceline
     source: git
     url: https://github.com/pixle-codes/fenceline.git
