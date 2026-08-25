@@ -133,6 +133,11 @@ export const observationOf = (entry, audit, bundle, exercise) => {
       ...areasOfKind(coverage, 'adapter_found_nothing'),
       ...areasOfKind(coverage, 'adapter_blind_spot'),
     ],
+    ...(areasOfKind(coverage, 'unclaimed_imported_construction').length === 0
+      ? {}
+      : {
+          unclaimedImportedConstructions: areasOfKind(coverage, 'unclaimed_imported_construction'),
+        }),
     discardedRelations: areasOfKind(coverage, 'discarded_relation'),
     findings: {
       total: findings.length,

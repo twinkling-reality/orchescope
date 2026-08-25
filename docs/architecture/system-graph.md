@@ -100,7 +100,8 @@ A graph is only as good as what was inspected, so every scan carries:
 - files skipped with a reason each (too large, unreadable, not a regular file, past the limit);
 - languages parsed, with counts;
 - adapters that ran, with what each found and whether it applied at all;
-- areas that could not be inspected, with the reason (a language with no adapter, an MCP entry whose placeholder cannot be
+- areas that could not be inspected, with the reason (a language with no adapter, a claimed framework that produced
+  nothing, an imported construction whose distribution nobody claims, an MCP entry whose placeholder cannot be
   resolved);
 - whether the scan hit its file ceiling and stopped early.
 
