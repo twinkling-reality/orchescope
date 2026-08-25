@@ -28,6 +28,11 @@ import { promptCallSupport, registerPromptEntries } from '../prompt-input.ts';
  * loop and is modelled as an agent, while a bare text generation is modelled as a model call attributed
  * to its enclosing function. Overstating a one shot completion as an agent system would make the graph
  * look busier than the code is.
+ *
+ * `embed` is deliberately not a generation call. An embedding turns text into a vector and selects
+ * nothing, so a repository whose only model usage is an embedding has no agent system to detect. Reading
+ * it here once made a three line embedding helper carry `agentSystemDetected` for a repository whose real
+ * agent had been refused, which is the opposite of what the refusal was for.
  */
 
 const PACKAGES = [
@@ -41,7 +46,7 @@ const PACKAGES = [
 const ADAPTER_ID = 'adapter:vercel-ai-sdk';
 const drafts = createDrafts(ADAPTER_ID);
 
-const GENERATION_CALLS = ['generateText', 'streamText', 'generateObject', 'streamObject', 'embed'];
+const GENERATION_CALLS = ['generateText', 'streamText', 'generateObject', 'streamObject'];
 
 const modelIdentity = (name: string): ComponentIdentity =>
   globalIdentity('model', GLOBAL_NAMESPACES.model, name);
@@ -261,18 +266,16 @@ const discoverGenerationCalls = (
       }),
     );
     components += 1;
-    if (!callee.endsWith('embed')) {
-      registerPromptEntries({
-        registry: context.promptInputs,
-        producer: ADAPTER_ID,
-        module: match.module,
-        call: match.call,
-        consumer: callerIdentity,
-        entries,
-        channels: ['system', 'prompt', 'messages'],
-        supportingLocations: promptCallSupport(match.module, match.call),
-      });
-    }
+    registerPromptEntries({
+      registry: context.promptInputs,
+      producer: ADAPTER_ID,
+      module: match.module,
+      call: match.call,
+      consumer: callerIdentity,
+      entries,
+      channels: ['system', 'prompt', 'messages'],
+      supportingLocations: promptCallSupport(match.module, match.call),
+    });
 
     builder.addEdge(
       drafts.edge({
