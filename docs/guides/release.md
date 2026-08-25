@@ -116,6 +116,11 @@ while a Python callback parameter named `fetch` became a false browser network w
 Deep Agents provenance and lexical-effect regression; the unmeasured negative adds no corpus entry; and neither lineage
 can be reused as an unseen holdout.
 
+The [passed 1642f0f6 evaluation](../research/1642f0f6-passed-blind-evaluation.md) records the completed passing gate for
+the frozen 0.9.1 artifact. Its positive is pinned as an exact LangGraph workflow, provider, permission, relation and
+bounded-refusal regression; its negative adds no duplicate precision entry; and neither lineage can be reused as an
+unseen holdout.
+
 `pnpm package` writes `release/release-summary.json`. Read it rather than trusting the exit code:
 
 | Field | What it has to say |

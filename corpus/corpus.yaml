@@ -3921,6 +3921,395 @@ repositories:
           - ruleId: observability-coverage
             severity: info
 
+  - name: prcritiq
+    source: git
+    url: https://github.com/momtazularefin/prcritiq.git
+    commit: 338e925a9254690ed0815fd71062767bbf2b098a
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive selected independently for the passing blind evaluation of candidate 1642f0f6.
+      Its production CLI routes pull-request review through a seven-step LangGraph workflow, constructs exact
+      Anthropic or OpenAI clients, asks the selected provider for structured findings, independently critiques their
+      evidence, and selects publish or suppress before reporting the result. It is a fixed goal-directed,
+      model-mediated review pipeline rather than an open-ended tool-selecting agent, and it does not implement GitHub
+      comment posting.
+
+      The regression preserves the passing boundary: the LangGraph workflow stays a workflow rather than an agent;
+      all seven registered steps, seven containment relations and six internal transitions retain their exact source
+      identities; Anthropic and OpenAI remain provider-scoped network writers; configurable model defaults do not
+      become invented model components; and the two raw SDK clients keep explicit source-located topology refusals.
+      Its exact Git tree has 60 tracked regular files and 397,141 bytes. The complete source manifest has SHA-256
+      89dcd9c91766e3de317a2f9778d63d9142c0cd2f4588d0769ceaf18c5aa7c81a. The root MIT LICENSE has SHA-256
+      dadb371f681b9e2d928c054d2576041ae5032a7c6b9b194fcccf9269b2e60864. Runtime is not attempted: the repository
+      supplies no Orchescope scenario, and the production path requires unauthorized GitHub, model-provider,
+      subprocess and optional database effects.
+    acceptance:
+      graphPopulation:
+        components: 10
+        edges: 13
+      exactIdsByKind:
+        provider:
+          - provider:anthropic
+          - provider:openai
+        workflow:
+          - workflow:graph.py-graph
+        workflow_step:
+          - workflow_step:fetch_diff
+          - workflow_step:guardrail_gate
+          - workflow_step:post_or_summarize
+          - workflow_step:reason_and_draft
+          - workflow_step:retrieve_context
+          - workflow_step:self_critique
+          - workflow_step:static_analysis
+      absentKinds:
+        - agent
+        - external_service
+        - model
+      absentComponentTerms:
+        - claude
+        - github
+        - gpt
+        - postgres
+      absentEdgeKinds:
+        - invokes_model
+        - calls_service
+        - hands_off_to
+      requiredEdges:
+        - kind: contains
+          from: workflow:graph.py-graph
+          to: workflow_step:fetch_diff
+          sourceFile: src/prcritiq/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_node("fetch_diff")'
+              sourceFile: src/prcritiq/graph.py
+              startLine: 172
+              endLine: 172
+        - kind: contains
+          from: workflow:graph.py-graph
+          to: workflow_step:guardrail_gate
+          sourceFile: src/prcritiq/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_node("guardrail_gate")'
+              sourceFile: src/prcritiq/graph.py
+              startLine: 173
+              endLine: 173
+        - kind: contains
+          from: workflow:graph.py-graph
+          to: workflow_step:static_analysis
+          sourceFile: src/prcritiq/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_node("static_analysis")'
+              sourceFile: src/prcritiq/graph.py
+              startLine: 174
+              endLine: 174
+        - kind: contains
+          from: workflow:graph.py-graph
+          to: workflow_step:retrieve_context
+          sourceFile: src/prcritiq/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_node("retrieve_context")'
+              sourceFile: src/prcritiq/graph.py
+              startLine: 175
+              endLine: 175
+        - kind: contains
+          from: workflow:graph.py-graph
+          to: workflow_step:reason_and_draft
+          sourceFile: src/prcritiq/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_node("reason_and_draft")'
+              sourceFile: src/prcritiq/graph.py
+              startLine: 176
+              endLine: 176
+        - kind: contains
+          from: workflow:graph.py-graph
+          to: workflow_step:self_critique
+          sourceFile: src/prcritiq/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_node("self_critique")'
+              sourceFile: src/prcritiq/graph.py
+              startLine: 177
+              endLine: 177
+        - kind: contains
+          from: workflow:graph.py-graph
+          to: workflow_step:post_or_summarize
+          sourceFile: src/prcritiq/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_node("post_or_summarize")'
+              sourceFile: src/prcritiq/graph.py
+              startLine: 178
+              endLine: 178
+        - kind: transitions_to
+          from: workflow_step:fetch_diff
+          to: workflow_step:guardrail_gate
+          sourceFile: src/prcritiq/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_edge("fetch_diff", "guardrail_gate")'
+              sourceFile: src/prcritiq/graph.py
+              startLine: 181
+              endLine: 181
+        - kind: transitions_to
+          from: workflow_step:guardrail_gate
+          to: workflow_step:static_analysis
+          sourceFile: src/prcritiq/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_edge("guardrail_gate", "static_analysis")'
+              sourceFile: src/prcritiq/graph.py
+              startLine: 182
+              endLine: 182
+        - kind: transitions_to
+          from: workflow_step:static_analysis
+          to: workflow_step:retrieve_context
+          sourceFile: src/prcritiq/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_edge("static_analysis", "retrieve_context")'
+              sourceFile: src/prcritiq/graph.py
+              startLine: 183
+              endLine: 183
+        - kind: transitions_to
+          from: workflow_step:retrieve_context
+          to: workflow_step:reason_and_draft
+          sourceFile: src/prcritiq/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_edge("retrieve_context", "reason_and_draft")'
+              sourceFile: src/prcritiq/graph.py
+              startLine: 184
+              endLine: 184
+        - kind: transitions_to
+          from: workflow_step:reason_and_draft
+          to: workflow_step:self_critique
+          sourceFile: src/prcritiq/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_edge("reason_and_draft", "self_critique")'
+              sourceFile: src/prcritiq/graph.py
+              startLine: 185
+              endLine: 185
+        - kind: transitions_to
+          from: workflow_step:self_critique
+          to: workflow_step:post_or_summarize
+          sourceFile: src/prcritiq/graph.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_edge("self_critique", "post_or_summarize")'
+              sourceFile: src/prcritiq/graph.py
+              startLine: 186
+              endLine: 186
+      componentMetadata:
+        provider:anthropic:
+          client: anthropic.Anthropic
+          compatibleClient: anthropic
+          providerBasis: library_default
+        provider:openai:
+          client: openai.OpenAI
+          compatibleClient: openai
+          providerBasis: library_default
+        workflow:graph.py-graph:
+          framework: langgraph
+          receiver: graph
+        workflow_step:fetch_diff:
+          declaredName: fetch_diff
+          framework: langgraph
+          role: workflow_step
+        workflow_step:guardrail_gate:
+          declaredName: guardrail_gate
+          framework: langgraph
+          role: workflow_step
+        workflow_step:post_or_summarize:
+          declaredName: post_or_summarize
+          framework: langgraph
+          role: workflow_step
+        workflow_step:reason_and_draft:
+          declaredName: reason_and_draft
+          framework: langgraph
+          role: workflow_step
+        workflow_step:retrieve_context:
+          declaredName: retrieve_context
+          framework: langgraph
+          role: workflow_step
+        workflow_step:self_critique:
+          declaredName: self_critique
+          framework: langgraph
+          role: workflow_step
+        workflow_step:static_analysis:
+          declaredName: static_analysis
+          framework: langgraph
+          role: workflow_step
+      componentPermissions:
+        provider:anthropic:
+          - kind: network
+            scope: anthropic
+            mode: write
+        provider:openai:
+          - kind: network
+            scope: openai
+            mode: write
+      componentEvidence:
+        provider:anthropic:
+          - producer: adapter:model-sdk
+            symbol: anthropic.Anthropic
+            sourceFile: src/prcritiq/providers.py
+            startLine: 113
+            endLine: 113
+          - producer: adapter:model-sdk
+            symbol: anthropic.Anthropic
+            sourceFile: src/prcritiq/providers.py
+            startLine: 116
+            endLine: 116
+        provider:openai:
+          - producer: adapter:model-sdk
+            symbol: openai.OpenAI
+            sourceFile: src/prcritiq/providers.py
+            startLine: 154
+            endLine: 154
+          - producer: adapter:model-sdk
+            symbol: openai.OpenAI
+            sourceFile: src/prcritiq/providers.py
+            startLine: 157
+            endLine: 157
+        workflow:graph.py-graph:
+          - producer: adapter:langgraph
+            symbol: StateGraph
+            sourceFile: src/prcritiq/graph.py
+            startLine: 171
+            endLine: 171
+        workflow_step:fetch_diff:
+          - producer: adapter:langgraph
+            symbol: 'add_node("fetch_diff")'
+            sourceFile: src/prcritiq/graph.py
+            startLine: 172
+            endLine: 172
+        workflow_step:guardrail_gate:
+          - producer: adapter:langgraph
+            symbol: 'add_node("guardrail_gate")'
+            sourceFile: src/prcritiq/graph.py
+            startLine: 173
+            endLine: 173
+        workflow_step:static_analysis:
+          - producer: adapter:langgraph
+            symbol: 'add_node("static_analysis")'
+            sourceFile: src/prcritiq/graph.py
+            startLine: 174
+            endLine: 174
+        workflow_step:retrieve_context:
+          - producer: adapter:langgraph
+            symbol: 'add_node("retrieve_context")'
+            sourceFile: src/prcritiq/graph.py
+            startLine: 175
+            endLine: 175
+        workflow_step:reason_and_draft:
+          - producer: adapter:langgraph
+            symbol: 'add_node("reason_and_draft")'
+            sourceFile: src/prcritiq/graph.py
+            startLine: 176
+            endLine: 176
+        workflow_step:self_critique:
+          - producer: adapter:langgraph
+            symbol: 'add_node("self_critique")'
+            sourceFile: src/prcritiq/graph.py
+            startLine: 177
+            endLine: 177
+        workflow_step:post_or_summarize:
+          - producer: adapter:langgraph
+            symbol: 'add_node("post_or_summarize")'
+            sourceFile: src/prcritiq/graph.py
+            startLine: 178
+            endLine: 178
+      sourceCitations:
+        provider:anthropic:
+          - src/prcritiq/providers.py
+        provider:openai:
+          - src/prcritiq/providers.py
+        workflow:graph.py-graph:
+          - src/prcritiq/graph.py
+        workflow_step:fetch_diff:
+          - src/prcritiq/graph.py
+        workflow_step:guardrail_gate:
+          - src/prcritiq/graph.py
+        workflow_step:post_or_summarize:
+          - src/prcritiq/graph.py
+        workflow_step:reason_and_draft:
+          - src/prcritiq/graph.py
+        workflow_step:retrieve_context:
+          - src/prcritiq/graph.py
+        workflow_step:self_critique:
+          - src/prcritiq/graph.py
+        workflow_step:static_analysis:
+          - src/prcritiq/graph.py
+      adapterApplicability:
+        adapter:model-sdk:
+          relevantImports: 2
+          distinctFiles: 1
+          omittedImports: 0
+          fileSample:
+            - module: anthropic
+              imported: Anthropic
+              sourceFile: src/prcritiq/providers.py
+              startLine: 113
+            - module: openai
+              imported: OpenAI
+              sourceFile: src/prcritiq/providers.py
+              startLine: 154
+      adapterOutcomes:
+        adapter:langgraph:
+          status: completed
+          componentsFound: 8
+          edgesFound: 13
+          filesInspected: 1
+        adapter:model-sdk:
+          status: completed
+          componentsFound: 2
+          edgesFound: 0
+          filesInspected: 1
+        adapter:effects:
+          status: completed
+          componentsFound: 0
+          edgesFound: 0
+          filesInspected: 0
+      topology:
+        status: incomplete
+        unresolvedCount: 2
+        conditionalDestinations: 0
+        producerPopulations:
+          - adapterId: adapter:langgraph
+            status: complete
+            inspectedInputs: 16
+            relationsFound: 13
+          - adapterId: adapter:model-sdk
+            status: incomplete
+            inspectedInputs: 2
+            relationsFound: 0
+        requiredRefusals:
+          - kind: adapter_input
+            reason: >-
+              adapter:model-sdk recognized a raw client or wrapper but has not stated a closed topology population for
+              that producer.
+            sourceFile: src/prcritiq/providers.py
+            startLine: 113
+          - kind: adapter_input
+            reason: >-
+              adapter:model-sdk recognized a raw client or wrapper but has not stated a closed topology population for
+              that producer.
+            sourceFile: src/prcritiq/providers.py
+            startLine: 154
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+        exactRisks:
+          - ruleId: observability-coverage
+            severity: info
+
   - name: fenceline
     source: git
     url: https://github.com/pixle-codes/fenceline.git

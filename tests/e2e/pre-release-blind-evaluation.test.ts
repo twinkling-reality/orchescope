@@ -63,6 +63,8 @@ const blockedDeepAgentsRecord = readFileSync(
   join(repositoryRoot, blockedDeepAgentsRecordPath),
   'utf8',
 );
+const passed091RecordPath = 'docs/research/1642f0f6-passed-blind-evaluation.md';
+const passed091Record = readFileSync(join(repositoryRoot, passed091RecordPath), 'utf8');
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
   readonly scripts: Readonly<Record<string, string>>;
 };
@@ -1099,6 +1101,62 @@ describe('the frozen pre-release blind evaluation protocol', () => {
         (entry) =>
           entry.name === 'praetor-security' ||
           entry.url === 'https://github.com/GrowBridge-LLC/praetor-security.git',
+      ),
+      false,
+    );
+  });
+
+  it('preserves the exact passing 0.9.1 candidate, pair, results and bounded runtime refusal', () => {
+    for (const fact of [
+      '1642f0f6d17773547e69da319bac627e5001dd44',
+      '1db83a22e104f5f9c2537f175fcb903b96242d99245e26b3c02fd4edb11f2fd3',
+      'https://github.com/momtazularefin/prcritiq',
+      '338e925a9254690ed0815fd71062767bbf2b098a',
+      'e976789b95df4b86fc082b34b3b8d3e93d6b6008',
+      'dadb371f681b9e2d928c054d2576041ae5032a7c6b9b194fcccf9269b2e60864',
+      'https://github.com/omrgpt/agentport',
+      '3b6ce6c16ae18419d9a8d6cda0e494119c6c4886',
+      'da007f3cb3fa3d376248cfdc3d7c61672c4f8a13',
+      '86ec95dfbefa9537a75b78cf54b032c1dd53bda5d87b145653da6024f4a33f82',
+      '163629b2fbaecac2aad6bfb10a44485d92421c3138e933fe56cf3681c50adbc8',
+    ]) {
+      assert.ok(passed091Record.includes(fact), `0.9.1 passed record omitted ${fact}`);
+    }
+    assert.match(passed091Record, /release decision was \*\*PASS\*\*/);
+    assert.match(passed091Record, /`agentSystemDetected: true` with 10 static-only components/);
+    assert.match(passed091Record, /13 source-cited relations/);
+    assert.match(passed091Record, /two source-located\s+refusals/);
+    assert.match(passed091Record, /all 19\/19 eligible required records/);
+    assert.match(passed091Record, /`agentSystemDetected: false` with zero components/);
+    assert.match(passed091Record, /No target runtime was executed/);
+    for (const name of ['GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'DATABASE_URL']) {
+      assert.ok(passed091Record.includes(`\`${name}\``), `0.9.1 passed record omitted ${name}`);
+    }
+    assert.match(
+      passed091Record,
+      /Credentials, model output, external side effects and substitute execution were not guessed/,
+    );
+    assert.doesNotMatch(
+      passed091Record,
+      /\/Users\/|\/tmp\/|orchescope-blind-|\brun_[0-9a-f]{8}|\bev_[0-9a-f]{8}|traceId|spanId/,
+    );
+  });
+
+  it('promotes only PRCritiq and permanently retires both passing 0.9.1 lineages', () => {
+    assert.match(
+      passed091Record,
+      /Both selected repositories and their source lineages are permanently ineligible as blind holdouts at any revision/,
+    );
+    assert.match(passed091Record, /different unseen positive and negative pair/);
+    assert.ok(protocol.includes('../research/1642f0f6-passed-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/1642f0f6-passed-blind-evaluation.md'));
+
+    const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
+    assert.equal(entries.filter((entry) => entry.name === 'prcritiq').length, 1);
+    assert.equal(
+      entries.some(
+        (entry) =>
+          entry.name === 'agentport' || entry.url === 'https://github.com/omrgpt/agentport.git',
       ),
       false,
     );

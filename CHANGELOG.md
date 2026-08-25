@@ -31,9 +31,12 @@ wrong provider identity. Candidate `13383b88c22cfa7c1bb6035ff6a184ad60f61295` wi
 unsupported database write-permission claim over an exact read-only SQLite connection. Candidate
 `f7019531ef891fcee06f35d6bd362b934d255b0b` with archive SHA-256
 `e20f972e70f03210c488d521ed1885f8cee97e4b42effaafcc148faaff6bea87` was independently evaluated and blocked by a
-missing exact Deep Agents identity and a false network effect over a callback parameter. None was published, tagged,
-pushed or attached to a release. A corrected candidate cannot be published until a different unseen positive and
-negative pair clears the blind gate.
+missing exact Deep Agents identity and a false network effect over a callback parameter. Candidate
+`1642f0f6d17773547e69da319bac627e5001dd44` with archive SHA-256
+`1db83a22e104f5f9c2537f175fcb903b96242d99245e26b3c02fd4edb11f2fd3` then passed an independent evaluation against
+a different unseen positive and negative pair and cleared the final blind gate. The passing positive is pinned with
+146 source-reviewed semantic assertions; the negative remained a clean zero and adds no duplicate precision entry.
+Nothing has been published, tagged, pushed or attached to a release.
 
 ### Deep Agents factories retain exact provenance and lexical effect boundaries
 
