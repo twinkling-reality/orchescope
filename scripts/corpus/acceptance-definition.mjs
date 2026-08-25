@@ -296,6 +296,25 @@ const checkApplicability = (acceptance, problem) => {
   }
 };
 
+const checkRequiredUnclaimedImportedConstructions = (acceptance, problem) => {
+  if (acceptance.requiredUnclaimedImportedConstructions === undefined) return;
+  if (
+    !isBoundedList(acceptance.requiredUnclaimedImportedConstructions) ||
+    acceptance.requiredUnclaimedImportedConstructions.length === 0 ||
+    acceptance.requiredUnclaimedImportedConstructions.some(
+      (construction) =>
+        !hasExactFields(construction, ['sourceFile', 'startLine']) ||
+        !isRelativePath(construction.sourceFile) ||
+        !Number.isInteger(construction.startLine) ||
+        construction.startLine <= 0,
+    )
+  ) {
+    problem(
+      'acceptance.requiredUnclaimedImportedConstructions has to list exact source-located unclaimed imported constructions',
+    );
+  }
+};
+
 const checkAdapterOutcomes = (acceptance, problem) => {
   if (acceptance.adapterOutcomes === undefined) return;
   if (
@@ -503,6 +522,9 @@ export const checkAcceptanceDefinition = (entry, problem) => {
     'sourceCitations',
     ...(acceptance.adapterApplicability === undefined ? [] : ['adapterApplicability']),
     ...(acceptance.adapterOutcomes === undefined ? [] : ['adapterOutcomes']),
+    ...(acceptance.requiredUnclaimedImportedConstructions === undefined
+      ? []
+      : ['requiredUnclaimedImportedConstructions']),
     'topology',
     'findings',
   ];
@@ -542,5 +564,6 @@ export const checkAcceptanceDefinition = (entry, problem) => {
   checkComponentPermissions(acceptance, problem);
   checkApplicability(acceptance, problem);
   checkAdapterOutcomes(acceptance, problem);
+  checkRequiredUnclaimedImportedConstructions(acceptance, problem);
   checkOutcome(acceptance, problem);
 };
