@@ -77,7 +77,7 @@ const isRelative = (specifier: string): boolean =>
  */
 const ROOT_ALIASES = ['@/', '~/'];
 
-const isRootAliased = (specifier: string): boolean =>
+export const namesRootAlias = (specifier: string): boolean =>
   ROOT_ALIASES.some((alias) => specifier.startsWith(alias));
 
 /** Resolves a JavaScript specifier that is relative to `fromFile`, or rooted by an alias, against the file set. */
@@ -86,7 +86,7 @@ const resolveJavaScript = (
   specifier: string,
   known: ReadonlySet<string>,
 ): string | undefined => {
-  const base = isRootAliased(specifier)
+  const base = namesRootAlias(specifier)
     ? normalizeSegments(specifier.slice(2))
     : normalizeSegments(`${dirnameOf(fromFile)}/${specifier}`);
   if (known.has(base)) return base;
@@ -149,7 +149,7 @@ export const buildSymbolIndex = (modules: readonly ModuleFacts[]): SymbolIndex =
   const resolveSpecifier = (fromFile: string, specifier: string): string | undefined =>
     fromFile.endsWith('.py')
       ? resolvePython(fromFile, specifier, known)
-      : isRelative(specifier) || isRootAliased(specifier)
+      : isRelative(specifier) || namesRootAlias(specifier)
         ? resolveJavaScript(fromFile, specifier, known)
         : undefined;
 

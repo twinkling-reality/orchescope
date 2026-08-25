@@ -3,6 +3,8 @@ import type { Sha256Hex, UnsupportedArea } from '@orchescope/schema';
 import type { CallFact, ModuleFacts, ObjectEntryFact } from '@orchescope/source-analysis';
 import { type LocalModules, localModules, namesLocalModule } from './local-modules.ts';
 import { moduleMatches } from './matching.ts';
+import { namesStandardLibrary } from './standard-library.ts';
+import { namesRootAlias } from './symbol-index.ts';
 
 /**
  * Imported constructions no adapter has claimed.
@@ -21,8 +23,10 @@ import { moduleMatches } from './matching.ts';
  * or from those keys is the widening ADR 0004 already refused.
  *
  * An OpenAI-style array of tool-schema objects is a model API payload, not a local tool population,
- * and stays quiet. Claimed distributions stay on `adapter_found_nothing`. Local modules, type-only
- * imports, test files and origin-less names stay quiet.
+ * and stays quiet. Claimed distributions stay on `adapter_found_nothing`. Local modules, bundler root
+ * aliases, standard library modules, type-only imports, test files and origin-less names stay quiet:
+ * each of those names is owned by somebody, and naming an owner is what keeps this reader precise as it
+ * widens.
  */
 
 const SAMPLE_CEILING = 10;
@@ -30,9 +34,27 @@ const SAMPLE_CEILING = 10;
 const TOOL_ARGUMENT_KEYS = new Set(['tools', 'toolset', 'toolsets', 'managed_agents']);
 const MODEL_ARGUMENT_KEYS = new Set(['model', 'llm', 'language_model', 'chat_model', 'llm_config']);
 
-/** A specifier that names a file this repository writes, not a distribution it depends on. */
-const namesLocalSpecifier = (specifier: string): boolean =>
-  specifier.startsWith('.') || specifier.startsWith('/') || specifier.startsWith('node:');
+/**
+ * A specifier that names a file this repository writes, or a module its language runtime provides, rather
+ * than a distribution it depends on.
+ *
+ * The three prefixes were the whole of this test, and each of the other two answers a case the prefixes
+ * cannot see. A bundler root alias is a file: `@/lib/agents` cannot be a package because an npm scope is
+ * never empty, and `open-agent-platform` maps exactly that alias in `apps/web/tsconfig.json`. A standard
+ * library module is the interpreter's, so `typing` and `dataclasses` are owned by Python rather than
+ * unclaimed by an adapter.
+ *
+ * Both are provenance rather than vocabulary: they say whose file a name belongs to, which is what
+ * [ADR 0004](../../../docs/architecture/adr/0004-provenance-not-confidence.md) requires of anything that
+ * makes this reader see more. They are here before the reader is widened, because the conjunction below
+ * fires so rarely that neither gap is reachable today, and both become wrong answers the moment it is.
+ */
+const namesLocalSpecifier = (specifier: string, language: string): boolean =>
+  specifier.startsWith('.') ||
+  specifier.startsWith('/') ||
+  specifier.startsWith('node:') ||
+  namesRootAlias(specifier) ||
+  namesStandardLibrary(specifier, language);
 
 /** The top level distribution a specifier belongs to: `pkg.sub` and `pkg/sub` are both `pkg`. */
 const distributionOf = (specifier: string): string => {
@@ -93,7 +115,10 @@ const exportedUnclaimedConstruction = (
   if (call.kind !== 'call' && call.kind !== 'new') return undefined;
   const origin = call.origin;
   if (origin === undefined || origin.isType) return undefined;
-  if (namesLocalSpecifier(origin.module) || namesLocalModule(local, module, origin.module)) {
+  if (
+    namesLocalSpecifier(origin.module, module.language) ||
+    namesLocalModule(local, module, origin.module)
+  ) {
     return undefined;
   }
   if (moduleMatches(origin.module, claimedPackages)) return undefined;

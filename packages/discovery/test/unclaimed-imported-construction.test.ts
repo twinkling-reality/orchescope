@@ -278,3 +278,74 @@ other = CodeAgent(tools=tools, model=model)
     assert.ok(result.graph.components.every((component) => component.kind !== 'agent'));
   });
 });
+
+/**
+ * Provenance, asked before the argument test.
+ *
+ * Every case here is a name the reader would otherwise call a distribution no adapter claims, and each
+ * one is owned by somebody: the interpreter, or a file this repository writes. They are pinned before the
+ * reader is widened, because the conjunction above fires so rarely that none of them is reachable today
+ * and all of them become wrong answers the moment it is. Measured across the pinned corpus before the
+ * gates landed: ten hits on `typing`, five on `dataclasses`, three on `asyncio`, one on `json`, and two
+ * on a `@/` alias in `open-agent-platform`, which is a pinned `not_agent_system` entry.
+ *
+ * Each `it` here is a falsifier: it fails against the revision before these gates. The guards that prove
+ * the reader still sees a real distribution are the cases above, which pass on both revisions on purpose.
+ */
+describe('who owns a name the reader would otherwise call an unclaimed distribution', () => {
+  it('leaves the Python standard library to the interpreter', async () => {
+    const result = await scan({
+      'src/app.py': `import functools
+import dataclasses
+
+bound = functools.partial(build, model='gpt-4o', tools=[search])
+spec = dataclasses.replace(base, model='gpt-4o', tools=[search])
+`,
+    });
+
+    assert.deepEqual(unclaimed(result), []);
+  });
+
+  it('leaves a bare Node builtin to the runtime', async () => {
+    const result = await scan({
+      'package.json': '{ "name": "fixture", "version": "1.0.0", "type": "module" }',
+      'src/app.js': `import { Worker } from 'worker_threads';
+
+const worker = new Worker(script, { model: 'gpt-4o', tools: [search] });
+`,
+    });
+
+    assert.deepEqual(unclaimed(result), []);
+  });
+
+  it('leaves a bundler root alias to the repository that declares it', async () => {
+    const result = await scan({
+      'package.json': '{ "name": "fixture", "version": "1.0.0", "type": "module" }',
+      'tsconfig.json': '{ "compilerOptions": { "paths": { "@/*": ["./src/*"] } } }',
+      'src/lib/agents.ts': 'export const createAgent = (options) => options;\n',
+      'src/app.ts': `import { createAgent } from '@/lib/agents';
+
+export const agent = createAgent({ model: 'gpt-4o', tools: [search] });
+`,
+    });
+
+    assert.deepEqual(unclaimed(result), []);
+  });
+
+  it('still records a real distribution beside a standard library call in the same file', async () => {
+    const result = await scan({
+      'src/app.py': `import json
+from unknown_agents import Factory
+
+payload = json.dumps({ 'model': 'gpt-4o', 'tools': [] })
+runtime = Factory(tools=[search], model=model)
+`,
+    });
+
+    assert.equal(unclaimed(result).length, 1);
+    assert.equal(
+      unclaimed(result)[0]?.area,
+      'unknown_agents.Factory is constructed at src/app.py:5 and no adapter claims that distribution',
+    );
+  });
+});
