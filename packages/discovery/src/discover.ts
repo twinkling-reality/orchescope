@@ -634,7 +634,7 @@ const coverageUnsupported = (
   adapterRuns: readonly AdapterRun[],
   modules: readonly ModuleFacts[],
   topology: TopologyCoverage | undefined,
-): readonly UnsupportedArea[] => [
+): UnsupportedArea[] => [
   ...unsupportedAreas(fileSet.extensionCounts),
   ...excludedTrackedSource(fileSet.excludedTracked),
   ...findUnclaimedImportedConstructions({
