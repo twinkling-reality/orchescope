@@ -128,8 +128,8 @@ identical.
 No target runtime was executed. Neither repository supplies a target-owned Orchescope scenario. Docent's production
 path calls a paid Anthropic model through pydantic-ai. `ANTHROPIC_API_KEY` was absent. There was no authorization to
 install target dependencies, call that service or mutate external state. Claude Usage Analyzer is a log reader, so
-executing it would not add an agent-runtime population. Credentials, model output, external side effects and
-substitute execution were not guessed.
+executing it would not add an agent-runtime population.
+Credentials, model output, external side effects and substitute execution were not guessed.
 
 ## Decision, regression and ineligibility
 
@@ -146,5 +146,5 @@ boundary, so it does not join the corpus.
 
 Both selected repositories and their source lineages are permanently ineligible as blind holdouts at any revision.
 Candidate `fdb11aa207039252524aca368164a00d31b283b8` cleared this blind gate only for the evaluated `0.9.2` artifact
-and selected pair. A subsequent artifact needs its own frozen candidate and a different unseen positive and negative
-pair under the public protocol.
+and selected pair. A subsequent artifact needs its own frozen candidate and a different unseen positive and negative pair
+under the public protocol.
