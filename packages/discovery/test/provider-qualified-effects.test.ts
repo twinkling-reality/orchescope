@@ -322,3 +322,143 @@ new DatabaseSync('records.db');
     ]);
   });
 });
+
+describe('source-settled global fetch identity', () => {
+  it('rejects Python callables and JavaScript parameters that shadow the browser global', async () => {
+    const created = workspace();
+    created.write(
+      'src/callback.py',
+      `from typing import Callable
+
+def paginate(fetch: Callable[[int, int], list], offset: int):
+    return fetch(100, offset)
+`,
+    );
+    created.write(
+      'src/callback.ts',
+      `export async function paginate(fetch: (url: string) => Promise<Response>, url: string) {
+  return fetch(url);
+}
+`,
+    );
+    created.write(
+      'src/imported.ts',
+      `import { fetch } from './client.js';
+
+export async function requestImported(url: string) {
+  return fetch(url);
+}
+`,
+    );
+    created.write(
+      'src/declared.ts',
+      `const fetch = async (url: string) => new Response(url);
+
+export async function requestDeclared(url: string) {
+  return fetch(url);
+}
+`,
+    );
+    created.write(
+      'src/declared-var.ts',
+      `var fetch = async (url: string) => new Response(url);
+
+export async function requestDeclaredVar(url: string) {
+  return fetch(url);
+}
+`,
+    );
+    created.write(
+      'src/nested-parameter.ts',
+      `export function buildRequest(fetch: (url: string) => Promise<Response>) {
+  return async function requestNested(url: string) {
+    return fetch(url);
+  };
+}
+`,
+    );
+    const result = await scan(created);
+    assert.equal(
+      result.graph.components.some((entry) => entry.kind === 'external_service'),
+      false,
+    );
+  });
+
+  it('retains the unshadowed JavaScript fetch global', async () => {
+    const created = workspace();
+    created.write(
+      'src/request.ts',
+      `export async function request() {
+  return fetch('https://example.com/items');
+}
+`,
+    );
+    const result = await scan(created);
+    assert.ok(component(result, 'external_service', 'example.com'));
+  });
+
+  it('keeps a sibling browser-global fetch outside a branch-local callback binding', async () => {
+    const created = workspace();
+    created.write(
+      'src/webhook.ts',
+      `export async function callWebhook(path: string) {
+  if (path.startsWith('/')) {
+    const fetch = () => Promise.resolve(new Response());
+    await fetch();
+  } else {
+    await fetch('https://example.com/webhook', { method: 'POST' });
+  }
+}
+`,
+    );
+    const result = await scan(created);
+    assert.ok(component(result, 'external_service', 'example.com'));
+    assert.equal(result.graph.edges.filter((edge) => edge.kind === 'calls_service').length, 1);
+  });
+
+  it('does not treat a function-scoped var binding as the browser global', async () => {
+    const created = workspace();
+    created.write(
+      'src/webhook.ts',
+      `export async function callWebhook(path: string) {
+  if (path.startsWith('/')) {
+    var fetch = () => Promise.resolve(new Response());
+    await fetch();
+  } else {
+    await fetch('https://example.com/webhook', { method: 'POST' });
+  }
+}
+`,
+    );
+    const result = await scan(created);
+    assert.equal(
+      result.graph.components.some((entry) => entry.kind === 'external_service'),
+      false,
+    );
+  });
+
+  it('keeps branch identity through nested callable declarations', async () => {
+    const created = workspace();
+    created.write(
+      'src/webhook.ts',
+      `export async function callWebhook(path: string) {
+  if (path.startsWith('/')) {
+    const fetch = () => Promise.resolve(new Response());
+    async function callLocal() {
+      return fetch();
+    }
+    return callLocal();
+  } else {
+    async function callRemote() {
+      return fetch('https://example.com/webhook', { method: 'POST' });
+    }
+    return callRemote();
+  }
+}
+`,
+    );
+    const result = await scan(created);
+    assert.ok(component(result, 'external_service', 'example.com'));
+    assert.equal(result.graph.edges.filter((edge) => edge.kind === 'calls_service').length, 1);
+  });
+});

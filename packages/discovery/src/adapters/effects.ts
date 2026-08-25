@@ -14,8 +14,10 @@ import type {
 } from '@orchescope/schema';
 import type {
   ArgumentFact,
+  BranchPredicateFact,
   CallFact,
   ControlFlowFact,
+  DefinitionFact,
   ModuleFacts,
   ObjectEntryFact,
 } from '@orchescope/source-analysis';
@@ -636,7 +638,7 @@ const modelRelationDeadlines = (
 ): ReadonlyMap<string, DeclaredDeadline> => {
   const grouped = new Map<string, (DeclaredDeadline | undefined)[]>();
   for (const call of module.calls) {
-    const request = requestAt(call, aliases);
+    const request = requestAt(module, call, aliases);
     if (request === undefined) continue;
     const reached = modelEndpointCalledAt(request);
     if (reached === undefined) continue;
@@ -930,7 +932,115 @@ type RequestCall = {
   readonly dynamic: boolean;
 };
 
+const sameOptionalLocation = (
+  left: SourceLocation | undefined,
+  right: SourceLocation | undefined,
+): boolean =>
+  left === undefined || right === undefined
+    ? left === right
+    : left.file === right.file &&
+      left.startLine === right.startLine &&
+      left.startColumn === right.startColumn &&
+      left.endLine === right.endLine &&
+      left.endColumn === right.endColumn;
+
+const locationContains = (outer: SourceLocation, inner: SourceLocation): boolean => {
+  if (outer.file !== inner.file) return false;
+  const startsBefore =
+    outer.startLine < inner.startLine ||
+    (outer.startLine === inner.startLine && (outer.startColumn ?? 0) <= (inner.startColumn ?? 0));
+  const outerEndLine = outer.endLine ?? outer.startLine;
+  const innerEndLine = inner.endLine ?? inner.startLine;
+  const endsAfter =
+    outerEndLine > innerEndLine ||
+    (outerEndLine === innerEndLine &&
+      (outer.endColumn ?? Number.MAX_SAFE_INTEGER) >= (inner.endColumn ?? inner.startColumn ?? 0));
+  return startsBefore && endsAfter;
+};
+
+const callBranches = (module: ModuleFacts, call: CallFact): readonly BranchPredicateFact[] => [
+  ...(call.branches ?? []),
+  ...module.definitions.flatMap((definition) =>
+    definition.branches !== undefined && locationContains(definition.location, call.location)
+      ? definition.branches
+      : [],
+  ),
+];
+
+const definitionBranchReachesCall = (
+  module: ModuleFacts,
+  definition: DefinitionFact,
+  call: CallFact,
+): boolean =>
+  (definition.branches ?? []).every((branch) =>
+    callBranches(module, call).some(
+      (candidate) =>
+        candidate.operator === branch.operator &&
+        candidate.branch === branch.branch &&
+        sameOptionalLocation(candidate.location, branch.location),
+    ),
+  );
+
+const locationEndsBefore = (left: SourceLocation, right: SourceLocation): boolean => {
+  const endLine = left.endLine ?? left.startLine;
+  if (endLine !== right.startLine) return endLine < right.startLine;
+  return (left.endColumn ?? left.startColumn ?? 0) <= (right.startColumn ?? 0);
+};
+
+const branchesAreMutuallyExclusive = (
+  left: readonly BranchPredicateFact[] | undefined,
+  right: readonly BranchPredicateFact[] | undefined,
+): boolean =>
+  (left ?? []).some((branch) =>
+    right?.some(
+      (candidate) =>
+        candidate.operator === branch.operator &&
+        candidate.branch !== branch.branch &&
+        sameOptionalLocation(candidate.location, branch.location),
+    ),
+  );
+
+const shadowsBrowserFetch = (module: ModuleFacts, call: CallFact): boolean =>
+  module.imports.some(
+    (entry) =>
+      !entry.isType &&
+      entry.local === 'fetch' &&
+      (entry.enclosing === undefined || entry.enclosing === call.enclosing),
+  ) ||
+  module.definitions.some((definition) => {
+    if (
+      definition.parameters?.some((parameter) => parameter.name === 'fetch') &&
+      locationContains(definition.location, call.location)
+    ) {
+      return true;
+    }
+    if (definition.name !== 'fetch') return false;
+    if (definition.declarationKind === 'var') {
+      if (definition.enclosing === undefined) return true;
+      return (
+        definition.enclosingLocation !== undefined &&
+        locationContains(definition.enclosingLocation, call.location)
+      );
+    }
+    const ownsCall =
+      definition.enclosing === undefined ||
+      (definition.enclosingLocation !== undefined &&
+        locationContains(definition.enclosingLocation, call.location));
+    return ownsCall && definitionBranchReachesCall(module, definition, call);
+  }) ||
+  module.assignments.some(
+    (assignment) =>
+      assignment.target.length === 1 &&
+      assignment.target[0] === 'fetch' &&
+      locationEndsBefore(assignment.location, call.location) &&
+      !branchesAreMutuallyExclusive(assignment.branches, callBranches(module, call)) &&
+      (assignment.enclosing === undefined ||
+        (assignment.enclosing === call.enclosing &&
+          sameOptionalLocation(assignment.enclosingLocation, call.enclosingLocation))),
+  );
+
 const requestAt = (
+  module: ModuleFacts,
   call: CallFact,
   aliases: ReadonlyMap<string, string>,
 ): RequestCall | undefined => {
@@ -949,6 +1059,13 @@ const requestAt = (
       (root === candidate.path.split('.')[0] && HTTP_METHOD_NAMES.has(calleeName(call))),
   );
   if (client === undefined) return undefined;
+  if (
+    client.path === 'fetch' &&
+    alias === undefined &&
+    (module.language === 'python' || shadowsBrowserFetch(module, call))
+  ) {
+    return undefined;
+  }
   const first = call.args[0];
   const url = addressOf(first);
   const stated =
@@ -1051,7 +1168,7 @@ const discoverHttp = (
   const aliases = clientAliases(context, module);
   const deadlines = modelRelationDeadlines(context, module, aliases);
   for (const call of module.calls) {
-    const request = requestAt(call, aliases);
+    const request = requestAt(module, call, aliases);
     if (request === undefined) continue;
     const { written, host } = request;
     /*
@@ -1823,7 +1940,7 @@ const discoverDecoratedRetries = (
 
 export const effectsAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
-  version: '5',
+  version: '6',
   // A side effect is a convention, not a package.
   packages: [],
   appliesTo: (context) => context.modules.length > 0,

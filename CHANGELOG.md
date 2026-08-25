@@ -28,9 +28,38 @@ well. After a different pair cleared that candidate, the next candidate, commit
 `dc6853a6cc1ec289faeca0cf51ea4afbd8ccaba649394cc05ea7ef6a613112fd`, was independently evaluated and blocked by a
 wrong provider identity. Candidate `13383b88c22cfa7c1bb6035ff6a184ad60f61295` with archive SHA-256
 `b7c9b14ffffbb1109f713bdea2518f2181ec8931d7de4a7318f745ee60cb8441` was independently evaluated and blocked by an
-unsupported database write-permission claim over an exact read-only SQLite connection. None was published, tagged,
+unsupported database write-permission claim over an exact read-only SQLite connection. Candidate
+`f7019531ef891fcee06f35d6bd362b934d255b0b` with archive SHA-256
+`e20f972e70f03210c488d521ed1885f8cee97e4b42effaafcc148faaff6bea87` was independently evaluated and blocked by a
+missing exact Deep Agents identity and a false network effect over a callback parameter. None was published, tagged,
 pushed or attached to a release. A corrected candidate cannot be published until a different unseen positive and
 negative pair clears the blind gate.
+
+### Deep Agents factories retain exact provenance and lexical effect boundaries
+
+Exact `deepagents.create_deep_agent` runtime imports have a dedicated source reader. Direct, renamed and namespace
+imports retain provenance; foreign, local, type-only, shadowed and rebound lookalikes do not. Stable construction
+identity produces an agent, while literal model and direct local tool populations produce only source-supported
+relations. Computed model, prompt, subagent, skill, permission and invocation populations produce source-located
+refusals. Generic names and graph-shaped syntax do not establish Deep Agents identity.
+
+Bare `fetch` calls establish the JavaScript browser global only in JavaScript source and only when the exact lexical
+position is unbound. Python callbacks and JavaScript parameters, imports or declarations with that spelling do not
+become HTTP requests. An unshadowed JavaScript global retains its existing effect identity.
+
+The independently selected Speechwriter Agent positive exposed both defects: its exact
+`deepagents.create_deep_agent` construction disappeared, while a Python pagination callback named `fetch` became an
+external service with network write permission. The positive is pinned with 51 semantic assertions covering its exact
+agent evidence, adapter applicability, absent false effect shapes, refusals, findings and topology. The selected Praetor
+Security negative was not measured after the positive blockers and adds no corpus entry.
+
+The corpus review found two additional exact framework populations without changing support by repository name:
+LangGraph's pinned integration graph contributes one Deep Agents identity and prompt relation, while GPT Researcher's
+three exact import sites contribute four source-scoped identities. Two same-name local `agent` bindings in separate
+functions remain distinct. LangGraph.js independently fixes the JavaScript branch control: a branch-local loopback
+callback is not a browser request, while the sibling branch's unshadowed global `fetch` remains a network effect.
+OpenAI Agents JS supplies a second independent control: its sandbox event sink binds a local `fetch` implementation,
+so the effects adapter inspects one fewer file while its graph population remains unchanged.
 
 ### Exact datastore access boundaries determine permission mode
 

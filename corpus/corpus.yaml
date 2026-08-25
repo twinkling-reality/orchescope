@@ -155,7 +155,10 @@ repositories:
     kind: agent_system
     why: >-
       The same framework in the other ecosystem. The adapter claims to read one fact model in two languages, and
-      only a repository in each language holds that claim up.
+      only a repository in each language holds that claim up. Its sandbox event sink binds
+      `const fetch = options.fetch ?? readGlobalFetch()` before calling that local value. Exact lexical effect
+      settlement removes that file from the effects adapter's inspected population without moving any graph
+      component or relation; the pinned count is eleven rather than the prior twelve.
 
   - name: openai-agents-js-exercised
     source: git
@@ -312,6 +315,12 @@ repositories:
       reading measured against the library that defines the idiom, and because it moving is how a rename in
       langgraph.types would be noticed.
 
+      The pinned integration graph also imports exact `deepagents.create_deep_agent` provenance and constructs
+      `v3_deep_agent` with a literal name and literal system prompt. The Deep Agents reader contributes one agent;
+      the prompt reader contributes the matching prompt and one `uses_prompt` relation. The exact import, call,
+      declared name, prompt argument and relation evidence were read against
+      `libs/sdk-py/integration/graph/deep_agent.py` before the aggregate expectation moved.
+
   - name: langgraphjs
     source: git
     url: https://github.com/langchain-ai/langgraphjs.git
@@ -329,6 +338,12 @@ repositories:
       argument to the fact that it is one, so nothing connects the commands inside it to the node it implements.
       An application does neither: it imports from the package and registers a named function. That the number here
       is zero while open-deep-research reads ten is the difference between a library and a use of one.
+
+      Its webhook implementation also proves the branch boundary on the browser `fetch` global. The consequence
+      branch binds a loopback callback named `fetch`; the alternative branch calls the unshadowed browser global.
+      The first contributes no network effect and the second retains the exact `callWebhook` service relation at
+      `libs/langgraph-api/src/webhook.mts:36-39`. The reconciled graph population is unchanged, while the effects
+      adapter's pre-reconciliation population drops by one component draft and one relation draft.
 
   - name: crewai
     source: git
@@ -538,6 +553,12 @@ repositories:
       field report so far has been an application, which is why they found what this corpus did not. Five adapters
       contribute here at once, langgraph beside effects, prompts, mcp and model-sdk, so a reader that stops
       recognising an application while still recognising its framework's own repository shows up as a diff.
+
+      This revision also carries three exact `deepagents.create_deep_agent` import sites and four constructions.
+      They produce `build_agent`, `build_baseline_files_agent`, `build_baseline_agent.agent` and
+      `build_gptr_agent.agent`. The last two deliberately reuse the local variable `agent` in separate functions;
+      their qualified identities are the corpus check that lexical scopes do not collapse. Computed model, tool and
+      prompt inputs remain source-located refusals, so the reader contributes four agents and no guessed relation.
 
   - name: open-deep-research
     source: git
@@ -3748,6 +3769,153 @@ repositories:
         exactRisks:
           - ruleId: retry-around-non-idempotent-operation
             severity: high
+          - ruleId: observability-coverage
+            severity: info
+
+  - name: speechwriter-agent
+    source: git
+    url: https://github.com/darylalim/speechwriter-agent.git
+    commit: 96dabf2633be92929530e034f0d5d48646ef26c6
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive selected independently for the blind evaluation of candidate f7019531. Its
+      production package imports `create_deep_agent` from `deepagents`, constructs the named speechwriter with a
+      model, delegated researcher and style-critic subagents, a conditional Tavily research tool, skill paths,
+      filesystem permissions, persistent store and checkpointer, then streams the compiled graph from both CLI and
+      Web entry paths. This is an implemented goal-directed agent application rather than framework documentation.
+
+      The frozen candidate reported no agent system and also mistook the Python callback parameter named `fetch` in
+      local store pagination for a network write. The regression requires exact provider-qualified factory evidence,
+      the declared speechwriter identity, complete parsing, no fabricated external service, and source-located
+      refusals for model, prompt, subagent, skill, permission and wrapped invocation populations that remain computed.
+      Its exact Git tree has 36 tracked files and 928,020 Git-blob bytes. The complete source manifest has SHA-256
+      9d81b4331759d1109f619534dd04ce755130d67c125e2ba12f6fbb21211f3ebc. The root MIT LICENSE has SHA-256
+      f4efdb2d00e7b040bc8fd1df8569bacf2f52652d47313230dcf8e8bd78a1df88. Runtime is not attempted: ordinary
+      invocation requires Anthropic credentials, may reach Tavily, and writes workspace and memory state.
+    acceptance:
+      graphPopulation:
+        components: 1
+        edges: 0
+      exactIdsByKind:
+        agent:
+          - agent:speechwriter
+      absentKinds:
+        - external_service
+      absentComponentTerms:
+        - _paginate
+        - unresolved-host
+      absentEdgeKinds:
+        - calls_service
+      requiredEdges: []
+      componentMetadata:
+        agent:speechwriter:
+          declaredName: speechwriter
+          factory: create_deep_agent
+          framework: deep-agents
+      componentDetails:
+        agent:speechwriter:
+          framework: deep-agents
+          role: worker
+      componentEvidence:
+        agent:speechwriter:
+          - producer: adapter:deep-agents
+            symbol: deepagents.create_deep_agent import
+            sourceFile: src/speechwriter/agent.py
+            startLine: 22
+            endLine: 22
+          - producer: adapter:deep-agents
+            symbol: deepagents.create_deep_agent call
+            sourceFile: src/speechwriter/agent.py
+            startLine: 200
+            endLine: 214
+          - producer: adapter:deep-agents
+            symbol: 'agent identity: speechwriter'
+            sourceFile: src/speechwriter/agent.py
+            startLine: 213
+            endLine: 213
+      sourceCitations:
+        agent:speechwriter:
+          - src/speechwriter/agent.py
+      adapterApplicability:
+        adapter:deep-agents:
+          relevantImports: 1
+          distinctFiles: 1
+          omittedImports: 0
+          fileSample:
+            - module: deepagents
+              imported: create_deep_agent
+              sourceFile: src/speechwriter/agent.py
+              startLine: 22
+      adapterOutcomes:
+        adapter:deep-agents:
+          status: completed
+          componentsFound: 1
+          edgesFound: 0
+          filesInspected: 1
+        adapter:effects:
+          status: completed
+          componentsFound: 0
+          edgesFound: 0
+          filesInspected: 0
+        adapter:prompts:
+          status: completed
+          componentsFound: 0
+          edgesFound: 0
+          filesInspected: 1
+      topology:
+        status: incomplete
+        unresolvedCount: 10
+        conditionalDestinations: 0
+        producerPopulations:
+          - adapterId: adapter:deep-agents
+            status: incomplete
+            inspectedInputs: 1
+            relationsFound: 0
+          - adapterId: adapter:langgraph
+            status: incomplete
+            inspectedInputs: 0
+            relationsFound: 0
+          - adapterId: adapter:prompts
+            status: incomplete
+            inspectedInputs: 1
+            relationsFound: 0
+            scope: prompt_use
+        requiredRefusals:
+          - kind: entry_boundary
+            reason: >-
+              deepagents.create_deep_agent returned graph has no source-settled direct invocation boundary in its
+              declaration module.
+            sourceFile: src/speechwriter/agent.py
+            startLine: 200
+          - kind: explicit_relation
+            reason: create_deep_agent model is absent or computed rather than a source-settled literal reference.
+            sourceFile: src/speechwriter/agent.py
+            startLine: 201
+          - kind: prompt_input
+            reason: 'adapter:deep-agents system_prompt: prompt value is computed rather than source-settled text'
+            sourceFile: src/speechwriter/agent.py
+            startLine: 205
+          - kind: explicit_relation
+            reason: >-
+              create_deep_agent subagents are not an empty bounded list whose endpoint population is source-settled.
+            sourceFile: src/speechwriter/agent.py
+            startLine: 206
+          - kind: explicit_relation
+            reason: >-
+              create_deep_agent skills are not an empty bounded list whose endpoint population is source-settled.
+            sourceFile: src/speechwriter/agent.py
+            startLine: 207
+          - kind: explicit_relation
+            reason: >-
+              create_deep_agent permissions are not an empty bounded list whose endpoint population is
+              source-settled.
+            sourceFile: src/speechwriter/agent.py
+            startLine: 210
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+        exactRisks:
           - ruleId: observability-coverage
             severity: info
 

@@ -160,6 +160,8 @@ export type DecoratorFact = {
 
 export type DefinitionFact = {
   readonly kind: 'function' | 'class' | 'variable' | 'method';
+  /** JavaScript variable declaration form, retained because `var` and block-scoped bindings differ. */
+  readonly declarationKind?: 'const' | 'let' | 'var';
   readonly name: string;
   readonly exported: boolean;
   readonly async: boolean;
@@ -410,6 +412,8 @@ export type AssignmentFact = {
   readonly enclosingLocation?: SourceLocation;
   /** True when the containing callable exists but has no authoritative semantic name. */
   readonly enclosingUnresolved?: true;
+  /** Conditional branches that must run for this write to be reached, outermost first. */
+  readonly branches?: readonly BranchPredicateFact[];
 };
 
 export type ModuleFacts = {

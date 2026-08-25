@@ -104,6 +104,16 @@ support = Agent(name="Support", instructions="Answer the customer.")
 `,
   },
   {
+    adapterId: 'adapter:deep-agents',
+    fixed: { 'pyproject.toml': PYPROJECT('deep-agents-app', ['deepagents>=0.6']) },
+    sourcePath: 'src/writer.py',
+    testPath: 'tests/test_writer.py',
+    code: `from deepagents import create_deep_agent
+
+writer = create_deep_agent(model="anthropic:claude-sonnet-4-5", tools=[], name="writer")
+`,
+  },
+  {
     adapterId: 'adapter:langgraph',
     fixed: {
       'package.json': PACKAGE_JSON('graph-app', { '@langchain/langgraph': '^0.4.0' }),

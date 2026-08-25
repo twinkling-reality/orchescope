@@ -93,6 +93,49 @@ describe('javascript fact extraction', () => {
     assert.equal(facts.environmentRefs[0]?.enclosing, 'makeClient');
   });
 
+  it('retains exact JavaScript conditional paths on declarations, calls and writes', () => {
+    const facts = analyze(`
+      export async function dispatch(useLocal: boolean) {
+        if (useLocal) {
+          const fetch = localFetch;
+          function consequenceOnly() {}
+          fetch('/local');
+          chosen = fetch;
+        } else {
+          fetch('https://example.com');
+        }
+      }
+    `);
+    const declaration = facts.definitions.find(
+      (candidate) => candidate.kind === 'variable' && candidate.name === 'fetch',
+    );
+    const calls = facts.calls.filter((candidate) => dotted(candidate.calleePath) === 'fetch');
+    const assignment = facts.assignments.find((candidate) => candidate.target[0] === 'chosen');
+    const callable = facts.definitions.find(
+      (candidate) => candidate.kind === 'function' && candidate.name === 'consequenceOnly',
+    );
+
+    assert.deepEqual(
+      declaration?.branches?.map((branch) => branch.branch),
+      ['consequence'],
+    );
+    assert.equal(declaration?.declarationKind, 'const');
+    assert.deepEqual(
+      calls.map((call) => call.branches?.map((branch) => branch.branch)),
+      [['consequence'], ['alternative']],
+    );
+    assert.deepEqual(
+      assignment?.branches?.map((branch) => branch.branch),
+      ['consequence'],
+    );
+    assert.deepEqual(
+      callable?.branches?.map((branch) => branch.branch),
+      ['consequence'],
+    );
+    assert.deepEqual(declaration?.branches?.[0]?.location, calls[0]?.branches?.[0]?.location);
+    assert.deepEqual(declaration?.branches?.[0]?.location, calls[1]?.branches?.[0]?.location);
+  });
+
   it('retains object method ownership for method, arrow and function property values', () => {
     const facts = analyze(`
       const command = defineCommand({

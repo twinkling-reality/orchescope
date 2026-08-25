@@ -58,11 +58,64 @@ const blockedReadOnlyPermissionRecord = readFileSync(
   join(repositoryRoot, blockedReadOnlyPermissionRecordPath),
   'utf8',
 );
+const blockedDeepAgentsRecordPath = 'docs/research/f7019531-blocked-blind-evaluation.md';
+const blockedDeepAgentsRecord = readFileSync(
+  join(repositoryRoot, blockedDeepAgentsRecordPath),
+  'utf8',
+);
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
   readonly scripts: Readonly<Record<string, string>>;
 };
 
 const witnesses = [
+  {
+    property:
+      'A Deep Agents construction requires exact factory provenance and lexical identity, and a lexically bound callback cannot become a browser network effect.',
+    file: 'packages/discovery/test/deep-agents.test.ts',
+    title: 'discovers the exact agent, literal model and direct local tools',
+  },
+  {
+    property:
+      'A Deep Agents construction requires exact factory provenance and lexical identity, and a lexically bound callback cannot become a browser network effect.',
+    file: 'packages/discovery/test/deep-agents.test.ts',
+    title: 'preserves direct aliases and namespace imports by exact exported identity',
+  },
+  {
+    property:
+      'A Deep Agents construction requires exact factory provenance and lexical identity, and a lexically bound callback cannot become a browser network effect.',
+    file: 'packages/discovery/test/deep-agents.test.ts',
+    title: 'keeps same-name assigned agents in their exact lexical scopes',
+  },
+  {
+    property:
+      'A Deep Agents construction requires exact factory provenance and lexical identity, and a lexically bound callback cannot become a browser network effect.',
+    file: 'packages/discovery/test/deep-agents.test.ts',
+    title: 'rejects wrong, local, type-only and parameter-shadowed lookalikes',
+  },
+  {
+    property:
+      'A Deep Agents construction requires exact factory provenance and lexical identity, and a lexically bound callback cannot become a browser network effect.',
+    file: 'packages/discovery/test/deep-agents.test.ts',
+    title: 'retains the target-shaped agent and source-locates every computed endpoint refusal',
+  },
+  {
+    property:
+      'A Deep Agents construction requires exact factory provenance and lexical identity, and a lexically bound callback cannot become a browser network effect.',
+    file: 'packages/discovery/test/provider-qualified-effects.test.ts',
+    title: 'rejects Python callables and JavaScript parameters that shadow the browser global',
+  },
+  {
+    property:
+      'A Deep Agents construction requires exact factory provenance and lexical identity, and a lexically bound callback cannot become a browser network effect.',
+    file: 'packages/discovery/test/provider-qualified-effects.test.ts',
+    title: 'retains the unshadowed JavaScript fetch global',
+  },
+  {
+    property:
+      'A Deep Agents construction requires exact factory provenance and lexical identity, and a lexically bound callback cannot become a browser network effect.',
+    file: 'packages/discovery/test/provider-qualified-effects.test.ts',
+    title: 'keeps a sibling browser-global fetch outside a branch-local callback binding',
+  },
   {
     property: 'Workflow registration does not establish agent identity or an agent handoff.',
     file: 'packages/discovery/test/adapters.test.ts',
@@ -1006,6 +1059,49 @@ describe('the frozen pre-release blind evaluation protocol', () => {
     const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
     assert.equal(entries.filter((entry) => entry.name === 'job-hunter').length, 1);
     assert.equal(entries.filter((entry) => entry.name === 'fenceline').length, 1);
+  });
+
+  it('blocks a missing Deep Agents identity and a shadowed callback effect', () => {
+    for (const fact of [
+      'f7019531ef891fcee06f35d6bd362b934d255b0b',
+      'e20f972e70f03210c488d521ed1885f8cee97e4b42effaafcc148faaff6bea87',
+      'https://github.com/darylalim/speechwriter-agent',
+      '96dabf2633be92929530e034f0d5d48646ef26c6',
+      '6f14a821724c9056cba139ee218d9357543daf57',
+      'f4efdb2d00e7b040bc8fd1df8569bacf2f52652d47313230dcf8e8bd78a1df88',
+      'https://github.com/GrowBridge-LLC/praetor-security',
+      '88affb0b8d5cbc3ec7c023d15e9bf4f49a1cc912',
+      '01c9f0384d5957e8ab83bd4185e4fd9bae57c3d1',
+      'a43404aff9a01b0b2da9f5f25a925503dc7477505ec3c302cbcb8115f191f2a7',
+      '822acede87de479f48f5cbfd7c7161447ae1454f3fc43d78e6a72dd58cfe0d9d',
+    ]) {
+      assert.ok(blockedDeepAgentsRecord.includes(fact), `Deep Agents block record omitted ${fact}`);
+    }
+    assert.match(blockedDeepAgentsRecord, /release decision was \*\*BLOCK\*\*/);
+    assert.match(blockedDeepAgentsRecord, /`agentSystemDetected: false`/);
+    assert.match(blockedDeepAgentsRecord, /`deepagents\.create_deep_agent`/);
+    assert.match(blockedDeepAgentsRecord, /`entrypoint:_paginate`/);
+    assert.match(blockedDeepAgentsRecord, /false effect identity/);
+    assert.match(blockedDeepAgentsRecord, /negative was not scanned and no result is claimed/);
+    assert.match(blockedDeepAgentsRecord, /51 reviewed semantic assertions/);
+    assert.match(blockedDeepAgentsRecord, /different unseen positive and negative pair/);
+    assert.doesNotMatch(
+      blockedDeepAgentsRecord,
+      /\/Users\/|\/tmp\/|orchescope-blind-|\brun_[0-9a-f]{8}|\bev_[0-9a-f]{8}|traceId|spanId/,
+    );
+    assert.ok(protocol.includes('../research/f7019531-blocked-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/f7019531-blocked-blind-evaluation.md'));
+
+    const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
+    assert.equal(entries.filter((entry) => entry.name === 'speechwriter-agent').length, 1);
+    assert.equal(
+      entries.some(
+        (entry) =>
+          entry.name === 'praetor-security' ||
+          entry.url === 'https://github.com/GrowBridge-LLC/praetor-security.git',
+      ),
+      false,
+    );
   });
 
   it('keeps every documented metamorphic witness executable through the named gate', () => {

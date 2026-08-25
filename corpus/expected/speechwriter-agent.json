@@ -19,22 +19,22 @@
       "status": "not_applicable"
     },
     "adapter:deep-agents": {
+      "componentsFound": 1,
+      "edgesFound": 0,
+      "filesInspected": 1,
+      "status": "completed"
+    },
+    "adapter:effects": {
       "componentsFound": 0,
       "edgesFound": 0,
       "filesInspected": 0,
-      "status": "not_applicable"
-    },
-    "adapter:effects": {
-      "componentsFound": 4,
-      "edgesFound": 3,
-      "filesInspected": 1,
       "status": "completed"
     },
     "adapter:implementation-reach": {
       "componentsFound": 0,
       "edgesFound": 0,
       "filesInspected": 0,
-      "status": "not_applicable"
+      "status": "completed"
     },
     "adapter:langchain-legacy-agent": {
       "componentsFound": 0,
@@ -49,9 +49,9 @@
       "status": "not_applicable"
     },
     "adapter:langgraph": {
-      "componentsFound": 6,
-      "edgesFound": 10,
-      "filesInspected": 1,
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 4,
       "status": "completed"
     },
     "adapter:manifest": {
@@ -67,10 +67,10 @@
       "status": "not_applicable"
     },
     "adapter:model-sdk": {
-      "componentsFound": 4,
-      "edgesFound": 2,
-      "filesInspected": 3,
-      "status": "completed"
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:openai-agents": {
       "componentsFound": 0,
@@ -91,10 +91,10 @@
       "status": "not_applicable"
     },
     "adapter:search-index": {
-      "componentsFound": 8,
-      "edgesFound": 4,
-      "filesInspected": 3,
-      "status": "completed"
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
     },
     "adapter:vercel-ai-sdk": {
       "componentsFound": 0,
@@ -112,57 +112,40 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "entrypoint": 5,
-      "external_service": 1,
-      "model": 3,
-      "provider": 3,
-      "retrieval": 4,
-      "workflow": 1,
-      "workflow_step": 5
+      "agent": 1
     },
     "declaredInTest": 0,
-    "total": 22
+    "total": 1
   },
   "discardedRelations": [],
   "files": {
-    "discovered": 13,
-    "inSupportedLanguages": 7,
-    "parsed": 7,
+    "discovered": 22,
+    "inSupportedLanguages": 18,
+    "parsed": 18,
     "skipped": 0,
     "truncated": false
   },
   "findings": {
     "byRule": {
-      "model-call-without-timeout": 1,
-      "observability-coverage": 1,
-      "topology-shape": 1
+      "observability-coverage": 1
     },
     "bySeverity": {
-      "info": 1,
-      "low": 1,
-      "medium": 1
+      "info": 1
     },
     "componentsByRule": {
-      "model-call-without-timeout": 2,
-      "observability-coverage": 5,
-      "topology-shape": 3
+      "observability-coverage": 1
     },
     "strengths": 0,
-    "total": 3
+    "total": 1
   },
-  "foundNothing": [],
+  "foundNothing": [
+    "langgraph is imported here and its adapter found nothing"
+  ],
   "kind": "agent_system",
   "languagesNotAnalysed": [],
-  "name": "local-deep-researcher",
+  "name": "speechwriter-agent",
   "relations": {
-    "byKind": {
-      "calls_service": 1,
-      "contains": 5,
-      "invokes_model": 1,
-      "queries_retrieval": 4,
-      "served_by_provider": 3,
-      "transitions_to": 5
-    },
-    "total": 19
+    "byKind": {},
+    "total": 0
   }
 }

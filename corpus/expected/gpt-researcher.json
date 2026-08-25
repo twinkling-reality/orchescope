@@ -18,6 +18,12 @@
       "filesInspected": 0,
       "status": "not_applicable"
     },
+    "adapter:deep-agents": {
+      "componentsFound": 4,
+      "edgesFound": 0,
+      "filesInspected": 3,
+      "status": "completed"
+    },
     "adapter:effects": {
       "componentsFound": 106,
       "edgesFound": 55,
@@ -28,7 +34,7 @@
       "componentsFound": 0,
       "edgesFound": 0,
       "filesInspected": 0,
-      "status": "not_applicable"
+      "status": "completed"
     },
     "adapter:langchain-legacy-agent": {
       "componentsFound": 0,
@@ -75,8 +81,8 @@
     "adapter:prompts": {
       "componentsFound": 0,
       "edgesFound": 0,
-      "filesInspected": 0,
-      "status": "not_applicable"
+      "filesInspected": 3,
+      "status": "completed"
     },
     "adapter:pydantic-ai": {
       "componentsFound": 0,
@@ -106,6 +112,7 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
+      "agent": 4,
       "entrypoint": 51,
       "external_service": 51,
       "mcp_server": 1,
@@ -115,7 +122,7 @@
       "workflow_step": 11
     },
     "declaredInTest": 0,
-    "total": 118
+    "total": 122
   },
   "discardedRelations": [],
   "files": {

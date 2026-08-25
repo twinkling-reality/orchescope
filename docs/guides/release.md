@@ -110,6 +110,12 @@ overlay repeated that unsupported claim. The positive is pinned as a bounded han
 negative is pinned as a distinct exact read-only permission regression; and neither lineage can be reused as an unseen
 holdout.
 
+The [blocked f7019531 evaluation](../research/f7019531-blocked-blind-evaluation.md) records a thirteenth completed block:
+an exact `deepagents.create_deep_agent` construction disappeared without an agent identity or bounded framework refusal,
+while a Python callback parameter named `fetch` became a false browser network write. The positive is pinned as an exact
+Deep Agents provenance and lexical-effect regression; the unmeasured negative adds no corpus entry; and neither lineage
+can be reused as an unseen holdout.
+
 `pnpm package` writes `release/release-summary.json`. Read it rather than trusting the exit code:
 
 | Field | What it has to say |

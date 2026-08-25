@@ -17,13 +17,15 @@ export const addCreateAgentTools = (input: {
   readonly agent: ComponentIdentity;
   readonly value: ArgumentFact | undefined;
   readonly location: SourceLocation;
+  readonly factory: string;
+  readonly framework: string;
   readonly refuse: (refusal: TopologyRefusal) => void;
 }): { readonly components: number; readonly edges: number } => {
   if (input.value === undefined) return { components: 0, edges: 0 };
   if (input.value.kind !== 'array') {
     input.refuse({
       kind: 'explicit_relation',
-      reason: 'create_agent tools are computed rather than a direct bounded list.',
+      reason: `${input.factory} tools are computed rather than a direct bounded list.`,
       location: input.location,
     });
     return { components: 0, edges: 0 };
@@ -36,8 +38,7 @@ export const addCreateAgentTools = (input: {
     if (item.kind !== 'identifier') {
       input.refuse({
         kind: 'explicit_relation',
-        reason:
-          'create_agent contains a tool entry whose local implementation is not source-settled.',
+        reason: `${input.factory} contains a tool entry whose local implementation is not source-settled.`,
         location: input.location,
       });
       continue;
@@ -47,7 +48,7 @@ export const addCreateAgentTools = (input: {
       if (existing.kind !== 'tool') {
         input.refuse({
           kind: 'explicit_relation',
-          reason: `create_agent tool ${item.name} resolves to ${existing.kind}, not a tool.`,
+          reason: `${input.factory} tool ${item.name} resolves to ${existing.kind}, not a tool.`,
           location: input.location,
         });
         continue;
@@ -93,7 +94,7 @@ export const addCreateAgentTools = (input: {
     ) {
       input.refuse({
         kind: 'explicit_relation',
-        reason: `create_agent tool ${item.name} has no unique unchanged local function implementation.`,
+        reason: `${input.factory} tool ${item.name} has no unique unchanged local function implementation.`,
         location: input.location,
       });
       continue;
@@ -113,8 +114,8 @@ export const addCreateAgentTools = (input: {
         symbol: `tools: ${item.name}`,
         confidence: CONFIDENCE_BANDS.deterministic,
         details: { for: 'tool' },
-        metadata: { framework: 'langchain-v1', declaredName: resolved.name },
-        tags: ['langchain-v1'],
+        metadata: { framework: input.framework, declaredName: resolved.name },
+        tags: [input.framework],
       }),
     );
     input.context.bindings.register(resolved.file, resolved.name, identity);

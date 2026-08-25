@@ -378,6 +378,8 @@ export const langChainV1CreateAgentAdapter: AgentSystemAdapter = {
           agent: identity,
           value: tools.value,
           location: tools.location,
+          factory: LANGCHAIN_CREATE_AGENT_EXPORT,
+          framework: 'langchain-v1',
           refuse: (refusal) => refuseTopology(topology, refusal),
         });
         components += addedTools.components;

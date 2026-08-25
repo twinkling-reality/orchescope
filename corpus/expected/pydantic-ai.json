@@ -18,6 +18,12 @@
       "filesInspected": 0,
       "status": "not_applicable"
     },
+    "adapter:deep-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
     "adapter:effects": {
       "componentsFound": 26,
       "edgesFound": 15,

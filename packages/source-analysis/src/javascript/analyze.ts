@@ -4,6 +4,7 @@ import {
   type ArgumentFact,
   type AssignmentFact,
   approximateTokens,
+  type BranchPredicateFact,
   type CalleeOrigin,
   type CallFact,
   type ControlFlowFact,
@@ -449,6 +450,7 @@ type Frame = {
   readonly lexicalEnclosing?: string;
   readonly lexicalScopes?: readonly LexicalScopeFact[];
   readonly lexicalShadows?: readonly string[];
+  readonly branches?: readonly BranchPredicateFact[];
 };
 
 const nestedLexicalScopes = (
@@ -459,10 +461,14 @@ const nestedLexicalScopes = (
 
 const definitionEnclosing = (
   frame: Frame,
-): Pick<DefinitionFact, 'enclosing' | 'enclosingLocation' | 'enclosingUnresolved'> => ({
+): Pick<
+  DefinitionFact,
+  'branches' | 'enclosing' | 'enclosingLocation' | 'enclosingUnresolved'
+> => ({
   enclosing: frame.name,
   ...(frame.callableLocation === undefined ? {} : { enclosingLocation: frame.callableLocation }),
   ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
+  ...(frame.branches === undefined ? {} : { branches: frame.branches }),
 });
 
 const transparentExpression = (node: Node | undefined): Node | undefined => {
@@ -671,6 +677,7 @@ const recordObjectMethod = (
     enclosing: owner,
     ...(frame.callableLocation === undefined ? {} : { enclosingLocation: frame.callableLocation }),
     ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
+    ...(frame.branches === undefined ? {} : { branches: frame.branches }),
   });
   const body = asNode(field(value, 'body'));
   if (body !== undefined) {
@@ -1121,18 +1128,64 @@ const recordControlFlow = (
   collecting: (readonly string[])[][],
 ): boolean => {
   const kind = CONTROL_FLOW_TYPES[node.type];
-  if (kind === undefined) return false;
+  const conditional = node.type === 'IfStatement';
+  if (kind === undefined && !conditional) return false;
   const contains: (readonly string[])[] = [];
   collecting.push(contains);
-  visitChildren(node, context, frame, false, collecting);
+  if (node.type === 'IfStatement') {
+    const test = asNode(field(node, 'test'));
+    const consequent = asNode(field(node, 'consequent'));
+    const alternate = asNode(field(node, 'alternate'));
+    if (test !== undefined) traverse(test, context, frame, false, collecting);
+    const predicateLocation = context.index.location(
+      context.file,
+      test?.start ?? node.start,
+      test?.end ?? node.start,
+    );
+    const operator = test?.type ?? 'IfStatement';
+    if (consequent !== undefined) {
+      traverse(
+        consequent,
+        context,
+        {
+          ...frame,
+          branches: [
+            ...(frame.branches ?? []),
+            { operator, references: [], location: predicateLocation, branch: 'consequence' },
+          ],
+        },
+        false,
+        collecting,
+      );
+    }
+    if (alternate !== undefined) {
+      traverse(
+        alternate,
+        context,
+        {
+          ...frame,
+          branches: [
+            ...(frame.branches ?? []),
+            { operator, references: [], location: predicateLocation, branch: 'alternative' },
+          ],
+        },
+        false,
+        collecting,
+      );
+    }
+  } else {
+    visitChildren(node, context, frame, false, collecting);
+  }
   collecting.pop();
+  if (conditional) return true;
   const repeats = LOOP_REPETITION[node.type];
   context.controlFlow.push({
-    kind,
+    kind: kind as ControlFlowFact['kind'],
     location: context.index.location(context.file, node.start, node.end),
     enclosing: frame.name,
     ...(frame.callableLocation === undefined ? {} : { enclosingLocation: frame.callableLocation }),
     ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
+    ...(frame.branches === undefined ? {} : { branches: frame.branches }),
     contains,
     ...(repeats === undefined ? {} : { repeats, passesBounded: passesBoundedIn(node) }),
     ...(repeats === 'same_work'
@@ -1145,6 +1198,34 @@ const recordControlFlow = (
     ...(kind === 'try_catch' ? { exitsOnSuccess: exitsOnSuccessIn(node) } : {}),
   });
   return true;
+};
+
+const recordAssignment = (
+  node: Node,
+  context: Context,
+  frame: Frame,
+  awaited: boolean,
+  collecting: (readonly string[])[][],
+): void => {
+  const target = asNode(field(node, 'left'));
+  const value = asNode(field(node, 'right'));
+  const path = target === undefined ? [] : memberPath(target);
+  if (path.length > 0 && value !== undefined) {
+    context.assignments.push({
+      target: path,
+      value: argumentFact(value, context),
+      location: context.index.location(context.file, node.start, node.end),
+      ...(frame.name === undefined ? {} : { enclosing: frame.name }),
+      ...(frame.callableLocation === undefined
+        ? {}
+        : { enclosingLocation: frame.callableLocation }),
+      ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
+      ...(frame.branches === undefined ? {} : { branches: frame.branches }),
+    });
+  }
+  for (const child of [target, value]) {
+    if (child !== undefined) traverse(child, context, frame, awaited, collecting);
+  }
 };
 
 /**
@@ -1181,24 +1262,7 @@ const traverse = (
      * value is still recorded as a call.
      */
     case 'AssignmentExpression': {
-      const target = asNode(field(node, 'left'));
-      const value = asNode(field(node, 'right'));
-      const path = target === undefined ? [] : memberPath(target);
-      if (path.length > 0 && value !== undefined) {
-        context.assignments.push({
-          target: path,
-          value: argumentFact(value, context),
-          location: context.index.location(context.file, node.start, node.end),
-          ...(frame.name === undefined ? {} : { enclosing: frame.name }),
-          ...(frame.callableLocation === undefined
-            ? {}
-            : { enclosingLocation: frame.callableLocation }),
-          ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
-        });
-      }
-      for (const child of [target, value]) {
-        if (child !== undefined) traverse(child, context, frame, awaited, collecting);
-      }
+      recordAssignment(node, context, frame, awaited, collecting);
       return;
     }
     case 'AwaitExpression': {
@@ -1304,6 +1368,7 @@ const recordCall = (
     ...(frame.lexicalEnclosing === undefined ? {} : { lexicalEnclosing: frame.lexicalEnclosing }),
     ...(frame.lexicalScopes === undefined ? {} : { lexicalScopes: frame.lexicalScopes }),
     ...(frame.lexicalShadows === undefined ? {} : { lexicalShadows: frame.lexicalShadows }),
+    ...(frame.branches === undefined ? {} : { branches: frame.branches }),
     awaited,
   };
   context.calls.push(fact);
@@ -1349,6 +1414,7 @@ const recordFunction = (node: Node, context: Context, frame: Frame): void => {
     enclosing: frame.name,
     ...(frame.callableLocation === undefined ? {} : { enclosingLocation: frame.callableLocation }),
     ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
+    ...(frame.branches === undefined ? {} : { branches: frame.branches }),
   };
   context.definitions.push(definition);
   const body = asNode(field(node, 'body'));
@@ -1412,6 +1478,7 @@ const recordClassField = (
     enclosing: className ?? frame.name,
     ...(frame.callableLocation === undefined ? {} : { enclosingLocation: frame.callableLocation }),
     ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
+    ...(frame.branches === undefined ? {} : { branches: frame.branches }),
   });
 };
 
@@ -1452,6 +1519,7 @@ const recordClassMethod = (
     enclosing: className ?? frame.name,
     ...(frame.callableLocation === undefined ? {} : { enclosingLocation: frame.callableLocation }),
     ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
+    ...(frame.branches === undefined ? {} : { branches: frame.branches }),
   });
   const methodBody = value === undefined ? undefined : asNode(field(value, 'body'));
   if (methodBody !== undefined) {
@@ -1555,6 +1623,7 @@ const recordClass = (
     enclosing: frame.name,
     ...(frame.callableLocation === undefined ? {} : { enclosingLocation: frame.callableLocation }),
     ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),
+    ...(frame.branches === undefined ? {} : { branches: frame.branches }),
   });
   const body = asNode(field(node, 'body'));
   if (body === undefined) return;
@@ -1675,6 +1744,7 @@ const recordVariables = (
   frame: Frame,
   collecting: (readonly string[])[][],
 ): void => {
+  const declarationKind = field(node, 'kind');
   for (const declarator of nodeArray(field(node, 'declarations'))) {
     const name = identifierName(asNode(field(declarator, 'id')));
     const init = asNode(field(declarator, 'init'));
@@ -1684,6 +1754,9 @@ const recordVariables = (
     if (name !== undefined) {
       context.definitions.push({
         kind: 'variable',
+        ...(declarationKind === 'const' || declarationKind === 'let' || declarationKind === 'var'
+          ? { declarationKind }
+          : {}),
         name,
         exported: frame.exported,
         async: false,

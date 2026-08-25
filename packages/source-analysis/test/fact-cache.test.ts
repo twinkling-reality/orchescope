@@ -64,8 +64,8 @@ const projectOf = (count: number): string => {
 };
 
 describe('the fact cache', () => {
-  it('keys nested-call, binding-scope and parameter-default facts by analyzer version', () => {
-    assert.equal(ANALYZER_VERSION, '23');
+  it('keys branch-path, nested-call, binding-scope and parameter-default facts by analyzer version', () => {
+    assert.equal(ANALYZER_VERSION, '25');
     assert.match(
       cacheKey(
         {
@@ -76,7 +76,7 @@ describe('the fact cache', () => {
         },
         'a'.repeat(64),
       ),
-      /^23:python:src\/graph\.py:/,
+      /^25:python:src\/graph\.py:/,
     );
   });
 

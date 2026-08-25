@@ -2,6 +2,7 @@ import type { AgentSystemAdapter } from './adapter.ts';
 import { agentflowAdapter } from './adapters/agentflow.ts';
 import { browserUseAgentAdapter } from './adapters/browser-use-agent.ts';
 import { crewAiAdapter } from './adapters/crewai.ts';
+import { deepAgentsAdapter } from './adapters/deep-agents.ts';
 import { effectsAdapter } from './adapters/effects.ts';
 import { implementationReachAdapter } from './adapters/implementation-reach.ts';
 import { langChainLegacyAgentAdapter } from './adapters/langchain-legacy-agent.ts';
@@ -34,6 +35,7 @@ export const DEFAULT_ADAPTERS: readonly AgentSystemAdapter[] = [
   manifestAdapter,
   workersBindingsAdapter,
   openAiAgentsAdapter,
+  deepAgentsAdapter,
   langChainV1CreateAgentAdapter,
   langGraphAdapter,
   agentflowAdapter,
