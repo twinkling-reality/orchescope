@@ -52,7 +52,9 @@ repositories:
     why: >-
       Every framework name Orchescope knows appears in this directory as a string literal, and so does most of the
       vocabulary of the domain. A reader that matches on names rather than on facts lights it up. The ceiling is
-      zero components: this package reads agent systems and is not one.
+      zero components: this package reads agent systems and is not one. The exact Deep Agents origin reader, adapter
+      and its regression test raise the tracked population to 101 discovered files and 100 supported files while
+      preserving that zero ceiling and all eleven injected negative shapes.
 
   - name: openai-agents-python
     source: git
