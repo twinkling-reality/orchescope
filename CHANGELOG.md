@@ -44,7 +44,22 @@ sha256 beside it.
 
 ## 0.9.1
 
-Unreleased. `orchescope@0.9.1` is not on the registry and carries no registry attestation. The first frozen candidate,
+Released 2026-08-25 from npm as `orchescope@0.9.1`, published locally with `npm publish --no-provenance`, so this
+release carries no registry attestation. The published archive is the one the blind gate was measured against, which
+was checked by downloading the published package and comparing:
+
+```
+sha256  1db83a22e104f5f9c2537f175fcb903b96242d99245e26b3c02fd4edb11f2fd3
+```
+
+Installed from the registry, the binary reports `0.9.1` and `orchescope doctor` passes every required check.
+
+The tag and the GitHub release for this version were created after 0.9.2 was published rather than at publication
+time, from the archive the registry serves rather than from a rebuild. Until then this section said the version was
+unreleased while the registry had served it since 2026-08-25, which is the same lapse the release guide already
+records for two earlier versions.
+
+The first frozen candidate,
 commit `604fce7516e47cd8971bedbb6da27b138e485fe0` with archive SHA-256
 `6210cafc465c56aa2b8ed6d6328499799bd4e6c553327708d1b1141fd522a274`, was independently evaluated and blocked. The
 second candidate, commit `48828a1d2f3d8aa479124987a04eb8d672fc63a3` with archive SHA-256
@@ -76,7 +91,8 @@ missing exact Deep Agents identity and a false network effect over a callback pa
 `1db83a22e104f5f9c2537f175fcb903b96242d99245e26b3c02fd4edb11f2fd3` then passed an independent evaluation against
 a different unseen positive and negative pair and cleared the final blind gate. The passing positive is pinned with
 146 source-reviewed semantic assertions; the negative remained a clean zero and adds no duplicate precision entry.
-Nothing has been published, tagged, pushed or attached to a release.
+That archive is what this release published; it is attached to the `v0.9.1` GitHub release with its
+sha256 beside it.
 
 ### Deep Agents factories retain exact provenance and lexical effect boundaries
 
