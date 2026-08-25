@@ -319,6 +319,18 @@ const graphAcceptanceVerdict = (acceptance, bundle) => {
     );
   }
   holdAdapters(acceptance, bundle, hold);
+  for (const expected of acceptance.requiredUnclaimedImportedConstructions ?? []) {
+    hold(
+      (bundle.graph.coverage.unsupported ?? []).some(
+        (area) =>
+          area.kind === 'unclaimed_imported_construction' &&
+          area.location?.file === expected.sourceFile &&
+          area.location?.startLine === expected.startLine &&
+          typeof area.location?.fileHash === 'string',
+      ),
+      `unclaimed imported construction at ${expected.sourceFile}:${expected.startLine} was absent`,
+    );
+  }
   holdOutcome(acceptance, bundle, hold);
 
   return { held: total - broken.length, total, broken };

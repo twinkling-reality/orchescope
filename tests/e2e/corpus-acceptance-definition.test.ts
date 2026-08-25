@@ -87,6 +87,11 @@ const acceptance = {
   findings: { strengths: 0, requiredRules: ['topology-shape'] },
 };
 
+const withUnclaimed = {
+  ...acceptance,
+  requiredUnclaimedImportedConstructions: [{ sourceFile: 'src/graph.ts', startLine: 1 }],
+};
+
 const validEntry = {
   name: 'measured-repository',
   source: 'git',
@@ -305,6 +310,10 @@ describe('corpus acceptance definitions', () => {
 
   it('accepts a complete bounded contract and rejects incomplete or unknown shapes', () => {
     assert.equal(readTemporary(validEntry).repositories[0]?.name, 'measured-repository');
+    assert.equal(
+      readTemporary({ ...validEntry, acceptance: withUnclaimed }).repositories[0]?.name,
+      'measured-repository',
+    );
     for (const test of [
       {
         entry: { ...validEntry, acceptance: { ...acceptance, exactIdsByKind: {} } },
@@ -375,6 +384,37 @@ describe('corpus acceptance definitions', () => {
           },
         },
         message: /without invented locations/,
+      },
+      {
+        entry: {
+          ...validEntry,
+          acceptance: { ...acceptance, requiredUnclaimedImportedConstructions: [] },
+        },
+        message: /exact source-located unclaimed imported constructions/,
+      },
+      {
+        entry: {
+          ...validEntry,
+          acceptance: {
+            ...acceptance,
+            requiredUnclaimedImportedConstructions: [
+              { sourceFile: 'src/graph.ts', startLine: 1, exported: 'Factory' },
+            ],
+          },
+        },
+        message: /exact source-located unclaimed imported constructions/,
+      },
+      {
+        entry: {
+          ...validEntry,
+          acceptance: {
+            ...acceptance,
+            requiredUnclaimedImportedConstructions: [
+              { sourceFile: '../src/graph.ts', startLine: 1 },
+            ],
+          },
+        },
+        message: /exact source-located unclaimed imported constructions/,
       },
     ]) {
       assert.throws(() => readTemporary(test.entry), test.message);

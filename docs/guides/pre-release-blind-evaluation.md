@@ -31,11 +31,13 @@ The [blocked a38ed43f evaluation](../research/a38ed43f-blocked-blind-evaluation.
 [blocked 78c62410 evaluation](../research/78c62410-blocked-blind-evaluation.md), and the
 [blocked 13383b88 evaluation](../research/13383b88-blocked-blind-evaluation.md), and the
 [blocked f7019531 evaluation](../research/f7019531-blocked-blind-evaluation.md), and the
-[passed 1642f0f6 evaluation](../research/1642f0f6-passed-blind-evaluation.md) are durable records of completed
+[passed 1642f0f6 evaluation](../research/1642f0f6-passed-blind-evaluation.md), and the
+[0.9.1 acceptance holdouts](../research/0.9.1-acceptance-used-holdouts.md) are durable records of completed
 applications of this protocol. Every repository selected in a completed evaluation, and its source lineage, is
 part of a used population. Those repositories and their source lineages are permanently ineligible as blind holdouts
 at any revision. A blocked candidate can be refrozen only after a generalized correction, and every candidate requires
-a different unseen positive and negative pair.
+a different unseen positive and negative pair. The 0.9.1 passing pair and the two 0.9.1 acceptance holdouts are
+already used for 0.9.2 and cannot clear that candidate's blind gate.
 
 ## Freeze and independent selection
 
@@ -146,6 +148,7 @@ inside `pnpm verify`; the named command makes the release boundary reviewable wi
 | An AgentFlow graph requires exact runtime provenance and settled source behavior, never a generic Agent, ToolNode or graph-shaped name. | `packages/discovery/test/agentflow.test.ts`, `discovers the exact Agent, ToolNode, cyclic graph and compiled invocation boundary`; `recognizes renamed and namespace runtime imports`; `stays quiet for foreign, local, shadowed and rebound lookalikes`; `refuses endpoint populations changed through invoked local helpers and aliases`; `does not borrow a bound map through parameter shadowing or replacement`; `does not apply one bounded invocation to an unbounded invocation population` |
 | Invocation ceilings, producer populations and refusal location boundaries cannot change behind stable corpus totals. | `tests/e2e/corpus-acceptance.test.ts`, `rejects changed invocation ceilings, producer populations and unlocated refusals` |
 | A Pydantic AI assignment can destabilize only its exact local, global or nonlocal Agent binding. | `packages/discovery/test/adapters.test.ts`, `keeps a decorated tool when another scope destructures the same variable name`; `does not attach a decorated tool after an explicit outer-scope Agent replacement`; `does not lend a global or nonlocal write to an unrelated same-named Agent`; `does not lend an unresolved nonlocal write to a module Agent`; `settles nonlocal writes by exact nested owner rather than a repeated callable name`; `keeps class namespaces distinct while nonlocal skips the class closure` |
+| An imported construction whose distribution no adapter claims cannot disappear, and its argument names cannot become an agent. | `packages/discovery/test/unclaimed-imported-construction.test.ts`, `records a Python factory whose distribution no adapter claims`; `records a JavaScript construction whose object keys carry both populations`; `stays quiet for a claimed framework that already has a reader`; `stays quiet for a type-only import`; `stays quiet for a local sibling module`; `stays quiet for an OpenAI-style tool-schema payload`; `does not mint an agent from the argument names alone` |
 | An imported construction whose distribution no adapter claims cannot disappear into closed-world absence. | `packages/discovery/test/unclaimed-imported-construction.test.ts`, `records a Python factory whose distribution no adapter claims`; `records a JavaScript construction whose object keys carry both populations`; `stays quiet for a claimed framework that already has a reader`; `stays quiet for an OpenAI-style tool-schema payload`; `does not mint an agent from the argument names alone` |
 
 The deterministic fixtures falsify one assumption at a time. The independently selected positive and negative prevent
