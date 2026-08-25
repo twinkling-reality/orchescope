@@ -4421,6 +4421,167 @@ repositories:
           - ruleId: observability-coverage
             severity: info
 
+  - name: docent
+    source: git
+    url: https://github.com/Dmitry9/docent.git
+    commit: f8a44120b928f04e9e5a0ac507362efc8647e627
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive selected independently for the passing blind evaluation of candidate fdb11aa.
+      Its production package imports Agent from pydantic_ai, constructs it in build_agent with a system prompt and a
+      registered search tool, and the console entry point calls agent.run_sync on the caller's question. The retriever
+      is a local keyword matcher over a hard-coded demo corpus.
+
+      The regression preserves the passing boundary: the pydantic-ai Agent stays an agent rather than disappearing;
+      the nested search tool and SYSTEM_PROMPT retain their exact source identities and relations; the string default
+      anthropic:claude-sonnet-5 does not become an invented model or provider; effects stay a visible completed zero;
+      and the applicable pydantic-ai topology population remains an explicit source-located refusal. The pinned Git
+      tree is 767d80ec8d0faac113e8d440749117622ad6e5ec and contains 14 regular files and 95,857 blob bytes. The
+      complete source manifest has SHA-256 570de135b0bdab61b64ee1f41dab78cdf2667d292865588874aa4d4c9f1cc542. LICENSE
+      is MIT with SHA-256 23b95ef6133b01d2a5e8133a003fcbfa3fdfd0676c4cdbc41d95b6c606570d9e. The scan discovers 8
+      files and parses all 6 supported Python files, covering 4,119 source bytes. No runtime is attempted: the
+      repository supplies no Orchescope scenario, and the production path requires an unauthorized Anthropic call.
+    acceptance:
+      graphPopulation:
+        components: 3
+        edges: 2
+      exactIdsByKind:
+        agent:
+          - agent:agent
+        prompt:
+          - prompt:system_prompt
+        tool:
+          - tool:build_agent.search
+      absentKinds:
+        - database
+        - entrypoint
+        - external_service
+        - group
+        - model
+        - provider
+        - workflow
+      absentComponentTerms:
+        - anthropic
+        - claude
+        - github
+      absentEdgeKinds:
+        - calls_service
+        - hands_off_to
+        - invokes_model
+        - queries_database
+      requiredEdges:
+        - kind: calls_tool
+          from: agent:agent
+          to: tool:build_agent.search
+          sourceFile: src/docent/agent.py
+          evidence:
+            - producer: adapter:pydantic-ai
+              symbol: '@agent.tool build_agent.search'
+              sourceFile: src/docent/agent.py
+              startLine: 28
+              endLine: 30
+        - kind: uses_prompt
+          from: agent:agent
+          to: prompt:system_prompt
+          sourceFile: src/docent/agent.py
+          evidence:
+            - producer: adapter:prompts
+              symbol: system_prompt
+              sourceFile: src/docent/agent.py
+              startLine: 25
+              endLine: 25
+      componentMetadata:
+        agent:agent:
+          declaredName: agent
+          framework: pydantic-ai
+          nameInferredFromVariable: true
+        prompt:system_prompt:
+          channel: system_prompt
+          characters: 230
+          hasSubstitutions: false
+          sourceProducer: adapter:pydantic-ai
+        tool:build_agent.search:
+          declaredName: build_agent.search
+          framework: pydantic-ai
+          registeredOn: agent
+      componentDetails:
+        agent:agent:
+          framework: pydantic-ai
+          role: unspecified
+        prompt:system_prompt:
+          interpolatesUntrustedInput: false
+        tool:build_agent.search:
+          for: tool
+      componentEvidence:
+        agent:agent:
+          - producer: adapter:pydantic-ai
+            symbol: agent
+            sourceFile: src/docent/agent.py
+            startLine: 25
+            endLine: 25
+        prompt:system_prompt:
+          - producer: adapter:prompts
+            symbol: SYSTEM_PROMPT
+            sourceFile: src/docent/agent.py
+            startLine: 10
+            endLine: 14
+        tool:build_agent.search:
+          - producer: adapter:pydantic-ai
+            symbol: '@agent.tool build_agent.search'
+            sourceFile: src/docent/agent.py
+            startLine: 28
+            endLine: 30
+      sourceCitations:
+        agent:agent:
+          - src/docent/agent.py
+        prompt:system_prompt:
+          - src/docent/agent.py
+        tool:build_agent.search:
+          - src/docent/agent.py
+      adapterOutcomes:
+        adapter:pydantic-ai:
+          status: completed
+          componentsFound: 2
+          edgesFound: 1
+          filesInspected: 1
+        adapter:prompts:
+          status: completed
+          componentsFound: 1
+          edgesFound: 1
+          filesInspected: 1
+        adapter:effects:
+          status: completed
+          componentsFound: 0
+          edgesFound: 0
+          filesInspected: 0
+      topology:
+        status: incomplete
+        unresolvedCount: 1
+        conditionalDestinations: 0
+        producerPopulations:
+          - adapterId: adapter:pydantic-ai
+            status: incomplete
+            inspectedInputs: 0
+            relationsFound: 1
+            scope: control_flow
+          - adapterId: adapter:prompts
+            status: complete
+            inspectedInputs: 1
+            relationsFound: 1
+            scope: prompt_use
+        requiredRefusals:
+          - kind: adapter_input
+            reason: adapter:pydantic-ai did not state an inspected topology population for this applicable input.
+            sourceFile: src/docent/agent.py
+            startLine: 5
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+        exactRisks:
+          - ruleId: observability-coverage
+            severity: info
+
   - name: fenceline
     source: git
     url: https://github.com/pixle-codes/fenceline.git
