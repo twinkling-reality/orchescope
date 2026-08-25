@@ -81,6 +81,12 @@ mcp → manifest → workers-bindings → openai-agents → deep-agents → lang
 Each adapter declares `appliesTo`, which is checked before it runs, and returns what it found. An adapter that does not
 apply is recorded as `not_applicable` rather than omitted, so the coverage block can say which frameworks were looked for.
 
+After the adapters finish, discovery also looks at imported constructions whose distribution nobody claimed. A call or
+`new` whose origin is an imported, non-local, non-type-only package, and whose arguments carry both a tools-shaped name
+and a model-shaped name, is recorded as `unclaimed_imported_construction` with its source location. That is a coverage
+fact: the names do not establish an agent, and a claimed framework stays on `adapter_found_nothing`. Without this pass,
+every adapter reporting `not_applicable` reads as an empty repository.
+
 A **binding registry** carries names across adapters: when the OpenAI adapter records `issueRefund` as `tool:issue_refund`,
 a later adapter resolving the identifier `issueRefund` in another module finds the same component. That is how an edge from
 an agent in one file to a tool in another gets drawn without guessing.

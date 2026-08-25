@@ -126,6 +126,13 @@ const UnsupportedAreaKind = literals([
    * the remediation is a setting to narrow, not a parser to write or a form to report.
    */
   'excluded_from_analysis',
+  /*
+   * An imported construction whose distribution no adapter claims, and whose arguments carry both a
+   * tools-shaped name and a model-shaped name. This is a coverage fact, not an agent identity: those
+   * names do not say what was built, only that a parsed construction disappeared from the report. The
+   * closed-world sentence "no agent system was detected" is false of that case.
+   */
+  'unclaimed_imported_construction',
 ] as const);
 
 export const UnsupportedArea = Type.Object(
@@ -140,6 +147,13 @@ export const UnsupportedArea = Type.Object(
     remediation: Type.Optional(
       NonEmptyString({ description: 'How the user can supply the missing facts.' }),
     ),
+    /**
+     * Where the unsupported fact was read, when it is a single source span.
+     *
+     * Optional because most kinds name a population rather than one location. Adding the field does
+     * not bump the document version.
+     */
+    location: Type.Optional(SourceLocation),
   },
   { additionalProperties: false },
 );

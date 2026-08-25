@@ -4614,8 +4614,49 @@
                             {
                               "const": "excluded_from_analysis",
                               "type": "string"
+                            },
+                            {
+                              "const": "unclaimed_imported_construction",
+                              "type": "string"
                             }
                           ]
+                        },
+                        "location": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "endColumn": {
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "endLine": {
+                              "minimum": 1,
+                              "type": "integer"
+                            },
+                            "file": {
+                              "description": "Repository relative POSIX path.",
+                              "minLength": 1,
+                              "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                              "type": "string"
+                            },
+                            "fileHash": {
+                              "description": "Lowercase hexadecimal SHA-256 digest.",
+                              "pattern": "^[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "startColumn": {
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "startLine": {
+                              "minimum": 1,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "file",
+                            "startLine"
+                          ],
+                          "type": "object"
                         },
                         "reason": {
                           "minLength": 1,
