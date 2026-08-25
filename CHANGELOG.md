@@ -17,8 +17,13 @@ imports, test files, model-identifier wrappers and OpenAI-style tool-schema payl
 The used positive is pinned in the regression corpus at the exact revision that exposed the silence, with
 `agentSystemDetected: false` and a required source-located `unclaimed_imported_construction`. The used
 negative repeated an exact read-only SQLite URI already held by an earlier pin and adds no corpus entry.
-Neither lineage can be reused as an unseen holdout. Nothing has been published, tagged, pushed or attached
-to a release.
+Neither lineage can be reused as an unseen holdout.
+
+Candidate `fdb11aa207039252524aca368164a00d31b283b8` with archive SHA-256
+`f8debfc991451547349feb6d980579220e8c18dae1d4fdb94af4939102f434c1` then passed an independent evaluation against
+a different unseen positive and negative pair and cleared the 0.9.2 blind gate. The passing positive is pinned with
+74 source-reviewed semantic assertions; the negative remained non-agent and adds no duplicate precision entry.
+Nothing has been published, tagged, pushed or attached to a release.
 
 ## 0.9.1
 
