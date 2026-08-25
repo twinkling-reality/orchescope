@@ -172,5 +172,8 @@
       "validated_by": 4
     },
     "total": 638
-  }
+  },
+  "unclaimedImportedConstructions": [
+    "litellm.acompletion is constructed at src/agents/extensions/models/litellm_model.py:597 and no adapter claims that distribution"
+  ]
 }
