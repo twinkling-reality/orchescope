@@ -228,28 +228,4 @@ jobs:
           pnpm orchescope mcp install --list > /dev/null
 
       - name: every internal documentation link resolves
-        run: |
-          node --input-type=module -e "
-            import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
-            import { dirname, join, resolve } from 'node:path';
-            const walk = (directory) =>
-              readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-                const path = join(directory, entry.name);
-                if (entry.isDirectory()) return entry.name === 'node_modules' ? [] : walk(path);
-                return path.endsWith('.md') ? [path] : [];
-              });
-            const files = ['README.md', 'CONTRIBUTING.md', 'SECURITY.md', 'AGENTS.md', 'PLANS.md', 'CODE_OF_CONDUCT.md']
-              .filter((file) => existsSync(file))
-              .concat(walk('docs'));
-            const broken = [];
-            for (const file of files) {
-              for (const match of readFileSync(file, 'utf8').matchAll(/\]\(([^)#][^)]*)\)/g)) {
-                const target = match[1].split('#')[0];
-                if (target.length === 0 || /^[a-z]+:/.test(target)) continue;
-                const resolved = resolve(dirname(file), target);
-                if (!existsSync(resolved)) broken.push(file + ' -> ' + target);
-              }
-            }
-            if (broken.length > 0) throw new Error('broken links:\n' + broken.join('\n'));
-            console.log(files.length + ' documents checked, every internal link resolves');
-          "
+        run: node scripts/check-doc-links.mjs
