@@ -65,6 +65,8 @@ const blockedDeepAgentsRecord = readFileSync(
 );
 const passed091RecordPath = 'docs/research/1642f0f6-passed-blind-evaluation.md';
 const passed091Record = readFileSync(join(repositoryRoot, passed091RecordPath), 'utf8');
+const passed092RecordPath = 'docs/research/fdb11aa-passed-blind-evaluation.md';
+const passed092Record = readFileSync(join(repositoryRoot, passed092RecordPath), 'utf8');
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
   readonly scripts: Readonly<Record<string, string>>;
 };
@@ -1157,6 +1159,63 @@ describe('the frozen pre-release blind evaluation protocol', () => {
       entries.some(
         (entry) =>
           entry.name === 'agentport' || entry.url === 'https://github.com/omrgpt/agentport.git',
+      ),
+      false,
+    );
+  });
+
+  it('preserves the exact passing 0.9.2 candidate, pair, results and bounded runtime refusal', () => {
+    for (const fact of [
+      'fdb11aa207039252524aca368164a00d31b283b8',
+      '35b1017b862aeae741e81440f49dc2f58a8d0f75',
+      'f8debfc991451547349feb6d980579220e8c18dae1d4fdb94af4939102f434c1',
+      'https://github.com/Dmitry9/docent',
+      'f8a44120b928f04e9e5a0ac507362efc8647e627',
+      '767d80ec8d0faac113e8d440749117622ad6e5ec',
+      '23b95ef6133b01d2a5e8133a003fcbfa3fdfd0676c4cdbc41d95b6c606570d9e',
+      'https://github.com/heswithme/claude-usage-analyzer',
+      '25eed40f95b8fa4eaf602a133f7060467d6e97c2',
+      '1af2242ad8c270d1ab626e9bac251b7ef1cb5948',
+      '32f3fd0d44f3055c8b946f6d19f4de2b0f2b5aad7613b3c2fd8041ea80e5bfc6',
+      '19e2c9348f0e30a44aac76069604c180c2fda5b3eb7eafe6a312ddeeb842656f',
+    ]) {
+      assert.ok(passed092Record.includes(fact), `0.9.2 passed record omitted ${fact}`);
+    }
+    assert.match(passed092Record, /release decision was \*\*PASS\*\*/);
+    assert.match(passed092Record, /`agentSystemDetected: true` with 3 static-only components/);
+    assert.match(passed092Record, /2 source-cited relations/);
+    assert.match(passed092Record, /source-located refusal at `src\/docent\/agent\.py:5`/);
+    assert.match(passed092Record, /all 9\/9 eligible required records/);
+    assert.match(passed092Record, /`agentSystemDetected: false` with 2 static-only components/);
+    assert.match(passed092Record, /unresolved-host-fetch_pricing/);
+    assert.match(passed092Record, /No target runtime was executed/);
+    assert.ok(passed092Record.includes('`ANTHROPIC_API_KEY`'), '0.9.2 passed record omitted key');
+    assert.match(
+      passed092Record,
+      /Credentials, model output, external side effects and substitute execution were not guessed/,
+    );
+    assert.doesNotMatch(
+      passed092Record,
+      /\/Users\/|\/tmp\/|orchescope-blind-|\brun_[0-9a-f]{8}|\bev_[0-9a-f]{8}|traceId|spanId/,
+    );
+  });
+
+  it('promotes only docent and permanently retires both passing 0.9.2 lineages', () => {
+    assert.match(
+      passed092Record,
+      /Both selected repositories and their source lineages are permanently ineligible as blind holdouts at any revision/,
+    );
+    assert.match(passed092Record, /different unseen positive and negative pair/);
+    assert.ok(protocol.includes('../research/fdb11aa-passed-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/fdb11aa-passed-blind-evaluation.md'));
+
+    const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
+    assert.equal(entries.filter((entry) => entry.name === 'docent').length, 1);
+    assert.equal(
+      entries.some(
+        (entry) =>
+          entry.name === 'claude-usage-analyzer' ||
+          entry.url === 'https://github.com/heswithme/claude-usage-analyzer.git',
       ),
       false,
     );

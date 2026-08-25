@@ -127,6 +127,11 @@ exposed a silent imported construction. The used positive is pinned as an `agent
 repeats an exact read-only SQLite URI already held elsewhere and adds no corpus entry. Those lineages, and the 0.9.1
 passing pair, cannot be reused as unseen holdouts for 0.9.2.
 
+The [passed fdb11aa evaluation](../research/fdb11aa-passed-blind-evaluation.md) records the completed passing gate for
+the frozen 0.9.2 artifact. Its positive is pinned as an exact Pydantic AI agent, tool, prompt, relation and
+bounded-refusal regression; its negative adds no duplicate precision entry; and neither lineage can be reused as an
+unseen holdout.
+
 `pnpm package` writes `release/release-summary.json`. Read it rather than trusting the exit code:
 
 | Field | What it has to say |
