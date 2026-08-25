@@ -174,4 +174,26 @@ describe('the refusal', () => {
     const rendered = lines(empty, 120, true);
     assert.ok(rendered.some((line) => line.startsWith('adapters')));
   });
+
+  it('does not treat an unclaimed imported construction as an empty repository', () => {
+    const unread = auditResult({
+      projectName: 'unclaimed-factory',
+      componentCount: 0,
+      componentKinds: {},
+      edgeCount: 0,
+      agentSystemDetected: false,
+      coverage: coverage({
+        unsupported: [
+          {
+            area: 'unknown_agents.Factory is constructed at src/app.py:3 and no adapter claims that distribution',
+            kind: 'unclaimed_imported_construction',
+            reason: 'an imported construction no adapter claims',
+          },
+        ],
+      }),
+    });
+    const rendered = lines(unread, 80);
+    assert.match(rendered[2] ?? '', /did not recognise an imported construction/);
+    assert.doesNotMatch(rendered.join('\n'), /No agent system was detected/);
+  });
 });

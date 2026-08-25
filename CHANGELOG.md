@@ -2,6 +2,18 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
+## 0.9.2
+
+Unreleased. Discovery now records an imported construction whose distribution no adapter claims when the call
+carries both a tools-shaped argument and a model-shaped argument. The graph still does not invent an agent
+identity from those names, from `Agent`, or from `CodeAgent`. The terminal document no longer says "no agent
+system was detected" for that case: adapter silence is a coverage fact, not an empty repository.
+
+A post-publication acceptance check of 0.9.1 against an independently selected holdout produced a silent false
+negative of that shape. This release generalizes the coverage boundary rather than adding a framework adapter
+for the target that exposed it. Claimed frameworks stay on `adapter_found_nothing`. Local modules, type-only
+imports, test files, model-identifier wrappers and OpenAI-style tool-schema payloads stay quiet.
+
 ## 0.9.1
 
 Unreleased. `orchescope@0.9.1` is not on the registry and carries no registry attestation. The first frozen candidate,

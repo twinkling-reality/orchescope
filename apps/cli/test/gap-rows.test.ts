@@ -107,6 +107,21 @@ describe('an area no adapter models', () => {
    * still carries it. Accepted for reading and never emitted, so it has to render rather than fall
    * through to the unnamed case, which would tell a reader less than the document holds.
    */
+  it('renders an unclaimed imported construction as unread', () => {
+    assert.deepEqual(
+      render({
+        unsupported: [
+          {
+            area: 'unknown_agents.Factory at src/app.py:3',
+            kind: 'unclaimed_imported_construction',
+            reason: 'an imported construction no adapter claims',
+          },
+        ] as never,
+      }),
+      ['gap             . unread     unknown_agents.Factory at src/app.py:3'],
+    );
+  });
+
   it('renders the name this build no longer writes', () => {
     assert.deepEqual(
       render({

@@ -177,6 +177,9 @@ const sourceRows = (
  *
  * The adapters that ran are named on the row below this, so a reader who wants to know what was looked
  * for has it. This says only that none of them recognised anything.
+ *
+ * That sentence is withheld when a parsed imported construction sat on nobody's claim list. Adapter
+ * silence is then a coverage fact, not an empty repository, and the line has to say so.
  */
 const NOT_DETECTED_VARIANTS: readonly string[] = [
   'No agent system was detected: no adapter here recognised an agent, a model call, a tool or an MCP server.',
@@ -184,12 +187,26 @@ const NOT_DETECTED_VARIANTS: readonly string[] = [
   'No agent system was detected.',
 ];
 
-const notDetectedCaveat = (layout: Layout): Row => ({
-  kind: 'caveat',
-  text:
-    NOT_DETECTED_VARIANTS.find((variant) => visibleWidth(variant) <= layout.effective) ??
-    (NOT_DETECTED_VARIANTS[NOT_DETECTED_VARIANTS.length - 1] as string),
-});
+const UNCLAIMED_CONSTRUCTION_VARIANTS: readonly string[] = [
+  'This build did not recognise an imported construction in this repository, and it does not treat that silence as an empty agent system.',
+  'This build did not recognise an imported construction, and it does not treat that silence as an empty agent system.',
+  'This build did not recognise an imported construction.',
+];
+
+const caveatVariants = (coverage: Coverage): readonly string[] =>
+  coverage.unsupported.some((area) => area.kind === 'unclaimed_imported_construction')
+    ? UNCLAIMED_CONSTRUCTION_VARIANTS
+    : NOT_DETECTED_VARIANTS;
+
+const notDetectedCaveat = (coverage: Coverage, layout: Layout): Row => {
+  const variants = caveatVariants(coverage);
+  return {
+    kind: 'caveat',
+    text:
+      variants.find((variant) => visibleWidth(variant) <= layout.effective) ??
+      (variants[variants.length - 1] as string),
+  };
+};
 
 const adapterRoster = (coverage: Coverage, layout: Layout): Row | null => {
   const ran = coverage.adapters.filter((adapter) => adapter.status !== 'not_applicable');
@@ -217,7 +234,7 @@ export const sourceRegion = (
 ): Region => {
   const rows = sourceRows(result, layout, bold, verbose);
   if (result.agentSystemDetected) return rows;
-  const caveat = notDetectedCaveat(layout);
+  const caveat = notDetectedCaveat(result.graph.coverage, layout);
   if (!verbose) return [...rows, caveat];
   const roster = adapterRoster(result.graph.coverage, layout);
   return roster === null ? [...rows, caveat] : [...rows, caveat, roster];

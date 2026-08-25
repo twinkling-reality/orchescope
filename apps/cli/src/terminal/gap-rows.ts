@@ -52,6 +52,7 @@ const UNSUPPORTED_STATE: Readonly<Record<string, string>> = {
   adapter_found_nothing: '. unread',
   // The name this build no longer writes, still rendered so a report stored by an earlier one reads.
   adapter_blind_spot: '. unread',
+  unclaimed_imported_construction: '. unread',
   discarded_relation: '. discarded',
   topology_incomplete: '. incomplete',
   excluded_from_analysis: '. excluded',

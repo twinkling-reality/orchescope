@@ -64,6 +64,7 @@ import { moduleMatches } from './matching.ts';
 import { createPromptInputRegistry } from './prompt-input.ts';
 import { DEFAULT_ADAPTERS } from './registry.ts';
 import { buildSymbolIndex } from './symbol-index.ts';
+import { findUnclaimedImportedConstructions } from './unclaimed-imported-construction.ts';
 
 /**
  * The static discovery pipeline.
@@ -169,6 +170,9 @@ const distributionOf = (specifier: string): string => {
  * not the OpenAI Agents SDK, and counting it here is how a pinned entry came to report a framework gap that does
  * not exist against a repository declaring no such distribution anywhere. This asks the same question
  * `projectUses` asks before an adapter runs at all, so the claim and the decision to run now agree.
+ *
+ * A distribution nobody claims never enters this path. That case is `unclaimed_imported_construction`, which
+ * records the parsed call rather than letting every adapter's `not_applicable` read as an empty repository.
  */
 const adaptersThatFoundNothing = (
   adapters: readonly AgentSystemAdapter[],
@@ -624,6 +628,23 @@ const aggregateTopology = (
   };
 };
 
+const coverageUnsupported = (
+  fileSet: ReturnType<typeof collectFiles>,
+  adapters: readonly AgentSystemAdapter[],
+  adapterRuns: readonly AdapterRun[],
+  modules: readonly ModuleFacts[],
+  topology: TopologyCoverage | undefined,
+): readonly UnsupportedArea[] => [
+  ...unsupportedAreas(fileSet.extensionCounts),
+  ...excludedTrackedSource(fileSet.excludedTracked),
+  ...findUnclaimedImportedConstructions({
+    modules,
+    claimedPackages: [...new Set(adapters.flatMap((adapter) => adapter.packages))],
+  }),
+  ...adaptersThatFoundNothing(adapters, adapterRuns, modules),
+  ...incompleteTopologyArea(topology),
+];
+
 const incompleteTopologyArea = (topology: TopologyCoverage | undefined): UnsupportedArea[] => {
   if (topology === undefined || topology.status === 'complete') return [];
   const promptOnly = controlFlowTopologyComplete(topology);
@@ -873,12 +894,7 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
     languages: [...analysis.languages],
     adapters: adapterRuns,
     ...(topology === undefined ? {} : { topology }),
-    unsupported: [
-      ...unsupportedAreas(fileSet.extensionCounts),
-      ...excludedTrackedSource(fileSet.excludedTracked),
-      ...adaptersThatFoundNothing(adapters, adapterRuns, analysis.facts),
-      ...incompleteTopologyArea(topology),
-    ],
+    unsupported: coverageUnsupported(fileSet, adapters, adapterRuns, analysis.facts, topology),
     durationMs: request.clock.monotonicMs() - startedAtMs,
     /*
      * A named configuration kind past its cap cut the scan short as surely as the traversal's file limit did,

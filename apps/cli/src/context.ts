@@ -11,7 +11,7 @@ import { createStyle, detectStyleMode, type Style } from './terminal/style.ts';
  * setting variables or attaching a terminal.
  */
 
-export const ORCHESCOPE_VERSION = '0.9.1';
+export const ORCHESCOPE_VERSION = '0.9.2';
 
 export type GlobalOptions = {
   readonly cwd?: string;
