@@ -165,5 +165,18 @@
       "uses_prompt": 2
     },
     "total": 104
-  }
+  },
+  "unclaimedImportedConstructions": [
+    "further unclaimed imported constructions were found and are omitted from this sample",
+    "langchain_anthropic.ChatAnthropic is constructed at libs/cli/examples/graphs/agent.py:14 and no adapter claims that distribution",
+    "langchain_anthropic.ChatAnthropic is constructed at libs/cli/examples/graphs_reqs_a/graphs_submod/agent.py:15 and no adapter claims that distribution",
+    "langchain_anthropic.ChatAnthropic is constructed at libs/cli/examples/graphs_reqs_b/graphs_submod/agent.py:15 and no adapter claims that distribution",
+    "langchain_core.ToolMessage is constructed at libs/cli/examples/graphs/storm.py:344 and no adapter claims that distribution",
+    "langchain_core.ToolMessage is constructed at libs/prebuilt/langgraph/prebuilt/tool_node.py:1007 and no adapter claims that distribution",
+    "langchain_core.ToolMessage is constructed at libs/prebuilt/langgraph/prebuilt/tool_node.py:1062 and no adapter claims that distribution",
+    "langchain_core.ToolMessage is constructed at libs/prebuilt/langgraph/prebuilt/tool_node.py:1154 and no adapter claims that distribution",
+    "langchain_core.ToolMessage is constructed at libs/prebuilt/langgraph/prebuilt/tool_node.py:1217 and no adapter claims that distribution",
+    "langgraph_api.swr is constructed at libs/sdk-py/langgraph_sdk/cache.py:141 and no adapter claims that distribution",
+    "pydantic.create_model is constructed at libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:730 and no adapter claims that distribution"
+  ]
 }

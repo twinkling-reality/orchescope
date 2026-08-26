@@ -156,5 +156,8 @@
       "transitions_to": 16
     },
     "total": 38
-  }
+  },
+  "unclaimedImportedConstructions": [
+    "langchain_core.ChatPromptTemplate is constructed at outline_generator1.py:358 and no adapter claims that distribution"
+  ]
 }

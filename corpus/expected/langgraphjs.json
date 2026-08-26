@@ -157,5 +157,18 @@
       "transitions_to": 24
     },
     "total": 120
-  }
+  },
+  "unclaimedImportedConstructions": [
+    "@langchain/anthropic.ChatAnthropic is constructed at examples/streaming/src/agents/shared.ts:13 and no adapter claims that distribution",
+    "@langchain/anthropic.ChatAnthropic is constructed at examples/ui-react/src/agents/shared.ts:12 and no adapter claims that distribution",
+    "@langchain/langgraph-sdk.flushPendingHeadlessToolInterrupts is constructed at libs/sdk-angular/src/use-stream.ts:643 and no adapter claims that distribution",
+    "@langchain/langgraph-sdk.flushPendingHeadlessToolInterrupts is constructed at libs/sdk-react/src/use-stream.ts:696 and no adapter claims that distribution",
+    "@langchain/langgraph-sdk.flushPendingHeadlessToolInterrupts is constructed at libs/sdk-svelte/src/use-stream.svelte.ts:625 and no adapter claims that distribution",
+    "@langchain/openai.ChatOpenAI is constructed at examples/ai-elements/agent.ts:62 and no adapter claims that distribution",
+    "@langchain/openai.ChatOpenAI is constructed at examples/assistant-ui-claude/agent.ts:5 and no adapter claims that distribution",
+    "@langchain/openai.ChatOpenAI is constructed at examples/sql-agent/sql_agent.ts:89 and no adapter claims that distribution",
+    "@langchain/quickjs.createCodeInterpreterMiddleware is constructed at examples/ui-react/src/agents/fan-out.ts:61 and no adapter claims that distribution",
+    "@langchain/react.useStream is constructed at examples/ui-react/src/views/HeadlessToolsView.tsx:36 and no adapter claims that distribution",
+    "further unclaimed imported constructions were found and are omitted from this sample"
+  ]
 }

@@ -160,5 +160,11 @@
       "served_by_provider": 2
     },
     "total": 7
-  }
+  },
+  "unclaimedImportedConstructions": [
+    "langchain_core.ToolMessage is constructed at src/open_deep_research/deep_researcher.py:276 and no adapter claims that distribution",
+    "langchain_core.ToolMessage is constructed at src/open_deep_research/deep_researcher.py:309 and no adapter claims that distribution",
+    "langchain_core.ToolMessage is constructed at src/open_deep_research/deep_researcher.py:317 and no adapter claims that distribution",
+    "langchain_core.ToolMessage is constructed at src/open_deep_research/deep_researcher.py:483 and no adapter claims that distribution"
+  ]
 }

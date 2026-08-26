@@ -162,5 +162,16 @@
       "uses_prompt": 36
     },
     "total": 214
-  }
+  },
+  "unclaimedImportedConstructions": [
+    "fastembed.TextEmbedding is constructed at lib/crewai/src/crewai/rag/qdrant/config.py:38 and no adapter claims that distribution",
+    "patronus_local_evaluator_tool.PatronusLocalEvaluatorTool is constructed at lib/crewai-tools/src/crewai_tools/tools/patronus_eval_tool/example.py:37 and no adapter claims that distribution",
+    "stagehand.ActOptions is constructed at lib/crewai-tools/src/crewai_tools/tools/stagehand_tool/stagehand_tool.py:448 and no adapter claims that distribution",
+    "stagehand.ActOptions is constructed at lib/crewai-tools/src/crewai_tools/tools/stagehand_tool/stagehand_tool.py:473 and no adapter claims that distribution",
+    "stagehand.ExtractOptions is constructed at lib/crewai-tools/src/crewai_tools/tools/stagehand_tool/stagehand_tool.py:519 and no adapter claims that distribution",
+    "stagehand.ObserveOptions is constructed at lib/crewai-tools/src/crewai_tools/tools/stagehand_tool/stagehand_tool.py:534 and no adapter claims that distribution",
+    "stagehand.StagehandConfig is constructed at lib/crewai-tools/src/crewai_tools/tools/stagehand_tool/stagehand_tool.py:334 and no adapter claims that distribution",
+    "weaviate.Configure is constructed at lib/crewai-tools/src/crewai_tools/tools/weaviate_tool/vector_search.py:38 and no adapter claims that distribution",
+    "weaviate.Configure is constructed at lib/crewai-tools/src/crewai_tools/tools/weaviate_tool/vector_search.py:47 and no adapter claims that distribution"
+  ]
 }

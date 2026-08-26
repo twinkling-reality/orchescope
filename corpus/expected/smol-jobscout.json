@@ -150,6 +150,9 @@
     "total": 1
   },
   "unclaimedImportedConstructions": [
-    "smolagents.CodeAgent is constructed at src/smol_jobscout/agent.py:35 and no adapter claims that distribution"
+    "smolagents.CodeAgent is constructed at src/smol_jobscout/agent.py:35 and no adapter claims that distribution",
+    "smolagents.InferenceClientModel is constructed at src/smol_jobscout/model.py:38 and no adapter claims that distribution",
+    "smolagents.LiteLLMModel is constructed at src/smol_jobscout/model.py:19 and no adapter claims that distribution",
+    "smolagents.TransformersModel is constructed at src/smol_jobscout/model.py:30 and no adapter claims that distribution"
   ]
 }

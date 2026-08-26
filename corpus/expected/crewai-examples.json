@@ -162,5 +162,11 @@
       "uses_prompt": 189
     },
     "total": 213
-  }
+  },
+  "unclaimedImportedConstructions": [
+    "langchain_community.FileManagementToolkit is constructed at crews/landing_page_generator/src/landing_page_generator/crew.py:124 and no adapter claims that distribution",
+    "langchain_community.FileManagementToolkit is constructed at crews/landing_page_generator/src/landing_page_generator/crew.py:73 and no adapter claims that distribution",
+    "langchain_nvidia_ai_endpoints.ChatNVIDIA is constructed at integrations/nvidia_models/intro/main.py:120 and no adapter claims that distribution",
+    "langchain_nvidia_ai_endpoints.ChatNVIDIA is constructed at integrations/nvidia_models/marketing_strategy/src/marketing_posts/crew.py:20 and no adapter claims that distribution"
+  ]
 }

@@ -159,5 +159,18 @@
       "transitions_to": 3
     },
     "total": 65
-  }
+  },
+  "unclaimedImportedConstructions": [
+    "further unclaimed imported constructions were found and are omitted from this sample",
+    "judges.HaluEvalDocumentSummaryNonFactual is constructed at evals/hallucination_eval/evaluate.py:24 and no adapter claims that distribution",
+    "langchain_cohere.CohereEmbeddings is constructed at gpt_researcher/memory/embeddings.py:125 and no adapter claims that distribution",
+    "langchain_fireworks.FireworksEmbeddings is constructed at gpt_researcher/memory/embeddings.py:139 and no adapter claims that distribution",
+    "langchain_gigachat.GigaChatEmbeddings is constructed at gpt_researcher/memory/embeddings.py:143 and no adapter claims that distribution",
+    "langchain_google_genai.GoogleGenerativeAIEmbeddings is constructed at gpt_researcher/memory/embeddings.py:133 and no adapter claims that distribution",
+    "langchain_google_vertexai.VertexAIEmbeddings is constructed at gpt_researcher/memory/embeddings.py:129 and no adapter claims that distribution",
+    "langchain_huggingface.HuggingFaceEmbeddings is constructed at gpt_researcher/memory/embeddings.py:167 and no adapter claims that distribution",
+    "langchain_mistralai.MistralAIEmbeddings is constructed at gpt_researcher/memory/embeddings.py:163 and no adapter claims that distribution",
+    "langchain_netmind.NetmindEmbeddings is constructed at gpt_researcher/memory/embeddings.py:159 and no adapter claims that distribution",
+    "langchain_together.TogetherEmbeddings is constructed at gpt_researcher/memory/embeddings.py:155 and no adapter claims that distribution"
+  ]
 }

@@ -163,5 +163,9 @@
       "uses_prompt": 3
     },
     "total": 14
-  }
+  },
+  "unclaimedImportedConstructions": [
+    "claude_code_sdk.ClaudeCodeOptions is constructed at autonomous-coding/client.py:103 and no adapter claims that distribution",
+    "fastapi.JSONResponse is constructed at computer-use-best-practices/dev_ui/localization_demo/server.py:157 and no adapter claims that distribution"
+  ]
 }
