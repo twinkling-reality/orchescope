@@ -153,13 +153,6 @@ const unsupportedAreas = (
   return areas;
 };
 
-/** The top level distribution a specifier belongs to: `langgraph.func` and `langgraph/prebuilt` are both `langgraph`. */
-const distributionOf = (specifier: string): string => {
-  const [scopedOrPlain = '', scopedRest] = specifier.split('/', 2);
-  const base = specifier.startsWith('@') ? `${scopedOrPlain}/${scopedRest ?? ''}` : scopedOrPlain;
-  return (base.split('.')[0] ?? base).toLowerCase();
-};
-
 /**
  * Where an adapter claims a framework this repository uses and reads nothing from it.
  *
@@ -187,14 +180,24 @@ const adaptersThatFoundNothing = (
   modules: readonly ModuleFacts[],
 ): readonly UnsupportedArea[] => {
   const local = localModules(modules);
+  /*
+   * Whole specifiers, not distributions. Reducing an import to its distribution before comparing it to a
+   * claim throws away the granularity a claim is written at: `adapter:prompts` claims `langchain.prompts`
+   * and a repository importing `langchain.agents` was told "langchain is imported here and its adapter
+   * found nothing", which names a distribution no reader claimed and an adapter that never looked at it.
+   * `moduleMatches` is the same test `projectUses` asks before an adapter runs, so what an adapter is
+   * reported against is now what it was run against.
+   */
   const imported = new Set<string>();
   for (const module of modules) {
     for (const entry of module.imports) {
       if (entry.isType) continue;
       if (namesLocalModule(local, module, entry.module)) continue;
-      imported.add(distributionOf(entry.module));
+      imported.add(entry.module);
     }
   }
+  const claimIsUsed = (name: string): boolean =>
+    [...imported].some((specifier) => moduleMatches(specifier, [name]));
 
   const areas: UnsupportedArea[] = [];
   for (const adapter of adapters) {
@@ -204,7 +207,7 @@ const adaptersThatFoundNothing = (
     const structured = run.applicability;
     const used =
       structured === undefined
-        ? [...new Set(adapter.packages.map(distributionOf))].filter((name) => imported.has(name))
+        ? [...new Set(adapter.packages.filter(claimIsUsed))]
         : [...new Set(structured.sample.map((entry) => `${entry.module}.${entry.imported}`))];
     if (structured !== undefined && structured.relevantImports === 0) continue;
     if (used.length === 0) continue;

@@ -3618,6 +3618,41 @@ describe('an adapter that claims a framework and reads nothing from it', () => {
       (area) => area.kind === 'adapter_found_nothing',
     );
 
+  /*
+   * GUARD, and it passes on the old tree only because nothing there claimed a submodule while being
+   * applicable for another reason. The claim and the import were both reduced to their distribution before
+   * being compared, so `adapter:prompts` claiming `langchain.prompts` reported a repository importing
+   * `langchain.agents` under the name `langchain`, which no reader claims. That names a distribution
+   * nobody read and an adapter that never looked at it, in the one place a reader is told about a limit.
+   *
+   * The correction is visible where the old collapse was already lossy rather than wrong:
+   * `speechwriter-agent` read `langgraph is imported here and its adapter found nothing` and now reads
+   * `langgraph, langgraph.graph`, which is the two claims that repository actually uses instead of the one
+   * name they both reduced to.
+   */
+  it('says nothing where the claim is a submodule and the import is a sibling of it', async () => {
+    const result = await scan((workspace) => {
+      writePythonProject(workspace, {
+        name: 'sibling-submodule',
+        dependencies: ['langchain>=1.2'],
+      });
+      workspace.write(
+        'src/app.py',
+        `from langchain.agents import create_agent
+
+assistant = create_agent(model="openai:gpt-4.1-mini", tools=[], name="assistant")
+`,
+      );
+    });
+
+    assert.deepEqual(
+      blindSpots(result)
+        .map((area) => area.area)
+        .filter((area) => area.startsWith('langchain is imported')),
+      [],
+    );
+  });
+
   it('reports the framework and the adapter rather than saying nothing was found', async () => {
     // LangGraph's functional API. The adapter reads graphs and prebuilt agents, not `@task` and `@entrypoint`.
     const result = await scan((workspace) => {
