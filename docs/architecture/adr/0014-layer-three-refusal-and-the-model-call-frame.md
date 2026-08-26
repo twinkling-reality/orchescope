@@ -98,11 +98,14 @@ and `ROW_CEILING = 4` in the terminal, where unsupported rows rank fourth of six
 `reason` carries the paragraph and every count, because the corpus observation records `area` and a count
 in that string makes the largest entries churn on unrelated edits.
 
-The third ceiling is **not** closed. `ROW_CEILING` still collapses the overflow to a count of kinds rather
-than naming them, so a located refusal that survives the discovery sample and the per-distribution sample
-can still be replaced by `N more kinds of gap, in the report` when a repository already has a failed
-adapter, a truncated scan and a skipped file. Naming the dropped kinds in that row is the remedy and it is
-not written.
+The third ceiling is closed. The overflow row named nothing, so a located refusal that survived the
+discovery sample and the per-distribution sample could still be replaced by `N more kinds of gap, in the
+report` on a repository that already had a failed adapter, a truncated scan and a skipped file. It now
+names the states it dropped: `crewai` reads `11 more, in the report: unread, incomplete, unparsed and 1
+more` where it read `11 more kinds of gap, in the report`. The four-row bound and the deliberate priority
+order are unchanged, and the naming stops at the same three the skipped reasons stop at, because all nine
+states at once is eighty five characters beside the key column and the frame would cut the last of them
+mid-word.
 
 ### 3. A model call site is an inferred entry point, not an agent
 
