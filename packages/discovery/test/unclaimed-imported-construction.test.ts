@@ -637,6 +637,44 @@ crew = nvllm(model='meta/llama3')
     assert.deepEqual(unclaimed(result), []);
   });
 
+  /*
+   * FALSIFIER. `definedPackages` is built from the basename of each directory that holds a `.py` file, so a
+   * package directory holding only other package directories never enters it and the head segment answers
+   * nothing. `tubemind` writes `skills/watch/scripts/*.py` and nothing directly under `skills/`, and
+   * `from skills.watch.scripts import export` was read as a distribution named `skills`: the refusal named
+   * the repository to itself.
+   */
+  it('is local when its own directory holds no file and only other directories', async () => {
+    const result = await scan({
+      'skills/watch/scripts/export.py': 'def to_obsidian(embed_model):\n    return embed_model\n',
+      'skills/watch/scripts/ingest.py': `from skills.watch.scripts import export as export_mod
+
+export_mod.to_obsidian(embed_model='nomic')
+`,
+    });
+
+    assert.deepEqual(unclaimed(result), []);
+  });
+
+  /*
+   * GUARD. The chain is asked of the filesystem and never of a name, so a distribution whose dotted
+   * spelling happens to look like a directory chain this repository does not hold is still a distribution.
+   */
+  it('still records a dotted distribution whose chain this repository does not hold', async () => {
+    const result = await scan({
+      'skills/watch/scripts/agent.py': `from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
+llm = ChatNVIDIA(model='meta/llama3')
+`,
+    });
+
+    assert.equal(unclaimed(result).length, 1);
+    assert.equal(
+      unclaimed(result)[0]?.area,
+      'langchain_nvidia_ai_endpoints.ChatNVIDIA is constructed at skills/watch/scripts/agent.py:3 and no adapter claims that distribution',
+    );
+  });
+
   it('still records a distribution that only resembles a directory this repository holds', async () => {
     const result = await scan({
       'src/smol_jobscout/model.py': `from smolagents import LiteLLMModel

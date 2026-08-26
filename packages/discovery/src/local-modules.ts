@@ -65,6 +65,20 @@ export type LocalModules = {
    * `computer_use_demo` are imported by the files beside them.
    */
   readonly definedPackages: ReadonlySet<string>;
+  /**
+   * Every directory of the scanned tree that leads to a Python file, by its repository relative path.
+   *
+   * `definedPackages` asks one question about one segment, and it cannot see a package whose own directory
+   * holds no `.py` file of its own. `tubemind` writes `skills/watch/scripts/*.py` and nothing directly under
+   * `skills/`, so `from skills.watch.scripts import export` was read as a third party distribution called
+   * `skills`, and the refusal named the repository to itself.
+   *
+   * This asks the filesystem instead of a name: does the tree contain the directory chain the specifier
+   * spells. It is exact and it is narrow. `mcp.server.fastmcp` on a repository holding `src/agents/mcp/`
+   * does not match, because that tree has no `mcp/server/fastmcp` in it, which is the answer a head segment
+   * cannot give.
+   */
+  readonly moduleDirectories: ReadonlySet<string>;
 };
 
 /**
@@ -83,6 +97,25 @@ const definedPackagesIn = (modules: readonly ModuleFacts[]): ReadonlySet<string>
     if (name.length > 0) names.add(name);
   }
   return names;
+};
+
+/**
+ * Every directory a Python file sits under, and every directory above it.
+ *
+ * The ancestors are the point. A package directory that holds only other package directories is still a
+ * package this repository writes, and it is the one `definedPackagesIn` cannot see.
+ */
+const moduleDirectoriesIn = (modules: readonly ModuleFacts[]): ReadonlySet<string> => {
+  const directories = new Set<string>();
+  for (const module of modules) {
+    if (module.language !== 'python' || !module.file.endsWith('.py')) continue;
+    let directory = directoryOf(module.file);
+    while (directory.length > 0 && !directories.has(directory)) {
+      directories.add(directory);
+      directory = directoryOf(directory);
+    }
+  }
+  return directories;
 };
 
 const INDEXES = new WeakMap<readonly ModuleFacts[], LocalModules>();
@@ -121,7 +154,12 @@ export const localModules = (modules: readonly ModuleFacts[]): LocalModules => {
     if (!packageDirectories.has(directory)) neighbours.add(neighbourKey(directory, moduleName));
   }
 
-  const index = { roots, neighbours, definedPackages: definedPackagesIn(modules) };
+  const index = {
+    roots,
+    neighbours,
+    definedPackages: definedPackagesIn(modules),
+    moduleDirectories: moduleDirectoriesIn(modules),
+  };
   INDEXES.set(modules, index);
   return index;
 };
@@ -147,13 +185,28 @@ export const namesLocalModule = (
 };
 
 /**
- * Whether this specifier could name a package this repository defines, read from its first segment.
+ * Whether this specifier could name a package this repository defines.
  *
- * Only the head is asked, because `open_deep_research.prompts` and `computer_use_demo.loop` are modules
- * inside a package this repository writes, and the package is what decides the owner. Read only by the
- * unclaimed-construction refusal, for the reason `definedPackages` states.
+ * Two questions, and the second exists because the first cannot reach a package whose own directory holds
+ * no file. The head segment is asked against `definedPackages`, because `open_deep_research.prompts` and
+ * `computer_use_demo.loop` are modules inside a package this repository writes and the package decides the
+ * owner. The whole dotted chain is then asked of the tree, because `skills.watch.scripts` names three
+ * nested directories a repository holds and the head of it names nothing at all.
+ *
+ * The chain is matched at a segment boundary so that a package reached through a project directory answers
+ * too: `marketing_posts.llm` is `src/marketing_posts/llm`. It is a question about the filesystem and never
+ * about a name, which is what keeps it provenance. Read only by the unclaimed-construction refusal, for the
+ * reason `definedPackages` states.
  */
 export const namesDefinedPackage = (local: LocalModules, specifier: string): boolean => {
   const [head = specifier] = specifier.split('.', 1);
-  return local.definedPackages.has(head);
+  if (local.definedPackages.has(head)) return true;
+  if (!specifier.includes('.')) return false;
+  const chain = specifier.split('.').join('/');
+  if (local.moduleDirectories.has(chain)) return true;
+  const suffix = `/${chain}`;
+  for (const directory of local.moduleDirectories) {
+    if (directory.endsWith(suffix)) return true;
+  }
+  return false;
 };
