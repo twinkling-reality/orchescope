@@ -323,6 +323,47 @@ spec = dataclasses.replace(base, model='gpt-4o', tools=[search])
     assert.deepEqual(unclaimed(result), []);
   });
 
+  /*
+   * FALSIFIER. The legacy LangChain agent reader matches `@tool` decorators against `langchain_core.tools`
+   * at two call sites and claimed only `langchain`, and `moduleMatches` needs an exact name or a `name/`
+   * or `name.` prefix, so a distribution normalised from `langchain-core` never met the claim. The reader
+   * was saying it does not read a name it reads.
+   *
+   * The construction here is deliberately synthetic: no repository in the pinned corpus constructs anything
+   * from that submodule with a model, tool or prompt stemmed argument, which is why the corpus does not
+   * move. What is under test is the ownership answer, not a shape anybody writes.
+   *
+   * Only the submodule is claimed. `langchain_core.messages.ToolMessage` is constructed on three pinned
+   * repositories and read by nothing, and claiming the distribution whole would silence all thirteen of
+   * those, which is manufactured silence rather than a correction. The guard below holds that line.
+   */
+  it('leaves the submodule a reader matches against to that reader', async () => {
+    const result = await scan({
+      'src/app.py': `from langchain_core.tools import StructuredTool
+
+runner = StructuredTool(model='gpt-4o')
+`,
+    });
+
+    assert.deepEqual(unclaimed(result), []);
+  });
+
+  /* GUARD. A sibling submodule nothing reads stays unclaimed, so the claim corrects an owner rather than buying silence. */
+  it('still records a sibling submodule no reader matches against', async () => {
+    const result = await scan({
+      'src/app.py': `from langchain_core.messages import ToolMessage
+
+message = ToolMessage(content='x', tool_call_id='1')
+`,
+    });
+
+    assert.equal(unclaimed(result).length, 1);
+    assert.equal(
+      unclaimed(result)[0]?.area,
+      'langchain_core.ToolMessage is constructed at src/app.py:3 and no adapter claims that distribution',
+    );
+  });
+
   it('leaves a bare Node builtin to the runtime', async () => {
     const result = await scan({
       'package.json': '{ "name": "fixture", "version": "1.0.0", "type": "module" }',

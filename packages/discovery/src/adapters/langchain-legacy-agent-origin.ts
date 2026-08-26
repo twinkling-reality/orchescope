@@ -5,7 +5,23 @@ import { matchRuntimeSymbol } from '../matching.ts';
 
 export const LANGCHAIN_LEGACY_AGENT_ADAPTER_ID = 'adapter:langchain-legacy-agent';
 export const LANGCHAIN_LEGACY_AGENT_MODULE = 'langchain.agents';
-export const LANGCHAIN_LEGACY_AGENT_PACKAGES = ['langchain'] as const;
+/**
+ * The distributions this reader claims, which is a statement about what it reads and not about applicability.
+ *
+ * `langchain_core.tools` is here because this adapter matches `@tool` decorators against it at two call
+ * sites and has always done so, while claiming only `langchain`. `moduleMatches` needs an exact name or a
+ * `name/` or `name.` prefix, and `langchain-core` is a separate distribution on PyPI rather than a sub-path
+ * of `langchain`, so the two never met. The consequence was that a construction this reader inspects landed
+ * in the unclaimed-construction refusal list, which is the reader saying it does not read a name it does
+ * read.
+ *
+ * Only the submodule, and only the one that is read. Claiming `langchain_core` whole silences thirteen
+ * `langchain_core.messages.ToolMessage` constructions across three pinned repositories that no reader
+ * touches, which manufactures the silence the refusal exists to remove. This adapter declares structured
+ * applicability, so this list feeds `claimedPackages` and nothing else: it can mint no component and change
+ * no adapter's applicability. Measured over all fifty six pinned repositories, it moves none of them.
+ */
+export const LANGCHAIN_LEGACY_AGENT_PACKAGES = ['langchain', 'langchain_core.tools'] as const;
 export const LANGCHAIN_LEGACY_FACTORY_EXPORT = 'create_openai_tools_agent';
 export const LANGCHAIN_LEGACY_EXECUTOR_EXPORT = 'AgentExecutor';
 
