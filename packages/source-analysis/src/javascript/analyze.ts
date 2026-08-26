@@ -1603,6 +1603,24 @@ const classScopeName = (node: Node, frame: Frame): string | undefined => {
   return frame.name === undefined ? declaredId : `${frame.name}.${declaredId}`;
 };
 
+/**
+ * The class this one extends, as the dotted name the source wrote.
+ *
+ * Recorded in `initializer` because that is where the Python reader already puts a base class, and the
+ * fact model exists so that one matching rule covers both ecosystems. Without it `class MyFlow extends
+ * Workflow` carried no trace of `Workflow` anywhere in `ModuleFacts`, so a framework whose declaration
+ * form is subclassing was structurally invisible in JavaScript and readable in Python.
+ *
+ * A base that is not a name, `class X extends mixin(Base)`, records nothing rather than a guess: the
+ * expression is retained as a call in its own right and the subclass relation is not what it says.
+ */
+const superClassPath = (node: Node): readonly string[] | undefined => {
+  const superClass = asNode(field(node, 'superClass'));
+  if (superClass === undefined) return undefined;
+  const path = calleePath(superClass);
+  return path.length === 0 ? undefined : [path.join('.')];
+};
+
 const recordClass = (
   node: Node,
   context: Context,
@@ -1619,7 +1637,7 @@ const recordClass = (
     async: false,
     decorators: decoratorFacts(node, context),
     location: context.index.location(context.file, node.start, node.end),
-    initializer: undefined,
+    initializer: superClassPath(node),
     enclosing: frame.name,
     ...(frame.callableLocation === undefined ? {} : { enclosingLocation: frame.callableLocation }),
     ...(frame.enclosingUnresolved === true ? { enclosingUnresolved: true } : {}),

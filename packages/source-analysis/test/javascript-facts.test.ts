@@ -7,6 +7,44 @@ const analyze = (text: string, file = 'src/agents/triage.ts') =>
   analyzeJavaScript({ file, text, contentHash: 'a'.repeat(64), language: 'typescript' });
 
 describe('javascript fact extraction', () => {
+  /**
+   * A base class is the declaration form a framework uses when it has no factory, and it was recorded in
+   * Python and dropped here. `class AgentWorkflow(Workflow)` was readable and `class MyFlow extends
+   * Workflow` left no trace of `Workflow` anywhere in the facts, so one ecosystem could be told what it
+   * was built on and the other could not.
+   */
+  it('records the class a class extends, as Python already records a base', () => {
+    const facts = analyze(`
+      import { Workflow } from 'unknown-workflows';
+      export class MyFlow extends Workflow {
+        async run(input: string) {
+          return input;
+        }
+      }
+    `);
+    const cls = facts.definitions.find((definition) => definition.kind === 'class');
+    assert.equal(cls?.name, 'MyFlow');
+    assert.deepEqual(cls?.initializer, ['Workflow']);
+  });
+
+  it('records a namespaced base class by its dotted name', () => {
+    const facts = analyze(`
+      import * as sdk from 'unknown-sdk';
+      export class MyAgent extends sdk.agents.Base {}
+    `);
+    const cls = facts.definitions.find((definition) => definition.kind === 'class');
+    assert.deepEqual(cls?.initializer, ['sdk.agents.Base']);
+  });
+
+  it('records nothing for a base that is computed rather than named', () => {
+    const facts = analyze(`
+      import { mixin, Base } from 'unknown-sdk';
+      export class MyAgent extends mixin(Base) {}
+    `);
+    const cls = facts.definitions.find((definition) => definition.kind === 'class');
+    assert.equal(cls?.initializer, undefined);
+  });
+
   it('records imports with their module, local alias and type flag', () => {
     const facts = analyze(`
       import { Agent, tool, type Tool } from '@openai/agents';

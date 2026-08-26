@@ -22,7 +22,7 @@ import { analyzePython } from './python/analyze.ts';
  * across an analyser change, because silently serving stale analysis is worse than being slow.
  */
 
-export const ANALYZER_VERSION = '25';
+export const ANALYZER_VERSION = '26';
 
 export type FactCache = {
   readonly get: (key: string) => ModuleFacts | undefined;
