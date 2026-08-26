@@ -212,7 +212,23 @@ const constructionKey = (area: UnsupportedArea): string => {
   return `${location.file}:${location.startLine}:${area.area}`;
 };
 
-type UnclaimedConstruction = { readonly exported: string; readonly namedBy: string };
+/** Whether a specifier reaches a distribution this build has no reader for. */
+const namesUnclaimedDistribution = (
+  module: ModuleFacts,
+  specifier: string,
+  local: LocalModules,
+  claimedPackages: readonly string[],
+): boolean =>
+  !namesLocalSpecifier(specifier, module.language) &&
+  !namesLocalModule(local, module, specifier) &&
+  !(module.language === 'python' && namesDefinedPackage(local, specifier)) &&
+  !moduleMatches(specifier, claimedPackages);
+
+type UnclaimedConstruction = {
+  readonly specifier: string;
+  readonly symbol: string;
+  readonly namedBy: string;
+};
 
 const unclaimedConstruction = (
   module: ModuleFacts,
@@ -223,22 +239,89 @@ const unclaimedConstruction = (
   if (call.kind !== 'call' && call.kind !== 'new') return undefined;
   const origin = call.origin;
   if (origin === undefined || origin.isType) return undefined;
-  if (
-    namesLocalSpecifier(origin.module, module.language) ||
-    namesLocalModule(local, module, origin.module) ||
-    (module.language === 'python' && namesDefinedPackage(local, origin.module))
-  ) {
-    return undefined;
-  }
-  if (moduleMatches(origin.module, claimedPackages)) return undefined;
-  const exported = constructedExportName(call);
-  if (exported === undefined) return undefined;
+  if (!namesUnclaimedDistribution(module, origin.module, local, claimedPackages)) return undefined;
+  const symbol = constructedExportName(call);
+  if (symbol === undefined) return undefined;
   const entries = objectEntries(call);
   const namedBy = constructionRole(entries);
   if (namedBy === undefined) return undefined;
   if (toolsArgumentLooksLikeJsonSchemas(entries)) return undefined;
   if (looksLikeADeclarationBuilder(call, entries)) return undefined;
-  return { exported, namedBy };
+  return { specifier: origin.module, symbol, namedBy };
+};
+
+const unclaimedReceiverCall = (
+  module: ModuleFacts,
+  call: CallFact,
+  receivers: ReadonlyMap<string, string>,
+  local: LocalModules,
+  claimedPackages: readonly string[],
+): UnclaimedConstruction | undefined => {
+  if (call.kind !== 'call' || call.origin !== undefined) return undefined;
+  if (call.calleePath.length < 2) return undefined;
+  const receiver = call.calleePath.slice(0, -1).join('.');
+  const specifier = receivers.get(receiver);
+  if (specifier === undefined) return undefined;
+  if (!namesUnclaimedDistribution(module, specifier, local, claimedPackages)) return undefined;
+  const entries = objectEntries(call);
+  const namedBy = constructionRole(entries);
+  if (namedBy === undefined) return undefined;
+  if (toolsArgumentLooksLikeJsonSchemas(entries)) return undefined;
+  const method = call.calleePath[call.calleePath.length - 1];
+  if (method === undefined) return undefined;
+  return { specifier, symbol: `${receiver}.${method}`, namedBy };
+};
+
+/**
+ * A call on something this repository built out of an unclaimed distribution and kept.
+ *
+ * `this.ollama = new Ollama({ host })` then `this.ollama.chat({ model, messages })` is a hand written
+ * agent loop, and the second line carries no `origin` at all: the callee is a member of an object, not an
+ * imported name, so every net keyed on an import walks past it. The 0.9.2 acceptance check recorded that
+ * as two silent misses in one file, and noted that the MCP half of the same repository was refused
+ * correctly while the model half said nothing.
+ *
+ * The bridge is the assignment. `AssignmentFact` carries `target: ['this', 'ollama']` and a value that is
+ * a call to `Ollama`, and `Ollama` resolves through the module's own imports to a distribution. So the
+ * receiver is named by the same provenance every other net uses, and the call is read under the same
+ * argument-name rule. Without that rule the net reads `app.get('/path', handler)` on every web framework
+ * there is: measured before it was applied, thirteen hits on one Express server and eleven across two
+ * pinned repositories, against three real ones.
+ */
+const boundReceivers = (module: ModuleFacts): ReadonlyMap<string, string> => {
+  const imported = new Map<string, string>();
+  for (const entry of module.imports) if (!entry.isType) imported.set(entry.local, entry.module);
+
+  const receivers = new Map<string, string>();
+  const bind = (target: string, builtBy: string | undefined): void => {
+    if (builtBy === undefined) return;
+    const specifier = imported.get(builtBy);
+    if (specifier !== undefined) receivers.set(target, specifier);
+  };
+
+  /* `this.ollama = new Ollama(...)`, and every later rebinding of a field or a name. */
+  for (const assignment of module.assignments) {
+    const value = assignment.value;
+    if (value === undefined || value.kind !== 'call') continue;
+    bind(assignment.target.join('.'), value.path[0]);
+  }
+  /*
+   * `const client = new Ollama(...)` at the top of a module, which is a definition rather than an
+   * assignment and is the more common of the two: a client bound once and called from every function in
+   * the file. Python writes every module level binding this way and has no other spelling for it.
+   *
+   * Only at module scope. A name bound inside a function or a class body holds that scope's working
+   * value, not a long lived client, and reading it as one attributes the call to whichever library
+   * produced the value rather than to whatever it is. Measured on the corpus before this bound was
+   * added: `const items = useMemo(...)` made `items.push(...)` a call to `react`, and a pydantic
+   * `Field(default=None)` on a class made `agent.execute_task(tools=...)` a call to `pydantic`. Both
+   * name an owner that is not the owner, which is the one thing this reader must not do.
+   */
+  for (const definition of module.definitions) {
+    if (definition.kind !== 'variable' || definition.enclosing !== undefined) continue;
+    bind(definition.name, definition.initializer?.[0]);
+  }
+  return receivers;
 };
 
 /**
@@ -253,16 +336,15 @@ const areaFor = (
   module: ModuleFacts,
   call: CallFact,
   construction: UnclaimedConstruction,
-): UnsupportedArea | undefined => {
-  const origin = call.origin;
-  if (origin === undefined) return undefined;
-  const { exported, namedBy } = construction;
-  const distribution = distributionOf(origin.module);
+): UnsupportedArea => {
+  const { specifier, symbol, namedBy } = construction;
+  const distribution = distributionOf(specifier);
+  const called = call.origin === undefined;
   const fileHash = module.contentHash as Sha256Hex;
   return {
-    area: `${distribution}.${exported} is constructed at ${module.file}:${call.location.startLine} and no adapter claims that distribution`,
+    area: `${distribution}.${symbol} is ${called ? 'called' : 'constructed'} at ${module.file}:${call.location.startLine} and no adapter claims that distribution`,
     kind: 'unclaimed_imported_construction',
-    reason: `${origin.module}.${exported} is imported from a distribution no adapter claims and is constructed with an argument named ${namedBy}. This build does not treat that silence as an empty repository, and it does not invent an agent identity from that argument name.`,
+    reason: `${specifier}.${symbol} ${called ? 'is called on a value this repository built from a distribution no adapter claims' : 'is imported from a distribution no adapter claims and is constructed'} with an argument named ${namedBy}. This build does not treat that silence as an empty repository, and it does not invent an agent identity from that argument name.`,
     remediation:
       'Declare the components in .orchescope/manifest.yaml so they appear in the graph. If the repository does declare components in source, report the form so an adapter can read it.',
     location: {
@@ -291,17 +373,31 @@ const areaFor = (
  * gets the full sample rather than being punished for the fairness the first pass buys. Both passes keep
  * the sorted order, so the sample is a subsequence of the whole and two scans of one commit agree.
  */
-const sampled = (
-  found: readonly { readonly distribution: string; readonly area: UnsupportedArea }[],
-): readonly UnsupportedArea[] => {
+type FoundArea = {
+  readonly distribution: string;
+  readonly called: boolean;
+  readonly area: UnsupportedArea;
+};
+
+const sampled = (found: readonly FoundArea[]): readonly UnsupportedArea[] => {
   const takenFrom = new Map<string, number>();
   const kept = new Set<UnsupportedArea>();
-  for (const entry of found) {
-    if (kept.size >= SAMPLE_CEILING) break;
-    const taken = takenFrom.get(entry.distribution) ?? 0;
-    if (taken >= SITES_PER_DISTRIBUTION) continue;
-    takenFrom.set(entry.distribution, taken + 1);
-    kept.add(entry.area);
+
+  /*
+   * Constructions before calls, because a construction says what was built and a call says what was done
+   * with it, and the first is what a reader needs to go and look at. Measured: without the ordering, one
+   * `llm.bindTools` call evicted the `new ChatOpenAI()` two hundred lines above it that produced `llm`,
+   * because the per-distribution share is filled in the sorted order and `:171` sorts before `:89`.
+   */
+  for (const constructionsFirst of [true, false]) {
+    for (const entry of found) {
+      if (entry.called === constructionsFirst) continue;
+      if (kept.size >= SAMPLE_CEILING) break;
+      const taken = takenFrom.get(entry.distribution) ?? 0;
+      if (taken >= SITES_PER_DISTRIBUTION) continue;
+      takenFrom.set(entry.distribution, taken + 1);
+      kept.add(entry.area);
+    }
   }
   for (const entry of found) {
     if (kept.size >= SAMPLE_CEILING) break;
@@ -315,16 +411,21 @@ export const findUnclaimedImportedConstructions = (input: {
   readonly claimedPackages: readonly string[];
 }): readonly UnsupportedArea[] => {
   const local = localModules(input.modules);
-  const found: { distribution: string; area: UnsupportedArea }[] = [];
+  const found: FoundArea[] = [];
 
   for (const module of input.modules) {
     if (isTestFile(module.file)) continue;
+    const receivers = boundReceivers(module);
     for (const call of module.calls) {
-      const construction = unclaimedConstruction(module, call, local, input.claimedPackages);
+      const construction =
+        unclaimedConstruction(module, call, local, input.claimedPackages) ??
+        unclaimedReceiverCall(module, call, receivers, local, input.claimedPackages);
       if (construction === undefined) continue;
-      const area = areaFor(module, call, construction);
-      if (area === undefined) continue;
-      found.push({ distribution: distributionOf(call.origin?.module ?? ''), area });
+      found.push({
+        distribution: distributionOf(construction.specifier),
+        called: call.origin === undefined,
+        area: areaFor(module, call, construction),
+      });
     }
   }
 

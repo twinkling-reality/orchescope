@@ -611,3 +611,94 @@ model = LiteLLMModel(model_id='ollama_chat/qwen2.5')
     );
   });
 });
+
+/**
+ * A call on a value this repository built and kept.
+ *
+ * `this.ollama = new Ollama({ host })` then `this.ollama.chat({ model })` is the shape the 0.9.2
+ * acceptance check recorded as rows 11 and 12 of its silent false negatives: a complete hand written
+ * agent loop whose MCP half was refused correctly and whose model half said nothing, because the second
+ * call carries no import origin for any net to key on.
+ *
+ * All three are FALSIFIERS. The argument-name rule applies here exactly as it does to a construction,
+ * and the guard below is why: without it this net reads every web framework route registration. Measured
+ * before it was applied, thirteen hits on one Express server against three real ones in the same file.
+ */
+describe('a call on a receiver built from an unclaimed distribution', () => {
+  it('records a model call on a field the constructor bound', async () => {
+    const result = await scan({
+      'package.json': '{ "name": "fixture", "version": "1.0.0", "type": "module" }',
+      'src/loop.js': `import { Ollama } from 'unknown-ollama';
+
+export class LoopWithMCP {
+  constructor(config) {
+    this.ollama = new Ollama({ host: config.host });
+  }
+
+  async chat(messages) {
+    return this.ollama.chat({ model: 'qwen2.5', messages, stream: false });
+  }
+}
+`,
+    });
+
+    assert.equal(unclaimed(result).length, 1);
+    assert.equal(
+      unclaimed(result)[0]?.area,
+      'unknown-ollama.this.ollama.chat is called at src/loop.js:9 and no adapter claims that distribution',
+    );
+    assert.deepEqual(agentIdentities(result), []);
+  });
+
+  it('says the call was called rather than constructed, and why, in the reason', async () => {
+    const result = await scan({
+      'package.json': '{ "name": "fixture", "version": "1.0.0", "type": "module" }',
+      'src/loop.js': `import { Ollama } from 'unknown-ollama';
+
+const client = new Ollama({ host: 'http://127.0.0.1:11434' });
+export const ask = (messages) => client.chat({ model: 'qwen2.5', messages });
+`,
+    });
+
+    const area = unclaimed(result)[0];
+    assert.match(area?.area ?? '', /^unknown-ollama\.client\.chat is called at src\/loop\.js:4/);
+    assert.match(area?.reason ?? '', /called on a value this repository built/);
+  });
+
+  /**
+   * GUARD. A value a library returned is not an instance of that library.
+   *
+   * Measured on the corpus before the module-scope bound: `const items = useMemo(...)` inside a component
+   * made `items.push({ toolName })` a call to `react`, and a pydantic `Field(default=None)` on a class
+   * made `agent.execute_task(tools=...)` a call to `pydantic`. Both name an owner that is not the owner.
+   */
+  it('leaves a value bound inside a function to the scope that computed it', async () => {
+    const result = await scan({
+      'package.json': '{ "name": "fixture", "version": "1.0.0", "type": "module" }',
+      'src/view.js': `import { useMemo } from 'unknown-view';
+
+export function List(input) {
+  const items = useMemo(() => [], [input]);
+  items.push({ toolName: 'search', model: 'gpt-4o' });
+  return items;
+}
+`,
+    });
+
+    assert.deepEqual(unclaimed(result), []);
+  });
+
+  it('leaves a route handler to the web framework that owns it', async () => {
+    const result = await scan({
+      'package.json': '{ "name": "fixture", "version": "1.0.0", "type": "module" }',
+      'src/server.js': `import express from 'unknown-express';
+
+const app = express();
+app.get('/health', (request, response) => response.send('ok'));
+app.post('/chat', (request, response) => response.send('ok'));
+`,
+    });
+
+    assert.deepEqual(unclaimed(result), []);
+  });
+});
