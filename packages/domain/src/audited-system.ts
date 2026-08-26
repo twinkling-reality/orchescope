@@ -1,4 +1,5 @@
 import type { Component } from '@orchescope/schema';
+import { isModelCallFrame } from './inferred-entry-point.ts';
 
 /**
  * Component kinds whose presence means this repository builds something worth auditing as an agent system.
@@ -51,8 +52,23 @@ export const partOfAuditedSystem = (component: Component): boolean =>
  * A consumed MCP server is part of the topology when an agent in the same repository reaches it, but the
  * server alone says only that this repository is a client. An unqualified server keeps the version 1
  * manifest meaning, and an implemented server establishes detection.
+ *
+ * A model call frame answers too, and it is the only kind of component here that is not one of the kinds
+ * above. A repository that calls a model implements an agent system, and normally the `model` component
+ * says so; a repository whose client takes a base URL chosen at run time and a model chosen from a
+ * variable has no model this build can name, so nothing was left to say it. That repository is the
+ * blind evaluation positive for candidate `df99c97c`, pinned because the sentence "no agent system was
+ * detected" about it blocked a release, and until this it was carried by a component invented from the
+ * call site and called an `agent`. The invention is gone; the observation it stood for is real and is
+ * asked for directly.
+ *
+ * This does not widen detection where a model can be named, because a named model already answers. It
+ * changes exactly one answer: the repository that calls a model this build cannot identify. A repository
+ * that makes no generation call has no frame and is unaffected, which is what keeps the pinned negatives
+ * where they are.
  */
 export const establishesAgentSystem = (component: Component): boolean =>
-  AGENT_SYSTEM_KINDS.has(component.kind) &&
   partOfAuditedSystem(component) &&
-  !(component.details?.for === 'mcp_server' && component.details.role === 'consumed');
+  (isModelCallFrame(component) ||
+    (AGENT_SYSTEM_KINDS.has(component.kind) &&
+      !(component.details?.for === 'mcp_server' && component.details.role === 'consumed')));

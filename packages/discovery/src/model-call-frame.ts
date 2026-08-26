@@ -1,4 +1,8 @@
-import { CONFIDENCE_BANDS, INFERRED_ENTRY_POINT_TAG } from '@orchescope/domain';
+import {
+  CONFIDENCE_BANDS,
+  INFERRED_ENTRY_POINT_TAG,
+  MODEL_CALL_FRAME_TAG,
+} from '@orchescope/domain';
 import type { ComponentIdentity, Metadata, SourceLocation } from '@orchescope/schema';
 import type { SystemGraphBuilder } from '@orchescope/graph';
 import type { ModuleFacts } from '@orchescope/source-analysis';
@@ -35,9 +39,6 @@ import { createDrafts, sourceIdentity } from './drafts.ts';
  * that set which no run can name reports `declared-not-exercised` on every run forever. The honest cost
  * is stated rather than hidden: the frame can never be reported as exercised either.
  */
-
-/** Distinguishes a frame that calls a model from one that performs an outside effect. */
-export const MODEL_CALL_FRAME_TAG = 'model-call-frame';
 
 /**
  * The frame for this call, minted once per function and shared with every other producer that finds it.

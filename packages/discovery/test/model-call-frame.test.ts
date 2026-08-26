@@ -3,8 +3,10 @@ import { after, describe, it } from 'node:test';
 import {
   AGENT_SYSTEM_KINDS,
   createDeadline,
+  establishesAgentSystem,
   fixedClock,
   isInferredEntryPoint,
+  isModelCallFrame,
 } from '@orchescope/domain';
 import { DEFAULT_EXCLUDED_DIRECTORIES } from '@orchescope/source-analysis';
 import { createTempWorkspace, writeNodeProject } from '@orchescope/testkit';
@@ -109,7 +111,7 @@ export async function basicCompletion() {
     );
   });
 
-  it('stops carrying agent system detection on its own', async () => {
+  it('is not one of the kinds detection is written in terms of', async () => {
     const result = await scan(bareCompletion, { openai: '^4.0.0' });
     const frame = result.graph.components.find(
       (component) => component.id === 'entrypoint:basiccompletion',
@@ -117,6 +119,81 @@ export async function basicCompletion() {
 
     assert.ok(frame !== undefined);
     assert.equal(AGENT_SYSTEM_KINDS.has(frame.kind), false);
+    /* It answers detection all the same, through `establishesAgentSystem` rather than through its kind,
+     * because a repository that calls a model implements an agent system whether or not this build can
+     * name the model. See the unnameable case below. */
+    assert.equal(establishesAgentSystem(frame), true);
+  });
+
+  /**
+   * The one answer this changes: a repository that calls a model this build cannot identify.
+   *
+   * The client takes a base URL chosen at run time, so no provider is settled, and the model is a
+   * variable, so no model is settled. Nothing is minted for either, and before the frame answered
+   * detection the only thing saying this repository calls a model was a component invented from the call
+   * site and called an `agent`. That repository is `tubemind`, the blind evaluation positive for
+   * candidate `df99c97c`, pinned because "reported no agent system" about it blocked a release.
+   *
+   * The first is a FALSIFIER against the revision that reclassified the frame without this. The second
+   * is the GUARD that keeps it from being a widening: a repository that makes no generation call has no
+   * frame, and every pinned negative stays where it was.
+   */
+  it('says a repository calls a model even where neither the model nor its provider can be named', async () => {
+    const result = await scan(
+      {
+        'src/utils.py': `import os
+
+def llm_call(messages, model):
+    import openai as openai_lib
+    client = openai_lib.OpenAI(base_url=os.environ["API_BASE"], api_key=os.environ["API_KEY"])
+    resp = client.chat.completions.create(model=model, messages=messages)
+    return resp.choices[0].message.content
+`,
+      },
+      { openai: '^4.0.0' },
+    );
+
+    const frame = result.graph.components.find(
+      (component) => component.id === 'entrypoint:llm_call',
+    );
+    assert.ok(frame !== undefined, ids(result).join(', '));
+    assert.equal(isModelCallFrame(frame), true);
+    /* Nothing was invented to stand in for what could not be read. */
+    assert.equal(
+      result.graph.components.some((component) => component.kind === 'model'),
+      false,
+      ids(result).join(', '),
+    );
+    assert.equal(
+      result.graph.components.some((component) => component.kind === 'agent'),
+      false,
+      ids(result).join(', '),
+    );
+    assert.equal(result.graph.components.some(establishesAgentSystem), true);
+  });
+
+  it('GUARD: a repository that calls no model has no frame and is not detected', async () => {
+    const result = await scan(
+      {
+        'src/server.js': `import express from 'express';
+
+const app = express();
+app.get('/health', (request, response) => response.json({ ok: true }));
+`,
+      },
+      { express: '^4.0.0' },
+    );
+
+    assert.equal(
+      result.graph.components.some((component) => isModelCallFrame(component)),
+      false,
+      ids(result).join(', '),
+    );
+    assert.equal(
+      result.graph.components.some(establishesAgentSystem),
+      false,
+      ids(result).join(', '),
+    );
   });
 
   it('collapses into one component where the same function also reaches the outside world', async () => {

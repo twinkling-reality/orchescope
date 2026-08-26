@@ -27,3 +27,23 @@ export const INFERRED_ENTRY_POINT_TAG = 'inferred-entry-point';
 
 export const isInferredEntryPoint = (component: Component): boolean =>
   component.kind === 'entrypoint' && component.tags.includes(INFERRED_ENTRY_POINT_TAG);
+
+/**
+ * The frame that holds a model call, as against the frame that holds an outside effect.
+ *
+ * Both are inferred entry points and both are invented rather than read, so a reader that wants one and
+ * not the other needs a second word. The vocabulary is here rather than beside its producer because
+ * detection reads it and so does discovery, and two consumers answering the same question differently is
+ * what `partOfAuditedSystem` exists to stop.
+ */
+export const MODEL_CALL_FRAME_TAG = 'model-call-frame';
+
+/**
+ * Whether this component is a function this repository wrote that calls a model.
+ *
+ * Not an agent: it shows no loop, no tool population and no decision, and calling it one reported seven
+ * demonstration functions as seven agents. It is still the strongest thing some repositories say about
+ * themselves, which is why detection asks about it separately.
+ */
+export const isModelCallFrame = (component: Component): boolean =>
+  isInferredEntryPoint(component) && component.tags.includes(MODEL_CALL_FRAME_TAG);

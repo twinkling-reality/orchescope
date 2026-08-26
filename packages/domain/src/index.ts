@@ -73,7 +73,12 @@ export {
   RUNTIME_NAMESPACE,
   runtimeIdentity,
 } from './identity.ts';
-export { INFERRED_ENTRY_POINT_TAG, isInferredEntryPoint } from './inferred-entry-point.ts';
+export {
+  INFERRED_ENTRY_POINT_TAG,
+  isInferredEntryPoint,
+  isModelCallFrame,
+  MODEL_CALL_FRAME_TAG,
+} from './inferred-entry-point.ts';
 export {
   assertNoFindingIdentityCollisions,
   canonicalFindingSemanticKey,
