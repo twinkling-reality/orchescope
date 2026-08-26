@@ -83,7 +83,7 @@ describe('an area no adapter models', () => {
         'gap             . unread     mcp used in source',
         'gap             . discarded  edge to nowhere',
         'gap             . incomplete  prompt use: 1 unresolved',
-        'gap             1 more kinds of gap, in the report',
+        'gap             1 more, in the report: unread',
       ],
     );
   });
@@ -189,7 +189,7 @@ describe('the ceiling', () => {
       truncated: true,
     });
     assert.equal(rendered.filter((line) => line.startsWith('gap')).length, 5);
-    assert.equal(rendered.at(-1), 'gap             2 more kinds of gap, in the report');
+    assert.equal(rendered.at(-1), 'gap             2 more, in the report: skipped');
   });
 });
 
@@ -213,5 +213,101 @@ describe('a directory excluded from analysis', () => {
       }),
       ['gap             . excluded   src/build'],
     );
+  });
+});
+
+/**
+ * The third bound in series between a construction and a reader.
+ *
+ * Discovery samples a refusal, the per-distribution share samples it again, and this ceiling could then
+ * replace what survived both with a number. A repository holding a failed adapter, a truncated scan and
+ * a skipped file has spent every slot before an unread distribution is considered, so the row a reader
+ * saw was a count and the refusal reached the machine readable document and nowhere else.
+ *
+ * All three are FALSIFIERS: against the revision before this the overflow row read
+ * `N more kinds of gap, in the report` and named nothing.
+ */
+describe('what the row ceiling drops', () => {
+  it('names the states it dropped rather than only counting them', () => {
+    /* Truncation and two skip reasons fill three of four slots, so the unread distribution is dropped. */
+    const rendered = render({
+      truncated: true as never,
+      skipped: [...skipped('binary', 2), ...skipped('generated', 1)] as never,
+      unsupported: [
+        { area: 'go source files (1)', kind: 'language_not_analysed', reason: 'x' },
+        {
+          area: 'a distribution nobody claims',
+          kind: 'unclaimed_imported_construction',
+          reason: 'y',
+        },
+        { area: 'edge to nowhere', kind: 'discarded_relation', reason: 'z' },
+      ] as never,
+    });
+
+    const last = rendered.at(-1) ?? '';
+    assert.match(last, /in the report:/, rendered.join(' | '));
+    assert.match(
+      last,
+      /unread/,
+      `the unread distribution was dropped without being named: ${last}`,
+    );
+    assert.match(last, /discarded/, last);
+  });
+
+  it('still bounds the region at the ceiling plus the one row that names the rest', () => {
+    const rendered = render({
+      unsupported: Array.from({ length: 30 }, (_value, index) => ({
+        area: `area ${index}`,
+        kind: 'unclaimed_imported_construction',
+        reason: 'r',
+      })) as never,
+    });
+
+    assert.equal(rendered.length, 5, rendered.join(' | '));
+    assert.equal(rendered.at(-1), 'gap             26 more, in the report: unread');
+  });
+
+  it('GUARD: fits the frame with every state the vocabulary allows overflowing at once', () => {
+    const kinds = [
+      'language_not_analysed',
+      'adapter_found_nothing',
+      'discarded_relation',
+      'topology_incomplete',
+      'excluded_from_analysis',
+    ];
+    const rendered = render({
+      truncated: true as never,
+      skipped: [
+        { file: 'a.py', reason: 'binary' },
+        { file: 'b.py', reason: 'generated' },
+        { file: 'c.py', reason: 'too_large' },
+        { file: 'd.py', reason: 'parse_error' },
+      ] as never,
+      componentsDeclaredInTest: 3 as never,
+      unsupported: kinds.map((kind, index) => ({
+        area: `area ${index}`,
+        kind,
+        reason: 'r',
+      })) as never,
+    });
+
+    const last = rendered.at(-1) ?? '';
+    assert.ok(last.length <= 80, `the overflow row does not fit the frame: ${last.length} columns`);
+    assert.equal(last.includes('…'), false, `the frame cut the names: ${last}`);
+    assert.match(last, /and \d+ more$/, last);
+  });
+
+  it('names a state once however many rows carried it', () => {
+    const rendered = render({
+      unsupported: Array.from({ length: 12 }, (_value, index) => ({
+        area: `area ${index}`,
+        kind: index % 2 === 0 ? 'discarded_relation' : 'topology_incomplete',
+        reason: 'r',
+      })) as never,
+    });
+
+    const last = rendered.at(-1) ?? '';
+    assert.equal(last.match(/discarded/g)?.length, 1, last);
+    assert.equal(last.match(/incomplete/g)?.length, 1, last);
   });
 });

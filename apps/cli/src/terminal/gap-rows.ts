@@ -21,12 +21,12 @@ import { type Layout, REST_COLUMN, type Region, type Row } from './document-grid
 type Coverage = AuditResult['graph']['coverage'];
 
 /**
- * Four rows, then one line saying how many kinds were left out.
+ * Four rows, then one line naming what was left out.
  *
  * Skipped files are grouped by reason before they reach a row, so the seven reasons the schema allows
  * contribute at most seven rows and the corpus never produces more than two. Unsupported areas are per
  * area and the schema bounds neither their count nor their length, which is the only way this list can
- * grow. Four rows shows a reader that more than one kind of gap exists; the count carries the rest.
+ * grow. Four rows shows a reader that more than one kind of gap exists.
  */
 const ROW_CEILING = 4;
 
@@ -37,6 +37,37 @@ const ROW_CEILING = 4;
  * a list that could grow. Three is where the sentence stops fitting beside the count at eighty columns.
  */
 const NAMED_REASONS = 3;
+
+/**
+ * The states of the rows the ceiling dropped, so an overflowing region still says what it dropped.
+ *
+ * This is the third bound in series between a construction and a reader: discovery samples a refusal,
+ * the per-distribution share samples it again, and this ceiling can then replace what survived both with
+ * a number. A repository holding a failed adapter, a truncated scan and a skipped file has spent every
+ * slot before an unread distribution is considered, and `2 more kinds of gap, in the report` is what a
+ * reader was told instead. The refusal existed, the corpus recorded it, and the one surface it exists to
+ * reach did not name it.
+ *
+ * Naming the states rather than the areas is what keeps this a row and not a list. A state is a word
+ * from a closed vocabulary of nine, and the areas behind them are in the machine readable document,
+ * which is where this region always sends the detail. Each state is named once however many rows carried
+ * it, because the region answers which kinds of thing were not seen rather than how many of each.
+ *
+ * It stops at `NAMED_REASONS` and then counts, for the reason that constant already gives: all nine
+ * states named at once is eighty five characters beside the key column, and the frame would cut the last
+ * of them mid-word. A word cut in half says less than a number does.
+ */
+const namesOf = (dropped: readonly Row[]): string => {
+  const seen: string[] = [];
+  for (const row of dropped) {
+    const state = row.state?.replace(/^[.x!] ?/, '').trim();
+    if (state !== undefined && state.length > 0 && !seen.includes(state)) seen.push(state);
+  }
+  if (seen.length === 0) return 'unstated';
+  const named = seen.slice(0, NAMED_REASONS);
+  const rest = seen.length - named.length;
+  return `${named.join(', ')}${rest === 0 ? '' : ` and ${rest} more`}`;
+};
 
 const adapterName = (adapterId: string): string => adapterId.replace(/^adapter:/, '');
 
@@ -225,7 +256,7 @@ export const gapRegion = (coverage: Coverage, layout: Layout): Region => {
    * Worst first: an input the project wrote on purpose and this build rejected outranks a limit this
    * build has, and a scan that stopped early outranks a file it chose not to read.
    */
-  const entries = [
+  const entries: readonly Row[] = [
     ...failedRows(coverage, layout),
     ...truncatedRow(coverage),
     ...skippedRows(coverage),
@@ -236,18 +267,21 @@ export const gapRegion = (coverage: Coverage, layout: Layout): Region => {
   const keyed = entries.filter((row) => row.kind === 'keyed');
   if (keyed.length <= ROW_CEILING) return entries;
   const kept: Row[] = [];
+  const dropped: Row[] = [];
   let shown = 0;
   for (const row of entries) {
-    if (row.kind === 'keyed') {
-      shown += 1;
-      if (shown > ROW_CEILING) break;
+    if (row.kind !== 'keyed') {
+      if (shown <= ROW_CEILING) kept.push(row);
+      continue;
     }
-    kept.push(row);
+    shown += 1;
+    if (shown <= ROW_CEILING) kept.push(row);
+    else dropped.push(row);
   }
   kept.push({
     kind: 'keyed',
     key: 'gap',
-    text: `${keyed.length - ROW_CEILING} more kinds of gap, in the report`,
+    text: `${dropped.length} more, in the report: ${namesOf(dropped)}`,
   });
   return kept;
 };
