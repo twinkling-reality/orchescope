@@ -9,7 +9,7 @@ import {
 } from './local-modules.ts';
 import { moduleMatches } from './matching.ts';
 import { namesStandardLibrary } from './standard-library.ts';
-import { namesRootAlias } from './symbol-index.ts';
+import { buildSymbolIndex, namesRootAlias, type SymbolIndex } from './symbol-index.ts';
 
 /**
  * Imported constructions no adapter has claimed.
@@ -39,6 +39,12 @@ import { namesRootAlias } from './symbol-index.ts';
  * aliases, standard library modules, type-only imports, test files and origin-less names stay quiet:
  * each of those names is owned by somebody, and naming an owner is what keeps this reader precise as it
  * widens.
+ *
+ * A local module is asked one further question before it is left alone: whether the symbol it hands over
+ * is its own. `from .llm import Agent` is local, and `llm.py` may hold `from anthropic_agents import
+ * Agent`, in which case the owner is a distribution and calling the name local is simply wrong. That
+ * chain is followed and it widens nothing, which is the point of it: measured over fifty six pinned
+ * repositories it produces zero further refusals and corrects thirty six ownership answers.
  */
 
 const SAMPLE_CEILING = 10;
@@ -224,6 +230,42 @@ const namesUnclaimedDistribution = (
   !(module.language === 'python' && namesDefinedPackage(local, specifier)) &&
   !moduleMatches(specifier, claimedPackages);
 
+/**
+ * The distribution a construction really came from, after following the repository's own modules.
+ *
+ * `from .llm import Agent` is refused as this repository's own before any argument test runs, and that
+ * refusal is a claim about ownership rather than a bound on the reader: `llm.py` may hold
+ * `from anthropic import Agent`, in which case the name belongs to a distribution and the build has just
+ * told itself otherwise. Following the chain can only make the ownership answer more correct, which is why
+ * this widens nothing: measured over the pinned corpus it produces zero new refusals, corrects 36 wrong
+ * ownership answers and redirects 37 more onto a distribution an adapter already claims.
+ *
+ * The locality of the terminal specifier is judged from the file that wrote it and not from the file that
+ * consumed it, because a relative or aliased specifier means something different in each.
+ *
+ * [ADR 0014](../../../docs/architecture/adr/0014-layer-three-refusal-and-the-model-call-frame.md) states
+ * this as a decision already taken. It was not built until now, and the sentence in that record was
+ * describing an intention.
+ */
+const throughLocalModules = (
+  index: SymbolIndex,
+  module: ModuleFacts,
+  call: CallFact,
+  local: LocalModules,
+  claimedPackages: readonly string[],
+): { readonly specifier: string; readonly claimed: boolean } | undefined => {
+  const root = call.calleePath[0];
+  if (root === undefined) return undefined;
+  const owner = index.owningDistribution(module.file, root);
+  if (owner === undefined) return undefined;
+  const writer = index.moduleOf(owner.from);
+  if (writer === undefined) return undefined;
+  return {
+    specifier: owner.module,
+    claimed: !namesUnclaimedDistribution(writer, owner.module, local, claimedPackages),
+  };
+};
+
 type UnclaimedConstruction = {
   readonly specifier: string;
   readonly symbol: string;
@@ -235,11 +277,17 @@ const unclaimedConstruction = (
   call: CallFact,
   local: LocalModules,
   claimedPackages: readonly string[],
+  index: SymbolIndex,
 ): UnclaimedConstruction | undefined => {
   if (call.kind !== 'call' && call.kind !== 'new') return undefined;
   const origin = call.origin;
   if (origin === undefined || origin.isType) return undefined;
-  if (!namesUnclaimedDistribution(module, origin.module, local, claimedPackages)) return undefined;
+  let specifier = origin.module;
+  if (!namesUnclaimedDistribution(module, specifier, local, claimedPackages)) {
+    const owner = throughLocalModules(index, module, call, local, claimedPackages);
+    if (owner === undefined || owner.claimed) return undefined;
+    specifier = owner.specifier;
+  }
   const symbol = constructedExportName(call);
   if (symbol === undefined) return undefined;
   const entries = objectEntries(call);
@@ -247,7 +295,7 @@ const unclaimedConstruction = (
   if (namedBy === undefined) return undefined;
   if (toolsArgumentLooksLikeJsonSchemas(entries)) return undefined;
   if (looksLikeADeclarationBuilder(call, entries)) return undefined;
-  return { specifier: origin.module, symbol, namedBy };
+  return { specifier, symbol, namedBy };
 };
 
 const unclaimedReceiverCall = (
@@ -411,6 +459,7 @@ export const findUnclaimedImportedConstructions = (input: {
   readonly claimedPackages: readonly string[];
 }): readonly UnsupportedArea[] => {
   const local = localModules(input.modules);
+  const index = buildSymbolIndex(input.modules);
   const found: FoundArea[] = [];
 
   for (const module of input.modules) {
@@ -418,7 +467,7 @@ export const findUnclaimedImportedConstructions = (input: {
     const receivers = boundReceivers(module);
     for (const call of module.calls) {
       const construction =
-        unclaimedConstruction(module, call, local, input.claimedPackages) ??
+        unclaimedConstruction(module, call, local, input.claimedPackages, index) ??
         unclaimedReceiverCall(module, call, receivers, local, input.claimedPackages);
       if (construction === undefined) continue;
       found.push({

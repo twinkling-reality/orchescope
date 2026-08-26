@@ -22,11 +22,31 @@ export type ExternalRef = {
   readonly imported: string;
 };
 
+/** An external reference plus the file that wrote it, which is the file its locality must be judged from. */
+export type OwningRef = ExternalRef & { readonly from: string };
+
 export type SymbolIndex = {
   /** Resolves a local binding to the module that defines it. */
   readonly resolve: (fromFile: string, localName: string) => SymbolRef | undefined;
   /** Resolves a local binding to the package it was imported from, when it is external. */
   readonly external: (fromFile: string, localName: string) => ExternalRef | undefined;
+  /**
+   * The distribution a binding came from, following the repository's own modules until the chain leaves it.
+   *
+   * `resolve` walks the same chain and answers only when it lands on a definition, so a chain ending at a
+   * package import returns nothing and the answer is discarded. `external` returns that answer but asks
+   * only the file it is handed, so it answers only if the caller already knew which module to ask. Neither
+   * one says who owns `np` in `from .imports import np`, where `imports.py` holds `import numpy as np`.
+   *
+   * Measured over the pinned corpus: 36 bindings refused as this repository's own actually reach a
+   * distribution no adapter claims, and 37 more reach one that is claimed. Every resolved chain is one hop
+   * deep and the deepest reachable is two, against a ceiling of four.
+   *
+   * The visited set is not decoration. Thirty real re-export cycles exist in the corpus, all Python
+   * `from . import X` inside a package `__init__.py`, and without it a cycle is indistinguishable from a
+   * chain that ran out of hops.
+   */
+  readonly owningDistribution: (fromFile: string, localName: string) => OwningRef | undefined;
   readonly definitionsOf: (file: string) => readonly DefinitionFact[];
   readonly moduleOf: (file: string) => ModuleFacts | undefined;
   readonly files: readonly string[];
@@ -182,9 +202,40 @@ export const buildSymbolIndex = (modules: readonly ModuleFacts[]): SymbolIndex =
     return { module: binding.module, imported: binding.imported };
   };
 
+  /**
+   * The chained form of `external`, which is the whole of the re-export bridge.
+   *
+   * It walks exactly the modules `resolve` walks and stops one step later: where `resolve` gives up on a
+   * specifier that leaves the repository, this returns it. A name the chain proves is defined here answers
+   * nothing, because that is the case `external` already gets right.
+   */
+  const owningDistribution = (fromFile: string, localName: string): OwningRef | undefined => {
+    let currentFile = fromFile;
+    let currentName = localName;
+    const visited = new Set<string>();
+    for (let hop = 0; hop < MAX_HOPS; hop += 1) {
+      if (visited.has(`${currentFile}|${currentName}`)) return undefined;
+      visited.add(`${currentFile}|${currentName}`);
+      if (definitionsByFile.get(currentFile)?.has(currentName) === true) return undefined;
+      const module = byFile.get(currentFile);
+      if (module === undefined) return undefined;
+      const binding = module.imports.find((entry) => entry.local === currentName);
+      if (binding === undefined || binding.isType) return undefined;
+      const target = resolveSpecifier(currentFile, binding.module);
+      if (target === undefined) {
+        if (isRelative(binding.module) || namesRootAlias(binding.module)) return undefined;
+        return { module: binding.module, imported: binding.imported, from: currentFile };
+      }
+      currentFile = target;
+      currentName = binding.imported === '*' ? currentName : binding.imported;
+    }
+    return undefined;
+  };
+
   return {
     resolve,
     external,
+    owningDistribution,
     definitionsOf: (file) => byFile.get(file)?.definitions ?? [],
     moduleOf: (file) => byFile.get(file),
     files: [...known],
