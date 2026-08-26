@@ -106,9 +106,14 @@ const runsPhrase = (result: AuditResult): string => {
  *
  * The denominator is named instead, and the documents beside it are counted where there are any.
  * Configuration is discovered and read for what it declares rather than parsed, so it belongs in neither
- * half of the parse rate and disappeared from the document entirely. What this still cannot say is how
- * many tracked files are in formats it never records, because the number reaches the coverage block only
- * as the language markers it recognises.
+ * half of the parse rate and disappeared from the document entirely.
+ *
+ * The paths this build records nothing about are counted here too, and that count is the answer to what
+ * this line could not say before: how much of a repository reaches no layer of the scan. It is deliberately
+ * a number and not a language. Naming the language would need a table this build maintains, and the
+ * eight-entry table it would extend matched nothing across fifty six pinned repositories while this count
+ * is non-zero on fifty five of them. A count cannot be wrong about what it did not read. See
+ * [ADR 0015](../../../../docs/architecture/adr/0015-the-asymmetric-invariant.md).
  */
 const coverageVariants = (result: AuditResult, verbose: boolean): readonly string[] => {
   const coverage = result.graph.coverage;
@@ -117,11 +122,26 @@ const coverageVariants = (result: AuditResult, verbose: boolean): readonly strin
   const documents = coverage.filesDiscovered - supported;
   const beside =
     documents <= 0 ? '' : ` beside ${formatCount(documents, 'configuration document')}`;
+  const unrecorded = Math.max(
+    0,
+    (coverage.pathsWalked ?? coverage.filesDiscovered) - coverage.filesDiscovered,
+  );
+  const alongside =
+    unrecorded === 0 ? '' : ` and ${formatCount(unrecorded, 'path')} it does not record`;
+  /*
+   * The same fact spelled short, so that the count survives a narrow frame. Written out it costs
+   * thirty three columns and never fitted eighty beside the key column on any real repository, which
+   * would have made this whole line the same silence it exists to remove.
+   */
+  const briefly = unrecorded === 0 ? '' : `, ${unrecorded} unrecorded`;
   const runs = runsPhrase(result);
   const graph = `${formatCount(result.bundle.summary.componentCount, 'part')} and ${formatCount(result.bundle.summary.edgeCount, 'link')}`;
   if (!verbose)
     return [
-      `read from ${files}${beside}, with ${runs}`,
+      `read from ${files}${beside}${alongside}, with ${runs}`,
+      `read from ${files}${alongside}, with ${runs}`,
+      `read from ${files}${briefly}, with ${runs}`,
+      `${files}${briefly}; ${runs}`,
       `read from ${files}, with ${runs}`,
       `${files}; ${runs}`,
       `read from ${files}`,
@@ -132,10 +152,14 @@ const coverageVariants = (result: AuditResult, verbose: boolean): readonly strin
    * decides what the rest of the document can say.
    */
   return [
-    `${graph}; ${files}${beside} read; ${runs}`,
+    `${graph}; ${files}${beside}${alongside} read; ${runs}`,
+    `${graph}; ${files}${alongside} read; ${runs}`,
+    `${graph}; ${files}${briefly} read; ${runs}`,
+    `${graph}; ${files}${briefly}; ${runs}`,
     `${graph}; ${files} read; ${runs}`,
     `${graph}; ${files}; ${runs}`,
     `${graph}; ${files} read`,
+    `read from ${files}${briefly}, with ${runs}`,
     `read from ${files}, with ${runs}`,
     `read from ${files}`,
   ];

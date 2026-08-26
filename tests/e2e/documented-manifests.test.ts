@@ -249,7 +249,17 @@ describe('a repository no adapter can read', () => {
     const result = await run(['--cwd', root, 'audit']);
     assert.equal(result.code, 0);
     assert.match(result.stdout, /No agent system was detected/);
-    assert.match(result.stdout, /^gap {13}\. unparsed {3}go source files \(1\)$/m);
+    /*
+     * The count is deliberately absent from the row and present in the reason. `area` is the only field
+     * the terminal prints and the only field the corpus records, so a number in it makes a pinned
+     * expectation churn on an edit that says nothing about this build.
+     */
+    assert.match(result.stdout, /^gap {13}\. unparsed {3}go source files$/m);
+    assert.match(
+      result.stdout,
+      /^ +\d+ of \d+ source files?, \d+ unrecorded; no runs on record$/m,
+      'the paths this scan recorded nothing about are counted on the coverage line, which is the only place a repository can be told how much of it went unread',
+    );
     assert.match(result.stdout, /^run {13}orchescope init --manifest$/m);
     assert.equal(
       (result.stdout.match(/^run /gm) ?? []).length,

@@ -3997,6 +3997,10 @@
                     },
                     "type": "array"
                   },
+                  "pathsWalked": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
                   "skipped": {
                     "items": {
                       "additionalProperties": false,

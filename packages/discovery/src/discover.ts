@@ -136,9 +136,16 @@ const unsupportedAreas = (
     const fileCount = markers.reduce((total, marker) => total + (extensionCounts[marker] ?? 0), 0);
     if (fileCount === 0) continue;
     areas.push({
-      area: `${language} source files (${fileCount})`,
+      /*
+       * The count belongs in `reason` and never here. `area` is the only field the terminal prints and the
+       * only field the corpus records, so a number in it makes a pinned expectation churn every time a file
+       * of that language is added or removed, which is movement that says nothing about this build.
+       * [ADR 0014](../../../docs/architecture/adr/0014-layer-three-refusal-and-the-model-call-frame.md)
+       * states the split and this row was the one place still breaking it.
+       */
+      area: `${language} source files`,
       kind: 'language_not_analysed',
-      reason: 'Orchescope analyses JavaScript, TypeScript and Python source in this release.',
+      reason: `This repository holds ${fileCount} ${language} source file(s). Orchescope analyses JavaScript, TypeScript and Python source in this release.`,
       remediation:
         'Declare the components in .orchescope/manifest.yaml so they appear in the graph.',
     });
@@ -871,6 +878,7 @@ export const discover = async (request: ScanRequest): Promise<ScanResult> => {
 
   const coverage: ScanCoverage = {
     filesDiscovered: fileSet.files.length,
+    pathsWalked: fileSet.walked.length,
     ...(request.trackedFileCount === undefined ? {} : { filesTracked: request.trackedFileCount }),
     /*
      * Files refused before analysis count too. A Python file too large to read is a file this build claims to read

@@ -268,6 +268,23 @@ export const ScanCoverage = Type.Object(
      */
     filesDiscovered: NonNegativeInt,
     /**
+     * Every path traversal walked, including the ones it recognised as no language at all.
+     *
+     * `filesDiscovered` counts what was recognised, so the difference between the two is the part of a
+     * repository that reaches no count in this block and no layer of the scan: not parsed, not read as a
+     * document, not skipped for a stated reason, and not named by any refusal. On the pinned corpus that
+     * difference is 28,333 of 43,000 paths, non-zero on 55 of 56 repositories.
+     *
+     * It is a count and never a language. Naming the language of an unread file needs a table this build
+     * maintains, and no runtime present during a scan can be asked for one instead, which is why the
+     * eight-entry language table it would extend matched nothing across those 56 repositories. A number
+     * cannot be wrong about what it did not read. See
+     * [ADR 0015](../../../docs/architecture/adr/0015-the-asymmetric-invariant.md).
+     *
+     * Absent on graphs written before this count existed.
+     */
+    pathsWalked: Type.Optional(NonNegativeInt),
+    /**
      * How many files the index lists, which is the only whole a reader can check the rest against.
      *
      * Absent where the root is not a checkout, because then nothing states what the repository is and a
