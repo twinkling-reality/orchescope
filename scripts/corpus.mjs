@@ -26,10 +26,19 @@ import { exerciseRepository, missingInterpreter, prepareEnvironment } from './co
 import { describeFederation, exerciseFederatedSystem } from './corpus/federation.mjs';
 import { injectionVerdicts } from './corpus/negatives.mjs';
 import { observationOf } from './corpus/observation.mjs';
+import {
+  deadNameReport,
+  nameWasSeen,
+  namesObservedIn,
+  recognitionNames,
+} from './corpus/recognition-names.mjs';
 import { describe } from './corpus/summary.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const { stableJson } = await import(join(root, 'packages/domain/src/index.ts'));
+const { analyzeFileSet, collectFiles, DEFAULT_EXCLUDED_DIRECTORIES, readManifests } = await import(
+  join(root, 'packages/source-analysis/src/index.ts')
+);
 
 const argv = process.argv.slice(2);
 const record = argv.includes('--record');
@@ -123,6 +132,48 @@ if (entries.length === 0 && systems.length === 0) {
   process.exit(2);
 }
 
+/*
+ * Every name the readers recognise by, so that one matching no pinned repository is reported rather than
+ * left to rot. See scripts/corpus/recognition-names.mjs and ADR 0015 decision 3.
+ */
+const declaredNames = recognitionNames(root);
+const namesSeen = new Set();
+
+/**
+ * What one checked-out repository answers for, reduced with the same traversal an audit uses.
+ *
+ * A second parse of each entry, which is the cost of the only check that can see a name go dead. It is
+ * bounded by the same ceilings the audit is bounded by, so a repository this scan would decline is a
+ * repository this check declines too.
+ */
+const recordNamesSeenIn = async (directory) => {
+  const fileSet = collectFiles(directory, {
+    maxFileBytes: 512 * 1024,
+    maxFiles: 20_000,
+    followSymlinks: false,
+    excludeDirectories: [...DEFAULT_EXCLUDED_DIRECTORIES],
+    excludePrefixes: [],
+    respectIgnoreFiles: true,
+  });
+  const analysis = await analyzeFileSet(fileSet, {
+    deadline: {
+      // This scan is bounded by the traversal ceilings above, so there is no clock to run out.
+      check: () => undefined,
+      remainingMs: () => Number.MAX_SAFE_INTEGER,
+      expired: () => false,
+    },
+    concurrency: 8,
+  });
+  const manifests = readManifests(directory);
+  const observed = namesObservedIn(
+    analysis.facts,
+    manifests.dependencies.map((entry) => entry.name),
+  );
+  for (const name of declaredNames.keys()) {
+    if (!namesSeen.has(name) && nameWasSeen(name, observed)) namesSeen.add(name);
+  }
+};
+
 const results = [];
 for (const entry of entries) {
   /*
@@ -193,6 +244,7 @@ for (const entry of entries) {
       entry.kind === 'not_agent_system'
         ? injectionVerdicts(root, entry, directory, observation)
         : [];
+    await recordNamesSeenIn(directory);
     results.push({ entry, observation, differences: found, injections, acceptance });
   } catch (error) {
     results.push({ entry, error: error instanceof Error ? error.message : String(error) });
@@ -421,6 +473,25 @@ if (federationResults.length > 0) {
       `${federationResults.length - federationDiffering - federationFailed - federationSkipped} ${record ? 'recorded' : 'matched'}, ` +
       `${federationDiffering} differing, ${federationFailed} not measured, ${federationSkipped} skipped`,
   );
+}
+/*
+ * A name matching no pinned repository is reported and never deleted here. The corpus is fifty six
+ * repositories and not the world, so an unmatched name may be legitimate; what it may not be is unnoticed.
+ * Only a full run can say it, because a subset that never checks out the repository holding a name would
+ * report that name dead on the strength of not having looked.
+ */
+const wholeCorpus = !offline && !required && selected.length === 0;
+if (wholeCorpus) {
+  const report = deadNameReport(declaredNames, namesSeen);
+  console.log(
+    `${report.total} recognition name(s) declared by the readers: ` +
+      `${report.total - report.dead.length} matched a pinned repository, ${report.dead.length} matched none`,
+  );
+  for (const entry of report.dead) {
+    console.log(
+      `  ${entry.name} is recognised for at ${entry.at} and no pinned repository carries it`,
+    );
+  }
 }
 console.log(`summary written to ${summaryPath.slice(root.length + 1)}`);
 
