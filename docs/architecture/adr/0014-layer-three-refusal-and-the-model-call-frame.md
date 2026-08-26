@@ -41,9 +41,12 @@ repository has one, and one of them additionally carries a claim the source does
 
 Reject this record unless all of these hold after the change.
 
-1. A construction, subclass, decorator or annotation whose root symbol resolves to a distribution no adapter
-   claims produces at least one line in the human document, whatever its argument shape, including when it
-   has no arguments at all.
+1. A construction whose root symbol resolves to a distribution no adapter claims, and one of whose
+   argument names carries a model, tool or prompt stem, produces at least one line in the human document.
+   **This was stated before implementation as "whatever its argument shape, including when it has no
+   arguments at all", and that stronger form was measured twice and refused. See "What the measurement
+   refused". The falsifier is recorded as it was written and as it was weakened, because a criterion
+   quietly relaxed to match an outcome is worth nothing.**
 2. `open-agent-platform` still reports `agentSystemDetected: false` with 26 components and no `agent`,
    `model`, `tool` or `mcp_server` key in `components.byKind`.
 3. `orchescope-discovery` still holds its ceiling of zero components.
@@ -66,12 +69,12 @@ segment, matched against key *segments* rather than against whole key names, so 
 and `systemPrompt` are one stem written three ways and none of them is listed. Sampled per distribution, so
 one noisy directory cannot evict a pinned construction.
 
-**Tier B, aggregate, with no argument predicate at all.** Every foreign distribution this repository
-constructs from, subclasses, decorates with or annotates against, that no adapter claims, named in one
-bounded line. This tier is the guarantee. Argument shape is a property a construction may not have:
-`create_agent(config)` and `build_agent()` have no object argument, so every predicate over arguments,
-including the widened one, leaves them silent. Tier A ranks and locates; tier B is what makes silence
-structurally impossible rather than merely unlikely.
+**A second tier under it, with no argument predicate, was proposed here and is not shipped.** The argument
+for it stands and is worth reading: argument shape is a property a construction may not have, so
+`create_agent(config)` and `build_agent()` are silent under every predicate over arguments, and only a
+floor that asks nothing about arguments makes silence impossible rather than unlikely. It was implemented
+in both a broad and a narrow form and measured over the whole corpus, and both forms cost more than the
+silence they removed. "What the measurement refused" records what each one produced.
 
 **A distribution is foreign by provenance, not by name.** Not relative, absolute or `node:` prefixed; not a
 Node builtin or a Python standard-library module, taken from the runtime's own list rather than one this
@@ -93,9 +96,13 @@ and `ROW_CEILING = 4` in the terminal, where unsupported rows rank fourth of six
 `area` carries the identifying content, because `unsupportedRows`
 (`apps/cli/src/terminal/gap-rows.ts:115-124`) renders `area.area` and nothing else, by stated policy.
 `reason` carries the paragraph and every count, because the corpus observation records `area` and a count
-in that string makes the largest entries churn on unrelated edits. The terminal's overflow row names the
-kinds it dropped rather than only how many, so a refusal cannot be silenced by a fourth ceiling after
-surviving the first three.
+in that string makes the largest entries churn on unrelated edits.
+
+The third ceiling is **not** closed. `ROW_CEILING` still collapses the overflow to a count of kinds rather
+than naming them, so a located refusal that survives the discovery sample and the per-distribution sample
+can still be replaced by `N more kinds of gap, in the report` when a repository already has a failed
+adapter, a truncated scan and a skipped file. Naming the dropped kinds in that row is the remedy and it is
+not written.
 
 ### 3. A model call site is an inferred entry point, not an agent
 
@@ -141,6 +148,38 @@ one about a site: the corpus acceptance requires a located area, and the termina
 differently. That is the whole of the schema change, and it touches no component identity and no
 population.
 
+## What the measurement refused
+
+**Tier B, as a floor under every construction, was implemented and measured and is not shipped.** The
+strict reading of the invariant is that a construction from a distribution with no adapter must be
+incapable of producing nothing, which means naming every foreign distribution a repository constructs
+from, with no argument test at all. Over the corpus that names `react` three hundred and sixty two times
+on one application, forty eight distributions on a second, twenty one on the pinned entry
+[ADR 0004](0004-provenance-not-confidence.md) turns on, and it puts a refusal on the acceptance negative
+control that passed cleanly. It is true and it is worthless, and it would flip `scanPopulationComplete`
+on nearly every entry.
+
+**The narrower version, over base classes and decorators only, was also implemented and measured and is
+also not shipped.** The argument for it was that a declaration with no arguments is a different case from
+a construction whose arguments named nothing: there the test applied and answered, here it does not
+apply. A fourteen repository sample supported it, showing five distributions on the LlamaIndex target,
+three on `flask` and nothing anywhere else. The full corpus refuted it: twenty four of forty eight entries
+moved, and the content is `pydantic.X(BaseModel)` on a dozen entries, `click` command decorators,
+`pyqt6.X(QWidget)`, `discord`, `streamlit`, `@angular/core.@Component` and `typing_extensions.X(TypedDict)`.
+On three entries the data models evicted the real construction out of the bounded sample entirely.
+
+The reason is worth stating because it will be proposed again. A base class and a decorator are how
+**every** Python library asks for a declaration, not how agent frameworks do. Data models, command line
+interfaces, GUI widgets and web frameworks all use the same two forms, and nothing structural separates
+`class AgentWorkflow(Workflow)` from `class Invoice(BaseModel)`. Separating them needs a vocabulary of
+framework names, which is the thing being removed.
+
+**So the invariant is held in a weaker form than its literal statement, and the gap is stated rather than
+papered over.** A construction whose arguments name a model, a tool or a prompt cannot go silent. A
+construction with no arguments at all, `create_agent(config)` or `build_agent()`, still can, and so can a
+framework whose only declaration form is subclassing. `class AgentWorkflow(Workflow)` in the 0.9.2
+acceptance set is not named by this build, and the two measurements above are why.
+
 ## Consequences
 
 **Findings move on up to forty-one entries.** `scanPopulationComplete`
@@ -174,9 +213,11 @@ written down rather than by measurement.
 **A construction from an unclaimed distribution that produces no line in the human document.** That is the
 guarantee, and one counterexample ends it.
 
-**A tier B cap that discards rather than counts.** Tier B cannot be empty while a foreign construction
-exists. A bound that drops instead of aggregating turns the guarantee back into a likelihood and this record
-should be reopened rather than worked around.
+**A structural signal that separates an agent declaration from a data model declaration.** The floor was
+refused because no such signal was found: a base class and a decorator are how every Python library asks
+for a declaration, and `class AgentWorkflow(Workflow)` is not distinguishable from `class Invoice(BaseModel)`
+without naming frameworks. A signal that does separate them, measured over the whole corpus rather than a
+sample, reopens the floor and with it the literal form of the invariant.
 
 **`open-agent-platform` gaining a component, or `orchescope-discovery` leaving its ceiling of zero.** Those
 are the pinned canaries. If widening a refusal moves either, the premise that a refusal is categorically
