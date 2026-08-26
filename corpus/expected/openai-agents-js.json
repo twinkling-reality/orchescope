@@ -171,6 +171,9 @@
     "total": 587
   },
   "unclaimedImportedConstructions": [
+    "@openai/agents-extensions.aisdk is constructed at integration-tests/bun/aisdk.ts:27 and no adapter claims that distribution",
+    "@openai/agents-extensions.aisdk is constructed at integration-tests/cloudflare-workers/worker/src/index.ts:54 and no adapter claims that distribution",
+    "@openai/agents-extensions.aisdk is constructed at integration-tests/deno/aisdk.ts:21 and no adapter claims that distribution",
     "@openai/agents-openai.OpenAIProvider is constructed at packages/agents/src/index.ts:6 and no adapter claims that distribution",
     "@openai/agents-realtime.RealtimeAgent is constructed at examples/docs/readme/readme-voice-agent.ts:13 and no adapter claims that distribution",
     "@openai/agents-realtime.RealtimeAgent is constructed at examples/realtime-demo/src/main.ts:25 and no adapter claims that distribution",
