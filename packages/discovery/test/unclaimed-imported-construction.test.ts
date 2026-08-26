@@ -578,6 +578,74 @@ export const client${index} = new Client({ model: 'gpt-4o' });
  * `vercel-ai-chatbot`. A guard that passes both ways is doing its job; a falsifier that does is a defect.
  */
 describe('what a widened argument name must not read', () => {
+  /*
+   * FALSIFIER. The declaration-builder suppressor asked whether every field was a call, and a schema names
+   * a sibling by its bare name as readily as by calling it. `openai-agents-js` writes twenty six fields at
+   * `packages/agents-core/src/runState.ts:413` of which two are bare references, and one reference was
+   * enough to report three Zod schema declarations as unread constructions of `zod`. Nothing on those lines
+   * is unread, and naming `zod` as the owner of a gap is the wrong owner this reader must not produce.
+   */
+  it('leaves a schema naming its siblings by name to the library describing it', async () => {
+    const result = await scan({
+      'package.json': '{ "name": "fixture", "version": "1.0.0", "type": "module" }',
+      'src/state.js': `import { z } from 'zod';
+
+export const stateSchema = z.object({
+  currentAgent: serializedAgentSchema,
+  toolName: z.string().optional(),
+  modelResponses: z.array(responseSchema),
+});
+`,
+    });
+
+    assert.deepEqual(unclaimed(result), []);
+  });
+
+  /*
+   * GUARD. The discriminator is unchanged and it is the half that keeps this honest: a construction whose
+   * arguments happen to be computed hands somebody else values, and none of them is the library handing
+   * itself back.
+   */
+  it('still records a construction whose computed arguments name nothing of its own library', async () => {
+    const result = await scan({
+      'src/app.py': `from agent_kit import Agent
+
+assistant = Agent(model=get_model(), tools=get_tools())
+`,
+    });
+
+    assert.equal(unclaimed(result).length, 1);
+    assert.equal(
+      unclaimed(result)[0]?.area,
+      'agent_kit.Agent is constructed at src/app.py:3 and no adapter claims that distribution',
+    );
+  });
+
+  /* GUARD. The widening reads a reference as part of a declaration, and a reference is not a suppressor. */
+  it('still records a construction handed nothing but references', async () => {
+    const result = await scan({
+      'src/app.py': `from agent_kit import Agent
+
+assistant = Agent(model=my_model, tools=my_tools)
+`,
+    });
+
+    assert.equal(unclaimed(result).length, 1);
+  });
+
+  /* GUARD. A value this repository wrote is what a construction hands over, and it is never a declaration. */
+  it('still records a construction handed a value this repository wrote', async () => {
+    const result = await scan({
+      'package.json': '{ "name": "fixture", "version": "1.0.0", "type": "module" }',
+      'src/app.js': `import { z } from 'zod';
+
+export const built = z.object({ model: 'gpt-4o', tools: z.array(z.string()) });
+`,
+    });
+
+    assert.equal(unclaimed(result).length, 1);
+  });
+
   it('leaves a terminal prompt suffix to the command line library that owns it', async () => {
     const result = await scan({
       'src/cli.py': `import unknown_cli

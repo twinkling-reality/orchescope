@@ -185,14 +185,35 @@ const toolsArgumentLooksLikeJsonSchemas = (entries: readonly ObjectEntryFact[]):
  *
  * Two entries is the floor because a single-entry object says nothing about a pattern.
  *
- * Every field must be a call, and at least one of them must be rooted at the name the construction
- * itself is rooted at. Both halves are load bearing. Requiring every field to be rooted there missed the
- * ordinary case of a schema naming its siblings: `z.object({ id: z.uuid(), message:
- * userMessageSchema.optional(), selectedChatModel: z.string() })` is one call to another schema in three,
- * and it was reported as an unread construction on two pinned repositories. Dropping the second half
- * instead would suppress `Agent(model=get_model(), tools=get_tools())`, which is a real construction
- * whose arguments happen to be computed, so the library handing itself back is what has to be seen.
+ * Two halves, and both are load bearing. **No field may be a value this repository wrote**, and **at least
+ * one field must be a call rooted at the name the construction itself is rooted at.**
+ *
+ * The second half is the discriminator. Dropping it would suppress
+ * `Agent(model=get_model(), tools=get_tools())`, a real construction whose arguments happen to be
+ * computed, so the library handing itself back is what has to be seen. Requiring every field to be rooted
+ * there instead would miss the ordinary case of a schema naming its siblings: `z.object({ id: z.uuid(),
+ * message: userMessageSchema.optional(), selectedChatModel: z.string() })` is one call to another schema in
+ * three, and it was reported as an unread construction on two pinned repositories.
+ *
+ * The first half asks what a field is rather than counting calls, and that is the correction. It read
+ * "every field is a call", which is one way a schema names a sibling and not the only one: a sibling
+ * referred to by its bare name is a reference and not a call. `openai-agents-js` writes
+ * `z.object({ currentAgent: serializedAgentSchema, modelResponses: z.array(...), ... })`, and one bare
+ * reference among twenty six calls was enough to report three Zod schema declarations as unread
+ * constructions of `zod`. The unread thing on those lines is nothing, and naming `zod` as the owner of a
+ * gap is the wrong owner this reader must not produce.
+ *
+ * A call and a reference are both pieces of a declaration. A string, a number, a bare array, an inline
+ * function are values this repository wrote and handed over, which is what a construction does. The kinds
+ * that count are listed rather than the kinds that do not, so a fact kind nobody anticipated fails towards
+ * reporting rather than towards silence.
+ *
+ * Measured over all fifty six pinned repositories, reading a reference as part of a declaration suppresses
+ * exactly those three sites and nothing else anywhere.
  */
+const namesPartOfADeclaration = (value: ObjectEntryFact['value']): boolean =>
+  value.kind === 'call' || value.kind === 'identifier' || value.kind === 'member';
+
 const looksLikeADeclarationBuilder = (
   call: CallFact,
   entries: readonly ObjectEntryFact[],
@@ -200,7 +221,7 @@ const looksLikeADeclarationBuilder = (
   if (entries.length < 2) return false;
   const root = call.calleePath[0];
   if (root === undefined) return false;
-  if (!entries.every((entry) => entry.value.kind === 'call')) return false;
+  if (!entries.every((entry) => namesPartOfADeclaration(entry.value))) return false;
   return entries.some((entry) => entry.value.kind === 'call' && entry.value.path[0] === root);
 };
 
