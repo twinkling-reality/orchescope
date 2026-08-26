@@ -166,6 +166,7 @@
   "unclaimedImportedConstructions": [
     "fastembed.TextEmbedding is constructed at lib/crewai/src/crewai/rag/qdrant/config.py:38 and no adapter claims that distribution",
     "patronus_local_evaluator_tool.PatronusLocalEvaluatorTool is constructed at lib/crewai-tools/src/crewai_tools/tools/patronus_eval_tool/example.py:37 and no adapter claims that distribution",
+    "scrapegraph_py.self._client.smartscraper is called at lib/crewai-tools/src/crewai_tools/tools/scrapegraph_scrape_tool/scrapegraph_scrape_tool.py:177 and no adapter claims that distribution",
     "stagehand.ActOptions is constructed at lib/crewai-tools/src/crewai_tools/tools/stagehand_tool/stagehand_tool.py:448 and no adapter claims that distribution",
     "stagehand.ActOptions is constructed at lib/crewai-tools/src/crewai_tools/tools/stagehand_tool/stagehand_tool.py:473 and no adapter claims that distribution",
     "stagehand.ExtractOptions is constructed at lib/crewai-tools/src/crewai_tools/tools/stagehand_tool/stagehand_tool.py:519 and no adapter claims that distribution",
