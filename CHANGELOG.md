@@ -2,6 +2,29 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
+## Unreleased
+
+Not published. What is here is the protocol recognition work and the record that reframes what this build
+claims. Read [ADR 0015](docs/architecture/adr/0015-the-asymmetric-invariant.md) first: the invariant this
+repository held, that its framework-blind layers are sufficient for correctness and framework adapters add
+resolution only, was measured false three times over the fifty six pinned repositories and is restated as an
+asymmetric one. What a run exercised is recognised without naming any framework. What a repository declares
+is recognised in detail only where a reader exists, and that set is a catalogue that decays.
+
+**Two published schema documents were removed.** `schemas/manifest.v1.json` and `schemas/manifest.v2.json`
+were neither emitted by `pnpm schemas` nor compared by its `--check`, and both published a `ComponentKind`
+enum omitting `workflow` and `workflow_step` while the live `ManifestV1` and `ManifestV2` readers accept
+both. An external author validating a version 1 manifest against the published file was told a kind was
+invalid that this build accepts. No document version moved and no reader changed: `MIN_READABLE_VERSIONS.manifest`
+is still 1, and the retained versions are exercised by `ManifestV1` and `ManifestV2` in
+`packages/schema/src/manifest.ts` rather than by a file nothing generated. `pnpm schemas --check` now fails
+on a schema document in that directory that nothing emits, which is the check that would have caught it.
+
+**The corpus reports a recognition name that no pinned repository carries.** On its first run it found nine,
+including two the Model Context Protocol reader had gated on for as long as they had been wrong. A name is
+reported and never deleted automatically: fifty six repositories are not the world, and an unmatched name
+may be legitimate. What it may not be is unnoticed.
+
 ## 0.9.2
 
 Released 2026-08-25 from npm as `orchescope@0.9.2`, published locally with `npm publish --no-provenance`, so this

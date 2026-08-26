@@ -6,7 +6,7 @@
  * source, which is what stops a schema change from shipping without its documentation.
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -44,6 +44,34 @@ for (const descriptor of documentDescriptors()) {
   }
   writeFileSync(target, contents);
   written.push(`${descriptor.fileName} (version ${descriptor.version})`);
+}
+
+/**
+ * A schema document in this directory that no descriptor emits.
+ *
+ * `manifest.v1.json` and `manifest.v2.json` sat here for as long as it took somebody to look. Neither was
+ * emitted, neither was compared, and both published a `ComponentKind` enum that omitted `workflow` and
+ * `workflow_step` while the live `ManifestV1` and `ManifestV2` readers accepted them. An external author
+ * validating against the published file was told a component kind was invalid that the product accepts.
+ *
+ * A generated directory holding a file nothing generates is a published claim with no producer, which is
+ * the same defect `packages/schema/src/component.ts` records about a kind with no producer. Emitting is
+ * checked; existing is now checked too.
+ */
+const emitted = new Set(documentDescriptors().map((descriptor) => descriptor.fileName));
+const orphans = readdirSync(outputDirectory)
+  .filter((name) => name.endsWith('.json') && !emitted.has(name))
+  .sort();
+for (const orphan of orphans) {
+  if (check) {
+    drifted += 1;
+    console.error(
+      `schema orphan: ${orphan} is published here and nothing in packages/schema emits it, so nothing checks what it claims`,
+    );
+    continue;
+  }
+  unlinkSync(join(outputDirectory, orphan));
+  written.push(`${orphan} (removed: nothing emits it)`);
 }
 
 const index = documentDescriptors()
