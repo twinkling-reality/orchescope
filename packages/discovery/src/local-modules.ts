@@ -1,4 +1,6 @@
 import type { ModuleFacts } from '@orchescope/source-analysis';
+import { namesStandardLibrary } from './standard-library.ts';
+import { namesRootAlias } from './symbol-index.ts';
 
 /**
  * Which import specifiers name a module this repository writes, rather than a distribution it depends on.
@@ -210,3 +212,20 @@ export const namesDefinedPackage = (local: LocalModules, specifier: string): boo
   }
   return false;
 };
+
+/**
+ * A specifier naming a file this repository writes, or a module its language runtime provides.
+ *
+ * The narrow answer, and the one a recogniser must use. `namesDefinedPackage` is deliberately broader for
+ * the refusal reader, on the argument in `definedPackages` above that the two errors are not the same size:
+ * a refusal that names the repository to itself costs one row, and a recognition that loses a real
+ * distribution costs a component. A layer 1 recogniser is the third reader that argument did not consider,
+ * and it needs the narrow answer. Measured: the broad set reports `mcp` as first party on a repository that
+ * writes `src/agents/mcp/`, which loses six real Model Context Protocol servers.
+ */
+export const namesLocalSpecifier = (specifier: string, language: string): boolean =>
+  specifier.startsWith('.') ||
+  specifier.startsWith('/') ||
+  specifier.startsWith('node:') ||
+  namesRootAlias(specifier) ||
+  namesStandardLibrary(specifier, language);

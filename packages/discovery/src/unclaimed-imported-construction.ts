@@ -6,10 +6,10 @@ import {
   localModules,
   namesDefinedPackage,
   namesLocalModule,
+  namesLocalSpecifier,
 } from './local-modules.ts';
 import { moduleMatches } from './matching.ts';
-import { namesStandardLibrary } from './standard-library.ts';
-import { buildSymbolIndex, namesRootAlias, type SymbolIndex } from './symbol-index.ts';
+import { buildSymbolIndex, type SymbolIndex } from './symbol-index.ts';
 
 /**
  * Imported constructions no adapter has claimed.
@@ -138,12 +138,6 @@ const constructionRole = (entries: readonly ObjectEntryFact[]): string | undefin
  * makes this reader see more. They are here before the reader is widened, because the conjunction below
  * fires so rarely that neither gap is reachable today, and both become wrong answers the moment it is.
  */
-const namesLocalSpecifier = (specifier: string, language: string): boolean =>
-  specifier.startsWith('.') ||
-  specifier.startsWith('/') ||
-  specifier.startsWith('node:') ||
-  namesRootAlias(specifier) ||
-  namesStandardLibrary(specifier, language);
 
 /** The top level distribution a specifier belongs to: `pkg.sub` and `pkg/sub` are both `pkg`. */
 const distributionOf = (specifier: string): string => {
