@@ -112,7 +112,7 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 1,
+      "entrypoint": 1,
       "model": 1,
       "prompt": 1
     },

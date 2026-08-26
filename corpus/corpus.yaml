@@ -1024,10 +1024,15 @@ repositories:
         components: 8
         edges: 4
       exactIdsByKind:
-        agent:
-          - agent:llm_call
-          - agent:vision_call
+        entrypoint:
+          - entrypoint:get_conn~1ed16c
+          - entrypoint:get_conn~92b7f1
+          - entrypoint:llm_call
+          - entrypoint:module-scope
+          - entrypoint:to_notion
+          - entrypoint:vision_call
       absentKinds:
+        - agent
         - model
         - provider
       absentComponentTerms:
@@ -1044,29 +1049,29 @@ repositories:
               startLine: 99
               endLine: 99
       componentMetadata:
-        agent:llm_call:
+        entrypoint:llm_call:
           inferredFrom: model call site
           modelBoundary: provider ownership and model identity are not source-settled
-        agent:vision_call:
+        entrypoint:vision_call:
           inferredFrom: model call site
           modelBoundary: provider ownership and model identity are not source-settled
       componentEvidence:
-        agent:llm_call:
+        entrypoint:llm_call:
           - producer: adapter:model-sdk
             symbol: llm_call
             sourceFile: skills/watch/scripts/utils.py
             startLine: 123
             endLine: 126
-        agent:vision_call:
+        entrypoint:vision_call:
           - producer: adapter:model-sdk
             symbol: vision_call
             sourceFile: skills/watch/scripts/utils.py
             startLine: 174
             endLine: 177
       sourceCitations:
-        agent:llm_call:
+        entrypoint:llm_call:
           - skills/watch/scripts/utils.py
-        agent:vision_call:
+        entrypoint:vision_call:
           - skills/watch/scripts/utils.py
       adapterOutcomes:
         adapter:model-sdk:
@@ -3438,13 +3443,14 @@ repositories:
         components: 3
         edges: 2
       exactIdsByKind:
-        agent:
-          - agent:validate
+        entrypoint:
+          - entrypoint:validate
         model:
           - model:gpt-4o-mini
         prompt:
           - prompt:validate-messages-validate-277-39
       absentKinds:
+        - agent
         - provider
       absentComponentTerms:
         - github
@@ -3453,7 +3459,7 @@ repositories:
         - served_by_provider
       requiredEdges:
         - kind: invokes_model
-          from: agent:validate
+          from: entrypoint:validate
           to: model:gpt-4o-mini
           sourceFile: scripts/validate_proposal.py
           evidence:
@@ -3463,7 +3469,7 @@ repositories:
               startLine: 275
               endLine: 294
         - kind: uses_prompt
-          from: agent:validate
+          from: entrypoint:validate
           to: prompt:validate-messages-validate-277-39
           sourceFile: scripts/validate_proposal.py
           evidence:
@@ -3483,7 +3489,7 @@ repositories:
               startLine: 275
               endLine: 294
       componentMetadata:
-        agent:validate:
+        entrypoint:validate:
           inferredFrom: model call site
           modelBoundary: provider ownership unresolved for a source-settled model
         model:gpt-4o-mini:
@@ -3497,9 +3503,6 @@ repositories:
           hasSubstitutions: true
           sourceProducer: adapter:model-sdk
       componentDetails:
-        agent:validate:
-          framework: hand-written
-          role: unspecified
         model:gpt-4o-mini:
           maxOutputTokens: 120
           modelId: gpt-4o-mini
@@ -3510,7 +3513,7 @@ repositories:
           interpolatesUntrustedInput: true
           textHash: 8e92316195e3bb7da4bba1b6df66e742b90d55f12118895beda95960705b7bb8
       componentEvidence:
-        agent:validate:
+        entrypoint:validate:
           - producer: adapter:model-sdk
             symbol: validate
             sourceFile: scripts/validate_proposal.py
@@ -3539,7 +3542,7 @@ repositories:
             startLine: 275
             endLine: 294
       sourceCitations:
-        agent:validate:
+        entrypoint:validate:
           - scripts/validate_proposal.py
         model:gpt-4o-mini:
           - scripts/validate_proposal.py

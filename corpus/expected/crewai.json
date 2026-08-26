@@ -112,10 +112,10 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 249,
+      "agent": 248,
       "agent_group": 94,
       "database": 3,
-      "entrypoint": 70,
+      "entrypoint": 71,
       "external_service": 47,
       "prompt": 36,
       "provider": 3,

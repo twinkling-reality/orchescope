@@ -112,9 +112,8 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 2,
       "database": 1,
-      "entrypoint": 4,
+      "entrypoint": 6,
       "external_service": 1
     },
     "declaredInTest": 0,
