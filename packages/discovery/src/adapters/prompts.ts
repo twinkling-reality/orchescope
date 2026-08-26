@@ -14,6 +14,7 @@ import { type PromptLeaf, settlePromptInput } from '../prompt-settlement.ts';
 import {
   discoverLangChainPromptTemplates,
   hasLangChainPromptTemplateImport,
+  LANGCHAIN_PROMPT_TEMPLATE_PACKAGES,
 } from './langchain-prompt-template.ts';
 
 const ADAPTER_ID = 'adapter:prompts';
@@ -212,7 +213,7 @@ const addConfigPrompt = (
 export const promptsAdapter: AgentSystemAdapter = {
   id: ADAPTER_ID,
   version: '4',
-  packages: [],
+  packages: LANGCHAIN_PROMPT_TEMPLATE_PACKAGES,
   appliesTo: (context) =>
     hasLangChainPromptTemplateImport(context) ||
     context.promptInputs

@@ -16,11 +16,27 @@ import type { SourcePromptInput } from '../prompt-input.ts';
 import { promptCallSupport } from '../prompt-input.ts';
 import { settlePromptInput } from '../prompt-settlement.ts';
 
-const PACKAGES = [
+/**
+ * The distributions this reader matches prompt template constructions against.
+ *
+ * Exported because the adapter that consumes this reader has to claim what the reader reads. It did not,
+ * and the consequence was a document contradicting itself about one line: `ai-article-writer` recorded
+ * `langchain_core.ChatPromptTemplate is constructed at outline_generator1.py:358 and no adapter claims that
+ * distribution`, while the same scan read that exact construction into `prompt:planner_node.prompt.human`
+ * and `prompt:planner_node.prompt.system` and called it exact in two pinned refusals. A reader saying it
+ * does not read a name it reads is worse than silence, because silence is at least consistent.
+ *
+ * Only these three submodules. `langchain_core` claimed whole silences thirteen
+ * `langchain_core.messages.ToolMessage` constructions on three pinned repositories that no reader touches,
+ * which is manufactured silence rather than a correction.
+ */
+export const LANGCHAIN_PROMPT_TEMPLATE_PACKAGES = [
   'langchain_core.prompts',
   'langchain.prompts',
   '@langchain/core/prompts',
 ] as const;
+
+const PACKAGES = LANGCHAIN_PROMPT_TEMPLATE_PACKAGES;
 const CONSTRUCTORS = new Set(['from_template', 'fromTemplate', 'from_messages', 'fromMessages']);
 const INVOCATIONS = new Set(['invoke', 'format', 'format_messages', 'formatMessages']);
 

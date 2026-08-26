@@ -364,6 +364,39 @@ message = ToolMessage(content='x', tool_call_id='1')
     );
   });
 
+  /*
+   * FALSIFIER, and the defect it pins is a document contradicting itself about one line. The prompt reader
+   * matches `ChatPromptTemplate` against three submodules and the adapter consuming it claimed none of
+   * them, so `ai-article-writer` recorded `langchain_core.ChatPromptTemplate is constructed at
+   * outline_generator1.py:358 and no adapter claims that distribution` while the same scan read that exact
+   * construction into two pinned prompt components and called it exact in two pinned refusals.
+   */
+  it('leaves a prompt template to the reader that reads it', async () => {
+    const result = await scan({
+      'src/app.py': `from langchain_core.prompts import ChatPromptTemplate
+
+prompt = ChatPromptTemplate.from_messages([
+    ('system', 'You plan an outline for an article.'),
+    ('human', 'Write an outline about {topic}.'),
+]).partial(format_instructions='numbered list')
+`,
+    });
+
+    assert.deepEqual(unclaimed(result), []);
+  });
+
+  /* GUARD. A sibling submodule no reader matches against stays unclaimed, here as it does above. */
+  it('still records a message construction no prompt reader matches against', async () => {
+    const result = await scan({
+      'src/app.py': `from langchain_core.messages import ToolMessage
+
+message = ToolMessage(content='x', tool_call_id='1')
+`,
+    });
+
+    assert.equal(unclaimed(result).length, 1);
+  });
+
   it('leaves a bare Node builtin to the runtime', async () => {
     const result = await scan({
       'package.json': '{ "name": "fixture", "version": "1.0.0", "type": "module" }',
