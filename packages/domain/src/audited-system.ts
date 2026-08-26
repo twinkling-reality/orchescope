@@ -1,4 +1,4 @@
-import type { Component } from '@orchescope/schema';
+import type { Component, ComponentKind } from '@orchescope/schema';
 import { isModelCallFrame } from './inferred-entry-point.ts';
 
 /**
@@ -9,7 +9,7 @@ import { isModelCallFrame } from './inferred-entry-point.ts';
  * here rather than beside the one call site so that a check on what detection can be moved by reads the set
  * detection decides with, instead of a copy of it that goes stale the day a kind is added.
  */
-export const AGENT_SYSTEM_KINDS: ReadonlySet<string> = new Set([
+export const AGENT_SYSTEM_KINDS: ReadonlySet<ComponentKind> = new Set<ComponentKind>([
   'agent',
   'workflow',
   'model',

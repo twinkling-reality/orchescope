@@ -401,11 +401,20 @@ const scanFixture = async (): Promise<Produced> => {
 /**
  * What the rules select on, read out of their own source.
  *
- * The enumerated kinds are asked for by name: a rule reaching a kind names its literal, so the question is
- * put to the schema's list and answered by the rule's text. Metadata keys and `details` fields are open
- * sets with no enumeration to ask against, so they are read off the two forms a rule has for reaching one.
- * Both over report rather than under: a name in a comment or on a branch nothing reaches costs an entry in
- * a table below, and a name this misses costs a release.
+ * Component kinds are asked in full, from the schema's own list, rather than narrowed to the ones a rule
+ * file happens to spell. Narrowing them was the defect: the filter asked the schema for eighteen kinds and
+ * handed the assertion seventeen, dropping `provider`, of which the corpus holds fifty one components, and
+ * a kind added with no producer was asked nothing at all and passed green. The list is the population the
+ * product publishes, so it is the population a producer has to exist for.
+ *
+ * Relation kinds keep the narrowing, and the difference is not an oversight. A `ComponentKind` with no
+ * producer is a kind the graph can never hold; an `EdgeKind` with no producer is a relation the graph can
+ * never hold, and the two exemptions below already carry the ones a run writes and the ones nothing writes.
+ * Widening the relation half is a separate measurement and is not made here.
+ *
+ * Metadata keys and `details` fields are open sets with no enumeration to ask against, so they are read off
+ * the two forms a rule has for reaching one. Both over report rather than under: a name in a comment or on
+ * a branch nothing reaches costs an entry in a table below, and a name this misses costs a release.
  */
 const readByRules = (): {
   readonly componentKinds: readonly string[];
@@ -423,7 +432,7 @@ const readByRules = (): {
     ...new Set([...source.matchAll(pattern)].map((match) => match[1] as string)),
   ];
   return {
-    componentKinds: named(literalsOf(ComponentKind)),
+    componentKinds: literalsOf(ComponentKind),
     edgeKinds: named(literalsOf(EdgeKind)),
     policyFields: Object.keys(EdgePolicy.properties),
     metadataKeys: matched(/metadata\['([A-Za-z0-9_]+)'\]/g),
@@ -526,7 +535,7 @@ describe('the values a rule reads, and what writes them', () => {
     }
   });
 
-  it('produces every component kind the rules select on', () => {
+  it('produces every component kind the schema publishes', () => {
     const traceKinds = new Set<string>();
     for (const operation of literalsOf(AgentOperation)) {
       const kind = componentKindFor(operation as AgentOperationName);
@@ -541,7 +550,7 @@ describe('the values a rule reads, and what writes them', () => {
     assert.deepEqual(
       unproduced,
       [],
-      `a rule selects on the component kinds ${unproduced.join(', ')} and nothing writes them, so the part of its population they stand for is empty on every repository and no reader can tell`,
+      `the schema publishes the component kinds ${unproduced.join(', ')} and nothing writes them, so the part of any population they stand for is empty on every repository and no reader can tell`,
     );
   });
 

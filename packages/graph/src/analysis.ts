@@ -1,5 +1,12 @@
 import { identityKey, isInferredEntryPoint, partOfDeclaredTopology } from '@orchescope/domain';
-import type { Component, ComponentId, Edge, EdgeKind, TopologyCoverage } from '@orchescope/schema';
+import type {
+  Component,
+  ComponentId,
+  ComponentKind,
+  Edge,
+  EdgeKind,
+  TopologyCoverage,
+} from '@orchescope/schema';
 import type { IndexedGraph } from './indexed-graph.ts';
 
 /**
@@ -378,7 +385,7 @@ export const topologyRequirements = (index: IndexedGraph): TopologyRequirements 
 };
 
 /** Components declared but never observed, restricted to kinds that can appear in a trace. */
-const OBSERVABLE_KINDS = new Set([
+const OBSERVABLE_KINDS: ReadonlySet<ComponentKind> = new Set<ComponentKind>([
   'agent',
   'workflow',
   'workflow_step',
@@ -395,4 +402,4 @@ const OBSERVABLE_KINDS = new Set([
   'evaluator',
 ]);
 
-export const isObservableKind = (kind: string): boolean => OBSERVABLE_KINDS.has(kind);
+export const isObservableKind = (kind: ComponentKind): boolean => OBSERVABLE_KINDS.has(kind);

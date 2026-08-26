@@ -17,6 +17,7 @@
  */
 
 import { formatCount } from '@orchescope/domain';
+import type { ComponentKind } from '@orchescope/schema';
 import type { AuditResult } from '@orchescope/usecases';
 import { cut, visibleWidth } from './display-width.ts';
 import { KEY_WIDTH, type Layout, type Region, type Row, VALUE_COLUMN } from './document-grid.ts';
@@ -40,7 +41,7 @@ const HEADLINE_KINDS = [
   { kind: 'workflow_step', singular: 'workflow step' },
   { kind: 'tool', singular: 'tool' },
   { kind: 'model', singular: 'model' },
-] as const;
+] as const satisfies readonly { readonly kind: ComponentKind; readonly singular: string }[];
 
 /** `a`, `a and b`, `a, b and c`. No serial comma, so the last two read as a pair. */
 const joinWords = (parts: readonly string[]): string =>

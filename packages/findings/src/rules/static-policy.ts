@@ -19,7 +19,14 @@ import {
   topologyRequirements,
   unreachableComponents,
 } from '@orchescope/graph';
-import type { Component, ComponentId, Edge, EvidenceId, SideEffectClass } from '@orchescope/schema';
+import type {
+  Component,
+  ComponentId,
+  ComponentKind,
+  Edge,
+  EvidenceId,
+  SideEffectClass,
+} from '@orchescope/schema';
 import {
   examined,
   type FindingDraft,
@@ -619,7 +626,7 @@ const approvedCallersOf = (context: RuleContext, component: Component): boolean 
   );
 };
 
-const MODEL_DRIVEN_KINDS: readonly string[] = ['agent', 'agent_group', 'mcp_server', 'tool'];
+const MODEL_DRIVEN_KINDS: readonly ComponentKind[] = ['agent', 'agent_group', 'mcp_server', 'tool'];
 
 /**
  * Everything a model can steer, seeded by what it is rather than only by what it is called.
@@ -1082,11 +1089,10 @@ export const promptInjectionBoundaryRule: Rule = {
  * all: nothing in the repository reaches it, that is correct, and reporting it as a defect files a
  * finding against the wrong party.
  */
-const REACHABILITY_KINDS: ReadonlySet<string> = new Set([
+const REACHABILITY_KINDS: ReadonlySet<ComponentKind> = new Set<ComponentKind>([
   'agent',
   'tool',
   'mcp_server',
-  'worker',
   'queue',
   'retrieval',
   'memory',

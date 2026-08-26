@@ -1,4 +1,4 @@
-import type { Finding, SystemGraph } from '@orchescope/schema';
+import type { ComponentKind, Finding, SystemGraph } from '@orchescope/schema';
 
 /**
  * Export formats for agents and CI.
@@ -9,7 +9,21 @@ import type { Finding, SystemGraph } from '@orchescope/schema';
 
 const MERMAID_MAX_EDGES = 400;
 
-const MERMAID_SHAPE: Readonly<Record<string, [string, string]>> = {
+/**
+ * A bracket pair per component kind, total over the published vocabulary on purpose.
+ *
+ * Total rather than partial because this is the one population that can be, and being total is what makes
+ * the compiler answer the question nothing else answers: a kind added to `COMPONENT_KINDS` fails to build
+ * until somebody decides how it is drawn. Every other kind-keyed population in this repository is a
+ * membership test, and a membership set is not required to be exhaustive, so none of them can catch an
+ * addition. This one carried `project` for as long as it took to notice, and omitted `evaluator` while
+ * three pinned repositories declared eight of them.
+ *
+ * `evaluator` is given the default pair deliberately, so that adding the missing key changes no exported
+ * diagram. Giving it a distinct shape is a defensible improvement and a separate decision, because it
+ * moves product output on the entries that hold those eight components.
+ */
+const MERMAID_SHAPE: Readonly<Record<ComponentKind, [string, string]>> = {
   agent: ['[', ']'],
   agent_group: ['[[', ']]'],
   workflow: ['[[', ']]'],
@@ -27,7 +41,7 @@ const MERMAID_SHAPE: Readonly<Record<string, [string, string]>> = {
   approval_boundary: ['{', '}'],
   side_effect: ['[', ']'],
   entrypoint: ['([', '])'],
-  project: ['[', ']'],
+  evaluator: ['[', ']'],
 };
 
 const mermaidId = (componentId: string): string => componentId.replace(/[^A-Za-z0-9_]/g, '_');

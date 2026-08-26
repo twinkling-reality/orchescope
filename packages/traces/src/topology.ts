@@ -227,7 +227,7 @@ const missingAttributeKey = (missing: MissingSpanAttribute): string =>
  * what it means to run an agent depends on what ran it, which is why `edgeKindFor` asks about the parent
  * before consulting this table.
  */
-const EDGE_KIND_BY_TARGET: Readonly<Record<string, string>> = {
+const EDGE_KIND_BY_TARGET: Readonly<Partial<Record<ComponentKind, string>>> = {
   model: 'invokes_model',
   tool: 'calls_tool',
   agent: 'contains',
@@ -259,7 +259,7 @@ const EDGE_KIND_BY_TARGET: Readonly<Record<string, string>> = {
  * it out of the control flow projection, where a relation this build could not name has no business
  * contributing a cycle or a fan out.
  */
-const edgeKindFor = (fromKind: string, toKind: string, operation: string): string => {
+const edgeKindFor = (fromKind: string, toKind: ComponentKind, operation: string): string => {
   if (operation === 'memory_write') return 'writes_memory';
   if (fromKind === 'agent' && toKind === 'agent') return 'hands_off_to';
   return EDGE_KIND_BY_TARGET[toKind] ?? 'observed_after';
