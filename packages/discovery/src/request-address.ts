@@ -133,5 +133,22 @@ export const statedHostOf = (
  * `bedrock-runtime.<region>.amazonaws.com` rejects `bedrock-runtime.*.amazonaws.com` on the character
  * rather than on the shape. An ordinary label in that position asks the question the pattern means. A
  * host with no wildcard in it is unchanged, which is every host read whole.
+ *
+ * The credentials and the port go too, because `hostOf` returns the whole authority and the table
+ * answers about hostnames. The two halves of the join disagreed about this: the shim asks with
+ * `url.hostname`, which carries neither, so a repository whose source writes
+ * `https://api.openai.com:443/v1/chat/completions` was an unrecognised host to the scan and OpenAI to
+ * the run, and the delta between them was manufactured here rather than found in the repository. The
+ * full authority stays on `details.host`, where it is the name a reader recognises and where
+ * `external_service:localhost-11434` comes from.
+ *
+ * Dropping the credentials also keeps them out of the permission scope and the component name, which is
+ * the second reason and would be enough on its own.
  */
-export const hostToAskAbout = (host: string): string => host.replaceAll(WILDCARD, 'label');
+export const hostToAskAbout = (host: string): string => {
+  const withoutCredentials = host.slice(host.lastIndexOf('@') + 1);
+  const closingBracket = withoutCredentials.lastIndexOf(']');
+  const portAt = withoutCredentials.indexOf(':', closingBracket + 1);
+  const withoutPort = portAt < 0 ? withoutCredentials : withoutCredentials.slice(0, portAt);
+  return withoutPort.replaceAll(WILDCARD, 'label');
+};
