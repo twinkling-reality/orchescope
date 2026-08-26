@@ -1,0 +1,157 @@
+{
+  "adapters": {
+    "adapter:agentflow": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:browser-use-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:deep-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 1,
+      "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langchain-legacy-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langchain-v1-create-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 4,
+      "edgesFound": 3,
+      "filesInspected": 2,
+      "status": "completed"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 2,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:search-index": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": true,
+  "components": {
+    "byKind": {
+      "entrypoint": 2,
+      "model": 1,
+      "provider": 1
+    },
+    "declaredInTest": 0,
+    "total": 4
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 13,
+    "inSupportedLanguages": 9,
+    "parsed": 9,
+    "skipped": 0,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "model-call-without-timeout": 1,
+      "observability-coverage": 1
+    },
+    "bySeverity": {
+      "info": 1,
+      "medium": 1
+    },
+    "componentsByRule": {
+      "model-call-without-timeout": 3,
+      "observability-coverage": 4
+    },
+    "strengths": 0,
+    "total": 2
+  },
+  "foundNothing": [],
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "tiny-code",
+  "relations": {
+    "byKind": {
+      "invokes_model": 2,
+      "served_by_provider": 1
+    },
+    "total": 3
+  }
+}

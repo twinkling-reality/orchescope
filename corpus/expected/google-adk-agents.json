@@ -1,0 +1,164 @@
+{
+  "adapters": {
+    "adapter:agentflow": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:browser-use-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:deep-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 5,
+      "edgesFound": 3,
+      "filesInspected": 1,
+      "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langchain-legacy-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langchain-v1-create-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:search-index": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": false,
+  "components": {
+    "byKind": {
+      "entrypoint": 2,
+      "external_service": 2
+    },
+    "declaredInTest": 0,
+    "total": 4
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 43,
+    "inSupportedLanguages": 33,
+    "parsed": 33,
+    "skipped": 0,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "observability-coverage": 1
+    },
+    "bySeverity": {
+      "info": 1
+    },
+    "componentsByRule": {
+      "observability-coverage": 4
+    },
+    "strengths": 0,
+    "total": 1
+  },
+  "foundNothing": [],
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "google-adk-agents",
+  "relations": {
+    "byKind": {
+      "calls_service": 2
+    },
+    "total": 2
+  },
+  "unclaimedImportedConstructions": [
+    "google.Agent is constructed at agent_id/agent_id/agent.py:3 and no adapter claims that distribution",
+    "google.Agent is constructed at hello/hello/agent.py:154 and no adapter claims that distribution",
+    "google.Agent is constructed at hello_auth/hello_auth/agent.py:103 and no adapter claims that distribution",
+    "google.Agent is constructed at scc/scc/agent.py:315 and no adapter claims that distribution",
+    "google.Agent is constructed at secret_agent/secret_agent/agent.py:12 and no adapter claims that distribution",
+    "google.Agent is constructed at security_manager/security_manager/sub_agents/scc/agent.py:315 and no adapter claims that distribution",
+    "google.Agent is constructed at security_manager/security_manager/sub_agents/web_risk/agent.py:75 and no adapter claims that distribution",
+    "google.Agent is constructed at send_email/send_email/agent.py:35 and no adapter claims that distribution",
+    "google.Agent is constructed at web_risk/web_risk/agent.py:73 and no adapter claims that distribution",
+    "google.LlmAgent is constructed at security_manager/security_manager/agent.py:13 and no adapter claims that distribution"
+  ]
+}

@@ -1,0 +1,148 @@
+{
+  "adapters": {
+    "adapter:agentflow": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:browser-use-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:deep-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langchain-legacy-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langchain-v1-create-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:search-index": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": false,
+  "components": {
+    "byKind": {},
+    "declaredInTest": 0,
+    "total": 0
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 12,
+    "inSupportedLanguages": 9,
+    "parsed": 8,
+    "skipped": 1,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {},
+    "bySeverity": {},
+    "componentsByRule": {},
+    "strengths": 0,
+    "total": 0
+  },
+  "foundNothing": [
+    "@modelcontextprotocol/sdk is imported here and its adapter found nothing"
+  ],
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "ollamaton",
+  "relations": {
+    "byKind": {},
+    "total": 0
+  },
+  "unclaimedImportedConstructions": [
+    "ollama.this.ollama.chat is called at ollama_integration.js:242 and no adapter claims that distribution",
+    "ollama.this.ollama.chat is called at ollama_integration.js:34 and no adapter claims that distribution",
+    "ollama.this.ollama.chat is called at ollama_integration.js:57 and no adapter claims that distribution"
+  ]
+}

@@ -1,0 +1,172 @@
+{
+  "adapters": {
+    "adapter:agentflow": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:browser-use-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:deep-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langchain-legacy-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langchain-v1-create-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 10,
+      "edgesFound": 10,
+      "filesInspected": 1,
+      "status": "completed"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 8,
+      "edgesFound": 8,
+      "filesInspected": 1,
+      "status": "completed"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:search-index": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": true,
+  "components": {
+    "byKind": {
+      "entrypoint": 7,
+      "model": 2,
+      "prompt": 8,
+      "provider": 1
+    },
+    "declaredInTest": 0,
+    "total": 18
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 22,
+    "inSupportedLanguages": 19,
+    "parsed": 19,
+    "skipped": 0,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "model-call-without-timeout": 1,
+      "observability-coverage": 1
+    },
+    "bySeverity": {
+      "info": 1,
+      "medium": 1
+    },
+    "componentsByRule": {
+      "model-call-without-timeout": 9,
+      "observability-coverage": 5
+    },
+    "strengths": 0,
+    "total": 2
+  },
+  "foundNothing": [],
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "ai-agents-from-scratch",
+  "relations": {
+    "byKind": {
+      "invokes_model": 8,
+      "served_by_provider": 2,
+      "uses_prompt": 8
+    },
+    "total": 18
+  },
+  "unclaimedImportedConstructions": [
+    "further unclaimed imported constructions were found and are omitted from this sample",
+    "node-llama-cpp.LlamaChatSession is constructed at examples/03_translation/translation.js:24 and no adapter claims that distribution",
+    "node-llama-cpp.LlamaChatSession is constructed at examples/04_think/think.js:27 and no adapter claims that distribution",
+    "node-llama-cpp.LlamaChatSession is constructed at examples/07_simple-agent/simple-agent.js:26 and no adapter claims that distribution",
+    "node-llama-cpp.LlamaChatSession is constructed at examples/08_simple-agent-with-memory/simple-agent-with-memory.js:51 and no adapter claims that distribution",
+    "node-llama-cpp.LlamaChatSession is constructed at examples/09_react-agent/react-agent.js:55 and no adapter claims that distribution",
+    "node-llama-cpp.LlamaChatSession is constructed at examples/10_aot-agent/aot-agent.js:97 and no adapter claims that distribution",
+    "node-llama-cpp.LlamaChatSession is constructed at examples/11_error-handling/error-handling.js:326 and no adapter claims that distribution",
+    "node-llama-cpp.LlamaChatSession is constructed at examples/12_tree-of-thought/tree-of-thought.js:85 and no adapter claims that distribution",
+    "node-llama-cpp.LlamaChatSession is constructed at examples/13_graph-of-thought/graph-of-thought.js:137 and no adapter claims that distribution",
+    "node-llama-cpp.LlamaChatSession is constructed at examples/14_chain-of-thought/chain-of-thought.js:152 and no adapter claims that distribution"
+  ]
+}

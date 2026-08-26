@@ -4739,6 +4739,769 @@ repositories:
       client of a framework is the shape being tested rather than this project in particular, so a replacement
       would have to be another repository that is about agents and declares none.
 
+  # The eight repositories used by the 0.9.2 post-publication acceptance check, pinned here because that
+  # record states they are regression inputs and never unseen holdouts again. Seven were selected as agent
+  # applications and one as a negative control, none had been seen by this repository before, and three
+  # were run rather than only scanned. What each entry holds is the exact answer 0.9.3 gives about the
+  # construction that made it worth selecting, so the recall this release gained cannot regress silently.
+
+  - name: autogen-ollama
+    source: git
+    url: https://github.com/vecnode/autogen-ollama.git
+    commit: 7a74b5b9be1fda536595406969c29dd4927907ab
+    kind: agent_system
+    why: >-
+      The clearest silent false negative the 0.9.2 acceptance check recorded, and the one that inverted the
+      join. `chat_core.py:25` constructs `OllamaChatCompletionClient(model=..., client_host=..., timeout=300.0)`
+      and `chat_core.py:42` constructs `AssistantAgent("assistant", self.model_client, system_message=...)`,
+      then drives it with `run_stream` at `chat_core.py:58`. Two real constructions, an agent name, a system
+      message and a declared 300 second timeout, all in a parsed file, produced no component, no finding and
+      no bounded refusal. The published release then traced a run of it, found `agent:assistant` at runtime
+      and raised `exercised-not-declared`, telling the reader an agent ran undeclared while the same report
+      said no agent system was detected. The declaration is the literal first positional argument one line
+      into a file that was read.
+
+      Both constructions are now refused by name and location. Neither carries a tools-shaped argument, so
+      the conjunction this release removed is what hid them. The client is handed to `AssistantAgent`
+      positionally, so no keyword names it at all; what the reader fires on is `model_client_stream=True`,
+      whose first word is the stem. An exact key list could not have reached that name, and reaching it by
+      adding the name would have fixed this repository and no other.
+
+      The entry pins the honest boundary rather than a detection. `agent`, `model` and `tool` stay absent,
+      the two components are the ones the browser JavaScript declares, and the two refusals are exact and
+      source located. A build that reports an agent here has invented one; a build that reports neither the
+      components nor the refusals has gone back to silence.
+    acceptance:
+      expectedAgentSystemDetected: false
+      graphPopulation:
+        components: 2
+        edges: 1
+      exactIdsByKind:
+        entrypoint:
+          - entrypoint:streamassistantreply
+        external_service:
+          - external_service:same-origin-streamassistantreply
+      absentKinds:
+        - agent
+        - agent_group
+        - mcp_server
+        - model
+        - prompt
+        - provider
+        - tool
+        - workflow
+      absentComponentTerms:
+        - autogen
+        - assistantagent
+        - ollamachatcompletionclient
+      requiredEdges:
+        - kind: calls_service
+          from: entrypoint:streamassistantreply
+          to: external_service:same-origin-streamassistantreply
+          sourceFile: static/js/chat.js
+          evidence:
+            - producer: adapter:effects
+              symbol: fetch
+              sourceFile: static/js/chat.js
+              startLine: 51
+              endLine: 55
+      componentMetadata:
+        entrypoint:streamassistantreply:
+          inferredFrom: enclosing scope of an external effect
+        external_service:same-origin-streamassistantreply:
+          client: fetch
+          httpMethod: POST
+          url: /chat/stream
+      componentEvidence:
+        entrypoint:streamassistantreply:
+          - producer: adapter:effects
+            symbol: streamAssistantReply
+            sourceFile: static/js/chat.js
+            startLine: 51
+            endLine: 55
+        external_service:same-origin-streamassistantreply:
+          - producer: adapter:effects
+            symbol: fetch
+            sourceFile: static/js/chat.js
+            startLine: 51
+            endLine: 55
+      sourceCitations:
+        entrypoint:streamassistantreply:
+          - static/js/chat.js
+        external_service:same-origin-streamassistantreply:
+          - static/js/chat.js
+      adapterOutcomes:
+        adapter:effects:
+          status: completed
+          componentsFound: 2
+          edgesFound: 1
+          filesInspected: 1
+      requiredUnclaimedImportedConstructions:
+        - sourceFile: chat_core.py
+          startLine: 25
+        - sourceFile: chat_core.py
+          startLine: 42
+      topology:
+        status: incomplete
+        unresolvedCount: 1
+        conditionalDestinations: 0
+        requiredUnlocatedRefusals:
+          - kind: adapter_input
+            reason: >-
+              adapter:effects did not state an inspected topology population for this applicable input.
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+  - name: mastra-agentic-rag
+    source: git
+    url: https://github.com/laoposkj/mastra-agentic-rag.git
+    commit: 057d918f86b6b82f22a724af436d8b2e730ba198
+    kind: agent_system
+    why: >-
+      The repository whose headline claim was carried entirely by two wrong components. `new Agent({ id:
+      'rag-agent', instructions: ..., model, tools: { ragTool }, memory: new Memory() })` at
+      `src/mastra/agents/rag-agent.ts:8` is the agent, and 0.9.2 refused it correctly. What it reported
+      instead was `agent:embedtext`, a three line embedding helper at `src/mastra/rag/embeddings.ts:13`,
+      and `model:embedding/unspecified`, which read `embedding`, the SDK method name in
+      `openai.embedding(...)`, as the provider segment. `agentSystemDetected: true` rested on both.
+
+      Two separate corrections meet here. Removing `embed` from the generation calls stopped an embedding
+      being read as a generation, and the model call frame stopped a function holding one generation call
+      from being called an agent. The entry holds the result: zero components, zero edges, and the real
+      agent named as a bounded refusal.
+
+      It is pinned `agent_system` and expects `agentSystemDetected: false`, which is the shape a repository
+      has when this build reads no adapter for its framework and says so. A component appearing here without
+      a Mastra reader is an invention, and that is what the exact zero population is for.
+    acceptance:
+      type: completed_zero
+      expectedAgentSystemDetected: false
+      graphPopulation:
+        components: 0
+        edges: 0
+      evidencePopulation:
+        records: 0
+      evidenceCoverage:
+        totalEligible: 0
+        included: 0
+        omitted: 0
+        requiredIncluded: 0
+        omissionReasons: []
+      componentMetricPopulation:
+        records: 0
+      runtimePopulation:
+        runs: 0
+        observed:
+          count: 0
+          runIds: []
+        silent:
+          count: 0
+          runIds: []
+      adapterOutcomes:
+        adapter:vercel-ai-sdk:
+          status: completed
+          componentsFound: 0
+          edgesFound: 0
+          filesInspected: 0
+          languages: []
+        adapter:effects:
+          status: completed
+          componentsFound: 0
+          edgesFound: 0
+          filesInspected: 0
+          languages: []
+      unsupported:
+        - kind: adapter_found_nothing
+          area: ai, @ai-sdk/openai is imported here and its adapter found nothing
+          reason: >-
+            adapter:vercel-ai-sdk claims this framework, ran and found no component. Either this build does not
+            read the form this repository uses, or this repository imports the framework as a client and
+            declares nothing an adapter could read.
+      topology:
+        status: incomplete
+        unresolvedCount: 1
+        conditionalDestinations: 0
+        producers:
+          - adapterId: adapter:vercel-ai-sdk
+            status: incomplete
+            scope: control_flow
+            inspectedInputs: 0
+            relationsFound: 0
+        requiredRefusals:
+          - kind: adapter_input
+            reason: >-
+              adapter:vercel-ai-sdk did not state an inspected topology population for this applicable input.
+            sourceFile: src/mastra/rag/embeddings.ts
+            startLine: 1
+            fileHash: 1277204c277449f3ff6eaf70ce74cf85bdd5446f8eab64432e091ee474b321a9
+      findings:
+        total: 0
+        strengths: 0
+  - name: google-adk-agents
+    source: git
+    url: https://github.com/alphasecio/google-adk.git
+    commit: 25d2c3027f5695f25043badedc32514b3be27a26
+    kind: agent_system
+    why: >-
+      Ten Google ADK agent constructions in one repository, of which 0.9.2 refused nine and lost the tenth.
+      `agent_id/agent_id/agent.py:3` constructs `Agent(name='agent_id', model='gemini-2.5-flash-lite',
+      instruction=...)` from the same distribution, through the same import path, in a file named by the
+      same convention as its nine siblings. It differs from them in exactly one way: it passes no `tools`
+      argument. That is the clearest evidence in the whole acceptance set that the gap was structural rather
+      than framework specific, because a single repository answered the same question two ways.
+
+      The entry pins all ten as located refusals. A reader who removes the segment-stem predicate and
+      restores an exact key list will fail on `agent_id/agent_id/agent.py:3` and nothing else, which is the
+      smallest possible statement of what that predicate is for.
+    acceptance:
+      expectedAgentSystemDetected: false
+      graphPopulation:
+        components: 4
+        edges: 2
+      exactIdsByKind:
+        entrypoint:
+          - entrypoint:get_access_token
+          - entrypoint:greet_github_user
+        external_service:
+          - external_service:api.github.com
+          - external_service:unresolved-host-get_access_token
+      absentKinds:
+        - agent
+        - agent_group
+        - mcp_server
+        - model
+        - prompt
+        - provider
+        - tool
+        - workflow
+      absentComponentTerms:
+        - google.adk
+        - llmagent
+        - gemini
+      requiredEdges:
+        - kind: calls_service
+          from: entrypoint:get_access_token
+          to: external_service:unresolved-host-get_access_token
+          sourceFile: hello_auth/hello_auth/agent.py
+          evidence:
+            - producer: adapter:effects
+              symbol: requests.get
+              sourceFile: hello_auth/hello_auth/agent.py
+              startLine: 27
+              endLine: 31
+        - kind: calls_service
+          from: entrypoint:greet_github_user
+          to: external_service:api.github.com
+          sourceFile: hello_auth/hello_auth/agent.py
+          evidence:
+            - producer: adapter:effects
+              symbol: requests.get
+              sourceFile: hello_auth/hello_auth/agent.py
+              startLine: 81
+              endLine: 81
+            - producer: adapter:effects
+              symbol: requests.get
+              sourceFile: hello_auth/hello_auth/agent.py
+              startLine: 90
+              endLine: 90
+      componentMetadata:
+        entrypoint:get_access_token:
+          inferredFrom: enclosing scope of an external effect
+        entrypoint:greet_github_user:
+          inferredFrom: enclosing scope of an external effect
+        external_service:api.github.com:
+          client: requests.get
+          httpMethod: get
+          url: https://api.github.com/user
+        external_service:unresolved-host-get_access_token:
+          client: requests.get
+          httpMethod: get
+          urlIsDynamic: True
+      componentEvidence:
+        entrypoint:get_access_token:
+          - producer: adapter:effects
+            symbol: get_access_token
+            sourceFile: hello_auth/hello_auth/agent.py
+            startLine: 27
+            endLine: 31
+        entrypoint:greet_github_user:
+          - producer: adapter:effects
+            symbol: greet_github_user
+            sourceFile: hello_auth/hello_auth/agent.py
+            startLine: 81
+            endLine: 81
+        external_service:api.github.com:
+          - producer: adapter:effects
+            symbol: requests.get
+            sourceFile: hello_auth/hello_auth/agent.py
+            startLine: 81
+            endLine: 81
+          - producer: adapter:effects
+            symbol: requests.get
+            sourceFile: hello_auth/hello_auth/agent.py
+            startLine: 90
+            endLine: 90
+        external_service:unresolved-host-get_access_token:
+          - producer: adapter:effects
+            symbol: requests.get
+            sourceFile: hello_auth/hello_auth/agent.py
+            startLine: 27
+            endLine: 31
+      sourceCitations:
+        entrypoint:get_access_token:
+          - hello_auth/hello_auth/agent.py
+        entrypoint:greet_github_user:
+          - hello_auth/hello_auth/agent.py
+        external_service:api.github.com:
+          - hello_auth/hello_auth/agent.py
+        external_service:unresolved-host-get_access_token:
+          - hello_auth/hello_auth/agent.py
+      adapterOutcomes:
+        adapter:effects:
+          status: completed
+          componentsFound: 5
+          edgesFound: 3
+          filesInspected: 1
+      requiredUnclaimedImportedConstructions:
+        - sourceFile: agent_id/agent_id/agent.py
+          startLine: 3
+        - sourceFile: hello_auth/hello_auth/agent.py
+          startLine: 103
+        - sourceFile: hello/hello/agent.py
+          startLine: 154
+        - sourceFile: scc/scc/agent.py
+          startLine: 315
+        - sourceFile: secret_agent/secret_agent/agent.py
+          startLine: 12
+        - sourceFile: security_manager/security_manager/agent.py
+          startLine: 13
+      topology:
+        status: incomplete
+        unresolvedCount: 1
+        conditionalDestinations: 0
+        requiredUnlocatedRefusals:
+          - kind: adapter_input
+            reason: >-
+              adapter:effects did not state an inspected topology population for this applicable input.
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+  - name: workflows-acp
+    source: git
+    url: https://github.com/AstraBert/workflows-acp.git
+    commit: bf10f5dfaa3adea5bf7ca06e509019e20707017f
+    kind: agent_system
+    why: >-
+      A think, act and observe agent loop declared by subclassing, which this build still cannot read.
+      `src/workflows_acp/workflow.py:18` defines `class AgentWorkflow(Workflow)` over `llama-index-workflows`
+      with `@step` methods `think`, `take_action` and `call_tool`, and describes itself as an agent loop in
+      its own docstring. `src/workflows_acp/tools/definitions.py` binds nineteen `Tool(name=, description=,
+      fn=)` objects covering thirteen tool names including `execute_command`, `write_file` and `edit_file`.
+      All seventy one supported files were parsed and none of it produced a component.
+
+      This entry is pinned as a known limit rather than as a fix. A base class and a decorator are how every
+      Python library asks for a declaration, and firing on them was implemented twice and measured to move
+      twenty four of forty eight corpus entries with data models, command line decorators and GUI widgets.
+      ADR 0014 records both measurements. What the entry does hold is that the `acp` constructions beside
+      the workflow are refused, that the three `.mcp.json` servers are still classified as developer
+      tooling, and that no agent, tool or model is invented from a repository this build reads only in part.
+    acceptance:
+      expectedAgentSystemDetected: false
+      graphPopulation:
+        components: 16
+        edges: 5
+      exactIdsByKind:
+        entrypoint:
+          - entrypoint:cancel_task
+          - entrypoint:create_task
+          - entrypoint:get_task
+          - entrypoint:poll_for_task
+          - entrypoint:upload_file
+        external_service:
+          - external_service:same-origin-cancel_task
+          - external_service:same-origin-create_task
+          - external_service:same-origin-get_task
+          - external_service:same-origin-poll_for_task
+          - external_service:same-origin-upload_file
+        mcp_server:
+          - mcp_server:search
+          - mcp_server:with-http
+          - mcp_server:with-stdio
+        provider:
+          - provider:anthropic
+          - provider:google
+          - provider:openai
+      absentKinds:
+        - agent
+        - agent_group
+        - model
+        - prompt
+        - tool
+        - workflow
+      absentComponentTerms:
+        - llama_index
+        - agentworkflow
+        - workflows
+      requiredEdges:
+        - kind: calls_service
+          from: entrypoint:cancel_task
+          to: external_service:same-origin-cancel_task
+          sourceFile: packages/lobsterx/src/lobsterx/api/client.py
+          evidence:
+            - producer: adapter:effects
+              symbol: client.delete
+              sourceFile: packages/lobsterx/src/lobsterx/api/client.py
+              startLine: 84
+              endLine: 84
+        - kind: calls_service
+          from: entrypoint:create_task
+          to: external_service:same-origin-create_task
+          sourceFile: packages/lobsterx/src/lobsterx/api/client.py
+          evidence:
+            - producer: adapter:effects
+              symbol: client.post
+              sourceFile: packages/lobsterx/src/lobsterx/api/client.py
+              startLine: 61
+              endLine: 61
+        - kind: calls_service
+          from: entrypoint:get_task
+          to: external_service:same-origin-get_task
+          sourceFile: packages/lobsterx/src/lobsterx/api/client.py
+          evidence:
+            - producer: adapter:effects
+              symbol: client.get
+              sourceFile: packages/lobsterx/src/lobsterx/api/client.py
+              startLine: 73
+              endLine: 73
+        - kind: calls_service
+          from: entrypoint:poll_for_task
+          to: external_service:same-origin-poll_for_task
+          sourceFile: packages/lobsterx/src/lobsterx/api/client.py
+          evidence:
+            - producer: adapter:effects
+              symbol: client.get
+              sourceFile: packages/lobsterx/src/lobsterx/api/client.py
+              startLine: 102
+              endLine: 102
+        - kind: calls_service
+          from: entrypoint:upload_file
+          to: external_service:same-origin-upload_file
+          sourceFile: packages/lobsterx/src/lobsterx/api/client.py
+          evidence:
+            - producer: adapter:effects
+              symbol: client.post
+              sourceFile: packages/lobsterx/src/lobsterx/api/client.py
+              startLine: 48
+              endLine: 48
+      componentMetadata:
+        entrypoint:cancel_task:
+          inferredFrom: enclosing scope of an external effect
+        entrypoint:create_task:
+          inferredFrom: enclosing scope of an external effect
+        entrypoint:get_task:
+          inferredFrom: enclosing scope of an external effect
+        entrypoint:poll_for_task:
+          inferredFrom: enclosing scope of an external effect
+        entrypoint:upload_file:
+          inferredFrom: enclosing scope of an external effect
+        external_service:same-origin-cancel_task:
+          aliasOf: httpx
+          client: client.delete
+          httpMethod: delete
+          url: /tasks/
+          urlIsDynamic: True
+      componentEvidence:
+        entrypoint:cancel_task:
+          - producer: adapter:effects
+            symbol: cancel_task
+            sourceFile: packages/lobsterx/src/lobsterx/api/client.py
+            startLine: 84
+            endLine: 84
+        entrypoint:create_task:
+          - producer: adapter:effects
+            symbol: create_task
+            sourceFile: packages/lobsterx/src/lobsterx/api/client.py
+            startLine: 61
+            endLine: 61
+        entrypoint:get_task:
+          - producer: adapter:effects
+            symbol: get_task
+            sourceFile: packages/lobsterx/src/lobsterx/api/client.py
+            startLine: 73
+            endLine: 73
+        entrypoint:poll_for_task:
+          - producer: adapter:effects
+            symbol: poll_for_task
+            sourceFile: packages/lobsterx/src/lobsterx/api/client.py
+            startLine: 102
+            endLine: 102
+        entrypoint:upload_file:
+          - producer: adapter:effects
+            symbol: upload_file
+            sourceFile: packages/lobsterx/src/lobsterx/api/client.py
+            startLine: 48
+            endLine: 48
+        external_service:same-origin-cancel_task:
+          - producer: adapter:effects
+            symbol: client.delete
+            sourceFile: packages/lobsterx/src/lobsterx/api/client.py
+            startLine: 84
+            endLine: 84
+      sourceCitations:
+        entrypoint:cancel_task:
+          - packages/lobsterx/src/lobsterx/api/client.py
+        entrypoint:create_task:
+          - packages/lobsterx/src/lobsterx/api/client.py
+        entrypoint:get_task:
+          - packages/lobsterx/src/lobsterx/api/client.py
+        entrypoint:poll_for_task:
+          - packages/lobsterx/src/lobsterx/api/client.py
+        entrypoint:upload_file:
+          - packages/lobsterx/src/lobsterx/api/client.py
+        external_service:same-origin-cancel_task:
+          - packages/lobsterx/src/lobsterx/api/client.py
+      adapterOutcomes:
+        adapter:mcp:
+          status: completed
+          componentsFound: 3
+          edgesFound: 0
+          filesInspected: 1
+        adapter:model-sdk:
+          status: completed
+          componentsFound: 3
+          edgesFound: 0
+          filesInspected: 6
+        adapter:effects:
+          status: completed
+          componentsFound: 10
+          edgesFound: 5
+          filesInspected: 1
+      requiredUnclaimedImportedConstructions:
+        - sourceFile: src/workflows_acp/acp_wrapper.py
+          startLine: 450
+        - sourceFile: src/workflows_acp/acp_wrapper.py
+          startLine: 461
+        - sourceFile: src/workflows_acp/acp_wrapper.py
+          startLine: 470
+        - sourceFile: src/workflows_acp/acp_wrapper.py
+          startLine: 500
+        - sourceFile: src/workflows_acp/acp_wrapper.py
+          startLine: 518
+      topology:
+        status: incomplete
+        unresolvedCount: 8
+        conditionalDestinations: 0
+        requiredUnlocatedRefusals:
+          - kind: adapter_input
+            reason: >-
+              adapter:effects did not state an inspected topology population for this applicable input.
+          - kind: adapter_input
+            reason: >-
+              adapter:mcp did not state an inspected topology population for this applicable input.
+        requiredRefusals:
+          - kind: adapter_input
+            reason: >-
+              adapter:model-sdk recognized a raw client or wrapper but has not stated a closed topology population
+              for that producer.
+            sourceFile: src/workflows_acp/llms/anthropic_llm.py
+            startLine: 1
+          - kind: adapter_input
+            reason: >-
+              adapter:model-sdk recognized a raw client or wrapper but has not stated a closed topology population
+              for that producer.
+            sourceFile: src/workflows_acp/llms/google_llm.py
+            startLine: 2
+          - kind: adapter_input
+            reason: >-
+              adapter:model-sdk recognized a raw client or wrapper but has not stated a closed topology population
+              for that producer.
+            sourceFile: src/workflows_acp/llms/openai_llm.py
+            startLine: 1
+          - kind: adapter_input
+            reason: >-
+              adapter:model-sdk recognized a raw client or wrapper but has not stated a closed topology population
+              for that producer.
+            sourceFile: tests/llms/test_anthropic_llm.py
+            startLine: 4
+          - kind: adapter_input
+            reason: >-
+              adapter:model-sdk recognized a raw client or wrapper but has not stated a closed topology population
+              for that producer.
+            sourceFile: tests/llms/test_google_llm.py
+            startLine: 4
+          - kind: adapter_input
+            reason: >-
+              adapter:model-sdk recognized a raw client or wrapper but has not stated a closed topology population
+              for that producer.
+            sourceFile: tests/llms/test_openai_llm.py
+            startLine: 5
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+  - name: ollamaton
+    source: git
+    url: https://github.com/inventorado/Ollamaton.git
+    commit: f0da5ba1d2769d643fac639b4c2775a9dfff3287
+    kind: agent_system
+    why: >-
+      A complete hand written agent loop whose two halves were read differently. `ollama_integration.js:3`
+      defines `class OllamaWithMCP`; its `chat` method builds a system message from
+      `this.mcp.getAvailableTools()`, calls the model, parses a tool call out of the reply, executes it
+      through `this.mcp.callTool(...)` and calls the model a second time with the result. 0.9.2 gave the MCP
+      half a bounded refusal and the model half nothing at all, because `this.ollama.chat({ model, messages })`
+      carries no import origin for a net keyed on imports to find.
+
+      The bridge is the assignment. `this.ollama = new Ollama({ host })` binds a receiver to a construction
+      whose distribution is unclaimed, and the call on that receiver is now read under the same argument
+      name rule as any construction. Without the rule the same net reads every web framework route
+      registration: measured, thirteen hits on one Express server against three real ones in this file.
+
+      The entry expects zero components and `agentSystemDetected: false`, with both the MCP refusal and the
+      three model calls named. This repository was also run under `orchescope trace` during the acceptance
+      check and its MCP tool name joined correctly, which is the product's central mechanism working on code
+      nobody involved had seen. No exercise block is declared here: the run needs a real MCP server over
+      stdio and a local model, and neither is invented.
+    acceptance:
+      type: completed_zero
+      expectedAgentSystemDetected: false
+      graphPopulation:
+        components: 0
+        edges: 0
+      evidencePopulation:
+        records: 0
+      evidenceCoverage:
+        totalEligible: 0
+        included: 0
+        omitted: 0
+        requiredIncluded: 0
+        omissionReasons: []
+      componentMetricPopulation:
+        records: 0
+      runtimePopulation:
+        runs: 0
+        observed:
+          count: 0
+          runIds: []
+        silent:
+          count: 0
+          runIds: []
+      adapterOutcomes:
+        adapter:mcp:
+          status: completed
+          componentsFound: 0
+          edgesFound: 0
+          filesInspected: 0
+          languages: []
+        adapter:effects:
+          status: completed
+          componentsFound: 0
+          edgesFound: 0
+          filesInspected: 0
+          languages: []
+      unsupported:
+        - kind: adapter_found_nothing
+          area: "@modelcontextprotocol/sdk is imported here and its adapter found nothing"
+          reason: >-
+            adapter:mcp claims this framework, ran and found no component. Either this build does not read the
+            form this repository uses, or this repository imports the framework as a client and declares nothing
+            an adapter could read.
+      topology:
+        status: incomplete
+        unresolvedCount: 1
+        conditionalDestinations: 0
+        producers:
+          - adapterId: adapter:mcp
+            status: incomplete
+            scope: control_flow
+            inspectedInputs: 0
+            relationsFound: 0
+        requiredRefusals:
+          - kind: adapter_input
+            reason: >-
+              adapter:mcp did not state an inspected topology population for this applicable input.
+            sourceFile: mcp_client.js
+            startLine: 1
+            fileHash: 4a62ea07acde2348f47731290b1272c7a97149e87819b0783fe69cb60c001596
+      findings:
+        total: 0
+        strengths: 0
+  - name: ai-agents-from-scratch
+    source: git
+    url: https://github.com/pguso/ai-agents-from-scratch.git
+    commit: 62e4ac7bf805149d7efd17442d552dc055e25c8b
+    kind: agent_system
+    why: >-
+      The repository that produced seven false agents and missed fourteen real ones. 0.9.2 reported
+      `agent:basiccompletion`, `agent:conversationcontext`, `agent:modelcomparison` and four more, every one
+      a demonstration function in `examples/02_openai-intro/openai-intro.js`. The file holds ten
+      `chat.completions.create` calls across those seven functions, every one a bare completion with no
+      tools and no loop. Meanwhile fourteen of the sixteen example files
+      import `node-llama-cpp`, declare twenty seven tools through `defineChatSessionFunction` across five of
+      them, and implement a ReAct loop at `examples/09_react-agent/react-agent.js:165` along with
+      algorithm-of-thought, tree-of-thought and graph-of-thought agents. All nineteen JavaScript files were
+      parsed.
+
+      Both halves move here. The seven functions are inferred entry points rather than agents, so the
+      component inventory stops claiming seven agents, and `node-llama-cpp` is named as an unread
+      distribution rather than passing in silence. The models and the provider were always read correctly
+      and still are.
+
+      This repository was also traced during the acceptance check, against a local Ollama serving models
+      aliased `gpt-4o` and `gpt-3.5-turbo`. All seven examples ran and both models answered, and 0.9.2
+      reported that nine declared components were never exercised and that either no scenario reached them
+      or they were unreachable in practice. Both disjuncts were false about the file the run had just
+      executed, because a loopback address is not on a twelve entry host table. That is the defect the
+      host independent path reader fixes, and it is why this entry is here even though its static answer is
+      the smaller half of the story.
+  - name: tiny-code
+    source: git
+    url: https://github.com/Chinenyay/tiny-code.git
+    commit: 2f1d51c24df838ce28c63d0bd2f30bf2359f0c0d
+    kind: agent_system
+    why: >-
+      A hand written coding agent read correctly in two dialects, with its tools invisible in both. The
+      attribution and the model identity are right: `model="gpt-5.4"` is a literal at
+      `tinycode-py/src/agent.py:20` and `tinycode-ts/src/agent.ts:21`, and reading one agent loop from two
+      languages in one repository is exactly what a framework blind reader should do. Both enclosing
+      functions are inferred entry points rather than agents, because a function holding a model call shows
+      no loop and no tool population of its own, and detection here rests on the model.
+
+      What is missing is the tool population, and it is the known limit this entry exists to hold.
+      `tinycode-py/src/tools.py` declares five tools with a `TOOLS` dispatch table at line 4 and JSON schemas
+      from line 12, including `run_command`, which executes arbitrary shell at `functions.py:38`, and three
+      file writers. None of it is imported from anything, so an imported-construction reader cannot see it at
+      any width. The graph holds no tool component, no `calls_tool` edge and no permission on any of them.
+
+      The entry pins that the agent and the model stay correct while the tools stay absent. A build that
+      invents a tool here has guessed; a build that loses the agent has regressed. Closing the gap needs a
+      reader over local data structures, which is a much larger precision problem and is not attempted.
+  - name: llm-mock
+    source: git
+    url: https://github.com/axium-lab/llm-mock.git
+    commit: b075870470eececfaab95ec82ff4f1857026e25c
+    kind: not_agent_system
+    why: >-
+      The negative control of the 0.9.2 acceptance set, and the precision ceiling every widening in 0.9.3 was
+      measured against. Its production closure is an Express server that serves mock OpenAI, Anthropic,
+      Gemini and Azure endpoints. It normalizes tool declarations off the wire and returns deterministic tool
+      calls as data. It constructs no agent, selects no tool for a goal, delegates nothing to downloaded code,
+      and contains no outbound request at all: no `fetch`, `http.request`, `undici` or `node-fetch` anywhere
+      under `src/`.
+
+      One hundred and twenty six TypeScript files carrying dense model and tool calling vocabulary,
+      `normalizeTools`, `tool_choice`, `functionDeclarations`, `chat/completions`, `responses` and `messages`,
+      produced no agent and no invented component under 0.9.2 and still produce none. The single component is
+      `provider:google` from `tests/gemini/auth.test.ts`, correctly marked `declaredInTest` and correctly kept
+      out of the detection population.
+
+      Every predicate this release widened was checked here first. The segment-stem reader fires zero times,
+      the bound receiver bridge fires zero times, and the host independent inference path fires zero times
+      because a server that answers a model request does not make one. This is the entry that turns red if
+      any of them is loosened again.
+
 multiRepositorySystems:
   - name: openai-agents-js-filesystem-mcp
     repositories:
