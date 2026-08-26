@@ -30,11 +30,12 @@ import {
   stringValue,
 } from '@orchescope/source-analysis';
 import {
-  isInferencePath,
   type ModelEndpoint,
   modelEndpointForHost,
   modelFromPath,
   modelOperationForPath,
+  recogniseInference,
+  UNIDENTIFIED_PROVIDER,
 } from '@orchescope/traces/model-endpoints';
 import type { AdapterFindings, AgentSystemAdapter, DiscoveryContext } from '../adapter.ts';
 import { callRelationKind } from '../call-relation.ts';
@@ -583,20 +584,30 @@ const modelNameAt = (
   };
 
 /**
- * Whether this request reaches a model, and which one it reaches.
+ * Whether this request reaches a model, and whose model it reaches.
  *
  * A known provider host is not enough on its own. The same host mints tokens, takes file uploads and
  * answers usage queries, and reading those as model calls reported an authentication endpoint as a
  * model and then offered a remediation naming a client that call site does not have.
+ *
+ * An unrecognised host is no longer an answer of no. The host table has twelve entries and every OpenAI
+ * compatible server there is fails it: a repository whose source posts to its own vLLM was described as
+ * an agent system containing no model, and a run against a local Ollama produced the same silence from
+ * the other side. The provider is left unidentified rather than guessed, and the shape of the path is
+ * what carries the recognition, read by the same function the running shim reads.
+ *
+ * `host === undefined` still declines, and that is what keeps a same origin request out: `/api/chat/completions`
+ * posted by a browser bundle to its own server names no authority, and reading it as a provider call
+ * would turn every application that proxies a model into one that is one.
  */
 const modelEndpointCalledAt = (
   request: RequestCall,
-): { readonly endpoint: ModelEndpoint; readonly url: string } | undefined => {
+): { readonly endpoint: ModelEndpoint | undefined; readonly url: string } | undefined => {
   const { url, host } = request;
   if (url === undefined || host === undefined) return undefined;
-  const endpoint = modelEndpointForHost(hostToAskAbout(host));
-  if (endpoint === undefined || !isInferencePath(pathOf(url))) return undefined;
-  return { endpoint, url };
+  const recognised = recogniseInference(hostToAskAbout(host), pathOf(url));
+  if (recognised.kind === 'not_inference') return undefined;
+  return { endpoint: recognised.kind === 'named' ? recognised.endpoint : undefined, url };
 };
 
 const registerInferencePrompt = (input: {
@@ -657,14 +668,17 @@ const modelRelationDeadlines = (
 };
 
 /** The caller and model a relation joins, named the way `ensureCaller` names the scope it mints. */
+const providerSegment = (endpoint: ModelEndpoint | undefined): string =>
+  endpoint?.provider ?? UNIDENTIFIED_PROVIDER;
+
 const modelRelationKey = (
   context: DiscoveryContext,
   module: ModuleFacts,
   call: CallFact,
-  endpoint: ModelEndpoint,
+  endpoint: ModelEndpoint | undefined,
   url: string,
 ): string =>
-  `${call.enclosing ?? 'module-scope'} ${endpoint.provider}/${modelNameAt(context, module, call, url).name}`;
+  `${call.enclosing ?? 'module-scope'} ${providerSegment(endpoint)}/${modelNameAt(context, module, call, url).name}`;
 
 /**
  * A model call written as a plain HTTP request.
@@ -688,7 +702,7 @@ const discoverModelEndpoint = (input: {
   readonly builder: SystemGraphBuilder;
   readonly found: Found;
   readonly call: CallFact;
-  readonly endpoint: ModelEndpoint;
+  readonly endpoint: ModelEndpoint | undefined;
   readonly url: string;
   readonly client: string;
   readonly deadline: DeclaredDeadline | undefined;
@@ -697,31 +711,36 @@ const discoverModelEndpoint = (input: {
   const path = pathOf(url);
   const modelResolution = modelNameAt(context, module, call, url);
   const model = modelResolution.name;
-  const providerIdentity = globalIdentity(
-    'provider',
-    GLOBAL_NAMESPACES.provider,
-    endpoint.provider,
-  );
-  const modelIdentity = globalIdentity(
-    'model',
-    GLOBAL_NAMESPACES.model,
-    `${endpoint.provider}/${model}`,
-  );
+  /*
+   * Neither half settled, so nothing is written. An address nobody recognises serving a model nobody
+   * wrote down would mint a component named `unspecified/unspecified`, which names nothing a reader can
+   * look at and joins to nothing a run can report. The running shim refuses the same case identically.
+   */
+  if (endpoint === undefined && model === 'unspecified') return;
+  const provider = providerSegment(endpoint);
+  const modelIdentity = globalIdentity('model', GLOBAL_NAMESPACES.model, `${provider}/${model}`);
 
-  builder.addComponent(
-    drafts.sourceComponent({
-      kind: 'provider',
-      identity: providerIdentity,
-      file: module.file,
-      name: endpoint.provider,
-      location: call.location,
-      symbol: input.client,
-      confidence: CONFIDENCE_BANDS.strongStructural,
-      permissions: [{ kind: 'network', scope: url, mode: 'write' }],
-      metadata: { client: input.client, reachedOver: 'http', endpoint: url },
-      tags: ['model-endpoint'],
-    }),
-  );
+  /*
+   * A provider component is a claim about who serves the model, and an unrecognised host does not settle
+   * that. The model is still real and still named; what is absent is the party behind it, and inventing
+   * one from the host would merge every model on a port and could never match a declared segment.
+   */
+  if (endpoint !== undefined) {
+    builder.addComponent(
+      drafts.sourceComponent({
+        kind: 'provider',
+        identity: globalIdentity('provider', GLOBAL_NAMESPACES.provider, endpoint.provider),
+        file: module.file,
+        name: endpoint.provider,
+        location: call.location,
+        symbol: input.client,
+        confidence: CONFIDENCE_BANDS.strongStructural,
+        permissions: [{ kind: 'network', scope: url, mode: 'write' }],
+        metadata: { client: input.client, reachedOver: 'http', endpoint: url },
+        tags: ['model-endpoint'],
+      }),
+    );
+  }
   const requestImport = module.imports.filter(
     (entry) => !entry.isType && entry.local === call.calleePath[0],
   );
@@ -746,14 +765,14 @@ const discoverModelEndpoint = (input: {
         kind: 'model',
         identity: modelIdentity,
         file: evidenceLocation.file,
-        name: `${endpoint.provider}/${model}`,
+        name: `${provider}/${model}`,
         location: evidenceLocation,
         symbol: `${input.client} model request evidence`,
         confidence:
           model === 'unspecified' ? CONFIDENCE_BANDS.structural : CONFIDENCE_BANDS.strongStructural,
         details: {
           for: 'model',
-          provider: endpoint.provider,
+          provider,
           modelId: model,
           streaming: false,
         },
@@ -772,7 +791,7 @@ const discoverModelEndpoint = (input: {
       kind: 'model',
       identity: modelIdentity,
       file: module.file,
-      name: `${endpoint.provider}/${model}`,
+      name: `${provider}/${model}`,
       location: call.location,
       symbol: input.client,
       /*
@@ -783,7 +802,7 @@ const discoverModelEndpoint = (input: {
         model === 'unspecified' ? CONFIDENCE_BANDS.structural : CONFIDENCE_BANDS.strongStructural,
       details: {
         for: 'model',
-        provider: endpoint.provider,
+        provider,
         modelId: model,
         streaming: false,
       },
@@ -806,20 +825,23 @@ const discoverModelEndpoint = (input: {
       tags: ['model-endpoint'],
     }),
   );
-  found.components += 2;
+  found.components += endpoint === undefined ? 1 : 2;
   found.files.add(module.file);
   context.callSiteEffects.record(module.file, call, modelIdentity);
 
-  builder.addEdge(
-    drafts.edge({
-      kind: 'served_by_provider',
-      from: modelIdentity,
-      to: providerIdentity,
-      location: call.location,
-      symbol: input.client,
-    }),
-  );
-  found.edges += 1;
+  /* No provider component, so no edge to one. The model stands on its own and says so. */
+  if (endpoint !== undefined) {
+    builder.addEdge(
+      drafts.edge({
+        kind: 'served_by_provider',
+        from: modelIdentity,
+        to: globalIdentity('provider', GLOBAL_NAMESPACES.provider, endpoint.provider),
+        location: call.location,
+        symbol: input.client,
+      }),
+    );
+    found.edges += 1;
+  }
   const caller = ensureCaller(module, call, context, builder, found);
   if (caller !== undefined) {
     builder.addEdge(

@@ -160,6 +160,86 @@ export const isInferencePath = (path: string): boolean => {
   return INFERENCE_OPERATIONS.some((operation) => endsWithOperation(segments, operation));
 };
 
+/**
+ * The provider segment written where a provider is genuinely not settled.
+ *
+ * Already the word both halves of this build use for the unsettled half of a provider and model pair, so
+ * a model reached at an address nobody recognises reads the same way as one whose provider a source did
+ * not name. A host derived segment would be worse than this in both directions: it can never equal a
+ * declared segment, so the join would never match, and it merges every model served on one port into one
+ * component.
+ */
+export const UNIDENTIFIED_PROVIDER = 'unspecified';
+
+/**
+ * The operations an OpenAI compatible server answers, which is the shape rather than the host.
+ *
+ * A separate, tighter list from the one above, because the one above is calibrated for a host already
+ * known to serve models and this one is asked of any address at all. Read host independently, that list
+ * says `/users/1/messages`, `/workflows/x/invoke` and `/graphql/responses` are model calls, and its own
+ * header says why: it is a question about a provider host.
+ *
+ * What makes this safe is the version segment. Every OpenAI compatible server answers under `/v1`, so the
+ * operation has to be preceded by a version and not by a resource: `/v1/messages` is Anthropic's shape
+ * and `/users/1/messages` is a conversation. That one requirement is the whole of the difference, and it
+ * covers vLLM, LM Studio, LocalAI, llama.cpp, LiteLLM, OpenRouter, Together and Ollama's `/v1` shim
+ * without naming any of them.
+ *
+ * Azure writes `/openai/deployments/gpt-4o/chat/completions`, with a deployment where the version would
+ * be. That is not a loss: `openai.azure.com` is a recognised host, so it is read by the list above.
+ */
+const OPENAI_COMPATIBLE_OPERATIONS: readonly string[] = [
+  'chat/completions',
+  'completions',
+  'responses',
+  'messages',
+  'embeddings',
+  'moderations',
+  'images/generations',
+  'images/edits',
+  'audio/speech',
+  'audio/transcriptions',
+  'audio/translations',
+];
+
+const VERSION_SEGMENT = /^v\d[a-z0-9]*$/i;
+
+/** Whether a path is the OpenAI compatible shape, answerable without knowing the host. */
+export const isOpenAiCompatiblePath = (path: string): boolean => {
+  const segments = segmentsOf(path);
+  return OPENAI_COMPATIBLE_OPERATIONS.some((operation) => {
+    if (!endsWithOperation(segments, operation)) return false;
+    const before = segments[segments.length - operation.split('/').length - 1];
+    return before !== undefined && VERSION_SEGMENT.test(before);
+  });
+};
+
+/**
+ * What an address says about whether it reaches a model, and about whose model it is.
+ *
+ * Three answers rather than two, because the question has three answers. A recognised host serving an
+ * inference path is a named provider. An unrecognised host serving the OpenAI compatible shape is a model
+ * call whose provider this build cannot name, and saying so is the whole of the fix: a traced run against
+ * a local server executed seven agents and both its models, and the report said nine declared components
+ * were never exercised and that either no scenario reached them or they were unreachable in practice.
+ * Both disjuncts were false, about the file the run had just executed, because the host was not on a
+ * twelve entry list.
+ *
+ * Anything else is not an inference call, which a provider host serving a token mint also is not.
+ */
+export type InferenceRecognition =
+  | { readonly kind: 'named'; readonly endpoint: ModelEndpoint }
+  | { readonly kind: 'unidentified' }
+  | { readonly kind: 'not_inference' };
+
+export const recogniseInference = (hostname: string, path: string): InferenceRecognition => {
+  const endpoint = modelEndpointForHost(hostname);
+  if (endpoint !== undefined) {
+    return isInferencePath(path) ? { kind: 'named', endpoint } : { kind: 'not_inference' };
+  }
+  return isOpenAiCompatiblePath(path) ? { kind: 'unidentified' } : { kind: 'not_inference' };
+};
+
 export type ModelOperation = 'chat' | 'embeddings';
 
 export const modelOperationForPath = (path: string): ModelOperation =>

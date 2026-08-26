@@ -5,6 +5,7 @@ import {
   modelEndpointForHost,
   modelFromPath,
   modelOperationForPath,
+  recogniseInference,
 } from '../src/model-endpoints.ts';
 
 /**
@@ -141,5 +142,56 @@ describe('isInferencePath', () => {
       doesNot.filter((path) => isInferencePath(path)),
       [],
     );
+  });
+});
+
+/**
+ * An address with no named provider, read by the shape of its path.
+ *
+ * The host table has twelve entries and every OpenAI compatible server there is fails it. A traced run
+ * against a local Ollama recorded its two chat completions as outside effects with `modelCalls: 0`, and
+ * the audit built on that run then claimed the nine components it had just exercised were never
+ * exercised at all.
+ *
+ * The first two are FALSIFIERS. The rest are GUARDS: the loose operation list above is calibrated for a
+ * host already known to serve models, and read host independently it says an ordinary conversation
+ * endpoint is a model call. The version segment is the whole of what stops it.
+ */
+describe('inference recognised without a named provider', () => {
+  it('recognises the OpenAI compatible shape on an address nobody has listed', () => {
+    assert.equal(recogniseInference('127.0.0.1', '/v1/chat/completions').kind, 'unidentified');
+    assert.equal(recogniseInference('my-vllm.internal', '/v1/embeddings').kind, 'unidentified');
+    assert.equal(
+      recogniseInference('openrouter.ai', '/api/v1/chat/completions').kind,
+      'unidentified',
+    );
+  });
+
+  it('still names a provider the host settles, and still refuses what that host also serves', () => {
+    const named = recogniseInference('api.openai.com', '/v1/chat/completions');
+    assert.equal(named.kind, 'named');
+    assert.equal(named.kind === 'named' ? named.endpoint.provider : undefined, 'openai');
+    assert.equal(recogniseInference('api.openai.com', '/v1/files').kind, 'not_inference');
+  });
+
+  it('GUARD: requires a version where a resource would otherwise stand', () => {
+    for (const path of [
+      '/users/1/messages',
+      '/api/conversations/42/messages',
+      '/workflows/x/invoke',
+      '/graphql/responses',
+      '/v2/predict',
+    ]) {
+      assert.equal(
+        recogniseInference('app.example.com', path).kind,
+        'not_inference',
+        `${path} was read as inference on an unrecognised host`,
+      );
+    }
+  });
+
+  it("GUARD: does not reach a provider's own native shape, which is a separate decision", () => {
+    assert.equal(recogniseInference('127.0.0.1', '/api/chat').kind, 'not_inference');
+    assert.equal(recogniseInference('127.0.0.1', '/api/generate').kind, 'not_inference');
   });
 });

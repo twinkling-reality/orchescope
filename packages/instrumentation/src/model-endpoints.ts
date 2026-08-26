@@ -1,9 +1,9 @@
 import {
-  isInferencePath,
-  modelEndpointForHost,
   modelFromPath,
   type ModelOperation,
   modelOperationForPath,
+  recogniseInference,
+  UNIDENTIFIED_PROVIDER,
 } from '@orchescope/traces/model-endpoints';
 
 /**
@@ -46,18 +46,30 @@ export const modelFromBody = (body: string | undefined): string | undefined => {
   }
 };
 
+/**
+ * A model call, whether or not this build can name whose model it is.
+ *
+ * A provider host serves more than inference, and a token mint is not a model call however familiar the
+ * host is. The test is shared with static discovery so that a request described by a run and the same
+ * request described by its call site cannot disagree about what it is.
+ *
+ * An unrecognised host serving the OpenAI compatible shape is a model call with an unidentified provider.
+ * That is the whole of the fix for a self hosted server: a run against a local Ollama recorded two chat
+ * completions as outside effects and reported `modelCalls: 0`, and the audit built on it then claimed the
+ * nine components that run had just exercised were never exercised at all.
+ *
+ * Where the provider is unidentified and the model cannot be read either, the request stays an outbound
+ * request. A model call has to name a model: with neither half settled the span would carry a component
+ * literally called `unspecified`, which is a name no repository declares and no reader asked about. The
+ * static half refuses the same case for the same reason.
+ */
 export const recogniseModelCall = (url: URL, body: string | undefined): ModelCall | undefined => {
-  const endpoint = modelEndpointForHost(url.hostname);
-  if (endpoint === undefined) return undefined;
-  /*
-   * A provider host serves more than inference, and a token mint is not a model call however familiar the
-   * host is. The test is shared with static discovery so that a request described by a run and the same
-   * request described by its call site cannot disagree about what it is.
-   */
-  if (!isInferencePath(url.pathname)) return undefined;
+  const recognised = recogniseInference(url.hostname, url.pathname);
+  if (recognised.kind === 'not_inference') return undefined;
   const model = modelFromBody(body) ?? modelFromPath(url.pathname);
+  if (recognised.kind === 'unidentified' && model === undefined) return undefined;
   return {
-    system: endpoint.system,
+    system: recognised.kind === 'named' ? recognised.endpoint.system : UNIDENTIFIED_PROVIDER,
     operation: modelOperationForPath(url.pathname),
     ...(model === undefined ? { model: undefined } : { model }),
   };
