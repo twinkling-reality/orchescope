@@ -16,6 +16,7 @@ import type {
   TopologyDiscovery,
 } from '../adapter.ts';
 import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
+import { ensureModelCallFrame } from '../model-call-frame.ts';
 import { implementationBody } from '../implementation-span.ts';
 import { definitionForCall, matchCalls, projectUses } from '../matching.ts';
 import { promptCallSupport, registerPromptEntries } from '../prompt-input.ts';
@@ -241,30 +242,57 @@ const discoverGenerationCalls = (
     components += 1;
 
     const callerName = match.call.enclosing ?? `${callee}-caller`;
-    const callerIdentity = sourceIdentity('agent', match.module.file, callerName);
     const isToolLoop = toolNames.length > 0;
-    builder.addComponent(
-      drafts.sourceComponent({
-        kind: 'agent',
-        file: match.module.file,
-        name: callerName,
-        location: match.call.location,
-        symbol: callerName,
-        confidence: isToolLoop ? CONFIDENCE_BANDS.structural : CONFIDENCE_BANDS.heuristic,
-        details: {
-          for: 'agent',
-          framework: 'vercel-ai-sdk',
-          toolCount: toolNames.length,
-          role: isToolLoop ? 'worker' : 'unspecified',
-          ...(maxSteps === undefined ? {} : { maxTurns: maxSteps }),
-        },
-        metadata: {
-          inferredFrom: isToolLoop ? 'tool using generation call' : 'single generation call',
-          singleShot: !isToolLoop,
-        },
-        tags: ['vercel-ai-sdk'],
-      }),
-    );
+    /*
+     * The distinction this file's header already draws, now carried into the component kind.
+     *
+     * A call passing a tools map is a tool using loop and is an agent; a bare text generation is a model
+     * call attributed to the function it was written in, and calling that an agent overstates a one shot
+     * completion. Both branches used to write `kind: 'agent'` and differ only in confidence and role, and
+     * the 0.9.2 acceptance check measured what that cost: seven demonstration functions in one file, each
+     * one bare completion with no tools and no loop, reported as seven agents.
+     */
+    const callerIdentity = isToolLoop
+      ? sourceIdentity('agent', match.module.file, callerName)
+      : ensureModelCallFrame({
+          module: match.module,
+          context,
+          builder,
+          producer: ADAPTER_ID,
+          name: callerName,
+          location: match.call.location,
+          metadata: {
+            inferredFrom: 'single generation call',
+            singleShot: true,
+            toolCount: 0,
+            framework: 'vercel-ai-sdk',
+          },
+          tags: ['vercel-ai-sdk'],
+        });
+    if (isToolLoop) {
+      builder.addComponent(
+        drafts.sourceComponent({
+          kind: 'agent',
+          file: match.module.file,
+          name: callerName,
+          location: match.call.location,
+          symbol: callerName,
+          confidence: CONFIDENCE_BANDS.structural,
+          details: {
+            for: 'agent',
+            framework: 'vercel-ai-sdk',
+            toolCount: toolNames.length,
+            role: 'worker',
+            ...(maxSteps === undefined ? {} : { maxTurns: maxSteps }),
+          },
+          metadata: {
+            inferredFrom: 'tool using generation call',
+            singleShot: false,
+          },
+          tags: ['vercel-ai-sdk'],
+        }),
+      );
+    }
     components += 1;
     registerPromptEntries({
       registry: context.promptInputs,

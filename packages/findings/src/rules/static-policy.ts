@@ -621,11 +621,27 @@ const approvedCallersOf = (context: RuleContext, component: Component): boolean 
 
 const MODEL_DRIVEN_KINDS: readonly string[] = ['agent', 'agent_group', 'mcp_server', 'tool'];
 
+/**
+ * Everything a model can steer, seeded by what it is rather than only by what it is called.
+ *
+ * The kind list is a proxy: those four are the kinds that used to be the only ones a model call could
+ * appear under. A function holding a bare model call was minted as an `agent` for exactly that reason,
+ * so reclassifying it as the frame it is would have dropped it out of this seed and narrowed
+ * `side-effect-approval-boundary` on every hand written loop that reaches a consequential operation
+ * directly rather than through a declared tool. That is a security rule losing coverage to a rename.
+ *
+ * An outgoing `invokes_model` edge says the thing outright, so it is asked directly and the proxy is kept
+ * beside it for the components that carry no such edge of their own.
+ */
+const drivesAModel = (graph: IndexedGraph, component: Component): boolean =>
+  MODEL_DRIVEN_KINDS.includes(component.kind) ||
+  graph.outgoing(component.id).some((edge) => edge.kind === 'invokes_model');
+
 const modelReachable = (graph: IndexedGraph): ReadonlySet<string> =>
   reachableFrom(
     graph,
     auditedComponents(graph)
-      .filter((component) => MODEL_DRIVEN_KINDS.includes(component.kind))
+      .filter((component) => drivesAModel(graph, component))
       .map((component) => component.id),
   );
 

@@ -17,7 +17,8 @@ import type {
   DiscoveryContext,
   TopologyDiscovery,
 } from '../adapter.ts';
-import { createDrafts, GLOBAL_NAMESPACES, globalIdentity, sourceIdentity } from '../drafts.ts';
+import { createDrafts, GLOBAL_NAMESPACES, globalIdentity } from '../drafts.ts';
+import { ensureModelCallFrame, modelCallFrameIdentity } from '../model-call-frame.ts';
 import { localModules, namesLocalModule } from '../local-modules.ts';
 import { definitionForCall, hasBindingAt, matchRuntimeSymbol, moduleMatches } from '../matching.ts';
 import {
@@ -923,37 +924,35 @@ const registerModelPromptInput = (input: {
 /** A supported model call whose runtime endpoint cannot justify a provider or model identity. */
 const registerUnresolvedModelCaller = (input: {
   readonly module: ModuleFacts;
+  readonly context: DiscoveryContext;
   readonly builder: SystemGraphBuilder;
   readonly found: Discovered;
   readonly call: CallFact;
   readonly boundary?: string;
 }): void => {
-  const { module, builder, found, call, boundary } = input;
+  const { module, context, builder, found, call, boundary } = input;
   const enclosing = call.enclosing;
   if (enclosing === undefined) return;
-  const callerIdentity = sourceIdentity('agent', module.file, enclosing);
-  builder.addComponent(
-    drafts.sourceComponent({
-      kind: 'agent',
-      file: module.file,
-      name: enclosing,
-      location: call.location,
-      symbol: enclosing,
-      confidence: CONFIDENCE_BANDS.heuristic,
-      details: { for: 'agent', role: 'unspecified', framework: 'hand-written' },
-      metadata: {
-        inferredFrom: 'model call site',
-        modelBoundary: boundary ?? 'provider and model selected at run time',
-      },
-      tags: ['hand-written-loop'],
-    }),
-  );
+  const callerIdentity = ensureModelCallFrame({
+    module,
+    context,
+    builder,
+    producer: ADAPTER_ID,
+    name: enclosing,
+    location: call.location,
+    metadata: {
+      inferredFrom: 'model call site',
+      modelBoundary: boundary ?? 'provider and model selected at run time',
+    },
+    tags: ['hand-written-loop'],
+  });
   recordComponent(found, callerIdentity);
   found.files.add(module.file);
 };
 
 const registerUnsettledModelCallers = (input: {
   readonly module: ModuleFacts;
+  readonly context: DiscoveryContext;
   readonly builder: SystemGraphBuilder;
   readonly found: Discovered;
   readonly calls: readonly CallFact[];
@@ -961,6 +960,7 @@ const registerUnsettledModelCallers = (input: {
   for (const call of input.calls) {
     registerUnresolvedModelCaller({
       module: input.module,
+      context: input.context,
       builder: input.builder,
       found: input.found,
       call,
@@ -1016,23 +1016,19 @@ const registerUnqualifiedModelCall = (input: {
 
   const enclosing = input.call.enclosing;
   if (enclosing === undefined) return;
-  const callerIdentity = sourceIdentity('agent', input.module.file, enclosing);
-  input.builder.addComponent(
-    drafts.sourceComponent({
-      kind: 'agent',
-      file: input.module.file,
-      name: enclosing,
-      location: input.call.location,
-      symbol: enclosing,
-      confidence: CONFIDENCE_BANDS.heuristic,
-      details: { for: 'agent', role: 'unspecified', framework: 'hand-written' },
-      metadata: {
-        inferredFrom: 'model call site',
-        modelBoundary: 'provider ownership unresolved for a source-settled model',
-      },
-      tags: ['hand-written-loop'],
-    }),
-  );
+  const callerIdentity = ensureModelCallFrame({
+    module: input.module,
+    context: input.context,
+    builder: input.builder,
+    producer: ADAPTER_ID,
+    name: enclosing,
+    location: input.call.location,
+    metadata: {
+      inferredFrom: 'model call site',
+      modelBoundary: 'provider ownership unresolved for a source-settled model',
+    },
+    tags: ['hand-written-loop'],
+  });
   recordComponent(input.found, callerIdentity);
   input.builder.addEdge(
     drafts.edge({
@@ -1073,7 +1069,7 @@ const promptConsumerForModelCall = (
   entry: ModelCall,
 ): ComponentIdentity | undefined => {
   if (entry.call.enclosing !== undefined) {
-    return sourceIdentity('agent', module.file, entry.call.enclosing);
+    return modelCallFrameIdentity(module, entry.call.enclosing);
   }
   if (entry.endpointProvider !== undefined) {
     return modelIdentity(entry.endpointProvider, entry.model);
@@ -1133,6 +1129,7 @@ const registerQualifiedModelRelations = (input: {
   readonly entry: ModelCall & { readonly endpointProvider: string };
   readonly modelComponent: ComponentIdentity;
   readonly declared: ReadonlyMap<string, DeclaredDeadline>;
+  readonly context: DiscoveryContext;
 }): void => {
   const { module, builder, found, entry, modelComponent, declared } = input;
   const { call, endpointProvider, model } = entry;
@@ -1150,20 +1147,16 @@ const registerQualifiedModelRelations = (input: {
 
   const enclosing = call.enclosing;
   if (enclosing === undefined) return;
-  const callerIdentity = sourceIdentity('agent', module.file, enclosing);
-  builder.addComponent(
-    drafts.sourceComponent({
-      kind: 'agent',
-      file: module.file,
-      name: enclosing,
-      location: call.location,
-      symbol: enclosing,
-      confidence: CONFIDENCE_BANDS.heuristic,
-      details: { for: 'agent', role: 'unspecified', framework: 'hand-written' },
-      metadata: { inferredFrom: 'model call site' },
-      tags: ['hand-written-loop'],
-    }),
-  );
+  const callerIdentity = ensureModelCallFrame({
+    module,
+    context: input.context,
+    builder,
+    producer: ADAPTER_ID,
+    name: enclosing,
+    location: call.location,
+    metadata: { inferredFrom: 'model call site' },
+    tags: ['hand-written-loop'],
+  });
   recordComponent(found, callerIdentity);
   builder.addEdge(
     drafts.edge({
@@ -1190,7 +1183,13 @@ const registerModelCalls = (
   found.unresolved.push(
     ...discovered.unresolved.slice(0, Math.max(0, 10 - found.unresolved.length)),
   );
-  registerUnsettledModelCallers({ module, builder, found, calls: discovered.unsettledCallers });
+  registerUnsettledModelCallers({
+    module,
+    context,
+    builder,
+    found,
+    calls: discovered.unsettledCallers,
+  });
   const declared = relationDeadlines(discovered.calls);
   for (const entry of discovered.calls) {
     const configuration = modelCallConfiguration(entry);
@@ -1210,6 +1209,7 @@ const registerModelCalls = (
       if (entry.model === 'unspecified') {
         registerUnresolvedModelCaller({
           module,
+          context,
           builder,
           found,
           call: entry.call,
@@ -1244,6 +1244,7 @@ const registerModelCalls = (
     });
     registerQualifiedModelRelations({
       module,
+      context,
       builder,
       found,
       entry: qualifiedEntry,

@@ -93,8 +93,8 @@ def vision_call(api_base, api_key, model, messages):
     return client.chat.completions.create(model=model, messages=messages)
 `);
     const ids = result.graph.components.map((component) => component.id);
-    assert.ok(ids.includes('agent:llm_call'), `missing llm_call in ${ids.join(', ')}`);
-    assert.ok(ids.includes('agent:vision_call'), `missing vision_call in ${ids.join(', ')}`);
+    assert.ok(ids.includes('entrypoint:llm_call'), `missing llm_call in ${ids.join(', ')}`);
+    assert.ok(ids.includes('entrypoint:vision_call'), `missing vision_call in ${ids.join(', ')}`);
     assert.equal(
       ids.some((id) => id.startsWith('provider:')),
       false,
@@ -148,7 +148,7 @@ def unrelated():
     return client.responses.create(model="foreign", input="hello")
 `);
     const ids = result.graph.components.map((component) => component.id);
-    assert.ok(ids.includes('agent:owner'));
+    assert.ok(ids.includes('entrypoint:owner'));
     for (const rejected of ['sibling', 'late', 'parameter', 'rebound', 'foreign']) {
       assert.equal(
         ids.some((id) => id.includes(rejected)),
@@ -176,7 +176,7 @@ def joined(flag, endpoint):
       result.graph.edges.some((edge) => edge.kind === 'invokes_model'),
       false,
     );
-    assert.ok(result.graph.components.some((component) => component.id === 'agent:joined'));
+    assert.ok(result.graph.components.some((component) => component.id === 'entrypoint:joined'));
     assert.ok(
       result.graph.coverage.topology?.unresolved.some(
         (entry) =>
@@ -239,7 +239,7 @@ ${source}
         false,
       );
       assert.equal(
-        result.graph.components.some((component) => component.id === 'agent:target'),
+        result.graph.components.some((component) => component.id === 'entrypoint:target'),
         expectAgent,
       );
       assert.ok(
@@ -264,14 +264,14 @@ def routed(flag, endpoint):
         return client.responses.create(model="resolved-model", input="hello")
 `);
     const ids = result.graph.components.map((component) => component.id);
-    assert.ok(ids.includes('agent:routed'));
+    assert.ok(ids.includes('entrypoint:routed'));
     assert.ok(ids.includes('model:openai/resolved-model'));
     assert.equal(ids.includes('model:openai/dynamic-model'), false);
     assert.ok(
       result.graph.edges.some(
         (edge) =>
           edge.kind === 'invokes_model' &&
-          edge.from === 'agent:routed' &&
+          edge.from === 'entrypoint:routed' &&
           edge.to === 'model:openai/resolved-model',
       ),
     );
@@ -344,7 +344,7 @@ ${source}
         false,
         `${refused} borrowed one competing client identity`,
       );
-      assert.ok(ids.includes('agent:target'), `${refused} hid its supported model boundary`);
+      assert.ok(ids.includes('entrypoint:target'), `${refused} hid its supported model boundary`);
       assert.ok(
         result.graph.coverage.topology?.unresolved.some((entry) =>
           entry.reason.includes('more than one provider client at this control-flow join'),
@@ -529,7 +529,7 @@ export function target(flag: boolean, endpoint: string) {
       result.graph.edges.some((edge) => edge.kind === 'invokes_model'),
       false,
     );
-    assert.ok(result.graph.components.some((component) => component.id === 'agent:target'));
+    assert.ok(result.graph.components.some((component) => component.id === 'entrypoint:target'));
     assert.ok(
       result.graph.coverage.topology?.unresolved.some(
         (entry) =>

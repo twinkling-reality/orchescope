@@ -79,7 +79,7 @@ def answer():
     return client.chat.completions.create(model="gpt-compatible", messages=[])
 `);
     const ids = result.graph.components.map((component) => component.id);
-    assert.ok(ids.includes('agent:answer'), ids.join(', '));
+    assert.ok(ids.includes('entrypoint:answer'), ids.join(', '));
     assert.equal(
       ids.some((id) => id.startsWith('provider:')),
       false,
@@ -94,7 +94,7 @@ def answer():
       result.graph.edges.some(
         (edge) =>
           edge.kind === 'invokes_model' &&
-          edge.from === 'agent:answer' &&
+          edge.from === 'entrypoint:answer' &&
           edge.to === 'model:gpt-compatible',
       ),
     );

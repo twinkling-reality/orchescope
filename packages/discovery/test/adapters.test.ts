@@ -1290,7 +1290,9 @@ export async function answer(prompt: string) {
     assert.ok(ids.includes('provider:anthropic'));
     assert.equal(ids.includes('model:openai/gpt-4o-mini'), false, ids.join(', '));
     assert.ok(ids.includes('model:gpt-4o-mini'), ids.join(', '));
-    assert.ok(ids.includes('agent:answer'));
+    /* The frame the call was written in, which is an inferred entry point and not an agent. */
+    assert.ok(ids.includes('entrypoint:answer'), ids.join(', '));
+    assert.equal(ids.includes('agent:answer'), false, ids.join(', '));
     assert.ok(
       result.graph.coverage.topology?.unresolved.some((entry) =>
         entry.reason.includes('client class does not establish provider ownership'),
@@ -1367,7 +1369,7 @@ async def compute_embedding(text: str):
 `,
       );
     });
-    assert.deepEqual(timeoutOf(result, 'agent:compute_embedding'), {
+    assert.deepEqual(timeoutOf(result, 'entrypoint:compute_embedding'), {
       ms: 60_000,
       declaredAt: 'call site',
       readFrom: undefined,
@@ -1392,7 +1394,7 @@ export async function answer(prompt: string) {
 `,
       );
     });
-    assert.deepEqual(timeoutOf(result, 'agent:answer'), {
+    assert.deepEqual(timeoutOf(result, 'entrypoint:answer'), {
       ms: 5000,
       declaredAt: 'call site',
       readFrom: undefined,
@@ -1414,7 +1416,7 @@ async def compute_embedding(text: str):
 `,
       );
     });
-    assert.deepEqual(timeoutOf(result, 'agent:compute_embedding'), {
+    assert.deepEqual(timeoutOf(result, 'entrypoint:compute_embedding'), {
       ms: 30_000,
       declaredAt: 'client',
       readFrom: undefined,
@@ -1439,7 +1441,7 @@ export async function answer(prompt: string) {
 `,
       );
     });
-    assert.deepEqual(timeoutOf(result, 'agent:answer'), {
+    assert.deepEqual(timeoutOf(result, 'entrypoint:answer'), {
       ms: 5000,
       declaredAt: 'call site',
       readFrom: undefined,
@@ -1502,7 +1504,7 @@ async def compute_embedding(text: str):
 `,
       );
     });
-    assert.deepEqual(timeoutOf(result, 'agent:compute_embedding'), {
+    assert.deepEqual(timeoutOf(result, 'entrypoint:compute_embedding'), {
       ms: undefined,
       declaredAt: undefined,
       readFrom: undefined,
@@ -1525,7 +1527,7 @@ async def answer(text: str):
 `,
       );
     });
-    assert.deepEqual(timeoutOf(result, 'agent:answer'), {
+    assert.deepEqual(timeoutOf(result, 'entrypoint:answer'), {
       ms: undefined,
       declaredAt: undefined,
       readFrom: undefined,
@@ -1548,7 +1550,7 @@ async def answer(text: str):
 `,
       );
     });
-    assert.deepEqual(timeoutOf(result, 'agent:answer'), {
+    assert.deepEqual(timeoutOf(result, 'entrypoint:answer'), {
       ms: 90_000,
       declaredAt: 'call site',
       readFrom: undefined,
