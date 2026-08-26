@@ -72,6 +72,14 @@ generation are pure functions of their inputs. The same repository at the same r
 the same layout coordinates and the same report content. Randomness comes from a seeded generator and time from an
 injected clock.
 
+**The invariant is asymmetric.** What a run exercised is recognised without naming any framework: protocol shapes,
+OpenAI-compatible path shapes and the OpenTelemetry generative AI conventions are read from the wire, so a framework
+this build has never heard of is observed exactly as well as one it ships a reader for. What a repository declares is
+recognised in detail only where a reader exists, and that set is a catalogue that decays. Everything the declared half
+cannot name is either named as unread with a source location or counted as unrecorded, and the build never reports a
+repository as empty because it failed to recognise it. A recognition name matching no pinned repository is a defect the
+corpus gate reports. See [adr/0015-the-asymmetric-invariant.md](adr/0015-the-asymmetric-invariant.md).
+
 **Refusal over downgrade.** Policy decisions are pure functions returning either an allowance or a refusal that names the
 setting. No subsystem decides for itself, and nothing runs in a weaker mode while reporting as though it ran in the
 stronger one.

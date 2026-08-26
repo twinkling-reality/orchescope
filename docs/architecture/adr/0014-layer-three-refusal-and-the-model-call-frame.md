@@ -4,6 +4,15 @@
 - Date: 2026-08-25
 - Deciders: repository maintainers
 
+**Amended by [ADR 0015](0015-the-asymmetric-invariant.md).** The invariant this record is written against,
+"layers 1 to 3 are sufficient for correctness and layer 4 adds resolution", was measured false three times
+and is restated there as an asymmetric one. Everything below stands as reasoning and as evidence; the
+sufficiency claim it rests on does not. Two sentences in it are now known to be wrong in detail and are
+corrected in ADR 0015: that the MCP SDK call sites are "structurally the same object" as the host allowlist
+defect B removed, which understates the difference because the specification defines no source-level API,
+and that a source-only enclosing-function identity "can never appear in a span", which is true of the shim
+as built and not of the platforms it runs on.
+
 ## Context
 
 The [0.9.2 acceptance check](../../research/0.9.2-acceptance-used-holdouts.md) measured the published
