@@ -1,6 +1,11 @@
 import { isTestFile } from '@orchescope/domain';
 import type { Sha256Hex, UnsupportedArea } from '@orchescope/schema';
-import type { CallFact, ModuleFacts, ObjectEntryFact } from '@orchescope/source-analysis';
+import type {
+  ArgumentFact,
+  CallFact,
+  ModuleFacts,
+  ObjectEntryFact,
+} from '@orchescope/source-analysis';
 import {
   type LocalModules,
   localModules,
@@ -260,6 +265,12 @@ const throughLocalModules = (
   };
 };
 
+/** An object literal a name was bound to, with the line that bound it. */
+type ObjectBinding = {
+  readonly entries: readonly ObjectEntryFact[];
+  readonly line: number;
+};
+
 type UnclaimedConstruction = {
   readonly specifier: string;
   readonly symbol: string;
@@ -272,6 +283,7 @@ const unclaimedConstruction = (
   local: LocalModules,
   claimedPackages: readonly string[],
   index: SymbolIndex,
+  bound: ReadonlyMap<string, ObjectBinding>,
 ): UnclaimedConstruction | undefined => {
   if (call.kind !== 'call' && call.kind !== 'new') return undefined;
   const origin = call.origin;
@@ -284,7 +296,7 @@ const unclaimedConstruction = (
   }
   const symbol = constructedExportName(call);
   if (symbol === undefined) return undefined;
-  const entries = objectEntries(call);
+  const entries = entriesHandedTo(call, bound);
   const namedBy = constructionRole(entries);
   if (namedBy === undefined) return undefined;
   if (toolsArgumentLooksLikeJsonSchemas(entries)) return undefined;
@@ -330,6 +342,79 @@ const unclaimedReceiverCall = (
  * there is: measured before it was applied, thirteen hits on one Express server and eleven across two
  * pinned repositories, against three real ones.
  */
+/**
+ * The object a name was bound to, where the whole module binds that name exactly once.
+ *
+ * `objectEntries` reads the arguments a call was written with, and a construction may not have written any:
+ * `create_agent(config)` hands over a name and `build_agent()` hands over nothing. Measured over the pinned
+ * corpus, fourteen thousand six hundred and sixty six foreign constructions carry no object argument at
+ * all, on fifty of fifty six repositories, which is nearly twice the population this reader can see.
+ *
+ * This closes a small, exact part of that and the number belongs beside it: **ten sites on four entries.**
+ * It is an increment and not a floor. Of those fourteen thousand, eleven thousand four hundred and fifty
+ * three carry no resolvable name at all and five thousand five hundred and two have no arguments, so no
+ * dataflow of any depth reaches them. Sixty nine resolve to a local object under a maximally permissive
+ * resolver, which is the hard ceiling on every predicate that reads arguments, and this deliberately takes
+ * fewer than that.
+ *
+ * One binding in the whole module, and written before the call. Not a rule about branches, but it subsumes
+ * one: `gpt_researcher/llm_provider/generic/base.py:164` calls `ChatAnthropic(**kwargs)` where `kwargs` is
+ * rebound at `:171`, `:220` and `:233` under three mutually exclusive branches, and a last-write rule hands
+ * all fourteen of that repository sites a `model_id` from the Bedrock branch. That is the wrong owner,
+ * which is the one thing this reader must not produce. Uniqueness costs recall and is the reason the number
+ * is ten rather than twenty six.
+ *
+ * One hop, deliberately. The second hop was measured separately and refused on its own evidence: ten sites
+ * with four of them naming the wrong owner, including `json_repair.loads` reported because the value handed
+ * to it came from a call carrying a model name.
+ */
+const boundObjects = (module: ModuleFacts): ReadonlyMap<string, ObjectBinding> => {
+  const seen = new Map<string, ObjectBinding | undefined>();
+  const record = (name: string, value: ArgumentFact | undefined, line: number): void => {
+    if (seen.has(name)) {
+      seen.set(name, undefined);
+      return;
+    }
+    seen.set(name, value?.kind === 'object' ? { entries: value.entries, line } : undefined);
+  };
+  for (const definition of module.definitions) {
+    if (definition.kind !== 'variable') continue;
+    record(definition.name, definition.value, definition.location.startLine);
+  }
+  for (const assignment of module.assignments) {
+    if (assignment.target.length !== 1) continue;
+    const name = assignment.target[0];
+    if (name === undefined) continue;
+    record(name, assignment.value, assignment.location.startLine);
+  }
+  const bound = new Map<string, ObjectBinding>();
+  for (const [name, binding] of seen) if (binding !== undefined) bound.set(name, binding);
+  return bound;
+};
+
+/** The entries a construction was handed, whether it wrote them at the call site or bound them first. */
+const entriesHandedTo = (
+  call: CallFact,
+  bound: ReadonlyMap<string, ObjectBinding>,
+): readonly ObjectEntryFact[] => {
+  const written = objectEntries(call);
+  if (written.length > 0) return written;
+  const resolved: ObjectEntryFact[] = [];
+  for (const argument of call.args) {
+    const name =
+      argument.kind === 'identifier'
+        ? argument.name
+        : argument.kind === 'member' && argument.path.length === 1
+          ? argument.path[0]
+          : undefined;
+    if (name === undefined) continue;
+    const binding = bound.get(name);
+    if (binding === undefined || binding.line >= call.location.startLine) continue;
+    resolved.push(...binding.entries);
+  }
+  return resolved;
+};
+
 const boundReceivers = (module: ModuleFacts): ReadonlyMap<string, string> => {
   const imported = new Map<string, string>();
   for (const entry of module.imports) if (!entry.isType) imported.set(entry.local, entry.module);
@@ -459,9 +544,10 @@ export const findUnclaimedImportedConstructions = (input: {
   for (const module of input.modules) {
     if (isTestFile(module.file)) continue;
     const receivers = boundReceivers(module);
+    const bound = boundObjects(module);
     for (const call of module.calls) {
       const construction =
-        unclaimedConstruction(module, call, local, input.claimedPackages, index) ??
+        unclaimedConstruction(module, call, local, input.claimedPackages, index, bound) ??
         unclaimedReceiverCall(module, call, receivers, local, input.claimedPackages);
       if (construction === undefined) continue;
       found.push({

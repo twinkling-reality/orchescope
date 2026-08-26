@@ -703,6 +703,89 @@ model = LiteLLMModel(model_id='ollama_chat/qwen2.5')
  * and the guard below is why: without it this net reads every web framework route registration. Measured
  * before it was applied, thirteen hits on one Express server against three real ones in the same file.
  */
+/**
+ * A construction handed a name rather than an object.
+ *
+ * Every predicate this reader has reads the arguments a call was written with, and a construction may not
+ * have written any. Measured over the pinned corpus, fourteen thousand six hundred and sixty six foreign
+ * constructions carry no object argument at all, on fifty of fifty six repositories, which is nearly twice
+ * the population this reader can see. This closes ten sites of it, and that ratio belongs in the same
+ * sentence as the fix.
+ */
+describe('a construction handed a name that was bound to an object', () => {
+  /* FALSIFIER. The shipped predicate reads `create_agent(config)` as a call with no arguments to read. */
+  it('reads the object the name was bound to', async () => {
+    const result = await scan({
+      'src/app.py': `from agent_kit import create_agent
+
+config = {'model': 'gpt-4o', 'instructions': 'be helpful'}
+assistant = create_agent(config)
+`,
+    });
+
+    assert.equal(unclaimed(result).length, 1);
+    assert.equal(
+      unclaimed(result)[0]?.area,
+      'agent_kit.create_agent is constructed at src/app.py:4 and no adapter claims that distribution',
+    );
+  });
+
+  /*
+   * GUARD, and it passes on the old tree because the old tree reads no binding at all. It is here because
+   * it is the assertion that would fail first if the uniqueness rule were ever relaxed. `gpt_researcher`
+   * binds `kwargs` under three mutually exclusive branches and calls `ChatAnthropic(**kwargs)` from a
+   * fourth, and a last-write rule hands all fourteen of that repository sites a `model_id` from the Bedrock
+   * branch. One binding in the module, or nothing, is what stops this reader naming an owner that is not
+   * the owner, and it is why the measured yield is ten sites rather than twenty six.
+   */
+  it('stays quiet where the name is bound more than once', async () => {
+    const result = await scan({
+      'src/app.py': `from agent_kit import create_agent
+
+def build(kind):
+    config = {'timeout': 30}
+    if kind == 'chat':
+        config = {'model': 'gpt-4o'}
+    return create_agent(config)
+`,
+    });
+
+    assert.deepEqual(unclaimed(result), []);
+  });
+
+  /* GUARD. A binding written after the call did not produce the value the call was given. */
+  it('stays quiet where the binding is written after the call', async () => {
+    const result = await scan({
+      'src/app.py': `from agent_kit import create_agent
+
+def build():
+    assistant = create_agent(config)
+    config = {'model': 'gpt-4o'}
+    return assistant
+`,
+    });
+
+    assert.deepEqual(unclaimed(result), []);
+  });
+
+  /*
+   * GUARD. One hop. The second was measured separately and refused: ten sites with four of them naming the
+   * wrong owner, including `json_repair.loads` reported because the value handed to it came from a call
+   * that carried a model name.
+   */
+  it('stays quiet where the name was bound to another call rather than to an object', async () => {
+    const result = await scan({
+      'src/app.py': `from agent_kit import create_agent
+
+config = make_config(model='gpt-4o')
+assistant = create_agent(config)
+`,
+    });
+
+    assert.deepEqual(unclaimed(result), []);
+  });
+});
+
 describe('a call on a receiver built from an unclaimed distribution', () => {
   it('records a model call on a field the constructor bound', async () => {
     const result = await scan({
