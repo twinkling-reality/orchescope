@@ -48,6 +48,41 @@ export type LocalModules = {
    * package and the framework whose declarations the adapter has to read.
    */
   readonly neighbours: ReadonlySet<string>;
+  /**
+   * Every package name this repository defines anywhere, whatever it is reachable from.
+   *
+   * `roots` is deliberately narrow because an adapter reads it to decide whether a framework import is
+   * really this repository's own file, and answering yes wrongly loses a component. This set answers a
+   * different question for a different reader: the unclaimed-construction refusal asks only whether a
+   * name could be the repository's own, and answering yes wrongly costs one refusal that would have named
+   * the repository to itself. The two errors are not the same size, so the two readers do not share an
+   * answer.
+   *
+   * It is broader than `roots` in two ways the narrow rule cannot reach. A directory holding `.py` files
+   * and no `__init__.py` is an importable package under PEP 420, which `open_deep_research`,
+   * `pydantic_ai_examples` and `tubemind`'s `skills` all rely on. And a package under a nested `src` or a
+   * project directory inside a monorepo is a root of its own project, which is how `marketing_posts` and
+   * `computer_use_demo` are imported by the files beside them.
+   */
+  readonly definedPackages: ReadonlySet<string>;
+};
+
+/**
+ * Every directory holding a Python file, by its own name.
+ *
+ * A directory a repository puts `.py` files in is a package it defines, whether or not it marks the
+ * directory with an `__init__.py` and wherever the directory sits. Both are true of the interpreter and
+ * neither is true of the narrow rule above, which is why this is a separate pass answering a separate
+ * question rather than a loosening of that one.
+ */
+const definedPackagesIn = (modules: readonly ModuleFacts[]): ReadonlySet<string> => {
+  const names = new Set<string>();
+  for (const module of modules) {
+    if (module.language !== 'python' || !module.file.endsWith('.py')) continue;
+    const name = baseNameOf(directoryOf(module.file));
+    if (name.length > 0) names.add(name);
+  }
+  return names;
 };
 
 const INDEXES = new WeakMap<readonly ModuleFacts[], LocalModules>();
@@ -86,7 +121,7 @@ export const localModules = (modules: readonly ModuleFacts[]): LocalModules => {
     if (!packageDirectories.has(directory)) neighbours.add(neighbourKey(directory, moduleName));
   }
 
-  const index = { roots, neighbours };
+  const index = { roots, neighbours, definedPackages: definedPackagesIn(modules) };
   INDEXES.set(modules, index);
   return index;
 };
@@ -109,4 +144,16 @@ export const namesLocalModule = (
   const [root = specifier] = specifier.split('.', 1);
   if (specifier.includes('.') && local.roots.has(root)) return true;
   return local.neighbours.has(neighbourKey(directoryOf(importer.file), root));
+};
+
+/**
+ * Whether this specifier could name a package this repository defines, read from its first segment.
+ *
+ * Only the head is asked, because `open_deep_research.prompts` and `computer_use_demo.loop` are modules
+ * inside a package this repository writes, and the package is what decides the owner. Read only by the
+ * unclaimed-construction refusal, for the reason `definedPackages` states.
+ */
+export const namesDefinedPackage = (local: LocalModules, specifier: string): boolean => {
+  const [head = specifier] = specifier.split('.', 1);
+  return local.definedPackages.has(head);
 };

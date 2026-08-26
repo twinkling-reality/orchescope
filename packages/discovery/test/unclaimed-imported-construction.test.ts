@@ -210,7 +210,20 @@ export const runtime = new Factory({ tools: [], model: 'x' });
     assert.deepEqual(unclaimed(result), []);
   });
 
-  it('stays quiet for a model wrapper that names only a model identifier', async () => {
+  /**
+   * This pin asserted the opposite until the 0.9.2 acceptance check measured the belief behind it.
+   *
+   * The belief was that a wrapper naming a model identifier is a model reference rather than a
+   * construction this build failed to read. Row 2 of that check's silent false negatives is
+   * `OllamaChatCompletionClient(model=..., client_host=..., timeout=300.0)` at `T1 chat_core.py:25`,
+   * recorded as "nothing": a construction from a distribution no adapter claims, carrying a declared
+   * 300-second timeout, that produced no component, no finding and no refusal. The wrapper is where the
+   * model identity and the deadline both live, so its silence is the loss, not a saving.
+   *
+   * What has not changed is the half that matters: no agent is invented, here or anywhere, from an
+   * argument name.
+   */
+  it('records a model wrapper from a distribution no adapter claims', async () => {
     const result = await scan({
       'src/model.py': `from unknown_agents import LiteLLMModel
 
@@ -218,7 +231,11 @@ model = LiteLLMModel(model_id="ollama_chat/qwen2.5")
 `,
     });
 
-    assert.deepEqual(unclaimed(result), []);
+    assert.equal(unclaimed(result).length, 1);
+    assert.equal(
+      unclaimed(result)[0]?.area,
+      'unknown_agents.LiteLLMModel is constructed at src/model.py:3 and no adapter claims that distribution',
+    );
     assert.deepEqual(agentIdentities(result), []);
   });
 
@@ -346,6 +363,251 @@ runtime = Factory(tools=[search], model=model)
     assert.equal(
       unclaimed(result)[0]?.area,
       'unknown_agents.Factory is constructed at src/app.py:5 and no adapter claims that distribution',
+    );
+  });
+});
+
+/**
+ * One argument name is enough, and the name is read by its words rather than matched whole.
+ *
+ * Every case here is a shape the conjunction hid, taken from the 0.9.2 acceptance check's silent false
+ * negatives. Google ADK's tenth agent differs from its nine refused siblings by an absent `tools`;
+ * AutoGen's assistant spells the model half `model_client`; `node-llama-cpp` spells neither half and
+ * names a `systemPrompt`. Each `it` is a falsifier: it fails against the revision before the widening.
+ *
+ * The guards that keep this precise are the `stays quiet` cases above, which pass on both revisions on
+ * purpose, and the two below, which are the suppressors the widening needed.
+ */
+describe('one argument name a construction carries', () => {
+  it('records a construction that names a model and no tools', async () => {
+    const result = await scan({
+      'src/agent.py': `from unknown_adk.agents import Agent
+
+root_agent = Agent(
+    name='agent_id',
+    model='gemini-2.5-flash-lite',
+    instruction='Answer user questions to the best of your knowledge',
+)
+`,
+    });
+
+    assert.equal(unclaimed(result).length, 1);
+    assert.equal(
+      unclaimed(result)[0]?.area,
+      'unknown_adk.Agent is constructed at src/agent.py:3 and no adapter claims that distribution',
+    );
+    assert.deepEqual(agentIdentities(result), []);
+  });
+
+  it('reads a model name spelled as one word of a longer key', async () => {
+    const result = await scan({
+      'src/chat.py': `from unknown_autogen.agents import AssistantAgent
+
+assistant = AssistantAgent(
+    'assistant',
+    model_client=client,
+    system_message='You are helpful',
+)
+`,
+    });
+
+    assert.equal(unclaimed(result).length, 1);
+    assert.equal(
+      unclaimed(result)[0]?.area,
+      'unknown_autogen.AssistantAgent is constructed at src/chat.py:3 and no adapter claims that distribution',
+    );
+  });
+
+  it('reads a prompt named in camel case', async () => {
+    const result = await scan({
+      'package.json': '{ "name": "fixture", "version": "1.0.0", "type": "module" }',
+      'src/session.js': `import { LlamaChatSession } from 'unknown-llama-cpp';
+
+const session = new LlamaChatSession({ contextSequence: sequence, systemPrompt: 'Be brief' });
+`,
+    });
+
+    assert.equal(unclaimed(result).length, 1);
+    assert.equal(
+      unclaimed(result)[0]?.area,
+      'unknown-llama-cpp.LlamaChatSession is constructed at src/session.js:3 and no adapter claims that distribution',
+    );
+  });
+
+  it('names the argument that fired in the reason and keeps the area free of it', async () => {
+    const result = await scan({
+      'src/agent.py': `from unknown_agents import Runtime
+
+runtime = Runtime(modelPath='/models/q4.gguf')
+`,
+    });
+
+    const area = unclaimed(result)[0];
+    assert.equal(
+      area?.area,
+      'unknown_agents.Runtime is constructed at src/agent.py:3 and no adapter claims that distribution',
+    );
+    assert.match(area?.reason ?? '', /argument named modelPath/);
+  });
+
+  it('stays quiet for a schema builder whose every field is another call to the same library', async () => {
+    const result = await scan({
+      'package.json': '{ "name": "fixture", "version": "1.0.0", "type": "module" }',
+      'src/schema.js': `import { z } from 'unknown-schema';
+
+export const Body = z.object({ model: z.string().optional(), tools: z.array(z.string()) });
+`,
+    });
+
+    assert.deepEqual(unclaimed(result), []);
+  });
+
+  it('samples across distributions rather than letting one directory fill the list', async () => {
+    const files: Record<string, string> = {
+      'package.json': '{ "name": "fixture", "version": "1.0.0", "type": "module" }',
+      'src/z-last.js': `import { Runtime } from 'unknown-rare-framework';
+
+export const runtime = new Runtime({ model: 'gpt-4o' });
+`,
+    };
+    for (let index = 0; index < 20; index += 1) {
+      files[`src/a-noisy-${index}.js`] = `import { Client } from 'unknown-busy-library';
+
+export const client${index} = new Client({ model: 'gpt-4o' });
+`;
+    }
+
+    const result = await scan(files);
+    const areas = unclaimed(result).map((area) => area.area);
+
+    assert.ok(
+      areas.some((area) => area.startsWith('unknown-rare-framework.Runtime is constructed')),
+      `the one construction from the rare distribution was evicted by the noisy one: ${areas.join(' | ')}`,
+    );
+    assert.ok(areas.length <= 11, `the sample is not bounded: ${areas.length} rows`);
+    assert.ok(
+      areas.some((area) => area.startsWith('further unclaimed imported constructions were found')),
+      'the omitted remainder was dropped rather than counted',
+    );
+  });
+});
+
+/**
+ * The two suppressors the widening needed, each taken from a repository the corpus already pins.
+ *
+ * Read what each case is. `still reads a prompt named as the word a key ends with` is a FALSIFIER: it
+ * fails against the revision before the widening. The two `stays quiet` cases are GUARDS, and they pass
+ * against that revision too, because the conjunction it used made them unreachable. They are here because
+ * they failed against the widened predicate before these suppressors were added, measured on the corpus
+ * rather than imagined: `click.prompt(prompt_suffix=)` produced three refusals on `crewai`, and
+ * `z.object({ selectedChatModel: z.string() })` produced four across `openai-agents-js` and
+ * `vercel-ai-chatbot`. A guard that passes both ways is doing its job; a falsifier that does is a defect.
+ */
+describe('what a widened argument name must not read', () => {
+  it('leaves a terminal prompt suffix to the command line library that owns it', async () => {
+    const result = await scan({
+      'src/cli.py': `import unknown_cli
+
+name = unknown_cli.prompt('Name of your crew', prompt_suffix=' > ')
+`,
+    });
+
+    assert.deepEqual(unclaimed(result), []);
+  });
+
+  it('still reads a prompt named as the word a key ends with', async () => {
+    const result = await scan({
+      'package.json': '{ "name": "fixture", "version": "1.0.0", "type": "module" }',
+      'src/session.js': `import { Session } from 'unknown-runtime';
+
+const session = new Session({ contextSize: 4096, systemPrompt: 'Be brief' });
+`,
+    });
+
+    assert.equal(unclaimed(result).length, 1);
+  });
+
+  it('stays quiet for a schema builder that names a sibling schema among its fields', async () => {
+    const result = await scan({
+      'package.json': '{ "name": "fixture", "version": "1.0.0", "type": "module" }',
+      'src/schema.js': `import { z } from 'unknown-schema';
+
+export const Body = z.object({
+  id: z.uuid(),
+  message: userMessageSchema.optional(),
+  selectedChatModel: z.string(),
+});
+`,
+    });
+
+    assert.deepEqual(unclaimed(result), []);
+  });
+
+  it('still reads a construction whose arguments are computed by calls of its own', async () => {
+    const result = await scan({
+      'src/app.py': `from unknown_agents import Agent
+
+runtime = Agent(model=get_model(), tools=get_tools())
+`,
+    });
+
+    assert.equal(unclaimed(result).length, 1);
+    assert.equal(
+      unclaimed(result)[0]?.area,
+      'unknown_agents.Agent is constructed at src/app.py:3 and no adapter claims that distribution',
+    );
+  });
+});
+
+/**
+ * A package this repository defines is its own, whatever it is reachable from.
+ *
+ * `still records a distribution that only resembles a directory this repository holds` is a FALSIFIER.
+ * The two `is local` cases are GUARDS against the revision before the widening, which could not reach
+ * them, and they were measured firing against the widened predicate before this landed: thirteen
+ * refusals across `open-deep-research`, `pydantic-ai`, `tubemind`, `anthropic-quickstarts`,
+ * `crewai-examples` and `gpt-researcher` named those repositories' own modules back to them.
+ * `open_deep_research` and `pydantic_ai_examples` carry no `__init__.py`; `marketing_posts` sits under a
+ * nested `src`.
+ */
+describe('a package this repository defines', () => {
+  it('is local without an __init__.py, which is a package under PEP 420', async () => {
+    const result = await scan({
+      'src/open_deep_research/deep_researcher.py': `from open_deep_research.prompts import research_system_prompt
+
+agent = research_system_prompt(model='gpt-4o')
+`,
+      'src/open_deep_research/prompts.py': 'def research_system_prompt(model):\n    return model\n',
+    });
+
+    assert.deepEqual(unclaimed(result), []);
+  });
+
+  it('is local under a nested source root', async () => {
+    const result = await scan({
+      'integrations/strategy/src/marketing_posts/__init__.py': '',
+      'integrations/strategy/src/marketing_posts/llm.py': 'nvllm = None\n',
+      'integrations/strategy/src/marketing_posts/crew.py': `from marketing_posts.llm import nvllm
+
+crew = nvllm(model='meta/llama3')
+`,
+    });
+
+    assert.deepEqual(unclaimed(result), []);
+  });
+
+  it('still records a distribution that only resembles a directory this repository holds', async () => {
+    const result = await scan({
+      'src/smol_jobscout/model.py': `from smolagents import LiteLLMModel
+
+model = LiteLLMModel(model_id='ollama_chat/qwen2.5')
+`,
+    });
+
+    assert.equal(unclaimed(result).length, 1);
+    assert.equal(
+      unclaimed(result)[0]?.area,
+      'smolagents.LiteLLMModel is constructed at src/smol_jobscout/model.py:3 and no adapter claims that distribution',
     );
   });
 });
