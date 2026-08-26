@@ -148,7 +148,9 @@
     "strengths": 0,
     "total": 2
   },
-  "foundNothing": [],
+  "foundNothing": [
+    "langchain_core.prompts is imported here and its adapter found nothing"
+  ],
   "kind": "agent_system",
   "languagesNotAnalysed": [],
   "name": "gpt-researcher",

@@ -139,7 +139,7 @@
     "total": 1
   },
   "foundNothing": [
-    "langgraph is imported here and its adapter found nothing"
+    "langgraph, langgraph.graph is imported here and its adapter found nothing"
   ],
   "kind": "agent_system",
   "languagesNotAnalysed": [],
