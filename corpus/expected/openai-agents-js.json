@@ -177,9 +177,6 @@
     "@openai/agents-openai.OpenAIProvider is constructed at packages/agents/src/index.ts:6 and no adapter claims that distribution",
     "@openai/agents-realtime.RealtimeAgent is constructed at examples/docs/readme/readme-voice-agent.ts:13 and no adapter claims that distribution",
     "@openai/agents-realtime.RealtimeAgent is constructed at examples/realtime-demo/src/main.ts:25 and no adapter claims that distribution",
-    "@openai/agents-realtime.RealtimeAgent is constructed at examples/realtime-demo/src/main.ts:32 and no adapter claims that distribution",
-    "zod.z is constructed at packages/agents-core/src/runState.ts:234 and no adapter claims that distribution",
-    "zod.z is constructed at packages/agents-core/src/runState.ts:413 and no adapter claims that distribution",
-    "zod.z is constructed at packages/agents-core/src/runState.ts:419 and no adapter claims that distribution"
+    "@openai/agents-realtime.RealtimeAgent is constructed at examples/realtime-demo/src/main.ts:32 and no adapter claims that distribution"
   ]
 }
