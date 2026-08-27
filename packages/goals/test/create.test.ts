@@ -198,6 +198,66 @@ describe('createGoal, naming the finding', () => {
  * asked got `not validated` with those two permanently undecided, so a goal that was in fact complete
  * could never say so, and the loop this product exists to close stopped one step from the end.
  */
+/**
+ * A criterion is stated only where the samples its own metric needs will be there.
+ *
+ * `independent-calls-run-sequentially` names `durationMs.p95`, and a p95 of three runs is the slowest of
+ * three. Measured end to end on a real repository, that reported a 15.3 per cent improvement on a system
+ * nobody had changed and this criterion banked it, in the same document where the mean of those three runs
+ * was reported indeterminate. The requirement belongs to the metric, and this repository had already
+ * written it down: a scenario aggregate withholds a p95 below twenty samples.
+ */
+describe('createGoal, the samples a criterion needs before it is stated', () => {
+  const latencyFinding = finding({
+    id: 'OSC-PERF-0001',
+    ruleId: 'independent-calls-run-sequentially',
+    category: 'performance',
+  });
+
+  const metricsOf = (samples: number, repetitions: number) =>
+    create({
+      finding: latencyFinding,
+      scenarioIds: ['support-desk'],
+      baseline: { scenarioId: 'support-desk', runIds: ['run_0000000000000001'], samples },
+      repetitions,
+    })
+      .acceptanceCriteria.map((criterion) => criterion.check)
+      .filter((check) => check.kind === 'metric_improvement' || check.kind === 'metric_not_worse')
+      .map((check) => check.metric);
+
+  it('states no p95 criterion against a baseline of three recorded samples', () => {
+    const metrics = metricsOf(3, 3);
+    assert.ok(
+      !metrics.includes('durationMs.p95'),
+      'a ninety fifth percentile criterion was stated against three samples',
+    );
+    // What a mean and a presence metric can still decide at three samples is still stated.
+    assert.deepEqual(metrics, ['successRate', 'duplicateSideEffects']);
+  });
+
+  it('states it once twenty samples are recorded and twenty are prescribed', () => {
+    assert.ok(metricsOf(20, 20).includes('durationMs.p95'));
+  });
+
+  it('withholds it when the recording has twenty and the plan reruns three', () => {
+    assert.ok(!metricsOf(20, 3).includes('durationMs.p95'));
+  });
+
+  it('names the metric and the number it would have needed', () => {
+    const goal = create({
+      finding: latencyFinding,
+      scenarioIds: ['support-desk'],
+      baseline: { scenarioId: 'support-desk', runIds: ['run_0000000000000001'], samples: 3 },
+      repetitions: 3,
+    });
+    assert.match(
+      goal.validation.comparisonUnavailable ?? '',
+      /durationMs\.p95, which needs 20 samples on each side/,
+    );
+    assert.match(renderGoalMarkdown(goal), /durationMs\.p95, which needs 20 samples/);
+  });
+});
+
 describe('createGoal, the criteria it is willing to be judged on', () => {
   it('issues no metric criterion when no run has been recorded to compare against', () => {
     const issued = create({}).acceptanceCriteria.map((criterion) => criterion.statement);

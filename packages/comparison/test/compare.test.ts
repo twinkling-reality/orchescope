@@ -140,8 +140,10 @@ describe('compareMetric', () => {
    * be decided. The tail is what the criterion asks about, and the mean is what hides it.
    */
   it('summarises a quantile metric by its quantile rather than by the mean', () => {
-    const slowTail = [100, 100, 100, 100, 100, 100, 100, 100, 100, 900];
-    const evenTail = [180, 180, 180, 180, 180, 180, 180, 180, 180, 180];
+    // Twenty a side, because that is what a p95 requires and this test is about what the tail shows.
+    // Two slow runs, so the ninety fifth percentile of twenty samples lands on one of them.
+    const slowTail = [...Array(18).fill(100), 900, 900];
+    const evenTail = Array(20).fill(180);
     const byMean = compareMetric(sample('durationMs', slowTail), sample('durationMs', evenTail));
     const byTail = compareMetric(
       sample('durationMs.p95', slowTail),
@@ -159,7 +161,51 @@ describe('compareMetric', () => {
   it('still refuses a quantile direction below the sample floor', () => {
     const delta = compareMetric(sample('durationMs.p95', [900]), sample('durationMs.p95', [100]));
     assert.equal(delta.direction, 'indeterminate');
-    assert.match(delta.caveat ?? '', /at least 3 samples per side/);
+    assert.match(delta.caveat ?? '', /at least 20 samples per side/);
+  });
+
+  /*
+   * The floor belongs to the metric, not to the comparison.
+   *
+   * One number for every metric let a p95 be called from three runs, which is the slowest of three.
+   * Measured on a real repository, that reported a 15.3 per cent improvement on a system nobody changed
+   * and an acceptance criterion banked it, in the same document where the mean of those three runs was
+   * reported indeterminate. This repository had already decided the answer at schema level and applies it
+   * when a scenario aggregate withholds a p95 below twenty samples; the comparison now asks the same.
+   */
+  it('refuses a p95 from ten samples a side, which clears the general floor and not its own', () => {
+    const delta = compareMetric(
+      sample('durationMs.p95', Array(10).fill(1000)),
+      sample('durationMs.p95', Array(10).fill(400)),
+    );
+    assert.equal(delta.direction, 'indeterminate');
+    assert.match(delta.caveat ?? '', /at least 20 samples per side, has 10 and 10/);
+  });
+
+  it('decides a p95 once twenty samples a side are there', () => {
+    const delta = compareMetric(
+      sample('durationMs.p95', Array(20).fill(1000)),
+      sample('durationMs.p95', Array(20).fill(400)),
+    );
+    assert.equal(delta.direction, 'improved');
+  });
+
+  /* A guard: the requirement is per quantile, so raising p95 must not raise the median with it. */
+  it('still decides a p50 from three samples a side', () => {
+    const delta = compareMetric(
+      sample('durationMs.p50', [1000, 1000, 1000]),
+      sample('durationMs.p50', [400, 400, 400]),
+    );
+    assert.equal(delta.direction, 'improved');
+  });
+
+  /* A guard: a mean is licensed by the spread test over the general floor, and is untouched. */
+  it('still puts a mean through the spread test at three samples a side', () => {
+    const delta = compareMetric(
+      sample('durationMs', [1000, 1001, 999]),
+      sample('durationMs', [400, 401, 399]),
+    );
+    assert.equal(delta.direction, 'improved');
   });
 
   it('reads the base metric off each run for a name that carries a reduction', () => {

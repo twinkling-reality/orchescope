@@ -1,8 +1,10 @@
 import {
+  formatCount,
   goalId as makeGoalId,
   metricDecidedByPresence,
   MINIMUM_SAMPLES_PER_SIDE,
   OrchescopeError,
+  samplesRequiredFor,
   SEMANTIC_FINDING_IDENTITY,
   semanticFindingKeyDigest,
   semanticFindingSubjectDigest,
@@ -113,15 +115,19 @@ const comparisonIsReachable = (input: CreateGoalInput): boolean =>
   input.validationScenarioIds.includes(input.baseline.scenarioId);
 
 /**
- * Whether both sides of the prescribed comparison will carry enough samples to support a direction.
+ * Whether both sides of the prescribed comparison will carry the samples this metric needs.
  *
- * `compareMetric` refuses one on fewer than `MINIMUM_SAMPLES_PER_SIDE`. The recorded result supplies the
- * baseline side and no rule can manufacture samples nobody recorded, and the plan's own repetition count
- * supplies the candidate side, so both are asked.
+ * The requirement belongs to the metric. A mean is licensed by a spread test over the general floor; a
+ * quantile is licensed by having enough samples for the order statistic to be one, and how many that is
+ * `samplesRequiredFor` reads from the table this repository already applies when a scenario aggregate
+ * withholds a p95 below twenty samples. The recorded result supplies the baseline side and no rule can
+ * manufacture samples nobody recorded, and the plan's own repetition count supplies the candidate side,
+ * so both are asked.
  */
-const clearsTheSampleFloor = (input: CreateGoalInput): boolean =>
-  (input.baseline?.samples ?? 0) >= MINIMUM_SAMPLES_PER_SIDE &&
-  input.repetitions >= MINIMUM_SAMPLES_PER_SIDE;
+const clearsTheSampleFloor = (input: CreateGoalInput, metric: string): boolean => {
+  const required = samplesRequiredFor(metric);
+  return (input.baseline?.samples ?? 0) >= required && input.repetitions >= required;
+};
 
 /**
  * Whether the plan can produce evidence that decides a criterion about this metric.
@@ -137,7 +143,8 @@ const clearsTheSampleFloor = (input: CreateGoalInput): boolean =>
  * that knows it is the one the comparison reads.
  */
 const metricIsDecidable = (input: CreateGoalInput, metric: string): boolean =>
-  comparisonIsReachable(input) && (metricDecidedByPresence(metric) || clearsTheSampleFloor(input));
+  comparisonIsReachable(input) &&
+  (metricDecidedByPresence(metric) || clearsTheSampleFloor(input, metric));
 
 const writePathsFor = (components: readonly Component[], finding: Finding): readonly string[] => {
   const paths = new Set<string>();
@@ -296,6 +303,11 @@ const validationPlanFor = (input: CreateGoalInput, goalId: string): ValidationPl
     command: ['orchescope', 'goal', 'validate', goalId],
   });
   const reachable = comparisonIsReachable(input);
+  /*
+   * One field carries what this plan cannot decide, whether that is the whole comparison or one term of
+   * it. A reader needs the same thing in both cases: what is missing and what would supply it.
+   */
+  const cannotDecide = reachable ? withheldMetrics(input) : unavailableReason(input);
   return {
     scenarioIds: [...input.validationScenarioIds],
     baselineRunIds: reachable && baseline !== undefined ? [...baseline.runIds] : [],
@@ -308,7 +320,8 @@ const validationPlanFor = (input: CreateGoalInput, goalId: string): ValidationPl
             samples: baseline.samples,
           },
         }
-      : { comparisonUnavailable: unavailableReason(input) }),
+      : {}),
+    ...(cannotDecide === undefined ? {} : { comparisonUnavailable: cannotDecide }),
     ...(input.baselineBenchmarkId === undefined
       ? {}
       : { baselineBenchmarkId: input.baselineBenchmarkId }),
@@ -337,6 +350,34 @@ const unavailableReason = (input: CreateGoalInput): string => {
     return `the recorded baseline is a result of ${input.baseline.scenarioId}, which this plan does not rerun, so nothing here would produce a candidate to compare it against`;
   }
   return 'no recorded result of a scenario that exercised these components can serve as a baseline';
+};
+
+/**
+ * What a comparison is prescribed for and still cannot decide, named with the number it would have needed.
+ *
+ * A criterion omitted for want of samples is a term the reader was entitled to expect, so its absence is
+ * accounted for rather than left to be noticed. The metrics are those a criterion would have named: the
+ * rule's own improvement metric where it has one, and the two the plan always considers. Each is reported
+ * against its own requirement, because "the baseline supplies three samples" means something different for
+ * a median than for a ninety fifth percentile.
+ */
+const withheldMetrics = (input: CreateGoalInput): string | undefined => {
+  if (!comparisonIsReachable(input)) return undefined;
+  const considered = [
+    RELATIVE_IMPROVEMENT_BY_RULE[input.finding.ruleId]?.metric,
+    'successRate',
+    'duplicateSideEffects',
+  ].filter((metric): metric is string => metric !== undefined);
+  const withheld = considered.filter((metric) => !metricIsDecidable(input, metric));
+  if (withheld.length === 0) return undefined;
+  const supplied = input.baseline?.samples ?? 0;
+  const named = withheld
+    .map(
+      (metric) =>
+        `${metric}, which needs ${formatCount(samplesRequiredFor(metric), 'sample')} on each side`,
+    )
+    .join('; ');
+  return `no criterion is stated on ${named}: this plan supplies ${formatCount(supplied, 'sample')} from the recorded baseline and ${formatCount(input.repetitions, 'repetition')} from the rerun`;
 };
 
 const scopeFor = (input: CreateGoalInput): GoalScope => {

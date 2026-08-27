@@ -1,4 +1,3 @@
-import { MINIMUM_SAMPLES_PER_SIDE } from '@orchescope/domain';
 import type { Goal } from '@orchescope/schema';
 
 /**
@@ -66,11 +65,16 @@ const comparisonNote = (goal: Goal): string => {
       ? ['no injected faults']
       : [`fault plan ${baseline.faultPlanId}`]),
   ].join(', ');
+  /*
+   * What the plan could not decide is stated by the plan, which knows the metric each criterion would have
+   * named and what that metric requires. Deriving it here from the sample count alone would have to assume
+   * one requirement for every metric, which is the assumption this change exists to remove.
+   */
   const shortfall =
-    baseline.samples >= MINIMUM_SAMPLES_PER_SIDE
+    goal.validation.comparisonUnavailable === undefined
       ? ''
-      : `, which is below the ${MINIMUM_SAMPLES_PER_SIDE} a metric direction needs on each side, so only the criteria decided by presence are stated`;
-  return `${goal.validation.baselineRunIds.join(', ')} (${conditions}, ${baseline.samples} ${baseline.samples === 1 ? 'sample' : 'samples'}${shortfall})`;
+      : `; ${goal.validation.comparisonUnavailable}`;
+  return `${goal.validation.baselineRunIds.join(', ')} (${conditions}, ${baseline.samples} ${baseline.samples === 1 ? 'sample' : 'samples'})${shortfall}`;
 };
 
 export const renderAgentPrompt = (goal: Goal): string =>

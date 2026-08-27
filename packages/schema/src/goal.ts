@@ -88,9 +88,8 @@ export const ValidationPlan = Type.Object(
      * The recorded work those runs are, and the conditions they were recorded under.
      *
      * A comparison means something only when both sides reproduce the same work, so the plan states what
-     * the candidate has to be rather than leaving it to whichever run happens to be newest. Absent
-     * exactly when `comparisonUnavailable` is present: either the plan can name a comparable pair or it
-     * says why it cannot, and never neither.
+     * the candidate has to be rather than leaving it to whichever run happens to be newest. Absent when
+     * no comparable pair exists, and `comparisonUnavailable` then says why.
      */
     baseline: Type.Optional(
       Type.Object(
@@ -104,7 +103,13 @@ export const ValidationPlan = Type.Object(
         { additionalProperties: false },
       ),
     ),
-    /** Why no comparison is prescribed, in the words of the question that failed. */
+    /**
+     * What this plan cannot decide, and what would supply it.
+     *
+     * Either no comparable pair exists, or one does and a term of it still cannot be decided: a criterion
+     * about a quantile needs the samples that quantile needs, and a baseline is a recording that cannot be
+     * re-run into existence. A reader needs the same thing in both cases, so one field carries both.
+     */
     comparisonUnavailable: Type.Optional(NonEmptyString()),
     baselineBenchmarkId: Type.Optional(NonEmptyString()),
     commands: Type.Array(

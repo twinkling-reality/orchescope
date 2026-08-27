@@ -5,13 +5,47 @@ import { type Distribution, QUANTILE_MIN_SAMPLES } from '@orchescope/schema';
  * not a p95, so quantiles below their threshold are withheld and the threshold is reported.
  */
 
-type QuantileName = 'p50' | 'p90' | 'p95' | 'p99';
+export type QuantileName = 'p50' | 'p90' | 'p95' | 'p99';
 
 const QUANTILE_FRACTIONS: Readonly<Record<QuantileName, number>> = {
   p50: 0.5,
   p90: 0.9,
   p95: 0.95,
   p99: 0.99,
+};
+
+/**
+ * The quantile a metric name asks for, when it asks for one.
+ *
+ * `durationMs.p95` is the 95th percentile of the durations the runs reported: the base names what is read
+ * from each run and the suffix names how the set is summarised. Asked here rather than where a metric is
+ * compared, because two surfaces need the answer and a second copy of this table is a second answer.
+ */
+export const quantileOf = (metric: string): QuantileName | undefined => {
+  const dot = metric.lastIndexOf('.');
+  if (dot < 0) return undefined;
+  const suffix = metric.slice(dot + 1);
+  return suffix in QUANTILE_FRACTIONS ? (suffix as QuantileName) : undefined;
+};
+
+export const quantileFraction = (name: QuantileName): number => QUANTILE_FRACTIONS[name];
+
+/**
+ * How many samples one side must carry before this metric supports a direction.
+ *
+ * A quantile needs the samples that quantile needs, which this repository already decided at schema level
+ * and which `summarize` above already honours when it withholds one from a scenario aggregate. The
+ * comparison used to apply one floor of three to every metric, so a scenario result would print "p95
+ * withheld: it needs at least 20 samples" while a comparison of the same runs computed a p95 from three
+ * and called a direction on it. Measured on a real repository, that let an unchanged system report a
+ * 15.3 per cent p95 improvement and bank an acceptance criterion with it, in the same document where the
+ * mean of those three runs was reported indeterminate.
+ *
+ * A mean keeps the general floor, because what licenses a mean is the spread test rather than a rank.
+ */
+export const samplesRequiredFor = (metric: string): number => {
+  const name = quantileOf(metric);
+  return name === undefined ? MINIMUM_SAMPLES_PER_SIDE : QUANTILE_MIN_SAMPLES[name];
 };
 
 /** Nearest rank quantile on the sorted sample. No interpolation, so the value is always observed. */

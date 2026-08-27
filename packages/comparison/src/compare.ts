@@ -6,9 +6,12 @@ import {
   mean,
   metricDecidedByPresence,
   MINIMUM_SAMPLES_PER_SIDE,
+  quantileFraction,
+  quantileOf,
   quantile,
   relativeChange,
   type RunObservation,
+  samplesRequiredFor,
   runMeasuredNothing,
 } from '@orchescope/domain';
 import { diffGraphs } from '@orchescope/graph';
@@ -134,16 +137,23 @@ export const compareMetric = (
    * gated on having enough samples for the order statistic to be one, and the claim it supports is
    * stated on the delta rather than implied: these are order statistics, compared without a spread test.
    */
-  const quantileMetric = metricReduction(baseline.metric).base !== baseline.metric;
-  const enoughSamples =
-    baseline.values.length >= minimumSamplesPerSide &&
-    candidate.values.length >= minimumSamplesPerSide;
+  const quantileMetric = quantileOf(baseline.metric) !== undefined;
+  /*
+   * A quantile needs the samples that quantile needs, not one number shared with every other metric.
+   * `samplesRequiredFor` reads the schema-level table `summarize` already honours, so a p95 the scenario
+   * aggregate withheld is not one this comparison then calls a direction on. A caller asking for a higher
+   * floor still gets it; nothing lowers a quantile below its own requirement.
+   */
+  const required = quantileMetric
+    ? Math.max(minimumSamplesPerSide, samplesRequiredFor(baseline.metric))
+    : minimumSamplesPerSide;
+  const enoughSamples = baseline.values.length >= required && candidate.values.length >= required;
   const meaningful = quantileMetric
     ? {
         meaningful: enoughSamples,
         reason: enoughSamples
           ? ''
-          : `needs at least ${minimumSamplesPerSide} samples per side, has ${baseline.values.length} and ${candidate.values.length}`,
+          : `needs at least ${required} samples per side, has ${baseline.values.length} and ${candidate.values.length}`,
       }
     : differenceIsMeaningful(baseline.values, candidate.values, minimumSamplesPerSide);
   const decided = directionFor(baseline.metric, baselineMean, candidateMean, meaningful);
@@ -198,28 +208,20 @@ const METRIC_UNITS: Readonly<Record<string, string>> = {
  * p95 is the slowest of the three. The sample count travels on every delta for exactly this reason, and
  * whether the two sets differ at all is still decided from the raw values rather than from the summary.
  */
-const QUANTILES: Readonly<Record<string, number>> = {
-  p50: 0.5,
-  p90: 0.9,
-  p95: 0.95,
-  p99: 0.99,
-};
-
 type MetricReduction = {
   readonly base: string;
   readonly summarise: (values: readonly number[]) => number | undefined;
 };
 
 export const metricReduction = (metric: string): MetricReduction => {
-  const dot = metric.lastIndexOf('.');
-  const fraction = dot < 0 ? undefined : QUANTILES[metric.slice(dot + 1)];
-  if (dot < 0 || fraction === undefined) return { base: metric, summarise: mean };
+  const name = quantileOf(metric);
+  if (name === undefined) return { base: metric, summarise: mean };
   return {
-    base: metric.slice(0, dot),
+    base: metric.slice(0, metric.lastIndexOf('.')),
     summarise: (values) =>
       quantile(
         [...values].sort((left, right) => left - right),
-        fraction,
+        quantileFraction(name),
       ),
   };
 };
