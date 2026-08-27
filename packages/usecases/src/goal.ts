@@ -74,7 +74,16 @@ export type CreateGoalResult = {
  */
 const MAX_VALIDATION_SCENARIOS = 3;
 
-/** A ceiling on the rows the exercising query reads back, never a window on which runs count. */
+/**
+ * How far back a baseline may be drawn from, counted in runs that exercised the components.
+ *
+ * This is a bound on staleness and not only on work, which is why it is ordered by recency rather than by
+ * coverage. A recording that covered everything the finding names but predates a year of unrelated change
+ * is not the better baseline: the candidate is a fresh rerun, so every one of those changes lands in the
+ * difference and is attributed to the one the goal asks for. That is the same error this whole rule
+ * exists to remove, arriving through time instead of through conditions. Coverage decides among what this
+ * window holds; it does not reach past it.
+ */
 const MAX_EXERCISING_RUNS = 200;
 
 /** How many stored results of one scenario are examined before it is passed over. */

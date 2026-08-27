@@ -133,6 +133,13 @@ question the `requiresRuntimeEvidence` guard asks. A goal whose finding rests on
 refused merely because none of them forms a set large enough to compare against; that is a reason to omit
 the metric criteria and say so.
 
+**A repository with no runs gets a goal that names no scenario.** The rule this replaces named up to three,
+because its fallback returned all of them. Nothing is lost: the goal document is not what tells an operator
+to run a scenario. The loop's third step reports itself blocked with "written down, none has ever run" and
+prescribes `orchescope test --scenario <id>` in the same terminal document, which is the surface that
+advances the loop. A scenario that has never run is unknown rather than irrelevant, and running it is a
+remediation rather than an acceptance criterion.
+
 **[ADR 0015](0015-the-asymmetric-invariant.md) is strengthened rather than amended.** A name list was
 removed from the runtime half and nothing replaced it, which is the direction that record asks for.
 
