@@ -1394,7 +1394,13 @@ describe('how a join was made', () => {
     assert.equal(refusal?.evidenceOmitted, 0);
   });
 
-  it('refuses an observed line outside the declaration range', () => {
+  /*
+   * The line is a discriminator, so it only decides where there is something to discriminate. One
+   * declaration on the file, the kind and the name is already selected, and a line outside its range
+   * says where the call was made rather than that this is a different component. The join holds and the
+   * part that did not corroborate is still reported.
+   */
+  it('keeps the only declaration on the file when the observed line sits outside its range', () => {
     const graph = buildGraph([agent], [], {
       git: { repositoryUrl, commit: revision, ref: 'main', dirty: false },
     });
@@ -1410,12 +1416,49 @@ describe('how a join was made', () => {
         ],
       }),
     ]);
-    assert.equal(reconciled.matches.length, 0);
+    assert.equal(reconciled.matches.length, 1);
+    assert.equal(reconciled.matches[0]?.rule, 'code_location');
     assert.ok(
       reconciled.missingSpanAttributes.some(
         (entry) =>
           entry.attribute === 'code.line.number' && entry.reason === 'line_outside_declaration',
       ),
+      'the line that did not corroborate has to reach coverage even though the join held',
+    );
+  });
+
+  /*
+   * A location that failed to select is not a location that named other code.
+   *
+   * The span carries a coordinate this checkout agrees with, and the file it names holds no declaration
+   * of that kind and name. The run still happened, the name still means one thing here, and refusing the
+   * name rules over a location that merely did not settle it would make a span carrying more evidence
+   * join to less than the same span carrying none.
+   */
+  it('falls back to the name when the location named no declaration', () => {
+    const graph = buildGraph([agent], [], {
+      git: { repositoryUrl, commit: revision, ref: 'main', dirty: false },
+    });
+    const reconciled = reconcile(graph, [
+      runtimeTopology({
+        components: [
+          observedComponent({
+            kind: 'agent',
+            observedName: 'support_agent',
+            codeLocation: { file: 'src/handlers/dispatch.py', line: 4 },
+            observedSource: observedSource('src/handlers/dispatch.py', 4),
+          }),
+        ],
+      }),
+    ]);
+    assert.equal(reconciled.matches.length, 1);
+    assert.equal(reconciled.matches[0]?.rule, 'kind_and_name');
+    assert.equal(reconciled.runtimeOnlyComponentIds.length, 0);
+    assert.ok(
+      reconciled.missingSpanAttributes.some(
+        (entry) => entry.attribute === 'code.file.path' && entry.reason === 'source_not_declared',
+      ),
+      'the location that did not settle it still has to reach coverage',
     );
   });
 

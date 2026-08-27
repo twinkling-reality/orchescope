@@ -199,7 +199,22 @@ const sourceCandidates = (
     observedSource: source,
   });
   if (result.kind === 'matched') {
-    return { kind: 'matched', component: result.component, rule: 'code_location', refusals: [] };
+    return {
+      kind: 'matched',
+      component: result.component,
+      rule: 'code_location',
+      // A part of the location that did not corroborate is still coverage, even where the match held.
+      refusals:
+        result.refusal === undefined
+          ? []
+          : [
+              sourceRefusal(
+                result.refusal.attribute,
+                result.refusal.reason,
+                observed.evidence as EvidenceId[],
+              ),
+            ],
+    };
   }
   const refusals = [
     sourceRefusal(
@@ -218,36 +233,72 @@ const sourceCandidates = (
   return { kind: 'unmatched', refusals };
 };
 
+/**
+ * Whether a refused source identity may still be judged by name.
+ *
+ * A source identity that cannot select a declaration says one of two very different things, and the
+ * difference decides whether the weaker rules are allowed a turn.
+ *
+ * `repository_mismatch` and `revision_mismatch` say the run was about **other code**: another remote, or
+ * another commit, or a working tree that had moved. Joining that to this checkout's declaration by name
+ * would attribute one repository's execution to another's source, so those stay unmatched, and two tests
+ * pin it by name. `ambiguous_source_mapping` says two declarations matched, which is the ambiguity the
+ * location existed to break, so falling back to the name that could not break it either is no better.
+ *
+ * `source_not_declared` says the run was about **this** code and the location merely failed to select:
+ * the file holds no declaration of that kind and name. That is the ordinary case for a call site, which
+ * is where a call was made rather than where a component was declared, and refusing the name rules over
+ * it would make a span carrying more evidence join to less than the same span carrying none. The refusal
+ * is still recorded, so coverage says the location was read and did not settle it.
+ *
+ * `line_outside_declaration` is named here for completeness and does not reach this decision: the
+ * matcher treats a line that eliminates every candidate as a part that did not corroborate rather than
+ * as a veto, so it arrives either on a match or on an ambiguity, never on a refusal.
+ */
+const REFUSALS_ABOUT_OTHER_CODE: ReadonlySet<NonNullable<MissingSpanAttribute['reason']>> = new Set(
+  ['repository_mismatch', 'revision_mismatch', 'ambiguous_source_mapping'],
+);
+
+const namesOtherCode = (refusals: readonly MissingSpanAttribute[]): boolean =>
+  refusals.some(
+    (refusal) => refusal.reason !== undefined && REFUSALS_ABOUT_OTHER_CODE.has(refusal.reason),
+  );
+
 const resolveObserved = (lookups: StaticLookups, observed: ObservedComponent): Resolution => {
   const name = normalizeLocalName(observed.observedName);
 
-  if (observed.observedSource !== undefined) return sourceCandidates(lookups, observed, name);
+  let refusals: readonly MissingSpanAttribute[] = [];
+  if (observed.observedSource !== undefined) {
+    const bySource = sourceCandidates(lookups, observed, name);
+    if (bySource.kind !== 'unmatched' || namesOtherCode(bySource.refusals)) return bySource;
+    refusals = bySource.refusals;
+  }
 
   const byRuntimeName = uniqueCandidate(lookups.byRuntimeName.get(`${observed.kind}|${name}`));
   if (byRuntimeName !== undefined) {
-    return { kind: 'matched', component: byRuntimeName, rule: 'runtime_name', refusals: [] };
+    return { kind: 'matched', component: byRuntimeName, rule: 'runtime_name', refusals };
   }
 
   const candidates = lookups.byKindAndName.get(`${observed.kind}|${name}`);
   const unique = uniqueCandidate(candidates);
   if (unique !== undefined) {
-    return { kind: 'matched', component: unique, rule: 'kind_and_name', refusals: [] };
+    return { kind: 'matched', component: unique, rule: 'kind_and_name', refusals };
   }
 
   // A qualified name and a bare name mean the same component when only one declaration shares the last segment.
   const bare = uniqueCandidate(lookups.byKindAndBareName.get(`${observed.kind}|${bareName(name)}`));
   if (bare !== undefined) {
-    return { kind: 'matched', component: bare, rule: 'kind_and_name', refusals: [] };
+    return { kind: 'matched', component: bare, rule: 'kind_and_name', refusals };
   }
 
   if (candidates !== undefined && candidates.length > 1) {
     return {
       kind: 'ambiguous',
       candidates: candidates.map((component) => component.id),
-      refusals: [],
+      refusals,
     };
   }
-  return { kind: 'unmatched', refusals: [] };
+  return { kind: 'unmatched', refusals };
 };
 
 const observationFrom = (
