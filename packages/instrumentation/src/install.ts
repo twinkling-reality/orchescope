@@ -3,6 +3,7 @@ import { createExporter, type Exporter } from './exporter.ts';
 import { patchMcpClient, type PatchOutcome } from './mcp-client.ts';
 import { instrumentedFetch } from './outbound-fetch.ts';
 import { writeReport } from './report-file.ts';
+import { createSourceFrameReader } from './source-frame.ts';
 import { type InstrumentationSettings, readSettings } from './settings.ts';
 import { createTracer, type Tracer } from './tracer.ts';
 
@@ -50,6 +51,8 @@ export type InstallOptions = {
   readonly nowNanos?: () => bigint;
   readonly identifier?: (bytes: number) => string;
   readonly loadModule?: (specifier: string) => Promise<readonly unknown[]>;
+  /** The directory the shim was loaded from, whose frames are never the frame that made a call. */
+  readonly instrumentationRoot?: string;
 };
 
 const platformNanos = (): bigint =>
@@ -87,10 +90,30 @@ export const install = (options: InstallOptions): Installation | undefined => {
     identifier: options.identifier ?? platformIdentifier,
   });
 
+  /*
+   * The call site is produced only for a run that named the repository it audits.
+   *
+   * Without that name there is no question to ask about a frame: the variable is inherited by every
+   * process the target spawns, and a shim that fell back to the working directory would answer for
+   * whichever descendant it landed in. The shim's own directory is excluded so the boundary this code
+   * occupies can never be reported as the caller, which matters most when the repository under audit is
+   * the one this code lives in.
+   */
+  const sourceFrames =
+    settings.repositoryRoot === undefined
+      ? undefined
+      : createSourceFrameReader({
+          repositoryRoot: settings.repositoryRoot,
+          ...(options.instrumentationRoot === undefined
+            ? {}
+            : { instrumentationRoot: options.instrumentationRoot }),
+        });
+
   options.globals.fetch = instrumentedFetch({
     tracer,
     original,
     receiverOrigin: new URL(settings.endpoint).origin,
+    ...(sourceFrames === undefined ? {} : { sourceFrames }),
   });
 
   const timer = options.setInterval(() => {

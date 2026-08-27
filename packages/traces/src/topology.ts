@@ -9,6 +9,7 @@ import type {
   NormalizedSpan,
   ObservedComponent,
   ObservedEdge,
+  ObservedContentLocation,
   ObservedSource,
   ObservedValueProvenance,
   RunMetrics,
@@ -149,6 +150,7 @@ type ComponentAccumulator = {
   model: string | undefined;
   codeLocation: { file: string; line?: number; function?: string } | undefined;
   observedSource: ObservedSource | undefined;
+  observedContent: ObservedContentLocation | undefined;
   sourceRefusals: Map<string, MissingSpanAttribute>;
   mcpServer: string | undefined;
   performedSideEffect: boolean;
@@ -293,6 +295,7 @@ export type TopologyResult = {
     readonly observedName: string;
     readonly kind: string;
     readonly observedSource?: ObservedSource;
+    readonly observedContent?: ObservedContentLocation;
     /** The provider and model the spans reported, which is what a price is keyed by. */
     readonly provider: string | undefined;
     readonly model: string | undefined;
@@ -375,6 +378,7 @@ const emptyAccumulator = (
   model: undefined,
   codeLocation: source.codeLocation,
   observedSource: source.observedSource,
+  observedContent: source.observedContent,
   sourceRefusals: new Map(
     source.refusals.map((missing) => [missingAttributeKey(missing), missing]),
   ),
@@ -441,6 +445,7 @@ const accumulateComponent = (
   accumulator.model = accumulator.model ?? modelNamed(span.attributes);
   accumulator.codeLocation = accumulator.codeLocation ?? facts.source.codeLocation;
   accumulator.observedSource = accumulator.observedSource ?? facts.source.observedSource;
+  accumulator.observedContent = accumulator.observedContent ?? facts.source.observedContent;
   mergeProvenance(accumulator.provenance.codeLocation, facts.source.codeLocationProvenance);
   for (const missing of facts.source.refusals) {
     const key = missingAttributeKey(missing);
@@ -554,6 +559,9 @@ const projectComponents = (
     ...(accumulator.observedSource === undefined
       ? {}
       : { observedSource: accumulator.observedSource }),
+    ...(accumulator.observedContent === undefined
+      ? {}
+      : { observedContent: accumulator.observedContent }),
     ...(accumulator.mcpServer === undefined ? {} : { mcpServer: accumulator.mcpServer }),
     performedSideEffect: accumulator.performedSideEffect,
     evidence: [...accumulator.evidence] as EvidenceId[],

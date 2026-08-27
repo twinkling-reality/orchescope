@@ -47,6 +47,15 @@ export type TargetResult = Static<typeof TargetResult>;
 export const TARGET_ENV = {
   /** OTLP endpoint of the local receiver, also exported as the standard OpenTelemetry variable. */
   endpoint: 'ORCHESCOPE_OTLP_ENDPOINT',
+  /**
+   * Absolute path of the repository this run is an audit of.
+   *
+   * Passed rather than inferred. The working directory is not this path: a scenario may name any
+   * subdirectory of the repository as its own, and `NODE_OPTIONS` reaches every process the target
+   * spawns, so a shim reading `process.cwd()` would answer for whichever descendant it happened to load
+   * into. Absent means no answer rather than a guess.
+   */
+  repositoryRoot: 'ORCHESCOPE_REPOSITORY_ROOT',
   resultFile: 'ORCHESCOPE_RESULT_FILE',
   runId: 'ORCHESCOPE_RUN_ID',
   seed: 'ORCHESCOPE_SEED',

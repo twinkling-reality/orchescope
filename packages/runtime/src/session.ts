@@ -26,6 +26,13 @@ import { locateShim, targetRunsNode, withShim } from './shim.ts';
 export type TraceSessionRequest = {
   readonly command: readonly string[];
   readonly cwd: string;
+  /**
+   * The repository this run is an audit of, which is not always the directory the target runs in.
+   *
+   * Absent when the caller has no repository to name, in which case the target is told nothing rather
+   * than told the working directory.
+   */
+  readonly repositoryRoot?: string;
   readonly runId: string;
   readonly baseEnv: Readonly<Record<string, string | undefined>>;
   readonly extraEnv?: Readonly<Record<string, string>>;
@@ -150,6 +157,7 @@ export const buildTargetEnv = (input: {
   readonly serviceName: string;
   readonly runId: string;
   readonly resultFile: string;
+  readonly repositoryRoot?: string;
   readonly shimPath?: string;
   readonly faultPlan?: FaultPlan;
   readonly extraEnv?: Readonly<Record<string, string>>;
@@ -168,6 +176,7 @@ export const buildTargetEnv = (input: {
   env[TARGET_ENV.endpoint] = input.endpoint;
   env[TARGET_ENV.runId] = input.runId;
   env[TARGET_ENV.resultFile] = input.resultFile;
+  if (input.repositoryRoot !== undefined) env[TARGET_ENV.repositoryRoot] = input.repositoryRoot;
   if (input.shimPath !== undefined) {
     env['NODE_OPTIONS'] = withShim(env['NODE_OPTIONS'], input.shimPath);
   }
@@ -229,6 +238,7 @@ export const runTracedSession = async (
       serviceName: request.serviceName,
       runId: request.runId,
       resultFile,
+      ...(request.repositoryRoot === undefined ? {} : { repositoryRoot: request.repositoryRoot }),
       ...(instrumentation.injected ? { shimPath: instrumentation.shimPath } : {}),
       ...(request.faultPlan === undefined ? {} : { faultPlan: request.faultPlan }),
       ...(request.extraEnv === undefined ? {} : { extraEnv: request.extraEnv }),

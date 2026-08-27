@@ -194,6 +194,7 @@ export {
   MissingSpanAttribute,
   ObservedCodeLocation,
   ObservedComponent,
+  ObservedContentLocation,
   ObservedEdge,
   ObservedSource,
   ObservedSourceIdentity,

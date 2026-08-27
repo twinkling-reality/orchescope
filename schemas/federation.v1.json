@@ -571,6 +571,10 @@
                   {
                     "const": "source_not_declared",
                     "type": "string"
+                  },
+                  {
+                    "const": "digest_mismatch",
+                    "type": "string"
                   }
                 ]
               }
@@ -3254,6 +3258,218 @@
                           ]
                         }
                       },
+                      "type": "object"
+                    },
+                    "observedContent": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "digest": {
+                          "description": "Lowercase hexadecimal SHA-256 digest.",
+                          "pattern": "^[0-9a-f]{64}$",
+                          "type": "string"
+                        },
+                        "file": {
+                          "description": "Repository relative POSIX path.",
+                          "minLength": 1,
+                          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+                          "type": "string"
+                        },
+                        "function": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "line": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "provenance": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "digest": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "attributes": {
+                                  "items": {
+                                    "minLength": 1,
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "resourceAttributes": {
+                                  "items": {
+                                    "minLength": 1,
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "spanFields": {
+                                  "items": {
+                                    "anyOf": [
+                                      {
+                                        "const": "name",
+                                        "type": "string"
+                                      },
+                                      {
+                                        "const": "operation",
+                                        "type": "string"
+                                      },
+                                      {
+                                        "const": "parentSpanId",
+                                        "type": "string"
+                                      }
+                                    ]
+                                  },
+                                  "type": "array"
+                                }
+                              },
+                              "required": [
+                                "attributes",
+                                "spanFields"
+                              ],
+                              "type": "object"
+                            },
+                            "file": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "attributes": {
+                                  "items": {
+                                    "minLength": 1,
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "resourceAttributes": {
+                                  "items": {
+                                    "minLength": 1,
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "spanFields": {
+                                  "items": {
+                                    "anyOf": [
+                                      {
+                                        "const": "name",
+                                        "type": "string"
+                                      },
+                                      {
+                                        "const": "operation",
+                                        "type": "string"
+                                      },
+                                      {
+                                        "const": "parentSpanId",
+                                        "type": "string"
+                                      }
+                                    ]
+                                  },
+                                  "type": "array"
+                                }
+                              },
+                              "required": [
+                                "attributes",
+                                "spanFields"
+                              ],
+                              "type": "object"
+                            },
+                            "function": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "attributes": {
+                                  "items": {
+                                    "minLength": 1,
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "resourceAttributes": {
+                                  "items": {
+                                    "minLength": 1,
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "spanFields": {
+                                  "items": {
+                                    "anyOf": [
+                                      {
+                                        "const": "name",
+                                        "type": "string"
+                                      },
+                                      {
+                                        "const": "operation",
+                                        "type": "string"
+                                      },
+                                      {
+                                        "const": "parentSpanId",
+                                        "type": "string"
+                                      }
+                                    ]
+                                  },
+                                  "type": "array"
+                                }
+                              },
+                              "required": [
+                                "attributes",
+                                "spanFields"
+                              ],
+                              "type": "object"
+                            },
+                            "line": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "attributes": {
+                                  "items": {
+                                    "minLength": 1,
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "resourceAttributes": {
+                                  "items": {
+                                    "minLength": 1,
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "spanFields": {
+                                  "items": {
+                                    "anyOf": [
+                                      {
+                                        "const": "name",
+                                        "type": "string"
+                                      },
+                                      {
+                                        "const": "operation",
+                                        "type": "string"
+                                      },
+                                      {
+                                        "const": "parentSpanId",
+                                        "type": "string"
+                                      }
+                                    ]
+                                  },
+                                  "type": "array"
+                                }
+                              },
+                              "required": [
+                                "attributes",
+                                "spanFields"
+                              ],
+                              "type": "object"
+                            }
+                          },
+                          "required": [
+                            "file",
+                            "digest"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "file",
+                        "digest",
+                        "provenance"
+                      ],
                       "type": "object"
                     },
                     "observedSource": {

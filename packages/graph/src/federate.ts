@@ -226,6 +226,10 @@ const eligibleRepositories = (
     candidates.push({
       coordinate: resolved.coordinate,
       graph: input.graph,
+      /*
+       * Federation reads `match` and never `matchContent`: a digest is checkable inside one workspace
+       * and cannot separate two checkouts holding a byte-identical file at one path.
+       */
       matcher: createSourceMatcher(input.graph),
     });
   }

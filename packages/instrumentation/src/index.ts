@@ -26,6 +26,11 @@ export { patchMcpClient, type PatchOutcome } from './mcp-client.ts';
 export { type ModelCall, recogniseModelCall } from './model-endpoints.ts';
 export { instrumentedFetch } from './outbound-fetch.ts';
 export { type InstrumentationReport, reportPathFor } from './report-file.ts';
+export {
+  createSourceFrameReader,
+  type SourceFrame,
+  type SourceFrameReader,
+} from './source-frame.ts';
 export { type InstrumentationSettings, readSettings } from './settings.ts';
 export {
   createTracer,

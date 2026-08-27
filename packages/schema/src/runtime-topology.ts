@@ -7,6 +7,7 @@ import {
   NonNegativeInt,
   OneBasedLine,
   RelativePath,
+  Sha256Hex,
 } from './primitives.ts';
 import { AgentOperation, SideEffectRecord } from './trace.ts';
 
@@ -51,7 +52,14 @@ export const ObservedValueProvenance = Type.Object(
 );
 export type ObservedValueProvenance = Static<typeof ObservedValueProvenance>;
 
-/** A runtime coordinate complete enough to compare with a separately scanned repository. */
+/**
+ * A runtime coordinate complete enough to compare with a separately scanned repository.
+ *
+ * A repository, an immutable revision and a path inside it. This is the form that survives leaving the
+ * workspace that produced it, so a run reaching a second checkout is described by it and federation
+ * rests on nothing else. What it costs is a clean checkout with a remote, which a tree somebody is
+ * editing does not have; [ObservedContentLocation] is what that tree can produce instead.
+ */
 export const ObservedSourceIdentity = Type.Object(
   {
     repositoryUrl: NonEmptyString(),
@@ -83,6 +91,41 @@ export const ObservedSource = Type.Object(
 );
 export type ObservedSource = Static<typeof ObservedSource>;
 
+/**
+ * A runtime coordinate that proves itself by the contents of the file rather than by a revision.
+ *
+ * A path relative to the scanned root and the digest of the file as the run found it. It answers the
+ * question a revision answers, which is whether the file the run pointed at is the file the declaration
+ * was read from, and it answers it directly: a reader can check it with `sha256sum` where a revision has
+ * to be trusted to imply it. It is also the only form a working tree can produce, because a tree with
+ * uncommitted work has no immutable revision to report.
+ *
+ * It is deliberately not part of [ObservedSourceIdentity] and cannot stand in for one. Two repositories
+ * can hold a byte-identical file at one path, so this says nothing outside the workspace that produced
+ * it, and a federated join must not read it. Keeping them apart is what stops the weaker claim being
+ * mistaken for the stronger one by anything that only checks whether a source is present.
+ */
+export const ObservedContentLocation = Type.Object(
+  {
+    /** Path inside the root the audit scanned, which is the form a declaration is recorded against. */
+    file: RelativePath,
+    digest: Sha256Hex,
+    line: Type.Optional(OneBasedLine),
+    function: Type.Optional(NonEmptyString()),
+    provenance: Type.Object(
+      {
+        file: ObservedValueProvenance,
+        digest: ObservedValueProvenance,
+        line: Type.Optional(ObservedValueProvenance),
+        function: Type.Optional(ObservedValueProvenance),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  { additionalProperties: false },
+);
+export type ObservedContentLocation = Static<typeof ObservedContentLocation>;
+
 export const MissingSpanAttribute = Type.Object(
   {
     attribute: NonEmptyString(),
@@ -97,6 +140,8 @@ export const MissingSpanAttribute = Type.Object(
         'line_outside_declaration',
         'ambiguous_source_mapping',
         'source_not_declared',
+        /** The file the run read is not the file the declaration was read from. */
+        'digest_mismatch',
       ] as const),
     ),
     /** Observed components in this run that did not carry the attribute. */
@@ -130,6 +175,8 @@ export const ObservedComponent = Type.Object(
     codeLocation: Type.Optional(ObservedCodeLocation),
     /** Complete runtime source identity, including separate provenance for every field. */
     observedSource: Type.Optional(ObservedSource),
+    /** Where the call was made, proved by the file's contents rather than by a revision. */
+    observedContent: Type.Optional(ObservedContentLocation),
     /** Set when the span carried MCP attributes, which makes the tool a cross process call. */
     mcpServer: Type.Optional(NonEmptyString()),
     /** True when the component performed at least one declared side effect. */

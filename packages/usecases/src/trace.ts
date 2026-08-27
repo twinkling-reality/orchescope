@@ -189,6 +189,7 @@ export const runTrace = async (request: TraceRequest): Promise<TraceResult> => {
     const session = await runTracedSession({
       command: request.command,
       cwd: workspace.paths.root,
+      repositoryRoot: workspace.paths.root,
       runId,
       baseEnv: process.env,
       serviceName: workspace.projectName,

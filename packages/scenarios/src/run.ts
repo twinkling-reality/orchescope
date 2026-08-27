@@ -158,6 +158,8 @@ const runRepetition = async (
   const session = await runTracedSession({
     command: scenario.target.command,
     cwd: context.cwd,
+    // The audit target is the repository, not the directory this scenario chose to run in.
+    repositoryRoot: resolve(input.projectRoot),
     runId: id,
     baseEnv: input.baseEnv,
     extraEnv: scenarioEnv(scenario, input.variant, context.index),

@@ -17,6 +17,15 @@ export type InstrumentationSettings = {
   readonly runId: string;
   readonly serviceName: string;
   readonly maxSpans: number;
+  /**
+   * The repository this run audits, when the run named one.
+   *
+   * Absent is a normal answer, not a degraded one: a process that was reached through an inherited
+   * `NODE_OPTIONS` may be a descendant of the target rather than the target, and the variable is the only
+   * thing that says which repository a frame would belong to. Without it the shim reports no source
+   * location rather than one derived from wherever the process happened to start.
+   */
+  readonly repositoryRoot?: string;
 };
 
 /** Beyond this a run has stopped being evidence and started being a memory leak in someone else's process. */
@@ -47,10 +56,12 @@ export const readSettings = (
   if (endpoint === undefined || endpoint.length === 0) return undefined;
   if (runId === undefined || runId.length === 0) return undefined;
   if (!isLoopback(endpoint)) return undefined;
+  const repositoryRoot = environment['ORCHESCOPE_REPOSITORY_ROOT'];
   return {
     endpoint,
     runId,
     serviceName: environment['OTEL_SERVICE_NAME'] ?? 'orchescope-target',
     maxSpans: positiveInteger(environment['ORCHESCOPE_MAX_SPANS'], DEFAULT_MAX_SPANS),
+    ...(repositoryRoot === undefined || repositoryRoot.length === 0 ? {} : { repositoryRoot }),
   };
 };

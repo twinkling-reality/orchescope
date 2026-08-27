@@ -1,4 +1,6 @@
 import process from 'node:process';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { install } from './install.ts';
 
 /**
@@ -19,6 +21,13 @@ try {
     onBeforeExit: (listener) => process.on('beforeExit', listener),
     setInterval: (body, ms) => setInterval(body, ms),
     directory: process.cwd(),
+    /*
+     * This module is what `--import` loads, so its own directory is the shim, and a frame inside it is
+     * the boundary rather than the caller. Taken from `import.meta.url` so it stays correct in both the
+     * bundled build, where everything is one file beside the command line, and the source checkout,
+     * where it is several modules in a package this repository also audits.
+     */
+    instrumentationRoot: dirname(fileURLToPath(import.meta.url)),
   });
   /*
    * Awaited here so every patch is in place before the target's first line. `--import` settles the module

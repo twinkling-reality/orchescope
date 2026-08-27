@@ -92,6 +92,19 @@ export const ORCHESCOPE = {
   sideEffectOutcome: 'orchescope.side_effect.outcome',
   queueWaitMs: 'orchescope.queue.wait_ms',
   repositoryPath: 'orchescope.code.repository.path',
+  /**
+   * The same file, relative to the root the audit scanned.
+   *
+   * Separate from `repositoryPath` because the two roots differ whenever the audit target is a directory
+   * inside a larger checkout, and separate from an inference because the instrumentor is the only side
+   * that can see both the frame and the root it was told to answer against.
+   */
+  auditPath: 'orchescope.code.audit.path',
+  /**
+   * sha256 of the file as the run found it, which is what lets a location be believed on a tree nobody
+   * has committed. A revision proves the same thing indirectly and only where the tree is clean.
+   */
+  fileDigest: 'orchescope.code.file.digest',
   sourceCapture: 'orchescope.source.capture',
 } as const;
 

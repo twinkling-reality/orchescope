@@ -2,6 +2,7 @@ import type {
   MissingSpanAttribute,
   NormalizedSpan,
   ObservedCodeLocation,
+  ObservedContentLocation,
   ObservedSource,
   ObservedValueProvenance,
 } from '@orchescope/schema';
@@ -18,6 +19,8 @@ export type SourceIdentityResult = {
   readonly codeLocation?: ObservedCodeLocation;
   readonly codeLocationProvenance: ObservedValueProvenance;
   readonly observedSource?: ObservedSource;
+  /** The content proof, produced independently of the pinned one and never in place of it. */
+  readonly observedContent?: ObservedContentLocation;
   readonly refusals: readonly MissingSpanAttribute[];
 };
 
@@ -113,6 +116,8 @@ type SourceInputs = {
   readonly line: ReturnType<typeof readNumberAttribute>;
   readonly functionName: ReturnType<typeof readStringAttribute>;
   readonly relative: ReturnType<typeof readStringAttribute>;
+  readonly audit: ReturnType<typeof readStringAttribute>;
+  readonly digest: ReturnType<typeof readStringAttribute>;
   readonly repository: ScopedString;
   readonly revision: ScopedString;
   readonly codeLocationProvenance: ObservedValueProvenance;
@@ -123,6 +128,8 @@ const sourceInputsOf = (span: NormalizedSpan): SourceInputs => {
   const line = readNumberAttribute(span.attributes, CODE.lineNumber, CODE.legacyLineNumber);
   const functionName = readStringAttribute(span.attributes, CODE.functionName, CODE.legacyFunction);
   const relative = readStringAttribute(span.attributes, ORCHESCOPE.repositoryPath);
+  const audit = readStringAttribute(span.attributes, ORCHESCOPE.auditPath);
+  const digest = readStringAttribute(span.attributes, ORCHESCOPE.fileDigest);
   const repository = scopedString(span, VCS.repositoryUrl);
   const revision = scopedString(span, VCS.headRevision);
   const codeLocationProvenance = attributeProvenance(
@@ -136,6 +143,8 @@ const sourceInputsOf = (span: NormalizedSpan): SourceInputs => {
     line,
     functionName,
     relative,
+    audit,
+    digest,
     repository,
     revision,
     codeLocationProvenance,
@@ -246,6 +255,44 @@ const completeSourceInputs = (
   return { relativeFile, repositoryUrl, immutableRevision, rawFile, relative };
 };
 
+/**
+ * The content proof, read on its own terms.
+ *
+ * It needs a path inside the scanned root and a digest of the file, and nothing else: a repository
+ * coordinate would make it the other proof, and a run that can produce one produces both. Read
+ * separately rather than as a fallback, because it is different evidence and not a relaxation, and a
+ * span that carries both should carry both.
+ */
+const contentLocationOf = (
+  inputs: SourceInputs,
+  validLine: number | undefined,
+  refusals: MissingSpanAttribute[],
+): ObservedContentLocation | undefined => {
+  const { audit, digest, functionName, line } = inputs;
+  if (audit === undefined || digest === undefined) return undefined;
+  const file = repositoryPath(audit.value);
+  const checked = /^[0-9a-f]{64}$/.test(digest.value) ? digest.value : undefined;
+  if (file === undefined) refusals.push(refusal(audit.attribute, 'invalid_path'));
+  if (checked === undefined) refusals.push(refusal(digest.attribute, 'invalid_path'));
+  if (file === undefined || checked === undefined) return undefined;
+  return {
+    file,
+    digest: checked,
+    ...(validLine === undefined ? {} : { line: validLine }),
+    ...(functionName === undefined ? {} : { function: functionName.value }),
+    provenance: {
+      file: attributeProvenance(audit.attribute),
+      digest: attributeProvenance(digest.attribute),
+      ...(validLine === undefined
+        ? {}
+        : { line: attributeProvenance(line?.attribute ?? CODE.lineNumber) }),
+      ...(functionName === undefined
+        ? {}
+        : { function: attributeProvenance(functionName.attribute) }),
+    },
+  };
+};
+
 /** Read and validate one span's independently emitted runtime source coordinate. */
 export const sourceIdentityOf = (span: NormalizedSpan): SourceIdentityResult => {
   const inputs = sourceInputsOf(span);
@@ -259,14 +306,33 @@ export const sourceIdentityOf = (span: NormalizedSpan): SourceIdentityResult => 
       refusals,
     };
   }
-  const complete = completeSourceInputs(inputs, refusals);
-  if (complete === undefined) {
-    return { codeLocationProvenance: inputs.codeLocationProvenance, refusals };
-  }
-
   const { functionName, line, repository, revision } = inputs;
   const validLine =
     line !== undefined && Number.isInteger(line.value) && line.value >= 1 ? line.value : undefined;
+  const observedContent = contentLocationOf(inputs, validLine, refusals);
+
+  const complete = completeSourceInputs(inputs, refusals);
+  if (complete === undefined) {
+    /*
+     * A content proof still carries a location a reader can open, even where no pinned coordinate could
+     * be assembled. That is the ordinary case on a tree with uncommitted work, and reporting nothing
+     * there would lose the only evidence such a run can produce.
+     */
+    if (observedContent === undefined) {
+      return { codeLocationProvenance: inputs.codeLocationProvenance, refusals };
+    }
+    return {
+      codeLocation: {
+        file: observedContent.file,
+        ...(validLine === undefined ? {} : { line: validLine }),
+        ...(functionName === undefined ? {} : { function: functionName.value }),
+      },
+      codeLocationProvenance: inputs.codeLocationProvenance,
+      observedContent,
+      refusals,
+    };
+  }
+
   const codeLocation: ObservedCodeLocation = {
     file: complete.relativeFile,
     ...(validLine === undefined ? {} : { line: validLine }),
@@ -296,6 +362,7 @@ export const sourceIdentityOf = (span: NormalizedSpan): SourceIdentityResult => 
     codeLocation,
     codeLocationProvenance: inputs.codeLocationProvenance,
     observedSource,
+    ...(observedContent === undefined ? {} : { observedContent }),
     refusals,
   };
 };

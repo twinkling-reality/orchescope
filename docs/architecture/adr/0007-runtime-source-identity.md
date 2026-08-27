@@ -1,8 +1,15 @@
 # ADR 0007: Runtime source identity must name the executed revision and file
 
-- Status: accepted
+- Status: accepted, amended by [ADR 0016](0016-two-proofs-of-a-source-location.md)
 - Date: 2026-08-22
 - Deciders: repository maintainers
+
+> **Two clauses of this record were amended.** The identity it decides is now one of two accepted proofs,
+> the second being the digest of the file, which a working tree can produce where an immutable revision
+> cannot. And its requirement that a present line fall inside a declaration's source range applies where
+> the line can discriminate between declarations, because a shim on the transport reports a call site
+> rather than a declaration site. The reasoning and the measurement below are the evidence for that
+> amendment and are unchanged.
 
 ## Context
 

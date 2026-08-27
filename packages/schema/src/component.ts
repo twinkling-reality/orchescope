@@ -9,7 +9,7 @@ import {
   NonNegativeInt,
   Sha256Hex,
 } from './primitives.ts';
-import { ObservedSource } from './runtime-topology.ts';
+import { ObservedContentLocation, ObservedSource } from './runtime-topology.ts';
 
 /**
  * The component vocabulary of an agentic system. A component is anything that can be pointed at
@@ -238,6 +238,14 @@ export const Component = Type.Object(
     sourceLocations: Type.Array(SourceLocation),
     /** Runtime source coordinate and the exact trace inputs that supplied each field. */
     observedSource: Type.Optional(ObservedSource),
+    /**
+     * The other runtime coordinate, proved by the file's contents rather than by a revision.
+     *
+     * Recorded beside the pinned one rather than folded into it, so a reader can see which evidence
+     * established a join. A component carrying only this one was matched inside this workspace and the
+     * claim does not travel: that is a fact about the join worth reading, not a detail to hide.
+     */
+    observedContent: Type.Optional(ObservedContentLocation),
     configLocations: Type.Array(ConfigLocation),
     /**
      * True when every source location that declares this component is a test file.

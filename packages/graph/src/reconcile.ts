@@ -186,18 +186,35 @@ const sourceRefusal = (
   ...(evidence[0] === undefined ? { evidenceOmitted: 1 } : {}),
 });
 
+/**
+ * The location a span carried, judged against the declarations.
+ *
+ * Two proofs reach this, and they are asked in the order of what they can support rather than of how
+ * much they are believed. A pinned coordinate is a claim about a repository at a revision and it holds
+ * outside this workspace, so it is asked first and its refusal is final. A content proof is a claim
+ * about one file's bytes and holds only here, which is enough for the tree an audit actually runs
+ * against and is why a working tree can join at all.
+ */
 const sourceCandidates = (
   lookups: StaticLookups,
   observed: ObservedComponent,
   name: string,
 ): Resolution => {
   const source = observed.observedSource;
-  if (source === undefined) return { kind: 'unmatched', refusals: [] };
-  const result = lookups.sourceMatcher.match({
-    observedKind: observed.kind,
-    observedName: name,
-    observedSource: source,
-  });
+  const content = observed.observedContent;
+  if (source === undefined && content === undefined) return { kind: 'unmatched', refusals: [] };
+  const result =
+    source !== undefined
+      ? lookups.sourceMatcher.match({
+          observedKind: observed.kind,
+          observedName: name,
+          observedSource: source,
+        })
+      : lookups.sourceMatcher.matchContent({
+          observedKind: observed.kind,
+          observedName: name,
+          observedContent: content as NonNullable<typeof content>,
+        });
   if (result.kind === 'matched') {
     return {
       kind: 'matched',
@@ -251,6 +268,9 @@ const sourceCandidates = (
  * it would make a span carrying more evidence join to less than the same span carrying none. The refusal
  * is still recorded, so coverage says the location was read and did not settle it.
  *
+ * `digest_mismatch` is the content proof's version of the same statement: the file on disk is not the
+ * file the run read, so the declaration in it describes something else.
+ *
  * `line_outside_declaration` is named here for completeness and does not reach this decision: the
  * matcher treats a line that eliminates every candidate as a part that did not corroborate rather than
  * as a veto, so it arrives either on a match or on an ambiguity, never on a refusal.
@@ -268,7 +288,7 @@ const resolveObserved = (lookups: StaticLookups, observed: ObservedComponent): R
   const name = normalizeLocalName(observed.observedName);
 
   let refusals: readonly MissingSpanAttribute[] = [];
-  if (observed.observedSource !== undefined) {
+  if (observed.observedSource !== undefined || observed.observedContent !== undefined) {
     const bySource = sourceCandidates(lookups, observed, name);
     if (bySource.kind !== 'unmatched' || namesOtherCode(bySource.refusals)) return bySource;
     refusals = bySource.refusals;
@@ -443,6 +463,9 @@ const markObserved = (
   state.components.set(component.id, {
     ...component,
     ...(observed.observedSource === undefined ? {} : { observedSource: observed.observedSource }),
+    ...(observed.observedContent === undefined
+      ? {}
+      : { observedContent: observed.observedContent }),
     presence: { ...component.presence, runtime: true },
     basis: strongerBasis(component.basis, 'observed'),
     evidence: [...new Set([...component.evidence, ...observed.evidence, record.id])],
@@ -463,6 +486,9 @@ const markObserved = (
     observedName: observed.observedName,
     observedKind: observed.kind,
     ...(observed.observedSource === undefined ? {} : { observedSource: observed.observedSource }),
+    ...(observed.observedContent === undefined
+      ? {}
+      : { observedContent: observed.observedContent }),
     componentId: component.id,
     rule,
   });
@@ -508,6 +534,9 @@ const addRuntimeOnly = (
             },
           ],
     ...(observed.observedSource === undefined ? {} : { observedSource: observed.observedSource }),
+    ...(observed.observedContent === undefined
+      ? {}
+      : { observedContent: observed.observedContent }),
     configLocations: [],
     evidence: [...new Set([...observed.evidence, record.id])],
     permissions: [],

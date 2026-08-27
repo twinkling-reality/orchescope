@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import { GEN_AI, MCP, ORCHESCOPE } from '@orchescope/traces/attributes';
+import { CODE, GEN_AI, MCP, ORCHESCOPE, VCS } from '@orchescope/traces/attributes';
 import type { AttributeValue, SpanAttributes } from './exporter.ts';
 import { type ProtocolCall, recogniseProtocolCall } from './json-rpc.ts';
 import { recogniseModelCall } from './model-endpoints.ts';
+import type { SourceFrame, SourceFrameReader } from './source-frame.ts';
 import { SPAN_KIND_CLIENT, type SpanHandle, type Tracer } from './tracer.ts';
 
 /** What the platform's own `fetch` accepts, rather than a shape borrowed from a browser type library. */
@@ -195,6 +196,53 @@ export type FetchPatchOptions = {
    * arrived as two, from two services, and the count a reader trusts had a copy of the machinery in it.
    */
   readonly receiverOrigin: string;
+  /**
+   * Where the call was made from, when this run named a repository to answer against.
+   *
+   * Absent is ordinary: a run may not have named one, and a process reached through an inherited
+   * `NODE_OPTIONS` may not be the target at all.
+   */
+  readonly sourceFrames?: SourceFrameReader;
+};
+
+/**
+ * The call site, written onto the span after the request rather than before it.
+ *
+ * Reading a file to hash it is the one thing here that touches the disk, so it happens once the response
+ * is in hand and the caller is no longer waiting: the span is still open, and `recordUsage` already
+ * writes to it from the same place. What the capture itself costs is bounded by the frame limit and is
+ * paid before the request, because the stack that made the call does not survive the await.
+ *
+ * Two coordinates go out and they answer different questions, so both are written when both can be. The
+ * pinned pair is what lets a location cross repositories, which a run that spawns a second process
+ * needs, and it exists only where the checkout is clean and has a remote. The audit-relative path and
+ * the digest are what let a location be believed on a tree somebody is editing, which is every other
+ * run, and they are checkable by hand.
+ */
+const sourceAttributes = (frame: SourceFrame): SpanAttributes => ({
+  [CODE.filePath]: frame.absoluteFile,
+  [ORCHESCOPE.repositoryPath]: frame.repositoryFile,
+  ...(frame.auditFile === undefined ? {} : { [ORCHESCOPE.auditPath]: frame.auditFile }),
+  ...(frame.line === undefined ? {} : { [CODE.lineNumber]: frame.line }),
+  ...(frame.functionName === undefined ? {} : { [CODE.functionName]: frame.functionName }),
+  ...(frame.digest === undefined ? {} : { [ORCHESCOPE.fileDigest]: frame.digest }),
+  ...(frame.repositoryUrl === undefined ? {} : { [VCS.repositoryUrl]: frame.repositoryUrl }),
+  ...(frame.revision === undefined ? {} : { [VCS.headRevision]: frame.revision }),
+  [ORCHESCOPE.sourceCapture]: 'node.callsite.tracked_file',
+});
+
+const recordSource = (
+  span: SpanHandle,
+  reader: SourceFrameReader,
+  frame: SourceFrame | undefined,
+): void => {
+  if (frame === undefined) return;
+  const digest = reader.digestOf(frame.absoluteFile);
+  for (const [key, value] of Object.entries(
+    sourceAttributes(digest === undefined ? frame : { ...frame, digest }),
+  )) {
+    span.set(key, value as AttributeValue);
+  }
 };
 
 /**
@@ -283,7 +331,7 @@ const recordEffect = (
 };
 
 export const instrumentedFetch = (options: FetchPatchOptions): typeof globalThis.fetch => {
-  const { tracer, original, receiverOrigin } = options;
+  const { tracer, original, receiverOrigin, sourceFrames } = options;
   return async (input: FetchInput, init?: RequestInit): Promise<Response> => {
     const url = requestUrl(input);
     if (url === undefined || url.origin === receiverOrigin) return original(input, init);
@@ -291,6 +339,8 @@ export const instrumentedFetch = (options: FetchPatchOptions): typeof globalThis
     const method = requestMethod(input, init);
     const body = requestBody(init);
     const described = describeRequest(url, method, body);
+    // Taken here because the stack that reached this call does not survive the await below.
+    const frame = sourceFrames?.capture();
     const span = tracer.start({
       name: described.name,
       kind: SPAN_KIND_CLIENT,
@@ -302,6 +352,7 @@ export const instrumentedFetch = (options: FetchPatchOptions): typeof globalThis
     try {
       const response = await tracer.within(span, () => original(input, init));
       span.set('http.response.status_code', response.status as AttributeValue);
+      if (sourceFrames !== undefined) recordSource(span, sourceFrames, frame);
       if (described.isModelCall) recordUsage(span, response);
       if (described.isOutsideEffect) {
         recordEffect(span, { ...effect, outcome: effectOutcome(response.status) });
@@ -309,6 +360,7 @@ export const instrumentedFetch = (options: FetchPatchOptions): typeof globalThis
       span.end(response.ok ? 'ok' : 'error', response.ok ? undefined : `status ${response.status}`);
       return response;
     } catch (error) {
+      if (sourceFrames !== undefined) recordSource(span, sourceFrames, frame);
       if (described.isOutsideEffect) recordEffect(span, { ...effect, outcome: 'unknown' });
       span.end('error', error instanceof Error ? error.message : 'the request failed');
       throw error;
