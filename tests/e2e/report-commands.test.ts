@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import * as commands from '../../packages/report/src/commands.ts';
 import {
   auditCommand,
   benchmarkCommand,
@@ -14,6 +15,7 @@ import {
   goalPromptCommand,
   importTraceCommand,
   manifestCommand,
+  scenarioRepeatCommand,
   scenarioRunCommand,
   traceCommand,
 } from '../../packages/report/src/commands.ts';
@@ -42,24 +44,56 @@ const helpFor = async (path: readonly string[]): Promise<string> => {
 const flagsOf = (argv: readonly string[]): readonly string[] =>
   argv.filter((token) => token.startsWith('--') && token !== '--');
 
-/** The verb is stated rather than parsed, and then checked against the argv the report actually prints. */
+/**
+ * The verb is stated rather than parsed, and then checked against the argv the report actually prints.
+ *
+ * `builder` names the exported function each case stands for, so the list below can be held against the
+ * module's own exports. It was a hand written list and it missed one: `scenarioRepeatCommand` printed
+ * `--repeat` where the binary declares `--repetitions`, so the loop's own next action aborted, and this
+ * suite passed because the builder that produced it was never in the list. A check that has to be
+ * remembered is a check that eventually is not.
+ */
 const CASES: readonly {
   readonly verb: readonly string[];
   readonly argv: readonly string[];
+  readonly builder: (...args: never[]) => readonly string[];
 }[] = [
-  { verb: ['audit'], argv: auditCommand() },
-  { verb: ['trace'], argv: traceCommand() },
-  { verb: ['trace'], argv: importTraceCommand() },
-  { verb: ['test'], argv: scenarioRunCommand('support-desk') },
-  { verb: ['benchmark'], argv: benchmarkCommand('support-desk') },
-  { verb: ['chaos'], argv: chaosCommand('support-desk') },
-  { verb: ['compare'], argv: compareCommand() },
-  { verb: ['goal', 'create'], argv: goalCommand('OSC-REL-0001') },
-  { verb: ['goal', 'show'], argv: goalPromptCommand('OSC-GOAL-0001') },
-  { verb: ['init'], argv: manifestCommand() },
+  { verb: ['audit'], argv: auditCommand(), builder: auditCommand },
+  { verb: ['trace'], argv: traceCommand(), builder: traceCommand },
+  { verb: ['trace'], argv: importTraceCommand(), builder: importTraceCommand },
+  { verb: ['test'], argv: scenarioRunCommand('support-desk'), builder: scenarioRunCommand },
+  {
+    verb: ['test'],
+    argv: scenarioRepeatCommand('support-desk', 5),
+    builder: scenarioRepeatCommand,
+  },
+  { verb: ['benchmark'], argv: benchmarkCommand('support-desk'), builder: benchmarkCommand },
+  { verb: ['chaos'], argv: chaosCommand('support-desk'), builder: chaosCommand },
+  { verb: ['compare'], argv: compareCommand(), builder: compareCommand },
+  { verb: ['goal', 'create'], argv: goalCommand('OSC-REL-0001'), builder: goalCommand },
+  { verb: ['goal', 'show'], argv: goalPromptCommand('OSC-GOAL-0001'), builder: goalPromptCommand },
+  { verb: ['init'], argv: manifestCommand(), builder: manifestCommand },
 ];
 
 describe('every command the report prints', () => {
+  /*
+   * The list above is held against the module rather than trusted. Anything exported from `commands.ts`
+   * that builds an argv is a command this product will print at somebody, so a builder with no case here
+   * is a command nothing checks.
+   */
+  it('covers every command builder the module exports', () => {
+    const exported = Object.entries(commands)
+      .filter(([, value]) => typeof value === 'function')
+      .map(([name]) => name)
+      .sort();
+    const covered = [...new Set(CASES.map((testCase) => testCase.builder.name))].sort();
+    assert.deepEqual(
+      covered,
+      exported,
+      'a command builder is exported with no case checking it against the binary',
+    );
+  });
+
   it('is invoked as orchescope', () => {
     for (const testCase of CASES) {
       assert.equal(testCase.argv[0], CLI, `${testCase.argv.join(' ')} does not start with ${CLI}`);

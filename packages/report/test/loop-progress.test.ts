@@ -279,12 +279,18 @@ describe('loopProgress', () => {
     const verdict = progress.steps.find((step) => step.id === 'verdict');
     assert.equal(verdict?.state, 'failed');
     assert.match(verdict?.summary ?? '', /no metric moved enough to call/);
+    /*
+     * Spelled out rather than compared against the builder, because this assertion existed while the
+     * flag was `--repeat`, which the binary refuses. A test that reads the argv from the same function
+     * that writes it agrees with whatever that function says; `tests/e2e/report-commands.test.ts` is
+     * what holds it against the binary's own help.
+     */
     assert.deepEqual(verdict?.command, [
       'orchescope',
       'test',
       '--scenario',
       'support-desk',
-      '--repeat',
+      '--repetitions',
       '5',
     ]);
   });

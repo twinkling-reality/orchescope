@@ -30,12 +30,20 @@ export const scenarioRunCommand = (scenario: string): readonly string[] => [
   scenario,
 ];
 
+/**
+ * The rerun the loop asks for when a comparison came back undecided, which is a sample size problem.
+ *
+ * The flag is `--repetitions`, which is what `orchescope test` declares. It read `--repeat` here, and
+ * commander refuses an option it does not know, so the one line the loop prints at its least decided
+ * moment was a line that aborts. That is worse than a command which under-records: an operator following
+ * it gets an error about the tool rather than more evidence about their system.
+ */
 export const scenarioRepeatCommand = (scenario: string, repeat: number): readonly string[] => [
   CLI,
   'test',
   '--scenario',
   scenario,
-  '--repeat',
+  '--repetitions',
   String(repeat),
 ];
 
