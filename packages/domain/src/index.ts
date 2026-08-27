@@ -138,6 +138,8 @@ export {
 export {
   differenceIsMeaningful,
   mean,
+  metricDecidedByPresence,
+  MINIMUM_SAMPLES_PER_SIDE,
   quantile,
   relativeChange,
   standardDeviation,

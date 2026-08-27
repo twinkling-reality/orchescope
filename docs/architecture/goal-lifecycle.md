@@ -33,6 +33,24 @@ A resilience finding that says "a single dependency failure ends the task" is no
 choice. A duplicated refund is eligible: attaching an idempotency key is local, and rerunning the same scenario with the
 same seed decides it.
 
+## What a goal is judged against
+
+The scenarios a goal reruns and the runs it compares against are one question, not two. A comparison means
+something only when both sides reproduce the same work, so both come from the same evidence: the audit
+records, per run, which components that run executed, and the goal asks which recorded runs exercised the
+components its finding names. That is the declared against exercised join asked backwards, and it is a
+scoped query rather than a window over recent runs.
+
+Nothing is matched by name. A scenario is chosen because runs of it were recorded executing the components,
+never because its tags read like them, and a scenario recorded covering more of what the finding names is
+preferred over one covering less.
+
+The baseline is one stored scenario result, whole, with the conditions it was recorded under: the scenario,
+the variant and the fault plan. The plan reruns that scenario under those conditions, so the two sides are
+two executions of the same work. Where no such pair exists, and a repository with no scenario is the normal
+case, the goal states no metric criterion, prescribes no comparison, and says which question failed rather
+than only that something is missing.
+
 ## What a goal contains
 
 - **`id`**, `OSC-GOAL-NNNN`, sequential per project and readable, derived from the identifiers already stored rather than
@@ -46,8 +64,9 @@ same seed decides it.
   `requiredApprovals` from `human_review`, `live_execution` and `cost_budget`.
 - **`risk`**: `low`, `medium` or `high`.
 - **`acceptanceCriteria`**, at least one, each `AC-NN` with a checkable statement and a check of a known kind.
-- **`validation`**: the scenarios to rerun, the baseline runs to compare against, the exact commands with their purpose,
-  the number of repetitions, and whether validating needs to execute the system rather than only analyse it.
+- **`validation`**: the scenarios to rerun, the baseline runs to compare against and the conditions they were
+  recorded under, or why no comparison is prescribed; the exact commands with their purpose, the number of
+  repetitions, and whether validating needs to execute the system rather than only analyse it.
 - **`expectedImprovement`**, stated as a direction and a magnitude where the evidence supports one.
 - **`rollback`**, how to undo the change if validation fails.
 - **`validationResults`**, every comparison that judged it, newest last.
@@ -98,7 +117,9 @@ The comparison applies the rules that keep it honest: sample sizes travel with e
 not support is `indeterminate`, and a latency improvement alongside a success decline is `mixed` or `regressed`, never
 `improved`. One exception is deliberate: for an event that must never happen, such as a duplicated side effect, crossing
 zero is decided by presence rather than by distribution. An effect that happened once and now happens never is a
-categorical change, not a statistical claim.
+categorical change, not a statistical claim, and that is why such a criterion is stated even where the recorded baseline
+is too small for a direction while a latency or a success rate criterion is not.
+
 
 ## Where to look
 

@@ -115,7 +115,7 @@ describe('semantic finding goal continuity', () => {
       ),
       evidence: [],
       validationScenarioIds: [],
-      baselineRunIds: [],
+      exercisingRunIds: [],
       repetitions: 3,
     });
     const resolved = goal.acceptanceCriteria.find(

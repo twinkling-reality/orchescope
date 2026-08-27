@@ -82,8 +82,30 @@ export const ValidationPlan = Type.Object(
   {
     /** Scenarios that must be rerun to judge the change. */
     scenarioIds: Type.Array(NonEmptyString()),
-    /** Runs the candidate is compared against. */
+    /** Runs the candidate is compared against. Empty when no comparable pair exists. */
     baselineRunIds: Type.Array(NonEmptyString()),
+    /**
+     * The recorded work those runs are, and the conditions they were recorded under.
+     *
+     * A comparison means something only when both sides reproduce the same work, so the plan states what
+     * the candidate has to be rather than leaving it to whichever run happens to be newest. Absent
+     * exactly when `comparisonUnavailable` is present: either the plan can name a comparable pair or it
+     * says why it cannot, and never neither.
+     */
+    baseline: Type.Optional(
+      Type.Object(
+        {
+          scenarioId: NonEmptyString(),
+          variantId: Type.Optional(NonEmptyString()),
+          faultPlanId: Type.Optional(NonEmptyString()),
+          /** Runs on the baseline side that measured something, which is what the sample floor counts. */
+          samples: NonNegativeInt,
+        },
+        { additionalProperties: false },
+      ),
+    ),
+    /** Why no comparison is prescribed, in the words of the question that failed. */
+    comparisonUnavailable: Type.Optional(NonEmptyString()),
     baselineBenchmarkId: Type.Optional(NonEmptyString()),
     commands: Type.Array(
       Type.Object(

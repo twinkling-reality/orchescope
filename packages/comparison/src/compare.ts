@@ -4,6 +4,8 @@ import {
   formatCount,
   comparisonId as makeComparisonId,
   mean,
+  metricDecidedByPresence,
+  MINIMUM_SAMPLES_PER_SIDE,
   quantile,
   relativeChange,
   type RunObservation,
@@ -69,21 +71,6 @@ export type MetricSample = {
   readonly values: readonly number[];
 };
 
-/**
- * Metrics that count something which must not happen at all.
- *
- * For these, crossing the zero boundary is a categorical change in behaviour rather than a statistical claim: a
- * duplicated payment that happened once and now happens never is decided by presence, not by a sample size. Latency
- * and token counts still go through the distribution rule, because there a small sample genuinely cannot support a
- * direction.
- */
-const INCIDENT_METRICS = new Set([
-  'duplicateSideEffects',
-  'prohibitedSideEffects',
-  'policyViolations',
-  'userInterventions',
-]);
-
 const directionFor = (
   metric: string,
   baseline: number,
@@ -91,7 +78,7 @@ const directionFor = (
   meaningful: { readonly meaningful: boolean; readonly reason: string },
 ): { readonly direction: MetricDelta['direction']; readonly caveat: string | undefined } => {
   if (baseline === candidate) return { direction: 'unchanged', caveat: undefined };
-  if (INCIDENT_METRICS.has(metric) && (baseline === 0 || candidate === 0)) {
+  if (metricDecidedByPresence(metric) && (baseline === 0 || candidate === 0)) {
     return candidate === 0
       ? {
           direction: 'improved',
@@ -120,7 +107,7 @@ const directionFor = (
 export const compareMetric = (
   baseline: MetricSample,
   candidate: MetricSample,
-  minimumSamplesPerSide = 3,
+  minimumSamplesPerSide = MINIMUM_SAMPLES_PER_SIDE,
 ): MetricDelta => {
   const { summarise } = metricReduction(baseline.metric);
   const baselineMean = summarise(baseline.values);

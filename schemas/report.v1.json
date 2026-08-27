@@ -4118,6 +4118,32 @@
           "validation": {
             "additionalProperties": false,
             "properties": {
+              "baseline": {
+                "additionalProperties": false,
+                "properties": {
+                  "faultPlanId": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "samples": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "scenarioId": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "variantId": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "scenarioId",
+                  "samples"
+                ],
+                "type": "object"
+              },
               "baselineBenchmarkId": {
                 "minLength": 1,
                 "type": "string"
@@ -4154,6 +4180,10 @@
                 },
                 "minItems": 1,
                 "type": "array"
+              },
+              "comparisonUnavailable": {
+                "minLength": 1,
+                "type": "string"
               },
               "repetitions": {
                 "minimum": 0,

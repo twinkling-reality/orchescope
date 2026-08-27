@@ -6,8 +6,8 @@ import type {
 } from '@orchescope/schema';
 import type { ArtifactStore } from '../artifacts.ts';
 import { asNullable, type Database } from '../database.ts';
-import type { RunSummary } from '../rows.ts';
-import { optionalText, text } from '../rows.ts';
+import type { ExercisingRun, RunSummary } from '../rows.ts';
+import { integer, optionalText, text } from '../rows.ts';
 
 /**
  * Runs, traces and per component metrics.
@@ -143,6 +143,18 @@ const writeComponentMetrics = (
   }
 };
 
+const summaryFrom = (row: Record<string, unknown>): RunSummary => ({
+  runId: text(row, 'id'),
+  kind: text(row, 'kind'),
+  label: text(row, 'label'),
+  status: text(row, 'status'),
+  startedAt: text(row, 'started_at'),
+  scenarioId: optionalText(row, 'scenario_id'),
+  variantId: optionalText(row, 'variant_id'),
+  faultPlanId: optionalText(row, 'fault_plan_id'),
+  experimentId: optionalText(row, 'experiment_id'),
+});
+
 export const createRunsRepository = (input: {
   readonly database: Database;
   readonly artifacts: ArtifactStore;
@@ -189,19 +201,49 @@ export const createRunsRepository = (input: {
     }
     parameters.push(input.limit ?? 100);
     const rows = database.all(
-      `SELECT id, kind, label, status, started_at, scenario_id, variant_id, experiment_id
+      `SELECT id, kind, label, status, started_at, scenario_id, variant_id, fault_plan_id, experiment_id
        FROM run WHERE ${clauses.join(' AND ')} ORDER BY started_at DESC, rowid DESC LIMIT ?`,
       ...parameters,
     );
+    return rows.map(summaryFrom);
+  };
+
+  /**
+   * The runs that executed at least one of these components, newest first.
+   *
+   * This is the declared against exercised join asked backwards, and it is the only honest way to decide
+   * which recorded work a goal is about. The alternative it replaces was a fixed window of the newest
+   * runs in the project, which relates a baseline to the finding by nothing at all, and a match between
+   * a scenario's tags and a component's name, which the corpus measures wrong in a fifth of the matches
+   * it makes inside one repository.
+   *
+   * A component identifier is a graph identifier and never a framework name, so nothing here is a
+   * catalogue. The limit is a ceiling on work rather than a selection rule: the `WHERE` clause is what
+   * selects, and it is answered from an index on the component.
+   */
+  const runsExercising = (input: {
+    readonly projectId: string;
+    readonly componentIds: readonly string[];
+    readonly limit?: number;
+  }): readonly ExercisingRun[] => {
+    if (input.componentIds.length === 0) return [];
+    const placeholders = input.componentIds.map(() => '?').join(', ');
+    const rows = database.all(
+      `SELECT run.id, run.kind, run.label, run.status, run.started_at, run.scenario_id,
+              run.variant_id, run.fault_plan_id, run.experiment_id,
+              COUNT(cm.component_id) AS exercised
+       FROM run
+       JOIN component_metric cm ON cm.run_id = run.id AND cm.component_id IN (${placeholders})
+       WHERE run.project_id = ? AND run.status = 'completed'
+       GROUP BY run.id
+       ORDER BY run.started_at DESC, run.rowid DESC LIMIT ?`,
+      ...input.componentIds,
+      input.projectId,
+      input.limit ?? 100,
+    );
     return rows.map((row) => ({
-      runId: text(row, 'id'),
-      kind: text(row, 'kind'),
-      label: text(row, 'label'),
-      status: text(row, 'status'),
-      startedAt: text(row, 'started_at'),
-      scenarioId: optionalText(row, 'scenario_id'),
-      variantId: optionalText(row, 'variant_id'),
-      experimentId: optionalText(row, 'experiment_id'),
+      ...summaryFrom(row),
+      exercisedComponents: integer(row, 'exercised'),
     }));
   };
 
@@ -264,6 +306,7 @@ export const createRunsRepository = (input: {
     saveComponentMetrics,
     runById,
     listRuns,
+    runsExercising,
     spanCountForRun,
     traceForRun,
     sideEffectsForRun,

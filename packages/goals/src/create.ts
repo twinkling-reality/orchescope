@@ -1,5 +1,7 @@
 import {
   goalId as makeGoalId,
+  metricDecidedByPresence,
+  MINIMUM_SAMPLES_PER_SIDE,
   OrchescopeError,
   SEMANTIC_FINDING_IDENTITY,
   semanticFindingKeyDigest,
@@ -35,10 +37,32 @@ export type CreateGoalInput = {
   readonly now: Timestamp;
   readonly components: readonly Component[];
   readonly evidence: readonly Evidence[];
-  /** Scenarios that exercise the affected components, chosen by the caller from the scenario set. */
+  /** Scenarios recorded exercising the affected components, chosen by the caller from what the store holds. */
   readonly validationScenarioIds: readonly string[];
-  /** Runs that will serve as the baseline for the comparison. */
-  readonly baselineRunIds: readonly string[];
+  /**
+   * The recorded work the candidate is compared against, with the conditions it was recorded under.
+   *
+   * Absent when the caller found no comparable pair, which is a normal outcome and not a failure: a
+   * repository with no scenario, a scenario whose only result is a single repetition, a finding whose
+   * components nothing has exercised. `comparisonUnavailable` says which of those it was.
+   */
+  readonly baseline?: {
+    readonly scenarioId: string;
+    readonly variantId?: string | undefined;
+    readonly faultPlanId?: string | undefined;
+    readonly runIds: readonly string[];
+    readonly samples: number;
+  };
+  /** Why no comparison is prescribed, when none is. */
+  readonly comparisonUnavailable?: string;
+  /**
+   * Runs that exercised the affected components, whether or not any of them can serve as a baseline.
+   *
+   * This is what runtime evidence means, and it is a different question from whether a comparison is
+   * reachable. Reading one field for both is how a goal came to name three unrelated recent runs as the
+   * thing its candidate would be compared against.
+   */
+  readonly exercisingRunIds: readonly string[];
   readonly baselineBenchmarkId?: string;
   readonly repetitions: number;
 };
@@ -69,7 +93,7 @@ const ALWAYS_PROHIBITED: readonly string[] = [
 ];
 
 /**
- * Whether this goal can be judged against a comparison, which needs two runs and not one.
+ * Whether this goal can be judged against a comparison of two executions of the same work.
  *
  * A baseline alone is half of a comparison. The other half is a run made after the change, and the only
  * thing in the plan that produces one is a scenario: `orchescope audit` records no run, so with no
@@ -78,10 +102,45 @@ const ALWAYS_PROHIBITED: readonly string[] = [
  * `metric_not_worse` criteria come back satisfied on a comparison that measured nothing about the
  * change. A false pass is worse than an undecided one: undecided says look again, and this says done.
  *
- * So the question is not whether a baseline exists, it is whether the plan will produce a candidate.
+ * Two questions, and both have to hold. The caller found a recorded result that can serve as a baseline,
+ * and the plan will rerun the scenario that result came from, so the candidate reproduces the same work
+ * under the same conditions rather than being whichever run happens to be newest.
  */
 const comparisonIsReachable = (input: CreateGoalInput): boolean =>
-  input.baselineRunIds.length > 0 && input.validationScenarioIds.length > 0;
+  input.baseline !== undefined &&
+  input.baseline.samples > 0 &&
+  input.repetitions > 0 &&
+  input.validationScenarioIds.includes(input.baseline.scenarioId);
+
+/**
+ * Whether a criterion about a distribution can be decided by what the plan will produce.
+ *
+ * Reachability is not one question, because deciding a metric is not one kind of act. A duplicated side
+ * effect that happened and now does not is decided by presence and needs no sample floor at all: it is the
+ * criterion the improvement loop closes on, and gating it on three samples would have withdrawn it from
+ * the one scenario shape that produces it, on the reasoning that a categorical change is a weak
+ * distribution claim.
+ *
+ * A latency, a token count or a success rate is a claim about a distribution, and `compareMetric` refuses
+ * a direction on fewer than `MINIMUM_SAMPLES_PER_SIDE`. Both sides have to clear it: the recorded result
+ * supplies the baseline side and no rule can manufacture samples nobody recorded, and the plan's own
+ * repetition count supplies the candidate side. Asked here rather than discovered afterwards, because a
+ * criterion whose deciding command comes back indeterminate is a term the plan wrote knowing nothing
+ * could answer it.
+ */
+const clearsTheSampleFloor = (input: CreateGoalInput): boolean =>
+  (input.baseline?.samples ?? 0) >= MINIMUM_SAMPLES_PER_SIDE &&
+  input.repetitions >= MINIMUM_SAMPLES_PER_SIDE;
+
+/**
+ * Whether the plan can produce evidence that decides a criterion about this metric.
+ *
+ * The metric is asked rather than listed, so adding a criterion never means remembering to update a rule
+ * about which criteria are which. What decides a metric is a property of the metric, and the one place
+ * that knows it is the one the comparison reads.
+ */
+const metricIsDecidable = (input: CreateGoalInput, metric: string): boolean =>
+  comparisonIsReachable(input) && (metricDecidedByPresence(metric) || clearsTheSampleFloor(input));
 
 const writePathsFor = (components: readonly Component[], finding: Finding): readonly string[] => {
   const paths = new Set<string>();
@@ -101,7 +160,7 @@ const writePathsFor = (components: readonly Component[], finding: Finding): read
 const acceptanceCriteriaFor = (
   finding: Finding,
   validationScenarioIds: readonly string[],
-  comparable: boolean,
+  decides: (metric: string) => boolean,
 ): readonly AcceptanceCriterion[] => {
   const criteria: AcceptanceCriterion[] = [];
   let sequence = 1;
@@ -124,7 +183,8 @@ const acceptanceCriteriaFor = (
    * handed to an agent and the honest form of a term that cannot be evaluated is its absence. Recording
    * a run, adding a scenario and cutting the goal again is what brings them back, and the plan says so.
    */
-  const improvement = comparable ? RELATIVE_IMPROVEMENT_BY_RULE[finding.ruleId] : undefined;
+  const named = RELATIVE_IMPROVEMENT_BY_RULE[finding.ruleId];
+  const improvement = named !== undefined && decides(named.metric) ? named : undefined;
   if (improvement !== undefined) {
     criteria.push({
       id: next(),
@@ -138,12 +198,14 @@ const acceptanceCriteriaFor = (
     });
   }
 
-  if (comparable) {
+  if (decides('successRate')) {
     criteria.push({
       id: next(),
       statement: 'task success does not decline against the baseline',
       check: { kind: 'metric_not_worse', metric: 'successRate', tolerance: 0 },
     });
+  }
+  if (decides('duplicateSideEffects')) {
     criteria.push({
       id: next(),
       statement: 'no duplicate side effect appears in any validation run',
@@ -206,17 +268,11 @@ const validationPlanFor = (input: CreateGoalInput, goalId: string): ValidationPl
       ],
     });
   }
-  if (comparisonIsReachable(input)) {
+  const baseline = input.baseline;
+  if (comparisonIsReachable(input) && baseline !== undefined) {
     commands.push({
-      purpose: 'compare the candidate run against the baseline run, attached to this goal',
-      command: [
-        'orchescope',
-        'compare',
-        input.baselineRunIds[0] as string,
-        'latest',
-        '--goal',
-        goalId,
-      ],
+      purpose: `compare the rerun of ${baseline.scenarioId} against the recording of it this goal was cut from, attached to this goal`,
+      command: ['orchescope', 'compare', baseline.runIds[0] as string, 'latest', '--goal', goalId],
     });
   }
   /*
@@ -242,9 +298,20 @@ const validationPlanFor = (input: CreateGoalInput, goalId: string): ValidationPl
     purpose: 'judge this goal against everything the commands above recorded',
     command: ['orchescope', 'goal', 'validate', goalId],
   });
+  const reachable = comparisonIsReachable(input);
   return {
     scenarioIds: [...input.validationScenarioIds],
-    baselineRunIds: [...input.baselineRunIds],
+    baselineRunIds: reachable && baseline !== undefined ? [...baseline.runIds] : [],
+    ...(reachable && baseline !== undefined
+      ? {
+          baseline: {
+            scenarioId: baseline.scenarioId,
+            ...(baseline.variantId === undefined ? {} : { variantId: baseline.variantId }),
+            ...(baseline.faultPlanId === undefined ? {} : { faultPlanId: baseline.faultPlanId }),
+            samples: baseline.samples,
+          },
+        }
+      : { comparisonUnavailable: unavailableReason(input) }),
     ...(input.baselineBenchmarkId === undefined
       ? {}
       : { baselineBenchmarkId: input.baselineBenchmarkId }),
@@ -252,6 +319,27 @@ const validationPlanFor = (input: CreateGoalInput, goalId: string): ValidationPl
     repetitions: input.repetitions,
     requiresExecution: input.validationScenarioIds.length > 0,
   };
+};
+
+/**
+ * Why the plan prescribes no comparison.
+ *
+ * The caller's reason is preferred, because the caller is what asked the store and knows which question
+ * failed. The two answered here are the ones only this module can see: it found a baseline the plan will
+ * not rerun, or the repetition count it was given is below what a direction needs.
+ */
+const unavailableReason = (input: CreateGoalInput): string => {
+  if (input.comparisonUnavailable !== undefined) return input.comparisonUnavailable;
+  if (input.repetitions < MINIMUM_SAMPLES_PER_SIDE) {
+    return `this plan reruns ${input.repetitions} ${input.repetitions === 1 ? 'repetition' : 'repetitions'}, and a metric direction needs at least ${MINIMUM_SAMPLES_PER_SIDE} samples on each side`;
+  }
+  if (
+    input.baseline !== undefined &&
+    !input.validationScenarioIds.includes(input.baseline.scenarioId)
+  ) {
+    return `the recorded baseline is a result of ${input.baseline.scenarioId}, which this plan does not rerun, so nothing here would produce a candidate to compare it against`;
+  }
+  return 'no recorded result of a scenario that exercised these components can serve as a baseline';
 };
 
 const scopeFor = (input: CreateGoalInput): GoalScope => {
@@ -343,7 +431,13 @@ export const createGoal = (input: CreateGoalInput): Goal => {
       },
     );
   }
-  if (input.finding.goalReadiness.requiresRuntimeEvidence && input.baselineRunIds.length === 0) {
+  /*
+   * Runtime evidence and a reachable comparison are different questions, and this asks the first.
+   * Reading the baseline here would refuse a goal whose finding rests on real recorded runs merely
+   * because none of those runs forms a repetition set large enough to compare against, which is a
+   * reason to omit the metric criteria and say so, never a reason to refuse the goal.
+   */
+  if (input.finding.goalReadiness.requiresRuntimeEvidence && input.exercisingRunIds.length === 0) {
     throw new OrchescopeError(
       'INVALID_ARGUMENT',
       `Finding ${input.finding.id} needs runtime evidence before it can be verified, and no baseline run was supplied.`,
@@ -385,10 +479,8 @@ export const createGoal = (input: CreateGoalInput): Goal => {
         ? 'medium'
         : (input.finding.recommendation?.risk ?? 'medium'),
     acceptanceCriteria: [
-      ...acceptanceCriteriaFor(
-        input.finding,
-        input.validationScenarioIds,
-        comparisonIsReachable(input),
+      ...acceptanceCriteriaFor(input.finding, input.validationScenarioIds, (metric) =>
+        metricIsDecidable(input, metric),
       ),
     ],
     validation: validationPlanFor(input, id),

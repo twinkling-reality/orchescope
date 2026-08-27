@@ -262,6 +262,19 @@ export const MIGRATIONS: readonly Migration[] = [
       'CREATE INDEX report_project ON report(project_id, created_at DESC)',
     ],
   },
+  {
+    version: 2,
+    description: 'index the per component run metrics by the component they name',
+    statements: [
+      /*
+       * The primary key is (run_id, component_id), which answers "what did this run execute" and cannot
+       * answer "which runs executed this component" without reading every row. That second question is
+       * how a goal finds the runs its finding is about, so it is asked with a component identifier in
+       * hand and no run to narrow by.
+       */
+      'CREATE INDEX component_metric_component ON component_metric(component_id)',
+    ],
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.reduce(

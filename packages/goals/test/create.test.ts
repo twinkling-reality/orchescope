@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { Evidence, Finding } from '@orchescope/schema';
-import { createGoal } from '../src/create.ts';
+import { createGoal, type CreateGoalInput } from '../src/create.ts';
 import { renderGoalMarkdown } from '../src/render.ts';
 
 /**
@@ -43,7 +43,9 @@ const create = (input: {
   readonly finding?: Finding;
   readonly evidence?: readonly Evidence[];
   readonly scenarioIds?: readonly string[];
-  readonly baselineRunIds?: readonly string[];
+  readonly baseline?: CreateGoalInput['baseline'];
+  readonly exercisingRunIds?: readonly string[];
+  readonly repetitions?: number;
 }) =>
   createGoal({
     finding: input.finding ?? finding(),
@@ -52,9 +54,20 @@ const create = (input: {
     components: [],
     evidence: input.evidence ?? [],
     validationScenarioIds: input.scenarioIds ?? [],
-    baselineRunIds: input.baselineRunIds ?? [],
-    repetitions: 3,
+    ...(input.baseline === undefined ? {} : { baseline: input.baseline }),
+    exercisingRunIds: input.exercisingRunIds ?? input.baseline?.runIds ?? [],
+    repetitions: input.repetitions ?? 3,
   });
+
+/** A recorded result that can serve as a baseline: one scenario, one condition, enough samples. */
+const recorded = (scenarioId: string, samples = 3): CreateGoalInput['baseline'] => ({
+  scenarioId,
+  runIds: Array.from(
+    { length: samples },
+    (_, index) => `run_${String(index + 1).padStart(16, '0')}`,
+  ),
+  samples,
+});
 
 describe('createGoal, the evidence summary', () => {
   it('carries the class of the records it counts rather than assuming they were observed', () => {
@@ -186,11 +199,8 @@ describe('createGoal, naming the finding', () => {
  * could never say so, and the loop this product exists to close stopped one step from the end.
  */
 describe('createGoal, the criteria it is willing to be judged on', () => {
-  const statements = (baselineRunIds: readonly string[]) =>
-    create({ baselineRunIds }).acceptanceCriteria.map((criterion) => criterion.statement);
-
   it('issues no metric criterion when no run has been recorded to compare against', () => {
-    const issued = statements([]);
+    const issued = create({}).acceptanceCriteria.map((criterion) => criterion.statement);
     assert.deepEqual(issued, [
       'finding retry-around-non-idempotent-operation no longer fires on a rescan',
     ]);
@@ -198,7 +208,7 @@ describe('createGoal, the criteria it is willing to be judged on', () => {
 
   it('issues them once the plan can produce both sides, which is when it prescribes the comparison', () => {
     const goal = create({
-      baselineRunIds: ['run_0000000000000001'],
+      baseline: recorded('support-desk'),
       scenarioIds: ['support-desk'],
     });
     const issued = goal.acceptanceCriteria.map((criterion) => criterion.statement);
@@ -218,7 +228,7 @@ describe('createGoal, the criteria it is willing to be judged on', () => {
    * is worse than one that reports it cannot tell.
    */
   it('issues no metric criterion when the plan can produce no candidate to compare against', () => {
-    const goal = create({ baselineRunIds: ['run_0000000000000001'] });
+    const goal = create({ baseline: recorded('support-desk') });
     const metric = goal.acceptanceCriteria.filter((criterion) =>
       criterion.check.kind.startsWith('metric_'),
     );
@@ -233,12 +243,12 @@ describe('createGoal, the criteria it is willing to be judged on', () => {
       'the plan prescribed a comparison whose candidate would be its own baseline',
     );
     // The document says which half is missing rather than leaving a reader to notice the absence.
-    assert.match(renderGoalMarkdown(goal), /no scenario is named/);
+    assert.match(renderGoalMarkdown(goal), /which this plan does not rerun/);
   });
 
   /* The two go together: a criterion is issued exactly when its deciding command is. */
   it('never states a criterion whose deciding command it declines to name', () => {
-    const goal = create({ baselineRunIds: [] });
+    const goal = create({});
     const metric = goal.acceptanceCriteria.filter((criterion) =>
       criterion.check.kind.startsWith('metric_'),
     );
@@ -253,7 +263,7 @@ describe('createGoal, the criteria it is willing to be judged on', () => {
    */
   it('names itself on the comparison it prescribes', () => {
     const goal = create({
-      baselineRunIds: ['run_0000000000000001'],
+      baseline: recorded('support-desk'),
       scenarioIds: ['support-desk'],
     });
     const compare = goal.validation.commands.find((entry) => entry.command.includes('compare'));

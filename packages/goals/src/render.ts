@@ -1,3 +1,4 @@
+import { MINIMUM_SAMPLES_PER_SIDE } from '@orchescope/domain';
 import type { Goal } from '@orchescope/schema';
 
 /**
@@ -45,12 +46,31 @@ const criterionText = (criterion: Goal['acceptanceCriteria'][number]): string =>
  * the plan produces the first unless a scenario is named. Saying which half is missing is what turns a
  * gap a reader has to notice into one the document states.
  */
+/**
+ * What the candidate is compared against, and under what conditions, or why nothing is.
+ *
+ * A comparison means something only when both sides reproduce the same work, so the conditions are stated
+ * rather than left for a reader to recover from run identifiers. Where there is no comparable pair the
+ * plan carries the question that failed, and it is printed as written: "no baseline run was recorded" sent
+ * every reader after a run when what some of them needed was more repetitions of the one they had.
+ */
 const comparisonNote = (goal: Goal): string => {
-  if (goal.validation.baselineRunIds.length === 0) return 'no baseline run was recorded';
-  const baselines = goal.validation.baselineRunIds.join(', ');
-  return goal.validation.scenarioIds.length === 0
-    ? `${baselines}, which nothing here can be compared against: no scenario is named, so this plan records no run made after the change`
-    : baselines;
+  const baseline = goal.validation.baseline;
+  if (baseline === undefined) {
+    return goal.validation.comparisonUnavailable ?? 'no comparable baseline was recorded';
+  }
+  const conditions = [
+    `scenario ${baseline.scenarioId}`,
+    ...(baseline.variantId === undefined ? [] : [`variant ${baseline.variantId}`]),
+    ...(baseline.faultPlanId === undefined
+      ? ['no injected faults']
+      : [`fault plan ${baseline.faultPlanId}`]),
+  ].join(', ');
+  const shortfall =
+    baseline.samples >= MINIMUM_SAMPLES_PER_SIDE
+      ? ''
+      : `, which is below the ${MINIMUM_SAMPLES_PER_SIDE} a metric direction needs on each side, so only the criteria decided by presence are stated`;
+  return `${goal.validation.baselineRunIds.join(', ')} (${conditions}, ${baseline.samples} ${baseline.samples === 1 ? 'sample' : 'samples'}${shortfall})`;
 };
 
 export const renderAgentPrompt = (goal: Goal): string =>

@@ -20,7 +20,7 @@ import { createScenariosRepository } from './repositories/scenarios.ts';
  * carries a component count while the graph itself lives behind a digest.
  */
 
-export type { RunSummary, ScanSummary } from './rows.ts';
+export type { ExercisingRun, RunSummary, ScanSummary } from './rows.ts';
 
 export type Store = ReturnType<typeof createStore>;
 

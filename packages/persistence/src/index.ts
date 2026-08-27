@@ -15,4 +15,10 @@ export {
   type SqlValue,
 } from './database.ts';
 export { LATEST_SCHEMA_VERSION, MIGRATIONS, type Migration } from './migrations.ts';
-export { createStore, type RunSummary, type ScanSummary, type Store } from './store.ts';
+export {
+  createStore,
+  type ExercisingRun,
+  type RunSummary,
+  type ScanSummary,
+  type Store,
+} from './store.ts';

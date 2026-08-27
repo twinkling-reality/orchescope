@@ -74,6 +74,38 @@ export const relativeChange = (baseline: number, candidate: number): number | un
   baseline === 0 ? undefined : (candidate - baseline) / baseline;
 
 /**
+ * The fewest samples either side of a comparison may carry before a direction is refused.
+ *
+ * It lives here rather than beside the comparison because two packages have to agree on it and cannot
+ * import each other: the comparison enforces it when it decides a direction, and goal creation asks it
+ * before writing a criterion whose deciding command would come back indeterminate. Two independent
+ * threes are two numbers that can drift apart, and the goal that promised evidence it could not produce
+ * is what that drift looks like from the operator's side.
+ */
+export const MINIMUM_SAMPLES_PER_SIDE = 3;
+
+/**
+ * Metrics counting something that must not happen at all, where crossing zero is decided by presence.
+ *
+ * A duplicated payment that happened once and now happens never is a categorical change in behaviour, not
+ * a claim about a distribution, so it needs no sample floor. Latency and token counts do, because there a
+ * small sample genuinely cannot support a direction.
+ *
+ * This lives beside the floor because the same two packages need both and for the same reason: the
+ * comparison applies it when it decides a direction, and goal creation asks it before writing a criterion.
+ * Gating every metric criterion on the floor would have withdrawn the one criterion the improvement loop
+ * actually closes on, from the one scenario shape that produces it.
+ */
+const DECIDED_BY_PRESENCE: ReadonlySet<string> = new Set([
+  'duplicateSideEffects',
+  'prohibitedSideEffects',
+  'policyViolations',
+  'userInterventions',
+]);
+
+export const metricDecidedByPresence = (metric: string): boolean => DECIDED_BY_PRESENCE.has(metric);
+
+/**
  * A conservative check for whether two samples differ enough to be worth reporting. Orchescope does
  * not claim statistical significance: this compares the difference of means against the pooled
  * spread and requires a minimum sample count on both sides.

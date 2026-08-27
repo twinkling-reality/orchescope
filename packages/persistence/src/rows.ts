@@ -27,7 +27,25 @@ export type RunSummary = {
   readonly startedAt: string;
   readonly scenarioId: string | undefined;
   readonly variantId: string | undefined;
+  /**
+   * The fault plan the run was made under, which is a condition of the measurement and not a label on it.
+   *
+   * A summary that carried the variant but not this could not tell a caller whether two runs measured the
+   * same thing, so a caller comparing them had to read every full record back or compare them anyway.
+   */
+  readonly faultPlanId: string | undefined;
   readonly experimentId: string | undefined;
+};
+
+/**
+ * A run that executed components a caller asked about, with how many of them it executed.
+ *
+ * The count is what lets a caller prefer the recorded work that covers more of what a finding is about.
+ * A run that touched one of six components and a run that touched all six are both matches, and treating
+ * them as equal would pick a baseline that measured a sixth of the thing being changed.
+ */
+export type ExercisingRun = RunSummary & {
+  readonly exercisedComponents: number;
 };
 
 export const text = (row: Record<string, unknown>, column: string): string => {
