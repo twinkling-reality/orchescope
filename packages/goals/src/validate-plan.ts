@@ -33,6 +33,39 @@ export type GoalValidation = {
 const metricDelta = (comparison: Comparison, metric: string) =>
   comparison.metricDeltas.find((delta) => delta.metric === metric);
 
+/**
+ * Whether a comparison's two sides measured the same work, which is what a metric criterion rests on.
+ *
+ * A criterion asks whether a change moved a number. A comparison whose sides ran different scenarios, or
+ * the same scenario under different variants or fault plans, moved that number for reasons that include
+ * everything those conditions differ by, so deciding the criterion from it reports the conditions as the
+ * change. Measured on the demonstration system, a plan followed verbatim compared one scenario against
+ * another running under injected faults and returned a regression to an operator who had changed nothing.
+ *
+ * Selection now refuses to prescribe such a pair, and the comparison records the difference when one is
+ * made by hand. This is the layer that protects the verdict, because it is the only one an operator
+ * typing commands cannot route around. An absent condition claims nothing and blocks nothing: it means
+ * the side did not report one, not that the two disagree.
+ */
+const conditionsDisagree = (comparison: Comparison): string | undefined => {
+  const { baseline, candidate } = comparison;
+  const differs = (key: 'scenarioId' | 'variantId' | 'faultPlanId'): boolean =>
+    baseline[key] !== undefined && candidate[key] !== undefined && baseline[key] !== candidate[key];
+  if (differs('scenarioId')) {
+    return `the comparison ran ${baseline.scenarioId} against ${candidate.scenarioId}, so it did not measure the same work twice`;
+  }
+  if (differs('variantId')) {
+    return `the comparison ran variant ${baseline.variantId} against variant ${candidate.variantId}, so it did not measure the same work twice`;
+  }
+  if (differs('faultPlanId')) {
+    return `the comparison ran fault plan ${baseline.faultPlanId} against fault plan ${candidate.faultPlanId}, so it did not measure the same work twice`;
+  }
+  if ((baseline.faultPlanId === undefined) !== (candidate.faultPlanId === undefined)) {
+    return 'only one side of the comparison ran under an injected fault plan, so the difference includes the injected failures';
+  }
+  return undefined;
+};
+
 type CriterionInput = {
   readonly comparison: Comparison | undefined;
   readonly scenarioResults: readonly ScenarioResult[];
@@ -58,6 +91,8 @@ const metricImprovementOutcome = (
   comparison: Comparison | undefined,
 ): CriterionOutcome => {
   if (comparison === undefined) return undecided(criterion, 'no comparison was recorded');
+  const mismatch = conditionsDisagree(comparison);
+  if (mismatch !== undefined) return undecided(criterion, mismatch);
   const delta = metricDelta(comparison, check.metric);
   if (delta === undefined || delta.relativeChange === undefined) {
     return undecided(criterion, `the comparison carries no relative change for ${check.metric}`);
@@ -99,6 +134,8 @@ const metricNotWorseOutcome = (
   comparison: Comparison | undefined,
 ): CriterionOutcome => {
   if (comparison === undefined) return undecided(criterion, 'no comparison was recorded');
+  const mismatch = conditionsDisagree(comparison);
+  if (mismatch !== undefined) return undecided(criterion, mismatch);
   const delta = metricDelta(comparison, check.metric);
   if (delta === undefined || delta.baseline === undefined || delta.candidate === undefined) {
     return undecided(criterion, `the comparison carries no values for ${check.metric}`);

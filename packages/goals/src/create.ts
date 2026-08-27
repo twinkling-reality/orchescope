@@ -113,20 +113,11 @@ const comparisonIsReachable = (input: CreateGoalInput): boolean =>
   input.validationScenarioIds.includes(input.baseline.scenarioId);
 
 /**
- * Whether a criterion about a distribution can be decided by what the plan will produce.
+ * Whether both sides of the prescribed comparison will carry enough samples to support a direction.
  *
- * Reachability is not one question, because deciding a metric is not one kind of act. A duplicated side
- * effect that happened and now does not is decided by presence and needs no sample floor at all: it is the
- * criterion the improvement loop closes on, and gating it on three samples would have withdrawn it from
- * the one scenario shape that produces it, on the reasoning that a categorical change is a weak
- * distribution claim.
- *
- * A latency, a token count or a success rate is a claim about a distribution, and `compareMetric` refuses
- * a direction on fewer than `MINIMUM_SAMPLES_PER_SIDE`. Both sides have to clear it: the recorded result
- * supplies the baseline side and no rule can manufacture samples nobody recorded, and the plan's own
- * repetition count supplies the candidate side. Asked here rather than discovered afterwards, because a
- * criterion whose deciding command comes back indeterminate is a term the plan wrote knowing nothing
- * could answer it.
+ * `compareMetric` refuses one on fewer than `MINIMUM_SAMPLES_PER_SIDE`. The recorded result supplies the
+ * baseline side and no rule can manufacture samples nobody recorded, and the plan's own repetition count
+ * supplies the candidate side, so both are asked.
  */
 const clearsTheSampleFloor = (input: CreateGoalInput): boolean =>
   (input.baseline?.samples ?? 0) >= MINIMUM_SAMPLES_PER_SIDE &&
@@ -134,6 +125,12 @@ const clearsTheSampleFloor = (input: CreateGoalInput): boolean =>
 
 /**
  * Whether the plan can produce evidence that decides a criterion about this metric.
+ *
+ * Reachability is not one question, because deciding a metric is not one kind of act. A duplicated side
+ * effect that happened and now does not is decided by presence and needs no sample floor at all: it is
+ * the criterion the improvement loop closes on, and gating it on three samples withdrew it from the one
+ * scenario shape that produces it, on the reasoning that a categorical change is a weak distribution
+ * claim. A latency, a token count or a success rate is a claim about a distribution and needs the floor.
  *
  * The metric is asked rather than listed, so adding a criterion never means remembering to update a rule
  * about which criteria are which. What decides a metric is a property of the metric, and the one place

@@ -469,3 +469,90 @@ describe('compare', () => {
     assert.ok(result.limitations.some((entry) => entry.includes('no graph delta')));
   });
 });
+
+/**
+ * What a comparison could not compare.
+ *
+ * A comparison of two executions of different work is arithmetic on numbers answering different
+ * questions, and it reads exactly like a result. Measured on the demonstration system, the goal plan the
+ * product printed compared one scenario against another running under an injected fault plan and reported
+ * `successRate 1 -> 0 regressed` and `totalTokens 1395 -> 394 improved`: the first was the injected
+ * failures and the second was a smaller task, in a document whose limitations mentioned neither.
+ *
+ * Selection now refuses to prescribe such a pair. This is the other half, for the comparison a person
+ * types by hand, which stays possible on purpose and must not stay silent.
+ */
+describe('compare, the conditions each side ran under', () => {
+  const conditioned = (
+    label: string,
+    runs: readonly RunObservation[],
+    conditions: Partial<Pick<ComparisonSide, 'scenarioId' | 'variantId' | 'faultPlanId'>>,
+  ): ComparisonSide => ({ ...side(label, runs), ...conditions });
+
+  const five = (overrides: Partial<RunMetrics>) => [
+    run(overrides),
+    run(overrides),
+    run(overrides),
+    run(overrides),
+    run(overrides),
+  ];
+
+  const pair = (
+    baselineConditions: Partial<Pick<ComparisonSide, 'scenarioId' | 'variantId' | 'faultPlanId'>>,
+    candidateConditions: Partial<Pick<ComparisonSide, 'scenarioId' | 'variantId' | 'faultPlanId'>>,
+  ) => {
+    const baselineRuns = five({ durationMs: 1000 });
+    const candidateRuns = five({ durationMs: 400 });
+    return compare({
+      baseline: conditioned('baseline', baselineRuns, baselineConditions),
+      candidate: conditioned('candidate', candidateRuns, candidateConditions),
+      baselineRuns,
+      candidateRuns,
+      now: NOW,
+    });
+  };
+
+  it('says so when the two sides ran different scenarios', () => {
+    const result = pair({ scenarioId: 'support-desk' }, { scenarioId: 'support-desk-faults' });
+    assert.ok(
+      result.limitations.some((limitation) =>
+        /ran different scenarios, support-desk against support-desk-faults/.test(limitation),
+      ),
+      `nothing said the two sides ran different work: ${result.limitations.join(' | ')}`,
+    );
+  });
+
+  it('says so when only one side ran under an injected fault plan', () => {
+    const result = pair(
+      { scenarioId: 'support-desk' },
+      { scenarioId: 'support-desk', faultPlanId: 'fp_injected' },
+    );
+    assert.ok(
+      result.limitations.some((limitation) =>
+        /only the candidate side ran under an injected fault plan/.test(limitation),
+      ),
+      `nothing said one side had faults injected: ${result.limitations.join(' | ')}`,
+    );
+  });
+
+  it('says nothing about conditions when the two sides ran the same work', () => {
+    const result = pair(
+      { scenarioId: 'support-desk', faultPlanId: 'fp_same' },
+      { scenarioId: 'support-desk', faultPlanId: 'fp_same' },
+    );
+    assert.equal(
+      result.limitations.some((limitation) => /different scenarios|fault plan/.test(limitation)),
+      false,
+      `a comparison of like with like was qualified anyway: ${result.limitations.join(' | ')}`,
+    );
+  });
+
+  /* A side that reports no condition is not evidence that its runs agreed, so nothing is claimed. */
+  it('claims nothing about a side that reports no condition', () => {
+    const result = pair({}, { scenarioId: 'support-desk' });
+    assert.equal(
+      result.limitations.some((limitation) => /different scenarios/.test(limitation)),
+      false,
+    );
+  });
+});

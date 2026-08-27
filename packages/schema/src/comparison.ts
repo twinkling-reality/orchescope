@@ -30,6 +30,18 @@ export const ComparisonSide = Type.Object(
     label: NonEmptyString(),
     /** Present when this side executed the system rather than only analysing it. */
     runIds: Type.Array(NonEmptyString()),
+    /**
+     * The work these runs performed and the conditions they performed it under.
+     *
+     * Present only when every run on this side agrees, because a side whose runs disagree describes no
+     * single condition and reporting one of them would be a claim about the others. A comparison whose
+     * two sides carry different values here measured two different things, which is a fact about the
+     * evidence rather than a fault, and one a reader has to be told rather than left to infer from the
+     * run identifiers.
+     */
+    scenarioId: Type.Optional(NonEmptyString()),
+    variantId: Type.Optional(NonEmptyString()),
+    faultPlanId: Type.Optional(NonEmptyString()),
     scanId: Type.Optional(NonEmptyString()),
     git: Type.Optional(
       Type.Object(

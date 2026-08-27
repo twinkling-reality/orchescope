@@ -344,6 +344,57 @@ const verdictFrom = (
   };
 };
 
+/**
+ * What the two sides did differently before anything was measured.
+ *
+ * A comparison of two executions of different work is arithmetic on numbers that answer different
+ * questions, and it reads exactly like a result: one scenario against another under an injected fault plan
+ * reports the faults as a regression and the smaller task as a token improvement, in a document that says
+ * nothing about either. This is refused at selection where a goal prescribes the comparison, and reported
+ * here, because `orchescope compare` is a general tool and comparing two different things on purpose is a
+ * thing a person may legitimately want. What they must not get is silence about it.
+ *
+ * A side that reports no condition is not evidence that its runs agreed, so nothing is claimed about it.
+ */
+const conditionsDiffering = (
+  baseline: ComparisonSide,
+  candidate: ComparisonSide,
+): readonly string[] => {
+  const differences: string[] = [];
+  const differs = (key: 'scenarioId' | 'variantId' | 'faultPlanId'): boolean =>
+    baseline[key] !== undefined && candidate[key] !== undefined && baseline[key] !== candidate[key];
+  const named = (value: string | undefined): string => value ?? 'none';
+  if (differs('scenarioId')) {
+    differences.push(
+      `the two sides ran different scenarios, ${named(baseline.scenarioId)} against ${named(candidate.scenarioId)}, so every difference below is at least partly the difference between those scenarios`,
+    );
+  }
+  if (differs('variantId')) {
+    differences.push(
+      `the two sides ran different variants, ${named(baseline.variantId)} against ${named(candidate.variantId)}`,
+    );
+  }
+  if (differs('faultPlanId')) {
+    differences.push(
+      `the two sides ran under different fault plans, ${named(baseline.faultPlanId)} against ${named(candidate.faultPlanId)}, so injected failures are part of what is being reported`,
+    );
+  }
+  /*
+   * One side under faults and the other under none is the same hazard with one identifier missing, and
+   * the equality test above cannot see it because an absent fault plan is absent rather than a value.
+   */
+  if (
+    !differs('faultPlanId') &&
+    (baseline.faultPlanId === undefined) !== (candidate.faultPlanId === undefined)
+  ) {
+    const faulted = baseline.faultPlanId === undefined ? 'candidate' : 'baseline';
+    differences.push(
+      `only the ${faulted} side ran under an injected fault plan, so injected failures are part of what is being reported`,
+    );
+  }
+  return differences;
+};
+
 export type CompareInput = {
   readonly baseline: ComparisonSide;
   readonly candidate: ComparisonSide;
@@ -379,7 +430,7 @@ export const compare = (input: CompareInput): Comparison => {
     input.baselineRuns.filter(runMeasuredNothing).length +
     input.candidateRuns.filter(runMeasuredNothing).length;
 
-  const limitations: string[] = [];
+  const limitations: string[] = [...conditionsDiffering(input.baseline, input.candidate)];
   if (unmeasured > 0) {
     limitations.push(
       `${formatCount(unmeasured, 'run')} produced no span and reported no task outcome, so ${unmeasured === 1 ? 'it contributes' : 'they contribute'} no sample to any metric here; a counter of zero from such a run is the absence of a measurement rather than a measurement of zero`,

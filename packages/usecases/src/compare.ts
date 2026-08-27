@@ -55,6 +55,32 @@ const repetitionSet = (workspace: Workspace, run: RunRecord): readonly RunRecord
   return runs.length > 0 ? runs : [run];
 };
 
+/**
+ * What these runs all did, when they all did the same thing.
+ *
+ * Reported only where every run agrees, because a side whose runs disagree describes no single condition
+ * and naming one of them would be a claim about the rest. This is what lets a comparison say that its two
+ * sides measured different work instead of presenting the difference between two scenarios as a result.
+ */
+const conditionsOf = (
+  runs: readonly RunRecord[],
+): Pick<ComparisonSide, 'scenarioId' | 'variantId' | 'faultPlanId'> => {
+  const agreed = <K extends 'scenarioId' | 'variantId' | 'faultPlanId'>(
+    key: K,
+  ): RunRecord[K] | undefined => {
+    const first = runs[0]?.[key];
+    return runs.every((run) => run[key] === first) ? first : undefined;
+  };
+  const scenarioId = agreed('scenarioId');
+  const variantId = agreed('variantId');
+  const faultPlanId = agreed('faultPlanId');
+  return {
+    ...(scenarioId === undefined ? {} : { scenarioId }),
+    ...(variantId === undefined ? {} : { variantId }),
+    ...(faultPlanId === undefined ? {} : { faultPlanId }),
+  };
+};
+
 /** A side made from one named run and the repetitions recorded alongside it. */
 const sideFromRun = (
   workspace: Workspace,
@@ -70,6 +96,7 @@ const sideFromRun = (
       reference,
       label: `${label} (${run.label}${repetitions})`,
       runIds: runs.map((entry) => entry.id),
+      ...conditionsOf(runs),
       ...(run.git === undefined ? {} : { git: run.git }),
     },
     runs,
@@ -140,6 +167,7 @@ const resolveSide = (workspace: Workspace, reference: string, label: string): Re
       reference,
       label: `${label} (${commit.slice(0, 12)})`,
       runIds: runs.map((run) => run.id),
+      ...conditionsOf(runs),
       scanId,
       git: { commit, ref: reference, dirty: false },
     },

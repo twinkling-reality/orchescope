@@ -120,6 +120,9 @@ zero is decided by presence rather than by distribution. An effect that happened
 categorical change, not a statistical claim, and that is why such a criterion is stated even where the recorded baseline
 is too small for a direction while a latency or a success rate criterion is not.
 
+A criterion about a metric is decided only from a comparison whose two sides describe the same work. One that ran
+different scenarios, variants or fault plans measured something else, says so in its limitations, and leaves the
+criterion undecided rather than reporting the conditions as the change.
 
 ## Where to look
 

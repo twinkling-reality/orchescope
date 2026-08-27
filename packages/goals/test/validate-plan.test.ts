@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { AcceptanceCriterion, Comparison, Goal, ScenarioResult } from '@orchescope/schema';
+import type {
+  AcceptanceCriterion,
+  Comparison,
+  ComparisonSide,
+  Goal,
+  ScenarioResult,
+} from '@orchescope/schema';
 import { validateGoal } from '../src/validate-plan.ts';
 
 /**
@@ -236,8 +242,36 @@ describe('validateGoal, criteria nothing here can decide', () => {
  * genuinely missing rather than fabricated, reported undecided, which is the behaviour this borrows.
  */
 describe('validateGoal, metric criteria against evidence that cannot decide', () => {
-  const comparisonWith = (deltas: readonly Comparison['metricDeltas'][number][]): Comparison =>
-    ({ metricDeltas: deltas }) as Comparison;
+  /*
+   * The two sides are supplied because a real comparison always carries them, and what they say about the
+   * work each side did is now part of what a metric criterion is allowed to be decided from. A fixture
+   * that omitted them was asserting against a document the product cannot produce.
+   */
+  const side = (
+    label: string,
+    conditions: Partial<Pick<ComparisonSide, 'scenarioId' | 'variantId' | 'faultPlanId'>> = {
+      scenarioId: 'support-desk',
+    },
+  ): ComparisonSide => ({
+    kind: 'run',
+    reference: `run_000000000000000${label === 'baseline' ? '1' : '2'}`,
+    label,
+    runIds: [`run_000000000000000${label === 'baseline' ? '1' : '2'}`],
+    ...conditions,
+  });
+
+  const comparisonWith = (
+    deltas: readonly Comparison['metricDeltas'][number][],
+    sides?: {
+      readonly baseline: Partial<Pick<ComparisonSide, 'scenarioId' | 'variantId' | 'faultPlanId'>>;
+      readonly candidate: Partial<Pick<ComparisonSide, 'scenarioId' | 'variantId' | 'faultPlanId'>>;
+    },
+  ): Comparison =>
+    ({
+      metricDeltas: deltas,
+      baseline: side('baseline', sides?.baseline),
+      candidate: side('candidate', sides?.candidate),
+    }) as Comparison;
 
   const notWorseGoal = goalWith(
     [
@@ -330,6 +364,99 @@ describe('validateGoal, metric criteria against evidence that cannot decide', ()
   });
 });
 
+/**
+ * A metric criterion judged against a comparison of two different things.
+ *
+ * This is the layer that protects the verdict, because it is the only one an operator typing commands by
+ * hand cannot route around. Selection will not prescribe such a pair and the comparison records the
+ * difference when one is made anyway, but neither of those stops a stored comparison from being read back
+ * and believed. Measured on the demonstration system before this existed: a plan followed verbatim
+ * compared one scenario against another running under injected faults, and the success rate criterion
+ * banked `1 -> 0 regressed` against an operator who had changed nothing.
+ */
+describe('validateGoal, metric criteria across conditions that differ', () => {
+  const conditioned = (
+    baseline: Partial<Pick<ComparisonSide, 'scenarioId' | 'variantId' | 'faultPlanId'>>,
+    candidate: Partial<Pick<ComparisonSide, 'scenarioId' | 'variantId' | 'faultPlanId'>>,
+  ): Comparison =>
+    ({
+      metricDeltas: [
+        {
+          metric: 'successRate',
+          unit: 'fraction',
+          baseline: 1,
+          candidate: 0,
+          baselineSamples: 3,
+          candidateSamples: 3,
+          direction: 'regressed',
+        },
+      ],
+      baseline: {
+        kind: 'run',
+        reference: 'run_0000000000000001',
+        label: 'baseline',
+        runIds: ['run_0000000000000001'],
+        ...baseline,
+      },
+      candidate: {
+        kind: 'run',
+        reference: 'run_0000000000000002',
+        label: 'candidate',
+        runIds: ['run_0000000000000002'],
+        ...candidate,
+      },
+    }) as Comparison;
+
+  const successGoal = goalWith(
+    [criterion('AC-01', { kind: 'metric_not_worse', metric: 'successRate', tolerance: 0 })],
+    GOAL_CREATED,
+  );
+
+  it('leaves the criterion undecided when the two sides ran different scenarios', () => {
+    const validation = validateGoal(
+      successGoal,
+      input({
+        comparison: conditioned(
+          { scenarioId: 'support-desk' },
+          { scenarioId: 'support-desk-faults' },
+        ),
+      }),
+    );
+    assert.equal(validation.outcomes[0]?.decided, false);
+    assert.equal(validation.outcomes[0]?.satisfied, false);
+    assert.match(validation.outcomes[0]?.detail ?? '', /did not measure the same work twice/);
+  });
+
+  it('leaves it undecided when only one side ran under an injected fault plan', () => {
+    const validation = validateGoal(
+      successGoal,
+      input({
+        comparison: conditioned(
+          { scenarioId: 'support-desk' },
+          { scenarioId: 'support-desk', faultPlanId: 'fp_injected' },
+        ),
+      }),
+    );
+    assert.equal(validation.outcomes[0]?.decided, false);
+    assert.match(validation.outcomes[0]?.detail ?? '', /injected fault plan/);
+  });
+
+  /* The refusal is about the conditions and not about the answer: like against like still decides. */
+  it('decides the criterion when the two sides ran the same work', () => {
+    const validation = validateGoal(
+      successGoal,
+      input({
+        comparison: conditioned(
+          { scenarioId: 'support-desk', faultPlanId: 'fp_same' },
+          { scenarioId: 'support-desk', faultPlanId: 'fp_same' },
+        ),
+      }),
+    );
+    assert.equal(validation.outcomes[0]?.decided, true);
+    assert.equal(validation.outcomes[0]?.satisfied, false);
+  });
+});
+
 describe('validateGoal, the whole goal', () => {
   /*
    * The module's own contract, which the arithmetic did not keep: `satisfied` was computed independently
@@ -362,6 +489,21 @@ describe('validateGoal, the whole goal', () => {
               caveat: 'one side has no samples',
             },
           ],
+          // Both sides ran the same scenario, so what leaves the criterion undecided is the direction.
+          baseline: {
+            kind: 'run',
+            reference: 'run_0000000000000001',
+            label: 'baseline',
+            runIds: ['run_0000000000000001'],
+            scenarioId: 'support-desk',
+          },
+          candidate: {
+            kind: 'run',
+            reference: 'run_0000000000000002',
+            label: 'candidate',
+            runIds: ['run_0000000000000002'],
+            scenarioId: 'support-desk',
+          },
         } as Comparison,
       }),
     );

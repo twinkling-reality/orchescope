@@ -1519,6 +1519,10 @@
           "baseline": {
             "additionalProperties": false,
             "properties": {
+              "faultPlanId": {
+                "minLength": 1,
+                "type": "string"
+              },
               "git": {
                 "additionalProperties": false,
                 "properties": {
@@ -1580,6 +1584,14 @@
                 "type": "array"
               },
               "scanId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "scenarioId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "variantId": {
                 "minLength": 1,
                 "type": "string"
               }
@@ -1595,6 +1607,10 @@
           "candidate": {
             "additionalProperties": false,
             "properties": {
+              "faultPlanId": {
+                "minLength": 1,
+                "type": "string"
+              },
               "git": {
                 "additionalProperties": false,
                 "properties": {
@@ -1656,6 +1672,14 @@
                 "type": "array"
               },
               "scanId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "scenarioId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "variantId": {
                 "minLength": 1,
                 "type": "string"
               }
