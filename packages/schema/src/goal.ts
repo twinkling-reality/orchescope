@@ -159,6 +159,29 @@ export const Goal = Document(
         { additionalProperties: false },
       ),
     ),
+    /**
+     * Reviews recorded against this goal, newest last.
+     *
+     * A `manual_review` criterion is the one term nothing in a run can decide, and until something
+     * recorded that a review happened it could never be satisfied, which made every goal cut from a
+     * finding that needs one permanently unvalidatable. This is what an explicit act writes.
+     *
+     * What it records is an attestation and not a verification. Orchescope authenticates nobody, so it
+     * can say a review was recorded, when, and what the reviewer wrote, and it must not say more than
+     * that. A reader judging the goal is judging the note.
+     */
+    reviews: Type.Optional(
+      Type.Array(
+        Type.Object(
+          {
+            at: Timestamp,
+            /** What the reviewer checked and concluded, in their own words. */
+            note: Type.String({ minLength: 1, maxLength: 2000 }),
+          },
+          { additionalProperties: false },
+        ),
+      ),
+    ),
     metadata: Metadata,
   }),
 );

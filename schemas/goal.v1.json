@@ -277,6 +277,29 @@
       "minLength": 1,
       "type": "string"
     },
+    "reviews": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "UTC timestamp, RFC 3339 with millisecond precision.",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+            "type": "string"
+          },
+          "note": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "note"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
     "risk": {
       "anyOf": [
         {

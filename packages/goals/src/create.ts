@@ -51,6 +51,16 @@ const RELATIVE_IMPROVEMENT_BY_RULE: Readonly<
   'agent-count-does-not-pay-for-itself': { metric: 'durationMs.p50', threshold: 0.1 },
 };
 
+/**
+ * What the plan prints where the reviewer's own words belong.
+ *
+ * Printed rather than omitted so the shape of the command is obvious, and refused when it arrives back
+ * unchanged. The review is the one step a machine must not be able to complete by copying: an agent that
+ * ran the plan verbatim would otherwise store this string as the note and satisfy the criterion with it,
+ * which is a goal reporting that a change was reviewed when nothing was.
+ */
+export const REVIEW_NOTE_PLACEHOLDER = '<what you checked>';
+
 const ALWAYS_PROHIBITED: readonly string[] = [
   'changing an acceptance criterion or a validation command in this goal',
   'editing a stored baseline run, benchmark or comparison',
@@ -209,6 +219,29 @@ const validationPlanFor = (input: CreateGoalInput, goalId: string): ValidationPl
       ],
     });
   }
+  /*
+   * The plan ends at the command that renders the decision.
+   *
+   * It used to end at the comparison, so an operator did everything asked and never saw what any of it
+   * decided: the only printed command that judges a goal was `audit`, which runs first, before the
+   * comparison it would have read exists. Naming `goal validate` last makes the order stop mattering,
+   * and it is the step that turns the evidence just produced into an answer about this goal.
+   *
+   * The review comes immediately before it, and only where a criterion asks for one. It is the single
+   * term nothing in a run can decide, so a plan that did not name the act that decides it would be
+   * stating a term whose deciding command it declines to name, which is the failure the comment above
+   * describes.
+   */
+  if (input.finding.goalReadiness.requiresHumanReview) {
+    commands.push({
+      purpose: 'record that the change was reviewed against the evidence in this goal',
+      command: ['orchescope', 'goal', 'review', goalId, '--note', REVIEW_NOTE_PLACEHOLDER],
+    });
+  }
+  commands.push({
+    purpose: 'judge this goal against everything the commands above recorded',
+    command: ['orchescope', 'goal', 'validate', goalId],
+  });
   return {
     scenarioIds: [...input.validationScenarioIds],
     baselineRunIds: [...input.baselineRunIds],

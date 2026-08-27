@@ -4,6 +4,7 @@ import {
   goalMatchesFinding,
   type GoalValidation,
   openGoalForFinding,
+  REVIEW_NOTE_PLACEHOLDER,
   validateGoal,
 } from '@orchescope/goals';
 import type { Comparison, Finding, Goal, ScenarioResult, Timestamp } from '@orchescope/schema';
@@ -186,6 +187,80 @@ export const judgeGoal = (input: {
     findingStillPresent: stillPresent,
     rescanned: input.rescanned,
   });
+};
+
+export type RecordGoalReviewRequest = {
+  readonly workspace: Workspace;
+  readonly goalId: string;
+  readonly note: string;
+};
+
+/**
+ * Recording that somebody reviewed the change this goal describes.
+ *
+ * A `manual_review` criterion is the one term no run can decide, and without an act that writes it down
+ * it could never be satisfied, so a goal cut from a finding that needs a review was unvalidatable by
+ * construction. This is that act, and it is deliberately separate from judging the goal: recording a
+ * review and asking what the evidence now says are two different things, and folding them together would
+ * mean neither could be done alone.
+ *
+ * It refuses a goal that asks for no review. A review recorded against a goal whose criteria never
+ * mention one is a note nothing reads, and storing it would let a caller believe they had answered
+ * something.
+ *
+ * The note is stored as written, through the workspace redactor, because it is text a person typed and
+ * this repository treats such text as untrusted everywhere else.
+ */
+export const recordGoalReview = (request: RecordGoalReviewRequest): Goal => {
+  const { workspace } = request;
+  const goal = workspace.store.goalById(request.goalId);
+  if (goal === undefined) {
+    throw new OrchescopeError('NOT_FOUND', `No goal ${request.goalId}.`, {
+      remediation: 'Run orchescope goals to list the goals this project holds.',
+    });
+  }
+  const note = workspace.redactor.text(request.note).trim();
+  if (note.length === 0) {
+    throw new OrchescopeError(
+      'INVALID_ARGUMENT',
+      'A review needs a note saying what was checked.',
+      {
+        remediation: 'Pass --note with what you reviewed and what you concluded.',
+      },
+    );
+  }
+  /*
+   * The plan prints the placeholder so the shape of the command is obvious, and it comes back here
+   * unchanged whenever something ran the plan without reading it. Storing it would satisfy the one
+   * criterion no run can decide with a string this product wrote itself.
+   */
+  if (note.includes(REVIEW_NOTE_PLACEHOLDER)) {
+    throw new OrchescopeError(
+      'INVALID_ARGUMENT',
+      'The review note is still the placeholder the goal printed, so it records no review.',
+      {
+        detail: { goalId: goal.id },
+        remediation: `Replace ${REVIEW_NOTE_PLACEHOLDER} with what you checked and what you concluded.`,
+      },
+    );
+  }
+  if (!goal.acceptanceCriteria.some((criterion) => criterion.check.kind === 'manual_review')) {
+    throw new OrchescopeError(
+      'INVALID_ARGUMENT',
+      `Goal ${goal.id} states no criterion that a review decides.`,
+      {
+        detail: { goalId: goal.id },
+        remediation: 'Nothing here is waiting on a review, so recording one would decide nothing.',
+      },
+    );
+  }
+  const updated: Goal = {
+    ...goal,
+    updatedAt: workspace.clock.now(),
+    reviews: [...(goal.reviews ?? []), { at: workspace.clock.now(), note: note.slice(0, 2000) }],
+  };
+  workspace.store.saveGoal(updated, workspace.projectId);
+  return updated;
 };
 
 export const validateGoalOutcome = (request: ValidateGoalRequest): ValidateGoalResult => {

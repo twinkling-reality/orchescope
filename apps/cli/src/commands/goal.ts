@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { OrchescopeError, stableJson } from '@orchescope/domain';
 import { renderAgentPrompt, renderGoalMarkdown, renderGoalSummary } from '@orchescope/goals';
-import { createGoalFromFinding, validateGoalOutcome } from '@orchescope/usecases';
+import { createGoalFromFinding, recordGoalReview, validateGoalOutcome } from '@orchescope/usecases';
 import type { CommandContext } from '../context.ts';
 import { EXIT_CODES } from '../exit.ts';
 import { goalSummary } from '../terminal/goal-summary.ts';
@@ -10,8 +10,9 @@ import { goalSummary } from '../terminal/goal-summary.ts';
  * Goal commands.
  *
  * `goal create` turns a finding into a bounded task. `goal show` prints it, or the agent prompt, or the markdown
- * document. `goal validate` judges the acceptance criteria against a comparison. The prompt is deliberately plain
- * text with no formatting, because it is meant to be pasted into another tool.
+ * document. `goal review` records that somebody looked at the change, which is the only thing that decides a
+ * `manual_review` criterion. `goal validate` judges the acceptance criteria against what the store holds. The
+ * prompt is deliberately plain text with no formatting, because it is meant to be pasted into another tool.
  */
 
 export const goalCreateCommand = (
@@ -154,6 +155,50 @@ const writeValidationText = (
     );
     context.stdout(style.dim(`      ${result.detail}\n`));
   }
+};
+
+/**
+ * Recording a review, which is the only way a `manual_review` criterion is ever decided.
+ *
+ * Kept apart from `goal validate` so that recording what was reviewed and asking what the evidence now
+ * says stay two acts. The output states what was stored rather than that the goal is now satisfied: what
+ * the store holds is an attestation, and the judgement is the next command's answer.
+ */
+export const goalReviewCommand = (
+  context: CommandContext,
+  goalId: string,
+  options: { readonly note?: string },
+): number => {
+  if (options.note === undefined) {
+    throw new OrchescopeError(
+      'INVALID_ARGUMENT',
+      'A review needs a note saying what was checked.',
+      {
+        remediation: `Run: orchescope goal review ${goalId} --note "<what you checked and concluded>"`,
+      },
+    );
+  }
+  const goal = recordGoalReview({
+    workspace: context.workspace,
+    goalId,
+    note: options.note,
+  });
+  const recorded = goal.reviews?.[goal.reviews.length - 1];
+  if (context.json) {
+    context.stdout(
+      `${stableJson({
+        ok: true,
+        command: 'goal review',
+        version: context.version,
+        data: { goal },
+      })}\n`,
+    );
+    return EXIT_CODES.success;
+  }
+  context.stdout(`${context.style.good('+')} recorded a review of ${goal.id}\n`);
+  context.stdout(context.style.dim(`  ${recorded?.at ?? ''} ${recorded?.note ?? ''}\n`));
+  context.stdout(`\n${context.style.dim('next:')} orchescope goal validate ${goal.id}\n`);
+  return EXIT_CODES.success;
 };
 
 export const goalValidateCommand = (

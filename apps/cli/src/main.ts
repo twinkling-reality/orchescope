@@ -6,6 +6,7 @@ import { federateCommand } from './commands/federate.ts';
 import {
   goalCreateCommand,
   goalListCommand,
+  goalReviewCommand,
   goalShowCommand,
   goalValidateCommand,
 } from './commands/goal.ts';
@@ -321,6 +322,17 @@ goal
       );
     },
   );
+
+goal
+  .command('review')
+  .description('record that the change described by a goal was reviewed')
+  .argument('<goalId>', 'goal identifier')
+  .option('--note <text>', 'what you checked and what you concluded')
+  .action(async (goalId: string, options: { note?: string }) => {
+    await withContext('goal review', globals(), (context) =>
+      goalReviewCommand(context, goalId, options),
+    );
+  });
 
 goal
   .command('validate')

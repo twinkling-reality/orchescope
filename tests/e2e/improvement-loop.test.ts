@@ -217,13 +217,32 @@ describe('the improvement loop', () => {
       compareStep.command.includes(baselineRunId),
       `the plan's compare does not name the baseline run: ${compareStep.command.join(' ')}`,
     );
+    /*
+     * The plan has to end at the step that answers it. Every command before this one produces evidence
+     * and none of them says what the evidence decided, so a plan that stopped at the comparison left an
+     * operator having done all the work and been told nothing.
+     */
+    const last = goal.validation.commands.at(-1);
+    assert.deepEqual(
+      last?.command,
+      ['orchescope', 'goal', 'validate', goal.id],
+      'the plan does not end at the command that renders its own decision',
+    );
+
     for (const step of goal.validation.commands) {
       assert.equal(step.command[0], 'orchescope', `${step.command.join(' ')} is not this binary`);
       const outcome = await runCli(root, step.command.slice(1));
-      assert.equal(
-        outcome.code,
-        0,
-        `the plan's own command failed: ${step.command.join(' ')}\n${outcome.stderr}`,
+      /*
+       * Exit 1 is a verdict rather than a refusal, and only from the step whose job is to reach one:
+       * `goal validate` exits 1 when the goal is not yet validated, which is an answer about the change
+       * and not a command the binary would not run. Everything above it either worked or did not, and
+       * codes 2, 3 and 70 mean the plan asked for something this binary refuses, which is the defect
+       * running the plan verbatim exists to catch.
+       */
+      const verdictStep = step.command[1] === 'goal' && step.command[2] === 'validate';
+      assert.ok(
+        verdictStep ? outcome.code === 0 || outcome.code === 1 : outcome.code === 0,
+        `the plan's own command failed with ${outcome.code}: ${step.command.join(' ')}\n${outcome.stderr}`,
       );
     }
 

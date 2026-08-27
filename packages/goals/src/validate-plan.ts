@@ -40,9 +40,10 @@ type CriterionInput = {
   readonly rescanned: boolean;
   /** When the goal was created. Evidence older than this describes the code the goal is about to change. */
   readonly goalCreatedAt: Timestamp;
+  readonly reviews: readonly { readonly at: Timestamp; readonly note: string }[];
 };
 
-export type ValidationInput = Omit<CriterionInput, 'goalCreatedAt'>;
+export type ValidationInput = Omit<CriterionInput, 'goalCreatedAt' | 'reviews'>;
 
 const undecided = (criterion: AcceptanceCriterion, detail: string): CriterionOutcome => ({
   criterion,
@@ -196,11 +197,48 @@ const findingResolvedOutcome = (
 };
 
 /**
+ * Judges a review criterion against what somebody recorded, and against nothing else.
+ *
+ * This is the one term no run can decide, and it used to be hard wired undecided, so a goal cut from a
+ * finding that needs a review could never reach `validated` whatever anyone did. What decides it now is
+ * an act: `orchescope goal review` writes a note, and the criterion reads it.
+ *
+ * Two things it deliberately does not claim. A review recorded before the goal existed describes the code
+ * the goal is about to change, which is the same guard the scenario criterion carries, so it leaves the
+ * criterion undecided rather than satisfying it. And the detail says a review was recorded rather than
+ * that a human performed one: Orchescope authenticates nobody, and reporting an attestation as a
+ * verification would be exactly the confident wrongness this module exists to prevent. The note is
+ * carried so a reader judges the review rather than the fact of it.
+ */
+const manualReviewOutcome = (
+  criterion: AcceptanceCriterion,
+  input: CriterionInput,
+): CriterionOutcome => {
+  const recorded = input.reviews
+    .filter((review) => review.at >= input.goalCreatedAt)
+    .toSorted((left, right) => (left.at < right.at ? 1 : -1));
+  const newest = recorded[0];
+  if (newest === undefined) {
+    return undecided(
+      criterion,
+      input.reviews.length === 0
+        ? 'no review has been recorded for this goal'
+        : 'every recorded review predates this goal, so none of them looked at the change it asks for',
+    );
+  }
+  return {
+    criterion,
+    satisfied: true,
+    decided: true,
+    detail: `a review was recorded at ${newest.at}: ${newest.note}`,
+  };
+};
+
+/**
  * Judges one criterion.
  *
- * Two of the kinds are deliberately never decided here. A command is the implementer's step and its exit status is not
- * recorded in the store, and a manual review is a person's judgement. Reporting either as satisfied would be a claim
- * Orchescope cannot support.
+ * One kind is deliberately never decided here. A command is the implementer's step and its exit status is not
+ * recorded in the store, so reporting it as satisfied would be a claim Orchescope cannot support.
  */
 const evaluateCriterion = (
   criterion: AcceptanceCriterion,
@@ -222,7 +260,7 @@ const evaluateCriterion = (
         `running ${check.command.join(' ')} is the implementer's step and its result is not recorded here`,
       );
     case 'manual_review':
-      return undecided(criterion, 'a human has to record this review');
+      return manualReviewOutcome(criterion, input);
     default:
       return undecided(criterion, 'unknown criterion kind');
   }
@@ -253,7 +291,11 @@ const outstanding = (outcomes: readonly CriterionOutcome[]): string => {
 
 export const validateGoal = (goal: Goal, input: ValidationInput): GoalValidation => {
   const outcomes = goal.acceptanceCriteria.map((criterion) =>
-    evaluateCriterion(criterion, { ...input, goalCreatedAt: goal.createdAt }),
+    evaluateCriterion(criterion, {
+      ...input,
+      goalCreatedAt: goal.createdAt,
+      reviews: goal.reviews ?? [],
+    }),
   );
   const satisfiedCount = outcomes.filter((outcome) => outcome.satisfied).length;
   const undecidedCount = outcomes.filter((outcome) => !outcome.decided).length;

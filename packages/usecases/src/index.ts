@@ -24,6 +24,8 @@ export {
   createGoalFromFinding,
   type ValidateGoalRequest,
   type ValidateGoalResult,
+  recordGoalReview,
+  type RecordGoalReviewRequest,
   validateGoalOutcome,
 } from './goal.ts';
 export {

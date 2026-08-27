@@ -18,11 +18,16 @@ const criterion = (id: string, check: AcceptanceCriterion['check']): AcceptanceC
   check,
 });
 
-/** validateGoal reads the criteria and the creation time; the rest of the document is not consulted. */
-const goalWith = (criteria: readonly AcceptanceCriterion[], createdAt: string): Goal =>
+/** validateGoal reads the criteria, the creation time and the reviews; the rest is not consulted. */
+const goalWith = (
+  criteria: readonly AcceptanceCriterion[],
+  createdAt: string,
+  reviews: readonly { at: string; note: string }[] = [],
+): Goal =>
   ({
     acceptanceCriteria: criteria,
     createdAt,
+    reviews,
   }) as Goal;
 
 /**
@@ -161,7 +166,7 @@ describe('validateGoal, criteria nothing here can decide', () => {
     assert.equal(validation.validated, false);
   });
 
-  it('never claims a human reviewed something', () => {
+  it('never claims a review happened that nobody recorded', () => {
     const validation = validateGoal(
       goalWith(
         [criterion('AC-01', { kind: 'manual_review', instruction: 'read it' })],
@@ -170,6 +175,43 @@ describe('validateGoal, criteria nothing here can decide', () => {
       input({}),
     );
     assert.equal(validation.outcomes[0]?.decided, false);
+    assert.match(validation.outcomes[0]?.detail ?? '', /no review has been recorded/);
+  });
+
+  /*
+   * The one term nothing in a run decides. Until an act recorded it, a goal cut from a finding that
+   * needs a review could never reach `validated` whatever anyone did, which made the criterion a
+   * permanent block dressed as a requirement.
+   */
+  it('decides the review criterion from what was recorded, and says what it read', () => {
+    const validation = validateGoal(
+      goalWith(
+        [criterion('AC-01', { kind: 'manual_review', instruction: 'read it' })],
+        GOAL_CREATED,
+        [{ at: AFTER, note: 'checked the idempotency key reaches the retry' }],
+      ),
+      input({}),
+    );
+    assert.equal(validation.outcomes[0]?.decided, true);
+    assert.equal(validation.outcomes[0]?.satisfied, true);
+    assert.equal(validation.validated, true);
+    // What it read, not that a person did it: nothing here authenticates anybody.
+    assert.match(validation.outcomes[0]?.detail ?? '', /a review was recorded at/);
+    assert.match(validation.outcomes[0]?.detail ?? '', /idempotency key reaches the retry/);
+  });
+
+  /* The same staleness guard the scenario criterion carries: a review of the old code decides nothing. */
+  it('refuses a review recorded before the goal existed', () => {
+    const validation = validateGoal(
+      goalWith(
+        [criterion('AC-01', { kind: 'manual_review', instruction: 'read it' })],
+        GOAL_CREATED,
+        [{ at: BEFORE, note: 'looked at it last week' }],
+      ),
+      input({}),
+    );
+    assert.equal(validation.outcomes[0]?.decided, false);
+    assert.match(validation.outcomes[0]?.detail ?? '', /predates this goal/);
   });
 
   it('leaves a finding criterion undecided until a rescan has happened', () => {
