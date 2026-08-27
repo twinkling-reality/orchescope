@@ -97,13 +97,28 @@ const metricImprovementOutcome = (
   if (delta === undefined || delta.relativeChange === undefined) {
     return undecided(criterion, `the comparison carries no relative change for ${check.metric}`);
   }
+  /*
+   * What weakened the number travels with the answer.
+   *
+   * A quantile is compared as an order statistic without a spread test, which is deliberate and is stated
+   * on the delta. Dropping that sentence here made the goal document the one surface where it was missing:
+   * measured on a real repository, an unchanged system reported `durationMs.p95 changed by -15.3 percent
+   * against a required 15 percent` and banked the criterion, while the mean of the very same three runs
+   * was reported indeterminate because the difference was 1.2 times the combined standard error. The
+   * criterion is still decided, because gating a tail on a test of means is what this repository already
+   * refused; what it must not do is present the weaker claim as the stronger one.
+   */
+  const qualified = (sentence: string): string =>
+    delta.caveat === undefined ? sentence : `${sentence} (${delta.caveat})`;
   const threshold = check.relativeThreshold;
   if (threshold === undefined) {
     return {
       criterion,
       satisfied: check.comparator === 'lt' ? delta.relativeChange < 0 : delta.relativeChange > 0,
       decided: true,
-      detail: `${check.metric} changed by ${(delta.relativeChange * 100).toFixed(1)} percent`,
+      detail: qualified(
+        `${check.metric} changed by ${(delta.relativeChange * 100).toFixed(1)} percent`,
+      ),
     };
   }
   const satisfied =
@@ -114,7 +129,9 @@ const metricImprovementOutcome = (
     criterion,
     satisfied,
     decided: true,
-    detail: `${check.metric} changed by ${(delta.relativeChange * 100).toFixed(1)} percent against a required ${(threshold * 100).toFixed(0)} percent (samples ${delta.baselineSamples} and ${delta.candidateSamples})`,
+    detail: qualified(
+      `${check.metric} changed by ${(delta.relativeChange * 100).toFixed(1)} percent against a required ${(threshold * 100).toFixed(0)} percent (samples ${delta.baselineSamples} and ${delta.candidateSamples})`,
+    ),
   };
 };
 

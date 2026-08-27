@@ -374,6 +374,83 @@ describe('validateGoal, metric criteria against evidence that cannot decide', ()
  * compared one scenario against another running under injected faults, and the success rate criterion
  * banked `1 -> 0 regressed` against an operator who had changed nothing.
  */
+/**
+ * What weakened a number has to reach whoever reads the verdict.
+ *
+ * Measured on a real repository through the real command line: an unchanged system reported
+ * `durationMs.p95 changed by -15.3 percent against a required 15 percent` and the criterion was banked,
+ * while the mean of the very same three runs was judged indeterminate at 1.2 times the combined standard
+ * error. The delta said why the tail claim was weaker and the goal document was where that sentence was
+ * dropped, so the one surface a coding agent reads presented an order statistic of three runs as a
+ * measured fifteen percent win.
+ */
+describe('validateGoal, what a metric criterion says its answer rests on', () => {
+  const withCaveat = (caveat?: string): Comparison =>
+    ({
+      metricDeltas: [
+        {
+          metric: 'durationMs.p95',
+          unit: 'ms',
+          baseline: 2176,
+          candidate: 1842,
+          relativeChange: -0.1535,
+          baselineSamples: 3,
+          candidateSamples: 3,
+          direction: 'improved',
+          ...(caveat === undefined ? {} : { caveat }),
+        },
+      ],
+      baseline: {
+        kind: 'run',
+        reference: 'run_0000000000000001',
+        label: 'baseline',
+        runIds: ['run_0000000000000001'],
+        scenarioId: 'flight-status',
+      },
+      candidate: {
+        kind: 'run',
+        reference: 'run_0000000000000002',
+        label: 'candidate',
+        runIds: ['run_0000000000000002'],
+        scenarioId: 'flight-status',
+      },
+    }) as Comparison;
+
+  const improvementGoal = goalWith(
+    [
+      criterion('AC-01', {
+        kind: 'metric_improvement',
+        metric: 'durationMs.p95',
+        comparator: 'lt',
+        relativeThreshold: 0.15,
+      }),
+    ],
+    GOAL_CREATED,
+  );
+
+  it('carries the caveat that weakened the number into the criterion it decided', () => {
+    const validation = validateGoal(
+      improvementGoal,
+      input({
+        comparison: withCaveat(
+          'compared as order statistics of the runs on each side, without a spread test',
+        ),
+      }),
+    );
+    assert.equal(validation.outcomes[0]?.decided, true);
+    assert.equal(validation.outcomes[0]?.satisfied, true);
+    assert.match(validation.outcomes[0]?.detail ?? '', /without a spread test/);
+  });
+
+  /* The claim is still decided: gating a tail on a test of means is what this module already refuses. */
+  it('adds nothing when the comparison carried no caveat, and still reports the samples', () => {
+    const validation = validateGoal(improvementGoal, input({ comparison: withCaveat() }));
+    assert.equal(validation.outcomes[0]?.decided, true);
+    assert.doesNotMatch(validation.outcomes[0]?.detail ?? '', /spread test/);
+    assert.match(validation.outcomes[0]?.detail ?? '', /samples 3 and 3/);
+  });
+});
+
 describe('validateGoal, metric criteria across conditions that differ', () => {
   const conditioned = (
     baseline: Partial<Pick<ComparisonSide, 'scenarioId' | 'variantId' | 'faultPlanId'>>,
