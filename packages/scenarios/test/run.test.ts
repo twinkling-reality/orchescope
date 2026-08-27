@@ -169,10 +169,18 @@ describe('runScenario', () => {
         result.reliability.passPowerK.map((entry) => entry.value),
         [1, 1, 1],
       );
+      /*
+       * Reliability and the verdict answer different questions about the same run, and this scenario is
+       * where they part company. Every repetition completed, reported task success and passed every
+       * evaluator that ran, so the rate is 3 of 3 and pass^k is 1: that is a true statement about how
+       * the system behaves. The scenario itself did not pass, because one of the questions it asked was
+       * never answered, and a verdict that ignored that would count an unmeasured expectation as a
+       * success.
+       */
       assert.equal(
         result.passed,
-        true,
-        `expected a pass: ${JSON.stringify(result.repetitions[0])}`,
+        false,
+        `a judged question nothing answered is not a pass: ${JSON.stringify(result.repetitions[0]?.evaluators)}`,
       );
 
       // Seeds advance per repetition, so the target genuinely saw a different seed each time.
@@ -180,10 +188,23 @@ describe('runScenario', () => {
       assert.match(result.repetitions[1]?.outputExcerpt ?? '', /seed 8/);
       assert.match(result.repetitions[2]?.outputExcerpt ?? '', /seed 9/);
 
-      // The judged evaluator is skipped rather than failed, and it never blocks the pass.
+      // The judged evaluator is skipped rather than failed, and it is what withheld the verdict.
       const judged = result.aggregate.evaluators.find((entry) => entry.kind === 'model_judge');
       assert.equal(judged?.skipped, true);
       assert.match(judged?.skipReason ?? '', /deterministic/);
+      assert.deepEqual(
+        result.repetitions[0]?.evaluators
+          .filter((entry) => entry.skipped === true)
+          .map((entry) => entry.kind),
+        ['model_judge'],
+      );
+
+      // Nothing that did run failed, so the withheld verdict is not a failure hiding in another name.
+      assert.equal(
+        result.repetitions[0]?.evaluators.filter((entry) => entry.skipped !== true && !entry.passed)
+          .length,
+        0,
+      );
 
       assert.ok(
         result.limitations.some((note) => note.includes('cost was not reported')),

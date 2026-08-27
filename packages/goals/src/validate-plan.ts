@@ -144,6 +144,26 @@ const scenarioPassesOutcome = (
       `scenario ${check.scenarioId} has only been run before this goal was created, so its result describes the code the goal is about to change`,
     );
   }
+  /*
+   * A run whose evaluators were skipped decided nothing, and reporting that as a failure tells an
+   * operator their change broke something when what happened is that the scenario asked a question
+   * nothing answered. It is the same distinction this module already draws for a criterion, applied to
+   * the evidence a criterion is judged from.
+   */
+  const undecidedKinds = [
+    ...new Set(
+      result.repetitions
+        .flatMap((repetition) => repetition.evaluators)
+        .filter((evaluator) => evaluator.skipped === true)
+        .map((evaluator) => evaluator.kind),
+    ),
+  ];
+  if (undecidedKinds.length > 0) {
+    return undecided(
+      criterion,
+      `scenario ${check.scenarioId} ran, and ${formatCount(undecidedKinds.length, 'evaluator')} decided nothing: ${undecidedKinds.join(', ')}`,
+    );
+  }
   return {
     criterion,
     satisfied: result.passed,

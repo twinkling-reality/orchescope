@@ -205,11 +205,26 @@ const runRepetition = async (
   };
 };
 
+/**
+ * Whether the scenario passed, which is not the same question reliability asks.
+ *
+ * A skipped evaluator is a question the scenario asked and nothing answered, and `evaluate` states the
+ * contract it is written against: a skipped result "never counts as a failure and never counts as a
+ * pass". This once read `skipped === true || passed`, which counted it as a pass, so a target that
+ * emitted no span and wrote no result file produced evaluators that all skipped and a verdict of passed.
+ * That is the loop closing on nothing, and it is the same defect as a goal criterion nobody decided being
+ * reported satisfied.
+ *
+ * `repetitionSucceeded` in `reliability.ts` keeps the other reading on purpose, and the two are not in
+ * conflict. Reliability is a rate over repetitions, and a skip is constant across all of them, so folding
+ * it in would drive every rate to zero and say nothing about how the system varies. This is a verdict on
+ * one scenario, and a verdict that ignores an unanswered question is not a verdict.
+ */
 const everyRepetitionPassed = (repetitions: readonly RepetitionResult[]): boolean =>
   repetitions.every(
     (repetition) =>
       repetition.status === 'completed' &&
-      repetition.evaluators.every((result) => result.skipped === true || result.passed),
+      repetition.evaluators.every((result) => result.skipped !== true && result.passed),
   );
 
 const requestedRepetitions = (input: RunScenarioInput): number => {

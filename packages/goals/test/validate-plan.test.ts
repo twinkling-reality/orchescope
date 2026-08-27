@@ -25,13 +25,22 @@ const goalWith = (criteria: readonly AcceptanceCriterion[], createdAt: string): 
     createdAt,
   }) as Goal;
 
-const scenarioResult = (scenarioId: string, startedAt: string, passed: boolean): ScenarioResult =>
+/**
+ * The evaluator results are part of what the judge reads: a scenario whose evaluators decided nothing
+ * cannot decide the criterion either, so a repetition here carries the list even when it is empty.
+ */
+const scenarioResult = (
+  scenarioId: string,
+  startedAt: string,
+  passed: boolean,
+  evaluators: readonly { kind: string; passed: boolean; skipped?: true }[] = [],
+): ScenarioResult =>
   ({
     scenarioId,
     startedAt,
     passed,
-    repetitions: [{}, {}, {}],
-  }) as ScenarioResult;
+    repetitions: [{ evaluators }, { evaluators }, { evaluators }],
+  }) as unknown as ScenarioResult;
 
 const input = (overrides: {
   readonly scenarioResults?: readonly ScenarioResult[];
@@ -75,6 +84,28 @@ describe('validateGoal, scenario criteria', () => {
     assert.equal(validation.outcomes[0]?.decided, true);
     assert.equal(validation.outcomes[0]?.satisfied, false);
     assert.equal(validation.validated, false);
+  });
+
+  /*
+   * A run that answered nothing is not a run that failed. Reporting it as a failure tells an operator
+   * their change broke something, when what happened is that the scenario asked a question the run could
+   * not answer, which is the reading error this module exists to prevent.
+   */
+  it('leaves the criterion undecided when the run decided nothing', () => {
+    const validation = validateGoal(
+      scenarioGoal,
+      input({
+        scenarioResults: [
+          scenarioResult('support-desk', AFTER, false, [
+            { kind: 'model_judge', passed: false, skipped: true },
+          ]),
+        ],
+      }),
+    );
+    assert.equal(validation.outcomes[0]?.decided, false);
+    assert.equal(validation.outcomes[0]?.satisfied, false);
+    assert.match(validation.outcomes[0]?.detail ?? '', /decided nothing: model_judge/);
+    assert.match(validation.summary, /cannot judge/);
   });
 
   it('leaves the criterion undecided when the scenario was never run', () => {
