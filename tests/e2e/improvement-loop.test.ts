@@ -198,54 +198,36 @@ describe('the improvement loop', () => {
     // 4. Make the change the goal describes.
     applyIdempotencyFix(root);
 
-    // 5. Rerun the same scenario with the same seed and fault plan.
-    const candidate = parseJson(
-      await runCli(root, ['test', '--scenario', 'support-desk-duplicate', '--json']),
-    );
-    const candidateRunIds = (candidate.data['runIds'] as string[] | undefined) ?? [];
-    assert.ok(candidateRunIds.length > 0);
-    const candidateResult = candidate.data['result'] as {
-      repetitions: { metrics: { duplicateSideEffects: number } }[];
-    };
-    const candidateDuplicates = candidateResult.repetitions.reduce(
-      (total, repetition) => total + repetition.metrics.duplicateSideEffects,
-      0,
-    );
-    assert.equal(
-      candidateDuplicates,
-      0,
-      'the fix should remove the duplicated effect from the same scenario and seed',
-    );
-
-    // 6. The comparison has to say the duplication improved, from measured runs on both sides.
-    const compared = parseJson(
-      await runCli(root, [
-        'compare',
-        baselineRunId,
-        candidateRunIds[0] as string,
-        '--goal',
-        goal.id,
-        '--json',
-      ]),
-    );
-    const comparison = compared.data as unknown as {
-      id: string;
-      verdict: string;
-      metricDeltas: { metric: string; direction: string; baseline?: number; candidate?: number }[];
-    };
-    const duplicateDelta = comparison.metricDeltas.find(
-      (delta) => delta.metric === 'duplicateSideEffects',
-    );
-    assert.ok(duplicateDelta !== undefined, 'the comparison did not include the duplicate metric');
-    assert.equal(duplicateDelta.baseline, 1);
-    assert.equal(duplicateDelta.candidate, 0);
-    assert.equal(duplicateDelta.direction, 'improved');
+    /*
+     * 5. Run the goal's own validation plan, verbatim, in the order it prints.
+     *
+     * This step used to build its own argv, which is why the plan could print a compare command missing
+     * the one flag that attaches the comparison to the goal and no test noticed. A goal is a contract
+     * handed to an agent that will do exactly what it says and nothing else, so the only honest way to
+     * test it is to be that agent: every token here comes from the document, and if the document is
+     * wrong the loop below cannot close.
+     */
     assert.ok(
-      comparison.verdict === 'improved' || comparison.verdict === 'mixed',
-      `unexpected verdict ${comparison.verdict}`,
+      goal.validation.commands.length >= 2,
+      `the plan printed nothing to run: ${JSON.stringify(goal.validation.commands)}`,
     );
+    const compareStep = goal.validation.commands.find((step) => step.command[1] === 'compare');
+    assert.ok(compareStep !== undefined, 'the plan named no comparison');
+    assert.ok(
+      compareStep.command.includes(baselineRunId),
+      `the plan's compare does not name the baseline run: ${compareStep.command.join(' ')}`,
+    );
+    for (const step of goal.validation.commands) {
+      assert.equal(step.command[0], 'orchescope', `${step.command.join(' ')} is not this binary`);
+      const outcome = await runCli(root, step.command.slice(1));
+      assert.equal(
+        outcome.code,
+        0,
+        `the plan's own command failed: ${step.command.join(' ')}\n${outcome.stderr}`,
+      );
+    }
 
-    // 7. Rescan, then judge the goal. The static half of the finding has to be gone too.
+    // 6. The static half of the finding has to be gone too, which the plan's own rescan established.
     const rescan = parseJson(await runCli(root, ['audit', '--json']));
     const rescanFindings = rescan.data['findings'] as { ruleId: string }[];
     assert.equal(
@@ -254,34 +236,17 @@ describe('the improvement loop', () => {
       'the static retry finding should be gone once the manifest declares the idempotency key',
     );
 
-    // Judged with no --comparison, which is how anyone following the goal's own validation plan will
-    // run it. The comparison was attached to the goal by `compare --goal`, so asking for its identifier
-    // again would be asking the reader to carry something the store already holds, and answering "no
-    // comparison was recorded" while it sits there would be false.
+    /*
+     * 7. Judge the goal the way the plan leaves it: no `--comparison`, because the plan never asked the
+     * operator to carry an identifier. The comparison reaches the judgement only through the goal the
+     * plan's own compare command named, so this assertion is the whole loop in one line, and it is the
+     * line that fails when the plan prints a command missing that name.
+     */
     const judgedByDefault = parseJson(await runCli(root, ['goal', 'validate', goal.id, '--json']));
-    const defaultOutcomes = (
-      judgedByDefault.data['validation'] as {
-        outcomes: { satisfied: boolean; decided: boolean; detail: string }[];
-      }
-    ).outcomes;
-    const defaultDuplicate = defaultOutcomes.find((outcome) =>
-      outcome.detail.includes('duplicateSideEffects'),
-    );
-    assert.ok(
-      defaultDuplicate !== undefined,
-      'validating without --comparison judged no metric criterion',
-    );
-    assert.equal(
-      defaultDuplicate.decided,
-      true,
-      `the comparison attached to the goal did not reach the judgement: ${defaultDuplicate.detail}`,
-    );
-    assert.equal(defaultDuplicate.satisfied, true);
-
-    const validated = parseJson(
-      await runCli(root, ['goal', 'validate', goal.id, '--comparison', comparison.id, '--json']),
-    );
-    const validation = validated.data['validation'] as {
+    const judgedGoal = judgedByDefault.data['goal'] as {
+      validationResults: { comparisonId: string; verdict: string }[];
+    };
+    const validation = judgedByDefault.data['validation'] as {
       outcomes: { criterion: string; satisfied: boolean; decided: boolean; detail: string }[];
       summary: string;
     };
@@ -292,8 +257,40 @@ describe('the improvement loop', () => {
       duplicateCriterion !== undefined,
       `no criterion judged the duplicate metric: ${validation.summary}`,
     );
+    assert.equal(
+      duplicateCriterion.decided,
+      true,
+      `the comparison the plan produced did not reach the judgement: ${duplicateCriterion.detail}`,
+    );
     assert.equal(duplicateCriterion.satisfied, true);
-    assert.equal(duplicateCriterion.decided, true);
+    assert.match(duplicateCriterion.detail, /moved from 1 to 0/);
+    assert.match(duplicateCriterion.detail, /improved/);
+
+    /*
+     * The goal records which comparison judged it, and it can only record one it was able to find. An
+     * empty list here means the plan produced a comparison the goal cannot see, which is the shape of
+     * the defect this whole step exists to catch.
+     */
+    assert.equal(
+      judgedGoal.validationResults.length,
+      1,
+      `the goal recorded no comparison after running its own plan: ${JSON.stringify(judgedGoal.validationResults)}`,
+    );
+
+    /*
+     * The flag has to name a goal that exists. A mistyped identifier stores a comparison attached to
+     * nothing and leaves the real goal reporting that no comparison was recorded, which is exactly what
+     * forgetting the flag looked like, so it is refused rather than accepted quietly.
+     */
+    const misattached = await runCli(root, [
+      'compare',
+      baselineRunId,
+      'latest',
+      '--goal',
+      'OSC-GOAL-9999',
+    ]);
+    assert.notEqual(misattached.code, 0, 'a comparison named a goal that does not exist');
+    assert.match(`${misattached.stdout}${misattached.stderr}`, /OSC-GOAL-9999/);
 
     // The scenario criterion is the one the product's own thesis rests on: the goal is verified by rerunning the
     // scenario it names. It is judged from the stored result of that rerun, and the result has to postdate the goal.

@@ -214,4 +214,18 @@ describe('createGoal, the criteria it is willing to be judged on', () => {
     const compares = goal.validation.commands.some((entry) => entry.command.includes('compare'));
     assert.equal(metric.length === 0, !compares);
   });
+
+  /*
+   * Naming the command is not enough on its own: it has to carry the argument that makes its result
+   * findable. A comparison is attached to a goal only by `--goal`, and a judgement resolves one by that
+   * identifier, so the command without it produces evidence the goal cannot see.
+   */
+  it('names itself on the comparison it prescribes', () => {
+    const goal = create({ baselineRunIds: ['run_0000000000000001'] });
+    const compare = goal.validation.commands.find((entry) => entry.command.includes('compare'));
+    assert.ok(compare !== undefined, 'the plan prescribed no comparison');
+    const at = compare.command.indexOf('--goal');
+    assert.ok(at >= 0, `the prescribed comparison carries no --goal: ${compare.command.join(' ')}`);
+    assert.equal(compare.command[at + 1], goal.id);
+  });
 });

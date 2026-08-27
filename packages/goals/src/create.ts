@@ -147,7 +147,17 @@ const acceptanceCriteriaFor = (
   return criteria;
 };
 
-const validationPlanFor = (input: CreateGoalInput): ValidationPlan => {
+/**
+ * The commands an implementer runs, and the arguments each one needs to decide what it is there to decide.
+ *
+ * The goal identifier is threaded in rather than left out because the comparison is the one step whose
+ * result is not findable without it. `orchescope compare` writes `goal_id` only from `--goal`, and the
+ * judgement resolves a comparison with `WHERE goal_id = ?`, which never matches a null. A plan that
+ * printed the command without the flag asked an operator to produce evidence and then hid it: the
+ * comparison sat in the store while the goal reported that no comparison was recorded, which is the same
+ * failure the comment above describes, one argument further in.
+ */
+const validationPlanFor = (input: CreateGoalInput, goalId: string): ValidationPlan => {
   const commands: ValidationPlan['commands'] = [
     {
       purpose: 'rescan the repository so the static side of the finding is re-evaluated',
@@ -169,8 +179,15 @@ const validationPlanFor = (input: CreateGoalInput): ValidationPlan => {
   }
   if (input.baselineRunIds.length > 0) {
     commands.push({
-      purpose: 'compare the candidate run against the baseline run',
-      command: ['orchescope', 'compare', input.baselineRunIds[0] as string, 'latest'],
+      purpose: 'compare the candidate run against the baseline run, attached to this goal',
+      command: [
+        'orchescope',
+        'compare',
+        input.baselineRunIds[0] as string,
+        'latest',
+        '--goal',
+        goalId,
+      ],
     });
   }
   return {
@@ -284,6 +301,7 @@ export const createGoal = (input: CreateGoalInput): Goal => {
     );
   }
 
+  const id = makeGoalId(input.sequence);
   const improvement = RELATIVE_IMPROVEMENT_BY_RULE[input.finding.ruleId];
   const semanticKey = semanticFindingKeyDigest(input.finding.metadata);
   const semanticSubject = semanticFindingSubjectDigest(input.finding.metadata);
@@ -298,7 +316,7 @@ export const createGoal = (input: CreateGoalInput): Goal => {
   }
   return {
     schemaVersion: 1,
-    id: makeGoalId(input.sequence),
+    id,
     findingId: input.finding.id,
     title: input.finding.recommendation?.summary ?? input.finding.title,
     status: 'ready',
@@ -321,7 +339,7 @@ export const createGoal = (input: CreateGoalInput): Goal => {
         input.baselineRunIds.length > 0,
       ),
     ],
-    validation: validationPlanFor(input),
+    validation: validationPlanFor(input, id),
     ...(improvement === undefined
       ? {}
       : {

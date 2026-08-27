@@ -122,8 +122,27 @@ const resolveSide = (workspace: Workspace, reference: string, label: string): Re
   };
 };
 
+/**
+ * A goal a comparison claims to be evidence for has to exist.
+ *
+ * `goal_id` is written straight through to the document and the judgement finds a comparison with
+ * `WHERE goal_id = ?`, so a mistyped identifier stores a comparison attached to nothing and leaves the
+ * real goal reporting that no comparison was recorded. That is indistinguishable, from the operator's
+ * side, from having forgotten the flag, and it is the failure the flag exists to remove. Refused here,
+ * where the store is already in hand, rather than discovered later by a goal that cannot see its own
+ * evidence.
+ */
+const assertGoalExists = (workspace: Workspace, goalId: string): void => {
+  if (workspace.store.goalById(goalId) !== undefined) return;
+  throw new OrchescopeError('NOT_FOUND', `No goal ${goalId}.`, {
+    detail: { goalId },
+    remediation: 'Run orchescope goals to list the goals this project holds.',
+  });
+};
+
 export const compareUseCase = (request: CompareRequest): Comparison => {
   const { workspace } = request;
+  if (request.goalId !== undefined) assertGoalExists(workspace, request.goalId);
   const baseline = resolveSide(workspace, request.baseline, 'baseline');
   const candidate = resolveSide(workspace, request.candidate, 'candidate');
 
