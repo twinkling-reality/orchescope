@@ -134,6 +134,59 @@ describe('compareMetric', () => {
     assert.equal(delta.direction, 'unchanged');
   });
 
+  /*
+   * A metric name may carry the reduction that summarises its samples. `durationMs.p95` was already in
+   * the direction table and produced by nothing, so three acceptance criteria named it and could never
+   * be decided. The tail is what the criterion asks about, and the mean is what hides it.
+   */
+  it('summarises a quantile metric by its quantile rather than by the mean', () => {
+    const slowTail = [100, 100, 100, 100, 100, 100, 100, 100, 100, 900];
+    const evenTail = [180, 180, 180, 180, 180, 180, 180, 180, 180, 180];
+    const byMean = compareMetric(sample('durationMs', slowTail), sample('durationMs', evenTail));
+    const byTail = compareMetric(
+      sample('durationMs.p95', slowTail),
+      sample('durationMs.p95', evenTail),
+    );
+    // The two sets have the same mean, so the mean sees nothing and the tail sees the whole difference.
+    assert.equal(byMean.baseline, byMean.candidate);
+    assert.equal(byTail.baseline, 900);
+    assert.equal(byTail.candidate, 180);
+    assert.equal(byTail.direction, 'improved');
+    // What the claim rests on is stated rather than implied, because it is weaker than the mean test.
+    assert.match(byTail.caveat ?? '', /order statistics/);
+  });
+
+  it('still refuses a quantile direction below the sample floor', () => {
+    const delta = compareMetric(sample('durationMs.p95', [900]), sample('durationMs.p95', [100]));
+    assert.equal(delta.direction, 'indeterminate');
+    assert.match(delta.caveat ?? '', /at least 3 samples per side/);
+  });
+
+  it('reads the base metric off each run for a name that carries a reduction', () => {
+    const runs = [run({ durationMs: 300 }), run({ durationMs: 100 }), run({ durationMs: 200 })];
+    const [plain, median] = samplesFromRuns(runs, ['durationMs', 'durationMs.p50']);
+    assert.deepEqual(plain?.values, median?.values);
+    assert.equal(plain?.unit, 'ms');
+    assert.equal(
+      median?.unit,
+      'ms',
+      'the unit comes from the metric being read, not from its suffix',
+    );
+    assert.equal(compareMetric(median as never, median as never).baseline, 200);
+  });
+
+  it('leaves a name whose suffix is not a quantile alone', () => {
+    const delta = compareMetric(
+      sample('durationMs.tail', [100, 900]),
+      sample('durationMs.tail', [100, 900]),
+    );
+    assert.equal(
+      delta.baseline,
+      500,
+      'an unrecognised suffix falls back to the mean of the samples',
+    );
+  });
+
   it('decides an event that must not happen by whether it still happens', () => {
     const improved = compareMetric(
       sample('duplicateSideEffects', [1]),

@@ -4,6 +4,7 @@ import {
   formatCount,
   comparisonId as makeComparisonId,
   mean,
+  quantile,
   relativeChange,
   type RunObservation,
   runMeasuredNothing,
@@ -14,6 +15,7 @@ import type {
   ComparisonSide,
   ComparisonVerdict,
   Finding,
+  Goal,
   MetricDelta,
   RunRecord,
   ScenarioResult,
@@ -120,8 +122,9 @@ export const compareMetric = (
   candidate: MetricSample,
   minimumSamplesPerSide = 3,
 ): MetricDelta => {
-  const baselineMean = mean(baseline.values);
-  const candidateMean = mean(candidate.values);
+  const { summarise } = metricReduction(baseline.metric);
+  const baselineMean = summarise(baseline.values);
+  const candidateMean = summarise(candidate.values);
   if (baselineMean === undefined || candidateMean === undefined) {
     return {
       metric: baseline.metric,
@@ -132,12 +135,35 @@ export const compareMetric = (
       caveat: 'one side has no samples',
     };
   }
-  const meaningful = differenceIsMeaningful(
-    baseline.values,
-    candidate.values,
-    minimumSamplesPerSide,
-  );
+  /*
+   * What licenses a direction depends on what the number is.
+   *
+   * For a mean, it is `differenceIsMeaningful`: two means can differ by less than the noise around them,
+   * and calling that an improvement is the shape of confident wrongness this module exists to refuse.
+   *
+   * For a quantile it is not. That test compares means and spreads, and a tail that moved while the mean
+   * held still is exactly the case a p95 criterion is written for: ten runs at 100ms with one at 900
+   * have the same mean as ten runs at 180, and the mean test reports nothing happened. So a quantile is
+   * gated on having enough samples for the order statistic to be one, and the claim it supports is
+   * stated on the delta rather than implied: these are order statistics, compared without a spread test.
+   */
+  const quantileMetric = metricReduction(baseline.metric).base !== baseline.metric;
+  const enoughSamples =
+    baseline.values.length >= minimumSamplesPerSide &&
+    candidate.values.length >= minimumSamplesPerSide;
+  const meaningful = quantileMetric
+    ? {
+        meaningful: enoughSamples,
+        reason: enoughSamples
+          ? ''
+          : `needs at least ${minimumSamplesPerSide} samples per side, has ${baseline.values.length} and ${candidate.values.length}`,
+      }
+    : differenceIsMeaningful(baseline.values, candidate.values, minimumSamplesPerSide);
   const decided = directionFor(baseline.metric, baselineMean, candidateMean, meaningful);
+  const caveat =
+    quantileMetric && decided.caveat === undefined && decided.direction !== 'unchanged'
+      ? 'compared as order statistics of the runs on each side, without a spread test'
+      : decided.caveat;
   const relative = relativeChange(baselineMean, candidateMean);
   return {
     metric: baseline.metric,
@@ -149,7 +175,7 @@ export const compareMetric = (
     baselineSamples: baseline.values.length,
     candidateSamples: candidate.values.length,
     direction: decided.direction,
-    ...(decided.caveat === undefined ? {} : { caveat: decided.caveat }),
+    ...(caveat === undefined ? {} : { caveat }),
   };
 };
 
@@ -170,6 +196,45 @@ const METRIC_UNITS: Readonly<Record<string, string>> = {
   policyViolations: 'count',
   successRate: 'fraction',
   queueWaitMs: 'ms',
+};
+
+/**
+ * A metric name may carry the reduction that summarises its per-run samples.
+ *
+ * `durationMs` is the mean of the durations the runs reported and `durationMs.p95` is the 95th
+ * percentile of the same numbers: the base names what is read from each run, the suffix names how the
+ * set is summarised. Both were already in the direction table, which knew `durationMs.p50` and
+ * `durationMs.p95` while nothing produced either, so three acceptance criteria named metrics no
+ * comparison computed and were undecidable for every goal that carried them.
+ *
+ * A quantile of a small sample is an order statistic of that sample and nothing more: at three runs a
+ * p95 is the slowest of the three. The sample count travels on every delta for exactly this reason, and
+ * whether the two sets differ at all is still decided from the raw values rather than from the summary.
+ */
+const QUANTILES: Readonly<Record<string, number>> = {
+  p50: 0.5,
+  p90: 0.9,
+  p95: 0.95,
+  p99: 0.99,
+};
+
+type MetricReduction = {
+  readonly base: string;
+  readonly summarise: (values: readonly number[]) => number | undefined;
+};
+
+export const metricReduction = (metric: string): MetricReduction => {
+  const dot = metric.lastIndexOf('.');
+  const fraction = dot < 0 ? undefined : QUANTILES[metric.slice(dot + 1)];
+  if (dot < 0 || fraction === undefined) return { base: metric, summarise: mean };
+  return {
+    base: metric.slice(0, dot),
+    summarise: (values) =>
+      quantile(
+        [...values].sort((left, right) => left - right),
+        fraction,
+      ),
+  };
 };
 
 const numericMetric = (run: RunRecord, metric: string): number | undefined => {
@@ -197,13 +262,16 @@ export const samplesFromRuns = (
   metrics: readonly string[],
 ): readonly MetricSample[] => {
   const measured = runs.filter((observation) => !runMeasuredNothing(observation));
-  return metrics.map((metric) => ({
-    metric,
-    unit: METRIC_UNITS[metric] ?? 'value',
-    values: measured
-      .map((observation) => numericMetric(observation.run, metric))
-      .filter((value): value is number => value !== undefined),
-  }));
+  return metrics.map((metric) => {
+    const { base } = metricReduction(metric);
+    return {
+      metric,
+      unit: METRIC_UNITS[base] ?? 'value',
+      values: measured
+        .map((observation) => numericMetric(observation.run, base))
+        .filter((value): value is number => value !== undefined),
+    };
+  });
 };
 
 export const DEFAULT_COMPARED_METRICS: readonly string[] = [
@@ -217,6 +285,26 @@ export const DEFAULT_COMPARED_METRICS: readonly string[] = [
   'duplicateSideEffects',
   'userInterventions',
 ];
+
+/**
+ * The metrics a comparison has to carry for the goal it is evidence for.
+ *
+ * A goal's criteria name the metrics they are judged on, and three of the rules that can be cut into a
+ * goal name `durationMs.p95`, `durationMs.p50` and `inputTokens`, none of which the default set
+ * computes. So every such criterion read "the comparison carries no relative change for durationMs.p95"
+ * and was undecidable for the life of the goal, whatever anyone ran.
+ *
+ * Added for a comparison attached to a goal rather than to the default set, because the verdict counts
+ * metrics: `durationMs`, `durationMs.p50` and `durationMs.p95` move together, and putting all three in
+ * front of every comparison would let one change in latency read as three improvements.
+ */
+export const metricsForGoal = (goal: Goal): readonly string[] => {
+  const named = goal.acceptanceCriteria
+    .map((criterion) => criterion.check)
+    .filter((check) => check.kind === 'metric_improvement' || check.kind === 'metric_not_worse')
+    .map((check) => check.metric);
+  return [...new Set([...DEFAULT_COMPARED_METRICS, ...named])];
+};
 
 const verdictFrom = (
   deltas: readonly MetricDelta[],

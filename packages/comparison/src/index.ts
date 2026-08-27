@@ -8,6 +8,7 @@ export {
   compare,
   compareMetric,
   DEFAULT_COMPARED_METRICS,
+  metricsForGoal,
   type MetricSample,
   samplesFromRuns,
 } from './compare.ts';
