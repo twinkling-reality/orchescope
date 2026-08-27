@@ -58,6 +58,21 @@ const ALWAYS_PROHIBITED: readonly string[] = [
   'disabling redaction, a policy setting or a permission check',
 ];
 
+/**
+ * Whether this goal can be judged against a comparison, which needs two runs and not one.
+ *
+ * A baseline alone is half of a comparison. The other half is a run made after the change, and the only
+ * thing in the plan that produces one is a scenario: `orchescope audit` records no run, so with no
+ * scenario named the plan prints `compare <baseline> latest` at a moment when `latest` is still the
+ * baseline. That is a run compared with itself, and it reports every metric unchanged, so both
+ * `metric_not_worse` criteria come back satisfied on a comparison that measured nothing about the
+ * change. A false pass is worse than an undecided one: undecided says look again, and this says done.
+ *
+ * So the question is not whether a baseline exists, it is whether the plan will produce a candidate.
+ */
+const comparisonIsReachable = (input: CreateGoalInput): boolean =>
+  input.baselineRunIds.length > 0 && input.validationScenarioIds.length > 0;
+
 const writePathsFor = (components: readonly Component[], finding: Finding): readonly string[] => {
   const paths = new Set<string>();
   for (const location of finding.sourceLocations) paths.add(location.file);
@@ -83,17 +98,21 @@ const acceptanceCriteriaFor = (
   const next = (): string => `AC-${String(sequence++).padStart(2, '0')}`;
 
   /*
-   * A metric criterion is issued only where there is a baseline to compare against.
+   * A metric criterion is issued only where the plan can produce the comparison that decides it.
    *
-   * The plan already declines to prescribe `orchescope compare` when no run has been recorded, and a
-   * goal that states a criterion whose deciding command it will not name has written a term nobody can
+   * A goal that states a criterion whose deciding command it will not name has written a term nobody can
    * evaluate. It read as a demand rather than as a gap: an operator who did exactly what the goal asked
    * got `not validated` with two criteria permanently undecided, so a goal that was in fact complete
    * could never say so, and the loop this product exists to close stopped one step from the end.
    *
+   * The same principle refuses the opposite failure. Naming a command is not enough if the command
+   * cannot decide the term: with a baseline and no scenario the prescribed comparison has no candidate
+   * but the baseline itself, and a run compared with itself reports every metric unchanged and satisfies
+   * the criteria on evidence about nothing. `comparisonIsReachable` is what asks the real question.
+   *
    * Omitted rather than reported not applicable at validation, because the goal document is a contract
    * handed to an agent and the honest form of a term that cannot be evaluated is its absence. Recording
-   * a run and cutting the goal again is what brings them back, and the plan says so.
+   * a run, adding a scenario and cutting the goal again is what brings them back, and the plan says so.
    */
   const improvement = comparable ? RELATIVE_IMPROVEMENT_BY_RULE[finding.ruleId] : undefined;
   if (improvement !== undefined) {
@@ -177,7 +196,7 @@ const validationPlanFor = (input: CreateGoalInput, goalId: string): ValidationPl
       ],
     });
   }
-  if (input.baselineRunIds.length > 0) {
+  if (comparisonIsReachable(input)) {
     commands.push({
       purpose: 'compare the candidate run against the baseline run, attached to this goal',
       command: [
@@ -336,7 +355,7 @@ export const createGoal = (input: CreateGoalInput): Goal => {
       ...acceptanceCriteriaFor(
         input.finding,
         input.validationScenarioIds,
-        input.baselineRunIds.length > 0,
+        comparisonIsReachable(input),
       ),
     ],
     validation: validationPlanFor(input, id),

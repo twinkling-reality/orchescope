@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { Evidence, Finding } from '@orchescope/schema';
 import { createGoal } from '../src/create.ts';
+import { renderGoalMarkdown } from '../src/render.ts';
 
 /**
  * Goal creation tests.
@@ -195,14 +196,44 @@ describe('createGoal, the criteria it is willing to be judged on', () => {
     ]);
   });
 
-  it('issues them once there is a baseline, which is when the plan prescribes the comparison', () => {
-    const goal = create({ baselineRunIds: ['run_0000000000000001'] });
+  it('issues them once the plan can produce both sides, which is when it prescribes the comparison', () => {
+    const goal = create({
+      baselineRunIds: ['run_0000000000000001'],
+      scenarioIds: ['support-desk'],
+    });
     const issued = goal.acceptanceCriteria.map((criterion) => criterion.statement);
     assert.ok(issued.some((statement) => statement.includes('task success does not decline')));
     assert.ok(
       goal.validation.commands.some((entry) => entry.command.includes('compare')),
       'the command that decides them has to be prescribed alongside them',
     );
+  });
+
+  /*
+   * A baseline without a scenario is half a comparison.
+   *
+   * Nothing in the plan records a run except a scenario, so `latest` still resolves to the baseline and
+   * the prescribed comparison is a run against itself. Every metric reads unchanged, which satisfies both
+   * `metric_not_worse` criteria on evidence about nothing, and a goal that reports a pass it did not earn
+   * is worse than one that reports it cannot tell.
+   */
+  it('issues no metric criterion when the plan can produce no candidate to compare against', () => {
+    const goal = create({ baselineRunIds: ['run_0000000000000001'] });
+    const metric = goal.acceptanceCriteria.filter((criterion) =>
+      criterion.check.kind.startsWith('metric_'),
+    );
+    assert.deepEqual(
+      metric,
+      [],
+      'a criterion was stated that only a self comparison could satisfy',
+    );
+    assert.equal(
+      goal.validation.commands.some((entry) => entry.command.includes('compare')),
+      false,
+      'the plan prescribed a comparison whose candidate would be its own baseline',
+    );
+    // The document says which half is missing rather than leaving a reader to notice the absence.
+    assert.match(renderGoalMarkdown(goal), /no scenario is named/);
   });
 
   /* The two go together: a criterion is issued exactly when its deciding command is. */
@@ -221,7 +252,10 @@ describe('createGoal, the criteria it is willing to be judged on', () => {
    * identifier, so the command without it produces evidence the goal cannot see.
    */
   it('names itself on the comparison it prescribes', () => {
-    const goal = create({ baselineRunIds: ['run_0000000000000001'] });
+    const goal = create({
+      baselineRunIds: ['run_0000000000000001'],
+      scenarioIds: ['support-desk'],
+    });
     const compare = goal.validation.commands.find((entry) => entry.command.includes('compare'));
     assert.ok(compare !== undefined, 'the plan prescribed no comparison');
     const at = compare.command.indexOf('--goal');

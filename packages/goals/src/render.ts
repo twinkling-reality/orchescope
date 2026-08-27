@@ -37,6 +37,22 @@ const criterionText = (criterion: Goal['acceptanceCriteria'][number]): string =>
   }
 };
 
+/**
+ * What the document says about the comparison, including when it prescribes none.
+ *
+ * A goal that named a baseline and then listed no `compare` command read as an omission. It is a
+ * refusal: a comparison needs a run made after the change as well as one made before it, and nothing in
+ * the plan produces the first unless a scenario is named. Saying which half is missing is what turns a
+ * gap a reader has to notice into one the document states.
+ */
+const comparisonNote = (goal: Goal): string => {
+  if (goal.validation.baselineRunIds.length === 0) return 'no baseline run was recorded';
+  const baselines = goal.validation.baselineRunIds.join(', ');
+  return goal.validation.scenarioIds.length === 0
+    ? `${baselines}, which nothing here can be compared against: no scenario is named, so this plan records no run made after the change`
+    : baselines;
+};
+
 export const renderAgentPrompt = (goal: Goal): string =>
   [
     `Task ${goal.id}: ${goal.title}`,
@@ -69,9 +85,7 @@ export const renderAgentPrompt = (goal: Goal): string =>
     bullet(
       goal.validation.commands.map((entry) => `${entry.command.join(' ')}  (${entry.purpose})`),
     ),
-    goal.validation.baselineRunIds.length === 0
-      ? '  compare against: no baseline run was recorded'
-      : `  compare against: ${goal.validation.baselineRunIds.join(', ')}`,
+    `  compare against: ${comparisonNote(goal)}`,
     '',
     'If validation fails',
     `  ${goal.rollback}`,
@@ -135,11 +149,7 @@ export const renderGoalMarkdown = (goal: Goal): string =>
     '',
     ...goal.validation.commands.map((entry) => `- \`${entry.command.join(' ')}\` ${entry.purpose}`),
     '',
-    `Repetitions: ${goal.validation.repetitions}. Baseline runs: ${
-      goal.validation.baselineRunIds.length === 0
-        ? 'none recorded'
-        : goal.validation.baselineRunIds.join(', ')
-    }.`,
+    `Repetitions: ${goal.validation.repetitions}. Baseline runs: ${comparisonNote(goal)}.`,
     '',
     '## Rollback',
     '',
