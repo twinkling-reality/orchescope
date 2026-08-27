@@ -1,6 +1,6 @@
-import { compare } from '@orchescope/comparison';
+import { compare, metricsForGoal } from '@orchescope/comparison';
 import { OrchescopeError, type RunObservation } from '@orchescope/domain';
-import type { Comparison, ComparisonSide, RunRecord } from '@orchescope/schema';
+import type { Comparison, ComparisonSide, Goal, RunRecord } from '@orchescope/schema';
 import type { Workspace } from '@orchescope/workspace';
 import { resolveRevision } from '@orchescope/workspace';
 
@@ -31,6 +31,52 @@ type Resolved = {
   readonly scanId: string | undefined;
 };
 
+/**
+ * The runs one named run stands for, which is the repetition set it belongs to.
+ *
+ * Repetitions exist to give a metric a sample size, and comparing one of them against one of another is
+ * comparing two draws from a noisy process. It is also the shape the printed plan produces: a goal names
+ * one baseline run and the candidate side resolves to one run, so every non-incident metric came back
+ * `indeterminate` for want of the samples the scenario had already recorded, and a real regression in
+ * task success was reported as something the evidence could not judge.
+ *
+ * A run that came from `orchescope trace` belongs to no set and stands for itself, which is the honest
+ * answer for a run nothing repeated.
+ */
+const repetitionSet = (workspace: Workspace, run: RunRecord): readonly RunRecord[] => {
+  if (run.scenarioId === undefined) return [run];
+  const result = workspace.store
+    .scenarioResults(run.scenarioId)
+    .find((entry) => entry.repetitions.some((repetition) => repetition.runId === run.id));
+  if (result === undefined) return [run];
+  const runs = result.repetitions
+    .map((repetition) => workspace.store.runById(repetition.runId))
+    .filter((entry): entry is RunRecord => entry !== undefined);
+  return runs.length > 0 ? runs : [run];
+};
+
+/** A side made from one named run and the repetitions recorded alongside it. */
+const sideFromRun = (
+  workspace: Workspace,
+  run: RunRecord,
+  reference: string,
+  label: string,
+): Resolved => {
+  const runs = repetitionSet(workspace, run);
+  const repetitions = runs.length === 1 ? '' : `, ${runs.length} repetitions`;
+  return {
+    side: {
+      kind: 'run',
+      reference,
+      label: `${label} (${run.label}${repetitions})`,
+      runIds: runs.map((entry) => entry.id),
+      ...(run.git === undefined ? {} : { git: run.git }),
+    },
+    runs,
+    scanId: undefined,
+  };
+};
+
 const resolveSide = (workspace: Workspace, reference: string, label: string): Resolved => {
   if (reference === 'latest') {
     const summaries = workspace.store.listRuns({ projectId: workspace.projectId, limit: 10 });
@@ -43,33 +89,13 @@ const resolveSide = (workspace: Workspace, reference: string, label: string): Re
       });
     }
     const latest = runs[0] as RunRecord;
-    return {
-      side: {
-        kind: 'run',
-        reference: latest.id,
-        label: `${label} (${latest.label})`,
-        runIds: [latest.id],
-        ...(latest.git === undefined ? {} : { git: latest.git }),
-      },
-      runs: [latest],
-      scanId: undefined,
-    };
+    return sideFromRun(workspace, latest, latest.id, label);
   }
 
   if (reference.startsWith('run_')) {
     const run = workspace.store.runById(reference);
     if (run === undefined) throw new OrchescopeError('NOT_FOUND', `No run ${reference}.`);
-    return {
-      side: {
-        kind: 'run',
-        reference,
-        label: `${label} (${run.label})`,
-        runIds: [reference],
-        ...(run.git === undefined ? {} : { git: run.git }),
-      },
-      runs: [run],
-      scanId: undefined,
-    };
+    return sideFromRun(workspace, run, reference, label);
   }
 
   if (reference.startsWith('scan_')) {
@@ -132,8 +158,9 @@ const resolveSide = (workspace: Workspace, reference: string, label: string): Re
  * where the store is already in hand, rather than discovered later by a goal that cannot see its own
  * evidence.
  */
-const assertGoalExists = (workspace: Workspace, goalId: string): void => {
-  if (workspace.store.goalById(goalId) !== undefined) return;
+const goalNamed = (workspace: Workspace, goalId: string): Goal => {
+  const goal = workspace.store.goalById(goalId);
+  if (goal !== undefined) return goal;
   throw new OrchescopeError('NOT_FOUND', `No goal ${goalId}.`, {
     detail: { goalId },
     remediation: 'Run orchescope goals to list the goals this project holds.',
@@ -142,7 +169,7 @@ const assertGoalExists = (workspace: Workspace, goalId: string): void => {
 
 export const compareUseCase = (request: CompareRequest): Comparison => {
   const { workspace } = request;
-  if (request.goalId !== undefined) assertGoalExists(workspace, request.goalId);
+  const goal = request.goalId === undefined ? undefined : goalNamed(workspace, request.goalId);
   const baseline = resolveSide(workspace, request.baseline, 'baseline');
   const candidate = resolveSide(workspace, request.candidate, 'candidate');
 
@@ -176,7 +203,7 @@ export const compareUseCase = (request: CompareRequest): Comparison => {
     ...(candidateGraph === undefined ? {} : { candidateGraph }),
     ...(baselineFindings === undefined ? {} : { baselineFindings }),
     ...(candidateFindings === undefined ? {} : { candidateFindings }),
-    ...(request.goalId === undefined ? {} : { goalId: request.goalId }),
+    ...(goal === undefined ? {} : { goalId: goal.id, metrics: metricsForGoal(goal) }),
     now: workspace.clock.now(),
   });
 
