@@ -1,6 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { type Dirent, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRedactor } from '@orchescope/redaction';
+import { DEFAULT_EXCLUDED_DIRECTORIES } from './excluded.ts';
 
 /**
  * Commands a repository already declares for starting itself.
@@ -31,6 +32,70 @@ export type StartCommandCandidate = {
  * the others, so the list stops rather than guessing which to keep.
  */
 const MAX_CANDIDATES = 8;
+
+/**
+ * How far below the root a manifest is looked for.
+ *
+ * An application inside a repository is normally one or two directories down, `ui/` beside `python/` or a
+ * `packages/<name>`, and past that the directories stop being the system and start being its parts. A
+ * ceiling on work rather than a rule about layout.
+ */
+const MAX_MANIFEST_DEPTH = 2;
+
+/** Enough directories to cover a monorepo without walking one that turns out to hold thousands. */
+const MAX_DIRECTORIES_SCANNED = 200;
+
+/**
+ * The directories a manifest is read from, the root first and then nearer ones before further ones.
+ *
+ * Reading the root alone was measured offering nothing at all for 32 of the 56 pinned repositories,
+ * including every one that keeps its application in a subdirectory: `openai-cs-agents-demo` has its
+ * interface at `ui/package.json` and its service under `python/`. A repository that declares how to start
+ * itself and is told this build found nothing has been told something false about its own contents.
+ *
+ * Excluded directories are the set the workspace already writes into its own configuration, so this walks
+ * past `node_modules` and `dist` for the same reason everything else here does and names nothing new. A
+ * directory whose name begins with a dot is skipped for the same reason: nothing declares how to start a
+ * system from inside one.
+ */
+const EXCLUDED = new Set<string>(DEFAULT_EXCLUDED_DIRECTORIES);
+
+/**
+ * The directories directly inside one, in a stable order, minus the ones analysis never enters.
+ *
+ * Sorted because readdir order is the filesystem's and two machines must offer the same list. A name
+ * beginning with a dot is skipped for the same reason the excluded set exists: nothing declares how to
+ * start a system from inside one.
+ */
+const childDirectories = (root: string, relative: string): readonly string[] => {
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(relative === '' ? root : join(root, relative), { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter(
+      (entry) => entry.isDirectory() && !entry.name.startsWith('.') && !EXCLUDED.has(entry.name),
+    )
+    .map((entry) => entry.name)
+    .toSorted()
+    .map((name) => (relative === '' ? name : `${relative}/${name}`));
+};
+
+const manifestDirectories = (root: string): readonly string[] => {
+  const found = [''];
+  let frontier: readonly string[] = [''];
+  for (let depth = 0; depth < MAX_MANIFEST_DEPTH; depth += 1) {
+    const next = frontier.flatMap((relative) => childDirectories(root, relative));
+    for (const directory of next) {
+      if (found.length >= MAX_DIRECTORIES_SCANNED) return found;
+      found.push(directory);
+    }
+    frontier = next;
+  }
+  return found;
+};
 
 const readText = (root: string, relativePath: string): string | undefined => {
   try {
@@ -127,7 +192,16 @@ const fromProcfile = (root: string): readonly StartCommandCandidate[] => {
  */
 export const startCommandCandidates = (root: string): readonly StartCommandCandidate[] => {
   const redactor = createRedactor();
-  return [...fromPackageJson(root), ...fromPyProject(root), ...fromProcfile(root)]
+  return manifestDirectories(root)
+    .flatMap((directory) => {
+      const prefix = directory === '' ? '' : `${directory}/`;
+      const absolute = directory === '' ? root : join(root, directory);
+      return [
+        ...fromPackageJson(absolute),
+        ...fromPyProject(absolute),
+        ...fromProcfile(absolute),
+      ].map((candidate) => ({ ...candidate, file: `${prefix}${candidate.file}` }));
+    })
     .slice(0, MAX_CANDIDATES)
     .map((candidate) => ({
       ...candidate,

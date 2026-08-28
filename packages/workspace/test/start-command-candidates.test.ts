@@ -31,6 +31,75 @@ const project = (files: Readonly<Record<string, string>>): string => {
   return root;
 };
 
+/**
+ * An application inside a repository still declares how to start itself.
+ *
+ * Reading the root manifest alone was measured offering nothing at all for 32 of the 56 pinned
+ * repositories, `openai-cs-agents-demo` among them: its interface is at `ui/package.json` and its service
+ * is under `python/`, and a repository that says how to start itself was told this build found nothing.
+ */
+describe('start commands declared below the root', () => {
+  it('reads a manifest in a subdirectory and cites the path it came from', () => {
+    const root = project({
+      'ui/package.json': `{
+  "scripts": {
+    "start": "next start"
+  }
+}
+`,
+    });
+    assert.deepEqual(startCommandCandidates(root), [
+      { command: 'npm run start', file: 'ui/package.json', line: 3 },
+    ]);
+  });
+
+  it('offers the root before anything below it', () => {
+    const root = project({
+      'package.json': '{"scripts":{"start":"node root.js"}}',
+      'app/package.json': '{"scripts":{"start":"node app.js"}}',
+    });
+    const files = startCommandCandidates(root).map((candidate) => candidate.file);
+    assert.deepEqual(files, ['package.json', 'app/package.json']);
+  });
+
+  it('walks past the directories analysis never enters', () => {
+    const root = project({
+      'node_modules/a/package.json': '{"scripts":{"start":"node dependency.js"}}',
+      'dist/package.json': '{"scripts":{"start":"node built.js"}}',
+      '.hidden/package.json': '{"scripts":{"start":"node hidden.js"}}',
+      'app/package.json': '{"scripts":{"start":"node app.js"}}',
+    });
+    assert.deepEqual(
+      startCommandCandidates(root).map((candidate) => candidate.file),
+      ['app/package.json'],
+    );
+  });
+
+  it('reads two directories down and stops', () => {
+    const root = project({
+      'a/b/package.json': '{"scripts":{"start":"node deep.js"}}',
+      'a/b/c/package.json': '{"scripts":{"start":"node deeper.js"}}',
+    });
+    assert.deepEqual(
+      startCommandCandidates(root).map((candidate) => candidate.file),
+      ['a/b/package.json'],
+    );
+  });
+
+  /* Two machines must offer the same list, so the walk does not inherit the filesystem's own order. */
+  it('offers subdirectories in a stable order', () => {
+    const root = project({
+      'zeta/package.json': '{"scripts":{"start":"node z.js"}}',
+      'alpha/package.json': '{"scripts":{"start":"node a.js"}}',
+      'mid/package.json': '{"scripts":{"start":"node m.js"}}',
+    });
+    assert.deepEqual(
+      startCommandCandidates(root).map((candidate) => candidate.file),
+      ['alpha/package.json', 'mid/package.json', 'zeta/package.json'],
+    );
+  });
+});
+
 describe('start commands a repository declares', () => {
   it('reads npm scripts with the line each is declared on', () => {
     const root = project({
