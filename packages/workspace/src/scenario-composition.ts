@@ -81,6 +81,12 @@ const distinctNeeds = (
 const named = (asked: readonly ScenarioNeed[]): string =>
   asked.map((need) => `${need.findingId} ${need.ruleId}`).join(', ');
 
+/** A requirement with no clause a file can carry, which is one only a recorded run answers. */
+const declaresNothing = (requirement: ScenarioRequirement): boolean =>
+  requirement.faultKinds.length === 0 &&
+  requirement.evaluatorKinds.length === 0 &&
+  !requirement.prohibitedEffects;
+
 /** A requirement asks for a fault when it names a kind and the audit resolved something to aim it at. */
 const faultOf = (
   requirement: ScenarioRequirement,
@@ -129,25 +135,21 @@ export const composeScenario = (needs: readonly ScenarioNeed[]): ComposedScenari
     const fault = faultOf(requirement);
     for (const kind of requirement.evaluatorKinds) evaluatorKinds.add(kind);
     if (requirement.prohibitedEffects) prohibited = true;
+    notes.push(`#   ${named(asked)} needs ${describeScenarioRequirement(requirement)}.`);
     /*
      * A requirement about recorded work is one no file answers. Skipping it silently would leave the
-     * finding that asked unexplained, so it is named here with what would satisfy it instead.
+     * finding that asked as the one thing the file does not explain, so it is named with what does
+     * satisfy it instead.
      */
-    if (
-      fault === undefined &&
-      requirement.evaluatorKinds.length === 0 &&
-      !requirement.prohibitedEffects
-    ) {
-      notes.push(`#   ${named(asked)} needs ${describeScenarioRequirement(requirement)}.`);
+    if (declaresNothing(requirement)) {
       notes.push('#     Run this scenario, then audit again: only a recorded run satisfies that.');
       continue;
     }
-    notes.push(`#   ${named(asked)} needs ${describeScenarioRequirement(requirement)}.`);
     if (fault === undefined) continue;
     faults.push(`  # ${named(asked)} asked for this fault.`);
     if (fault.others.length > 0) {
       faults.push(
-        `  # Other names this audit resolved, any of which this fault could be aimed at instead:`,
+        '  # Other names this audit resolved, any of which this fault could be aimed at instead:',
         `  #   ${fault.others.join(', ')}`,
       );
     }
@@ -160,7 +162,7 @@ export const composeScenario = (needs: readonly ScenarioNeed[]): ComposedScenari
 
   if (omitted > 0) {
     notes.push(
-      `#   ${formatCount(omitted, 'further requirement')} is not written here, to keep this file readable.`,
+      `#   ${formatCount(omitted, 'further requirement')} not written here, to keep this file readable.`,
     );
   }
   if (faults.length > 0) {
