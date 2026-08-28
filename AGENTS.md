@@ -80,6 +80,10 @@ Rules the tooling enforces:
   rule nothing can ever answer, and one repository per rule passes for a rule whose other branch nothing
   can answer. Declare the branches on the rule as `remediations`, keyed by the situation each one
   addresses, so that check enumerates them instead of being handed a list.
+- A rule that gates a goal on a repository scenario declares that scenario as `scenarioRequirement`, and
+  needs a repository in `tests/e2e/scenario-requirement-rules.test.ts` where the finding states what is
+  missing and the product then satisfies it. One predicate searches and says what is absent: a rule that
+  writes the search out longhand drifts from the sentence beside it, and two of them had.
 - A new adapter needs a fixture repository and a test asserting the components, the relations and the evidence.
 - Waits are event driven. A test that sleeps to fix flakiness will be rejected.
 - Time and randomness come from `fixedClock` and `seededRng` in tests, never from the platform.
