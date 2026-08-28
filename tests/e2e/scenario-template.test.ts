@@ -150,4 +150,87 @@ describe('the scenario template', () => {
     const again = await run(['--cwd', root, 'init', '--scenario']);
     assert.match(again.stdout, /scenario\.yaml already exists, left unchanged/);
   });
+
+  /*
+   * A `start` script is usually a server, and a server offered without this sentence is a command that
+   * always fails. The sentence is the whole of what can honestly be said: nothing this build reads says
+   * which of a repository's declared commands exits on its own, and running one to find out is the thing
+   * candidate discovery exists not to do.
+   */
+  it('says what decides whether a command it offers can be a target', async () => {
+    const root = project();
+    await run(['--cwd', root, 'init', '--scenario']);
+    const template = readFileSync(join(root, '.orchescope/scenario.yaml'), 'utf8');
+    assert.ok(
+      template.includes('#   npm run start    (package.json:4)'),
+      `the declared start command was not offered: ${template}`,
+    );
+    assert.ok(
+      template.includes('Does the one you pick exit on its own?'),
+      `a command was offered with nothing said about what decides it: ${template}`,
+    );
+    assert.ok(
+      template.includes('recorded as a timeout') &&
+        template.includes('fails whatever its evaluators say'),
+      `the consequence was not stated in the terms the runner actually applies: ${template}`,
+    );
+  });
+
+  /*
+   * The guard that makes the sentence above more than a sentence. It holds on any tree, which is the
+   * point: the claim in the template is about behaviour this build already has, and if that behaviour
+   * ever changes the template becomes a lie and this is what says so.
+   */
+  it('fails a target that does not exit, whatever evaluator the scenario declares', async () => {
+    const root = project();
+    writeFileSync(join(root, 'src/forever.js'), 'setInterval(() => {}, 1000);\n');
+    mkdirSync(join(root, 'scenarios'), { recursive: true });
+    writeFileSync(
+      join(root, 'scenarios/forever.yaml'),
+      [
+        'schemaVersion: 1',
+        'id: forever',
+        'name: A target that never exits',
+        'target:',
+        "  command: ['node', 'src/forever.js']",
+        '  resultSource: exit_code',
+        '  timeoutMs: 2000',
+        '  stopSignal: SIGTERM',
+        'evaluators:',
+        '  - kind: no_duplicate_effects',
+        'budgets: {}',
+        'faults: []',
+        'repetitions: 1',
+        'requiredPermissions:',
+        '  - process:spawn',
+        'tags: []',
+        'metadata: {}',
+        '',
+      ].join('\n'),
+    );
+    const test = await run(['--cwd', root, 'test', '--scenario', 'forever', '--json']);
+    const document = JSON.parse(test.stdout) as {
+      readonly data: {
+        readonly result: {
+          readonly passed: boolean;
+          readonly repetitions: readonly {
+            readonly status: string;
+            readonly evaluators: readonly { readonly kind: string; readonly passed: boolean }[];
+          }[];
+        };
+      };
+    };
+    const repetition = document.data.result.repetitions[0];
+    assert.equal(repetition?.status, 'timeout');
+    assert.equal(
+      repetition?.evaluators.find((entry) => entry.kind === 'no_duplicate_effects')?.passed,
+      true,
+      'the evaluator that would have passed did not, so this proves nothing about the status gate',
+    );
+    assert.equal(
+      document.data.result.passed,
+      false,
+      'a target that never exited passed, so the sentence the template prints is false',
+    );
+  });
 });

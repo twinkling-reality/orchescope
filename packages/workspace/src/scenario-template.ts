@@ -33,9 +33,15 @@ const commented = (heading: string, values: readonly string[]): string =>
  *
  * The placeholder is the honest answer where nothing is known, and it stays the value the parser reads.
  * These sit above it as comments with the file and line each was read from, so filling the field in is a
- * choice a reader makes from their own repository rather than a command this build picked for them. A
- * `start` script is often a server that never exits, which is exactly why the field it would go in carries a
- * timeout and a stop signal.
+ * choice a reader makes from their own repository rather than a command this build picked for them.
+ *
+ * **The property that decides is stated with them.** A `start` script is often a server that never exits,
+ * and offering one without saying what happens to it is offering a command that always fails. Choosing a
+ * different evaluator does not rescue it: `repetitionStatus` returns `timeout` before any evaluator is
+ * consulted and a repetition that is not `completed` fails whatever its evaluators say, so the refusal is
+ * about the target rather than about the check. Nothing this build reads says which of these exits on its
+ * own, so none of them is picked, and the one question that separates them is asked here rather than
+ * guessed at.
  */
 const candidateLines = (candidates: readonly StartCommandCandidate[]): readonly string[] =>
   candidates.length === 0
@@ -45,6 +51,10 @@ const candidateLines = (candidates: readonly StartCommandCandidate[]): readonly 
         ...candidates.map(
           (candidate) => `  #   ${candidate.command}    (${candidate.file}:${candidate.line})`,
         ),
+        '  #',
+        '  # Does the one you pick exit on its own? A target that does not is stopped at target.timeoutMs',
+        '  # and recorded as a timeout. A repetition that did not complete fails whatever its evaluators say,',
+        '  # so no evaluator here rescues a server. It needs a command that finishes instead.',
       ];
 
 export const scenarioTemplate = (candidates: readonly StartCommandCandidate[] = []): string =>
