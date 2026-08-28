@@ -1,6 +1,12 @@
 import { existsSync, writeFileSync } from 'node:fs';
 import { RESULT_SOURCES, SCENARIO_PERMISSIONS, SCHEMA_VERSIONS } from '@orchescope/schema';
 import type { WorkspacePaths } from './paths.ts';
+import {
+  type ComposedScenario,
+  composeScenario,
+  EMPTY_COMPOSITION,
+  type ScenarioNeed,
+} from './scenario-composition.ts';
 import { type StartCommandCandidate, startCommandCandidates } from './start-command-candidates.ts';
 
 /**
@@ -57,8 +63,58 @@ const candidateLines = (candidates: readonly StartCommandCandidate[]): readonly 
         '  # so no evaluator here rescues a server. It needs a command that finishes instead.',
       ];
 
-export const scenarioTemplate = (candidates: readonly StartCommandCandidate[] = []): string =>
-  [
+/**
+ * The expectation block, live where a requirement asked for one and an example otherwise.
+ *
+ * The commented form stays where nothing asked, because a reader with no findings still has to be shown
+ * the shape, and a live block naming an effect nobody asked about would be an assertion this build made up.
+ */
+const expectLines = (composed: ComposedScenario): readonly string[] =>
+  composed.expect.length > 0
+    ? [...composed.expect]
+    : [
+        '# expect:',
+        '#   taskSuccess: true',
+        '#   requiredEffects:',
+        '#     - kind: notification',
+        '#       minCount: 1',
+        '#   prohibitedEffects:',
+        '#     - kind: refund',
+        '#       maxCount: 1',
+      ];
+
+/**
+ * The exit code check the template has always written, and the evaluators a requirement asked for.
+ *
+ * The exit code entry stays even though `repetitionStatus` already fails a non zero exit, because a
+ * scenario declaring no evaluator at all passes vacuously, and a template that ships one deciding nothing
+ * is worse than one shipping a check that agrees with the status.
+ */
+const evaluatorLines = (composed: ComposedScenario): readonly string[] => [
+  'evaluators:',
+  '  - kind: exit_code',
+  '    equals: 0',
+  ...composed.evaluators,
+  ...(composed.evaluators.length > 0
+    ? []
+    : [
+        '  # - kind: output_contains_all',
+        "  #   values: ['Done']",
+        '  # - kind: no_duplicate_effects',
+      ]),
+];
+
+const faultLines = (composed: ComposedScenario): readonly string[] =>
+  composed.faults.length === 0
+    ? ['# Faults injected into the run, for orchescope chaos. None by default.', 'faults: []']
+    : ['faults:', ...composed.faults];
+
+export const scenarioTemplate = (
+  candidates: readonly StartCommandCandidate[] = [],
+  needs: readonly ScenarioNeed[] = [],
+): string => {
+  const composed = needs.length === 0 ? EMPTY_COMPOSITION : composeScenario(needs);
+  return [
     '# Orchescope scenario.',
     '#',
     '# One repeatable run of your system. `target.command` is the argv Orchescope executes, without a shell,',
@@ -71,6 +127,7 @@ export const scenarioTemplate = (candidates: readonly StartCommandCandidate[] = 
     '#',
     '# It is read from scenarios/ and not from here, so nothing runs until you move it.',
     '#',
+    ...(composed.notes.length === 0 ? [] : [...composed.notes, '#']),
     commented('result sources', RESULT_SOURCES),
     commented('permissions', SCENARIO_PERMISSIONS),
     '#',
@@ -102,21 +159,9 @@ export const scenarioTemplate = (candidates: readonly StartCommandCandidate[] = 
     '#   prompt: Where is my order 1234?',
     '',
     '# External effects the run must and must not produce, judged against what the spans reported.',
-    '# expect:',
-    '#   taskSuccess: true',
-    '#   requiredEffects:',
-    '#     - kind: notification',
-    '#       minCount: 1',
-    '#   prohibitedEffects:',
-    '#     - kind: refund',
-    '#       maxCount: 1',
+    ...expectLines(composed),
     '',
-    'evaluators:',
-    '  - kind: exit_code',
-    '    equals: 0',
-    '  # - kind: output_contains_all',
-    "  #   values: ['Done']",
-    '  # - kind: no_duplicate_effects',
+    ...evaluatorLines(composed),
     '',
     'budgets:',
     '  maxDurationMs: 60000',
@@ -124,8 +169,7 @@ export const scenarioTemplate = (candidates: readonly StartCommandCandidate[] = 
     '  maxModelCalls: 200',
     '  maxRetries: 20',
     '',
-    '# Faults injected into the run, for orchescope chaos. None by default.',
-    'faults: []',
+    ...faultLines(composed),
     '',
     '# A seed makes the run repeatable, and repetitions give a metric its sample size.',
     'seed: 1',
@@ -140,19 +184,27 @@ export const scenarioTemplate = (candidates: readonly StartCommandCandidate[] = 
     'metadata: {}',
     '',
   ].join('\n');
+};
 
 export type ScenarioTemplateResult = {
   readonly created: boolean;
   readonly scenarioFile: string;
+  /** Whether a finding's own requirement was written into it, so the command can say which file it wrote. */
+  readonly composed?: boolean;
 };
 
 /** Writes the template unless one is already there, so a filled in answer is never overwritten. */
-export const writeScenarioTemplate = (paths: WorkspacePaths): ScenarioTemplateResult => {
+export const writeScenarioTemplate = (
+  paths: WorkspacePaths,
+  needs: readonly ScenarioNeed[] = [],
+): ScenarioTemplateResult => {
   if (existsSync(paths.scenarioTemplateFile)) {
     return { created: false, scenarioFile: paths.scenarioTemplateFile };
   }
-  writeFileSync(paths.scenarioTemplateFile, scenarioTemplate(startCommandCandidates(paths.root)), {
-    mode: 0o600,
-  });
-  return { created: true, scenarioFile: paths.scenarioTemplateFile };
+  writeFileSync(
+    paths.scenarioTemplateFile,
+    scenarioTemplate(startCommandCandidates(paths.root), needs),
+    { mode: 0o600 },
+  );
+  return { created: true, scenarioFile: paths.scenarioTemplateFile, composed: needs.length > 0 };
 };

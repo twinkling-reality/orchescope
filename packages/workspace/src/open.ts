@@ -24,6 +24,7 @@ import { DEFAULT_CONFIG, loadConfig, writeConfig } from './config.ts';
 import { type ExcludedConfig, excludedConfig } from './committable-config.ts';
 import { type GitFacts, readGitFacts } from './git.ts';
 import { type ManifestTemplateResult, writeManifestTemplate } from './manifest-template.ts';
+import type { ScenarioNeed } from './scenario-composition.ts';
 import { type ScenarioTemplateResult, writeScenarioTemplate } from './scenario-template.ts';
 import {
   ensureStateDirectories,
@@ -159,6 +160,14 @@ export type InitOptions = {
   readonly manifest?: boolean;
   /** Writes `.orchescope/scenario.yaml` from the template unless one is already there. */
   readonly scenario?: boolean;
+  /**
+   * What the last audit's findings said they needed a scenario to declare.
+   *
+   * Passed in rather than read here, because this package builds a workspace and does not know what a
+   * finding is. The command that has both hands them over, so composition stays a function of the
+   * requirements and of nothing else.
+   */
+  readonly scenarioNeeds?: readonly ScenarioNeed[];
 };
 
 /**
@@ -181,7 +190,9 @@ export const initWorkspace = (root: string, options: InitOptions = {}): InitResu
     configFile: paths.configFile,
     alreadyExisted: existed,
     ...(options.manifest === true ? { manifest: writeManifestTemplate(paths) } : {}),
-    ...(options.scenario === true ? { scenario: writeScenarioTemplate(paths) } : {}),
+    ...(options.scenario === true
+      ? { scenario: writeScenarioTemplate(paths, options.scenarioNeeds ?? []) }
+      : {}),
     ...(ignoredBy === undefined ? {} : { configIgnoredBy: ignoredBy }),
   };
 };

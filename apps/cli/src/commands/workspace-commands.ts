@@ -1,9 +1,9 @@
 import { writeFileSync } from 'node:fs';
-import { OrchescopeError, stableJson } from '@orchescope/domain';
+import { formatCount, OrchescopeError, stableJson } from '@orchescope/domain';
 import { toMermaid, toSarif } from '@orchescope/report';
 import type { ReportBundle } from '@orchescope/schema';
 import { runDoctor } from '@orchescope/usecases';
-import { initWorkspace } from '@orchescope/workspace';
+import { initWorkspace, type ScenarioNeed } from '@orchescope/workspace';
 import type { CommandContext } from '../context.ts';
 import { EXIT_CODES } from '../exit.ts';
 import { doctorSummary } from '../terminal/doctor-summary.ts';
@@ -15,14 +15,37 @@ import { doctorSummary } from '../terminal/doctor-summary.ts';
  * machine artifacts (JSON, Mermaid, SARIF) for CI and pull requests.
  */
 
+/**
+ * What the last audit's findings said a scenario would have to declare.
+ *
+ * Read here because this is where the store is, and handed to the workspace as data: a repository that has
+ * never been audited has no findings and gets the template it always got, which is the honest answer when
+ * nothing has asked for anything.
+ */
+const scenarioNeeds = (context: CommandContext): readonly ScenarioNeed[] => {
+  const bundle = context.workspace.store.latestReport(context.workspace.projectId);
+  return (bundle?.findings ?? []).flatMap((finding) =>
+    finding.scenarioRequirement === undefined
+      ? []
+      : [
+          {
+            findingId: finding.id,
+            ruleId: finding.ruleId,
+            requirement: finding.scenarioRequirement,
+          },
+        ],
+  );
+};
+
 export const initCommand = (
   context: CommandContext,
   options: { readonly name?: string; readonly manifest?: boolean; readonly scenario?: boolean },
 ): number => {
+  const needs = options.scenario === true ? scenarioNeeds(context) : [];
   const result = initWorkspace(context.workspace.paths.root, {
     ...(options.name === undefined ? {} : { projectName: options.name }),
     ...(options.manifest === true ? { manifest: true } : {}),
-    ...(options.scenario === true ? { scenario: true } : {}),
+    ...(options.scenario === true ? { scenario: true, scenarioNeeds: needs } : {}),
   });
   if (context.json) {
     context.stdout(
@@ -57,6 +80,13 @@ export const initCommand = (
      * Where to put it is the half a reader cannot infer. Scenarios are read from `scenarios/` and this
      * file is not there, which is deliberate: nothing runs until the command in it is yours.
      */
+    if (result.scenario.composed === true) {
+      context.stdout(
+        context.style.dim(
+          `  It declares what ${formatCount(needs.length, 'finding')} in the last audit asked for: the faults, the evaluators and the effects they name.\n`,
+        ),
+      );
+    }
     context.stdout(
       context.style.dim(
         '  Fill in target.command, then move it to scenarios/ and run: orchescope test --scenario example\n',

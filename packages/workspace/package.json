@@ -14,5 +14,8 @@
     "@orchescope/persistence": "workspace:*",
     "@orchescope/redaction": "workspace:*",
     "@orchescope/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "@orchescope/scenarios": "workspace:*"
   }
 }

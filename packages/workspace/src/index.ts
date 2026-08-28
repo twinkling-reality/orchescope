@@ -18,6 +18,7 @@ export {
   manifestTemplate,
   writeManifestTemplate,
 } from './manifest-template.ts';
+export type { ScenarioNeed } from './scenario-composition.ts';
 export {
   type ScenarioTemplateResult,
   scenarioTemplate,
