@@ -28,10 +28,56 @@ export type LoadScenarioRequest = {
   readonly reference: string;
 };
 
+/**
+ * A scenario read back from the file its author edits, when the store knows which file that was.
+ *
+ * The stored copy used to answer every lookup by identifier, so editing a scenario on disk did nothing:
+ * changing `repetitions` from three to one and running `orchescope test --scenario example` still ran
+ * three, with no message. Iterating on a scenario is the whole activity `init --scenario` starts, and it
+ * was inert.
+ *
+ * Three refusals, each deliberate. A file that no longer parses raises rather than falling back to the
+ * stored copy, because running the previous version of something an operator has just edited is the same
+ * silence pointed the other way. A file that now declares a different identifier is a different scenario,
+ * so this reference is no longer about it and the stored copy stands. And a file that has been deleted
+ * leaves the stored copy as the last thing anybody recorded, which is what it is.
+ */
+const editedOnDisk = (
+  workspace: Workspace,
+  scenarioId: string,
+  reference: string,
+): Scenario | undefined => {
+  const sourcePath = workspace.store.scenarioSourceById(scenarioId);
+  if (sourcePath === undefined) return undefined;
+  const resolved = resolveInsideRoot(workspace.paths, sourcePath);
+  let text: string;
+  try {
+    text = readFileSync(resolved, 'utf8');
+  } catch {
+    return undefined;
+  }
+  const parsed = parseScenario(text, sourcePath);
+  if (!parsed.ok) {
+    throw new OrchescopeError(
+      'SCHEMA_INVALID',
+      `${sourcePath} is not a valid scenario: ${formatIssues(parsed.issues)}`,
+      {
+        detail: { scenarioId: reference },
+        remediation: `Fix ${sourcePath}, or delete it to fall back to what was last recorded.`,
+      },
+    );
+  }
+  if (parsed.value.id !== scenarioId) return undefined;
+  workspace.store.saveScenario(parsed.value, workspace.projectId, sourcePath);
+  return parsed.value;
+};
+
 export const loadScenario = (request: LoadScenarioRequest): Scenario => {
   const { workspace } = request;
   const stored = workspace.store.scenarioById(request.reference);
-  if (stored !== undefined) return stored;
+  if (stored !== undefined) {
+    return editedOnDisk(workspace, stored.id, request.reference) ?? stored;
+  }
 
   if (request.reference.endsWith('.yaml') || request.reference.endsWith('.yml')) {
     // Resolved and normalized before it is compared: a textual prefix check accepts `<root>/../../etc/passwd`.

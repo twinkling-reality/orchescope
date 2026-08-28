@@ -1,7 +1,7 @@
 import type { Scenario, ScenarioResult } from '@orchescope/schema';
 import type { ArtifactStore } from '../artifacts.ts';
 import { asInteger, asNullable, type Database } from '../database.ts';
-import { text } from '../rows.ts';
+import { optionalText, text } from '../rows.ts';
 
 /**
  * Scenarios and their results.
@@ -35,6 +35,18 @@ export const createScenariosRepository = (input: {
   const scenarioById = (scenarioId: string): Scenario | undefined => {
     const row = database.get('SELECT json FROM scenario WHERE id = ?', scenarioId);
     return row === undefined ? undefined : (JSON.parse(text(row, 'json')) as Scenario);
+  };
+
+  /**
+   * The file a stored scenario was read from, so an edit to it can be honoured.
+   *
+   * The path was recorded from the first save and read by nothing, which is why editing a scenario on disk
+   * did nothing: the stored copy answered every lookup and the file was consulted only when the caller
+   * named it directly. A scenario is a file its author edits, so the store has to be able to say which one.
+   */
+  const scenarioSourceById = (scenarioId: string): string | undefined => {
+    const row = database.get('SELECT source_path FROM scenario WHERE id = ?', scenarioId);
+    return row === undefined ? undefined : optionalText(row, 'source_path');
   };
 
   const listScenarios = (projectId: string): readonly Scenario[] =>
@@ -71,6 +83,7 @@ export const createScenariosRepository = (input: {
   return {
     saveScenario,
     scenarioById,
+    scenarioSourceById,
     listScenarios,
     saveScenarioResult,
     scenarioResults,

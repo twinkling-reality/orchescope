@@ -272,7 +272,9 @@ export const testCommand = async (
       })}\n`,
     );
   } else {
-    context.stdout(`${scenarioSummary(context.style, outcome.result)}\n`);
+    context.stdout(
+      `${scenarioSummary(context.style, outcome.result, (value) => context.workspace.redactor.text(value))}\n`,
+    );
   }
   return outcome.result.passed ? EXIT_CODES.success : EXIT_CODES.findings;
 };
