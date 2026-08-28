@@ -236,7 +236,7 @@ const evaluatorsByRun = (
   );
   const byRun = new Map<string, readonly EvaluatorResult[]>();
   for (const scenarioId of scenarioIds) {
-    for (const result of workspace.store.scenarioResults(scenarioId)) {
+    for (const result of workspace.store.scenarioResults(workspace.projectId, scenarioId)) {
       for (const repetition of result.repetitions) {
         if (!wanted.has(repetition.runId)) continue;
         byRun.set(repetition.runId, repetition.evaluators);

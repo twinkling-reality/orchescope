@@ -46,7 +46,7 @@ type Resolved = {
 const repetitionSet = (workspace: Workspace, run: RunRecord): readonly RunRecord[] => {
   if (run.scenarioId === undefined) return [run];
   const result = workspace.store
-    .scenarioResults(run.scenarioId)
+    .scenarioResults(workspace.projectId, run.scenarioId)
     .find((entry) => entry.repetitions.some((repetition) => repetition.runId === run.id));
   if (result === undefined) return [run];
   const runs = result.repetitions

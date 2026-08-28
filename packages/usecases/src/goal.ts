@@ -158,7 +158,7 @@ const comparableResultFor = (
   scenarioId: string,
 ): BaselineCandidate | undefined => {
   const candidates = workspace.store
-    .scenarioResults(scenarioId, MAX_RESULTS_PER_SCENARIO)
+    .scenarioResults(workspace.projectId, scenarioId, MAX_RESULTS_PER_SCENARIO)
     .map((result) => baselineFrom(workspace, result))
     .filter((candidate): candidate is BaselineCandidate => candidate !== undefined)
     .filter((candidate) => candidate.samples > 0);
@@ -353,7 +353,9 @@ const resultsForCriteria = (workspace: Workspace, goal: Goal): readonly Scenario
       .filter((check) => check.kind === 'scenario_passes')
       .map((check) => check.scenarioId),
   );
-  return [...scenarioIds].flatMap((scenarioId) => workspace.store.scenarioResults(scenarioId));
+  return [...scenarioIds].flatMap((scenarioId) =>
+    workspace.store.scenarioResults(workspace.projectId, scenarioId),
+  );
 };
 
 export type ValidateGoalResult = {

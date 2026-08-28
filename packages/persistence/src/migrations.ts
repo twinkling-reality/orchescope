@@ -275,6 +275,48 @@ export const MIGRATIONS: readonly Migration[] = [
       'CREATE INDEX component_metric_component ON component_metric(component_id)',
     ],
   },
+  {
+    version: 3,
+    description: 'a scenario is identified by its project and its name, not by its name alone',
+    statements: [
+      /*
+       * Every other identifier this store keys on is minted from content, so two of them collide only when
+       * they are the same thing. A scenario identifier is the one an author types, and `example` is the one
+       * `init --scenario` writes into every template this product hands out, so the name most likely to be
+       * shared between two repositories is the one the product supplies.
+       *
+       * One store holds two projects whenever a repository is copied together with its `.orchescope`
+       * directory, because a project identifier is minted from the scan root and the database travels with
+       * the copy. Keyed on the name alone that store held one scenario: the second project's save updated
+       * the first project's row and left it attached to the first, so the second listed none of its own,
+       * and a repository holding no scenario file at all could load and execute another repository's argv.
+       *
+       * Rebuilt rather than altered, because SQLite cannot add a column to a primary key in place. Rows
+       * carry over exactly as they are: a row under a project that no longer scans this root becomes
+       * invisible to the project that does, which is the correct answer and is repaired by the next audit.
+       * Nothing references this table, so the rebuild needs no foreign key suspension.
+       */
+      `CREATE TABLE scenario_by_project (
+        project_id TEXT NOT NULL REFERENCES project(id),
+        id TEXT NOT NULL,
+        source_path TEXT,
+        schema_version INTEGER NOT NULL,
+        updated_at TEXT NOT NULL,
+        json TEXT NOT NULL,
+        PRIMARY KEY (project_id, id)
+      ) STRICT`,
+      `INSERT INTO scenario_by_project (project_id, id, source_path, schema_version, updated_at, json)
+       SELECT project_id, id, source_path, schema_version, updated_at, json FROM scenario`,
+      'DROP TABLE scenario',
+      'ALTER TABLE scenario_by_project RENAME TO scenario',
+      /*
+       * The results were already stamped with the project that recorded them and were read without it, so
+       * the column existed and the query did not use it. The index is what lets the scoped read stay one
+       * lookup rather than a scan of every result the store holds.
+       */
+      'CREATE INDEX scenario_result_project ON scenario_result(project_id, scenario_id, started_at DESC)',
+    ],
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.reduce(

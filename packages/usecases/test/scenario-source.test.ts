@@ -61,8 +61,8 @@ const workspaceWith = (fileText: string, storedRepetitions: number) => {
       projectId: 'prj_test',
       paths: { root },
       store: {
-        scenarioById: (id: string) =>
-          id === 'example'
+        scenarioById: (projectId: string, id: string) =>
+          projectId === 'prj_test' && id === 'example'
             ? ({ id: 'example', repetitions: storedRepetitions } as unknown as Scenario)
             : undefined,
         scenarioSourceById: () => 'scenarios/example.yaml',

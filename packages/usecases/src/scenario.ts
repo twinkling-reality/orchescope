@@ -47,7 +47,7 @@ const editedOnDisk = (
   scenarioId: string,
   reference: string,
 ): Scenario | undefined => {
-  const sourcePath = workspace.store.scenarioSourceById(scenarioId);
+  const sourcePath = workspace.store.scenarioSourceById(workspace.projectId, scenarioId);
   if (sourcePath === undefined) return undefined;
   const resolved = resolveInsideRoot(workspace.paths, sourcePath);
   let text: string;
@@ -74,7 +74,7 @@ const editedOnDisk = (
 
 export const loadScenario = (request: LoadScenarioRequest): Scenario => {
   const { workspace } = request;
-  const stored = workspace.store.scenarioById(request.reference);
+  const stored = workspace.store.scenarioById(workspace.projectId, request.reference);
   if (stored !== undefined) {
     return editedOnDisk(workspace, stored.id, request.reference) ?? stored;
   }

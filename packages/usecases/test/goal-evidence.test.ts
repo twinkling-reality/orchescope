@@ -112,7 +112,7 @@ const workspaceHolding = (history: readonly Recorded[]) => {
         saveGoal: (goal: Goal) => saved.push(goal),
         spanCountForRun: () => 4,
         runById: (runId: string) => runs.get(runId),
-        scenarioResults: (scenarioId: string) => results.get(scenarioId) ?? [],
+        scenarioResults: (_projectId: string, scenarioId: string) => results.get(scenarioId) ?? [],
         runsExercising: () =>
           flat
             .filter(({ entry }) => entry.exercised > 0)
