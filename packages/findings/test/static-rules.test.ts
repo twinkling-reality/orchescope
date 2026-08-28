@@ -266,8 +266,20 @@ describe('retry-around-non-idempotent-operation', () => {
     assert.equal(draft?.basis, 'discovered');
     assert.ok(draft?.components.includes('tool:issue_refund'));
     assert.equal(draft?.goalEligible, false);
-    assert.equal(draft?.suggestedExperiment, undefined);
-    assert.match(draft?.goalReason ?? '', /No repository scenario/);
+    /*
+     * The specification is carried in the case that has no scenario, which is the case a reader needs it
+     * in. It used to be dropped, so the finding that could not say which scenario to run also stopped
+     * saying what one would have to contain.
+     */
+    assert.deepEqual(draft?.scenarioRequirement, {
+      faultKinds: ['tool_timeout', 'side_effect_partial_success'],
+      faultTargets: ['issue_refund', 'tool:issue_refund'],
+      evaluatorKinds: ['no_duplicate_effects'],
+      prohibitedEffects: false,
+    });
+    assert.deepEqual(draft?.suggestedExperiment?.command, ['orchescope', 'init', '--scenario']);
+    assert.match(draft?.goalReason ?? '', /No repository scenario meets what this needs/);
+    assert.match(draft?.goalReason ?? '', /tool_timeout .* fault aimed at issue_refund/);
   });
 
   it('stays quiet when the effect class itself is unknown', () => {
@@ -352,7 +364,12 @@ describe('retry-around-non-idempotent-operation', () => {
       ),
     );
     assert.equal(unsupported.drafts[0]?.goalEligible, false);
-    assert.equal(unsupported.drafts[0]?.suggestedExperiment, undefined);
+    assert.deepEqual(unsupported.drafts[0]?.suggestedExperiment?.command, [
+      'orchescope',
+      'init',
+      '--scenario',
+    ]);
+    assert.equal(unsupported.drafts[0]?.scenarioRequirement?.faultTargets[0], 'issue_refund');
   });
 
   it('does not transfer an aggregate provider effect through a generic helper', () => {
@@ -1354,8 +1371,21 @@ describe('what a rule says when it had nothing to look at', () => {
     assert.equal(outcome.status, 'fired');
     assert.equal(outcome.drafts[0]?.polarity, 'risk');
     assert.equal(outcome.drafts[0]?.goalEligible, false);
-    assert.equal(outcome.drafts[0]?.suggestedExperiment, undefined);
-    assert.match(outcome.drafts[0]?.goalReason ?? '', /No repository scenario/);
+    assert.deepEqual(outcome.drafts[0]?.scenarioRequirement, {
+      faultKinds: ['prompt_injection_in_content'],
+      faultTargets: ['lookup_account', 'tool:lookup_account'],
+      evaluatorKinds: ['no_duplicate_effects'],
+      prohibitedEffects: true,
+    });
+    assert.deepEqual(outcome.drafts[0]?.suggestedExperiment?.command, [
+      'orchescope',
+      'init',
+      '--scenario',
+    ]);
+    assert.match(
+      outcome.drafts[0]?.goalReason ?? '',
+      /No repository scenario meets what this needs/,
+    );
   });
 
   it('does not attach an unrelated prompt-injection scenario', () => {
@@ -1388,7 +1418,11 @@ describe('what a rule says when it had nothing to look at', () => {
     );
     assert.equal(outcome.status, 'fired');
     assert.equal(outcome.drafts[0]?.goalEligible, false);
-    assert.equal(outcome.drafts[0]?.suggestedExperiment, undefined);
+    assert.deepEqual(outcome.drafts[0]?.suggestedExperiment?.command, [
+      'orchescope',
+      'init',
+      '--scenario',
+    ]);
   });
 
   it('prompt-injection-boundary stays quiet about a prompt that interpolates nothing', () => {

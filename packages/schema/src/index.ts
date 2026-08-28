@@ -211,6 +211,7 @@ export {
   ScenarioTarget,
   ScenarioVariant,
 } from './scenario.ts';
+export { ScenarioRequirement } from './scenario-requirement.ts';
 export { Reliability, RepetitionResult, ScenarioResult } from './scenario-result.ts';
 export { TARGET_ENV, TargetResult } from './target-result.ts';
 export {

@@ -163,6 +163,9 @@ const toFinding = (
     ...(draft.suggestedExperiment === undefined
       ? {}
       : { suggestedExperiment: draft.suggestedExperiment }),
+    ...(draft.scenarioRequirement === undefined
+      ? {}
+      : { scenarioRequirement: draft.scenarioRequirement }),
     goalReadiness: {
       eligible: draft.goalEligible,
       reason: draft.goalReason,

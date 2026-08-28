@@ -128,6 +128,11 @@ export {
 export { mapWithConcurrency, type ParallelOptions, settleWithConcurrency } from './parallel.ts';
 export { decideByKey, type Rng, seededRng } from './random.ts';
 export {
+  bindScenarioRequirement,
+  describeScenarioRequirement,
+  scenarioSatisfying,
+} from './scenario-requirement.ts';
+export {
   basisStrength,
   CONFIDENCE_BANDS,
   capSeverity,

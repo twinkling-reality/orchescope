@@ -1,11 +1,19 @@
 import {
   absenceEvidence,
+  bindScenarioRequirement,
   CONFIDENCE_BANDS,
   derivedEvidence,
+  describeScenarioRequirement,
   formatCount,
   normalizeLocalName,
+  scenarioSatisfying,
 } from '@orchescope/domain';
-import type { ComponentId, EvidenceId, ReconciliationDelta } from '@orchescope/schema';
+import type {
+  ComponentId,
+  EvidenceId,
+  ReconciliationDelta,
+  ScenarioRequirement,
+} from '@orchescope/schema';
 import { clear, type FindingDraft, fired, insufficient, type Rule } from '../rule.ts';
 
 /**
@@ -316,8 +324,29 @@ export const contradictedDeclarationRule: Rule = {
   },
 };
 
+/**
+ * A scenario that recorded this duplicate, which is a requirement no file can answer.
+ *
+ * The other two rules gated on a scenario ask what a scenario declares, and an operator satisfies them by
+ * writing one. This one asks which repeatable set the run that produced the evidence belonged to, so the
+ * only thing that satisfies it is a run. It is carried as a requirement anyway, because "you need a
+ * scenario and writing one is not enough" is exactly the sentence a reader was not being given, and
+ * because a composer that silently skipped it would leave the finding unexplained.
+ *
+ * The clauses stay empty on purpose. Adding a `no_duplicate_effects` clause here would read well and would
+ * change a shipped answer on no evidence: the rule has never asked what the scenario declares.
+ */
+const DUPLICATE_EFFECT_SCENARIO: ScenarioRequirement = {
+  faultKinds: [],
+  faultTargets: [],
+  evaluatorKinds: [],
+  prohibitedEffects: false,
+  recordedScenarioIds: [],
+};
+
 export const duplicateSideEffectRule: Rule = {
   id: 'duplicate-side-effect',
+  scenarioRequirement: DUPLICATE_EFFECT_SCENARIO,
   category: 'reliability',
   summary: 'The same logical side effect performed more than once inside one run.',
   evaluate: (context) => {
@@ -338,7 +367,10 @@ export const duplicateSideEffectRule: Rule = {
           .map(({ run }) => run.scenarioId)
           .filter((scenarioId): scenarioId is string => scenarioId !== undefined),
       );
-      const scenario = context.scenarios.find((candidate) => scenarioIds.has(candidate.id));
+      const requirement = bindScenarioRequirement(DUPLICATE_EFFECT_SCENARIO, {
+        recordedScenarioIds: [...scenarioIds].sort(),
+      });
+      const scenario = scenarioSatisfying(requirement, context.scenarios);
       const record = derivedEvidence({
         producer: PRODUCER,
         rule: 'duplicate-side-effect',
@@ -395,7 +427,16 @@ export const duplicateSideEffectRule: Rule = {
           risk: 'medium',
         },
         ...(scenario === undefined
-          ? {}
+          ? {
+              scenarioRequirement: requirement,
+              suggestedExperiment: {
+                description:
+                  'Write a scenario that reproduces this run and record one, which orchescope init --scenario starts.',
+                command: ['orchescope', 'init', '--scenario'],
+                expectedSignal:
+                  'duplicateSideEffects drops to zero while task success is unchanged',
+              },
+            }
           : {
               suggestedExperiment: {
                 description: `Rerun repository scenario ${scenario.id}.`,
@@ -407,7 +448,7 @@ export const duplicateSideEffectRule: Rule = {
         goalEligible: scenario !== undefined,
         goalReason:
           scenario === undefined
-            ? 'No stored repository scenario is associated with the run that recorded this duplicate.'
+            ? `No stored repository scenario meets what this needs: ${describeScenarioRequirement(requirement)}.`
             : `Repository scenario ${scenario.id} is associated with the run that recorded this duplicate.`,
         requiresRuntimeEvidence: true,
         tags: ['reconciliation', 'duplicate-effect'],

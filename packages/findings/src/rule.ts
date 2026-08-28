@@ -17,6 +17,7 @@ import type {
   ReconciliationDelta,
   RunRecord,
   Scenario,
+  ScenarioRequirement,
   Severity,
   SuggestedExperiment,
 } from '@orchescope/schema';
@@ -101,6 +102,14 @@ export type FindingDraft = {
    */
   readonly remediationVariant?: string;
   readonly suggestedExperiment?: SuggestedExperiment;
+  /**
+   * The scenario this draft needed and did not find, bound to what the audit resolved.
+   *
+   * Set only where the rule wanted one and none satisfied it, so the field reads as the specification of
+   * what is missing. A draft that found its scenario names it in `goalReason` and prints it in
+   * `suggestedExperiment` instead.
+   */
+  readonly scenarioRequirement?: ScenarioRequirement;
   readonly taxonomy?: readonly string[];
   readonly goalEligible: boolean;
   readonly goalReason: string;
@@ -165,6 +174,18 @@ export type Rule = {
    * failing check; adding a branch with no key is the thing the key exists to make awkward.
    */
   readonly remediations?: RemediationVariants;
+  /**
+   * The scenario this rule needs before a goal cut from it can be decided by rerunning something.
+   *
+   * Declared here for the same reason `remediations` is: so a check can enumerate the rules that make this
+   * promise rather than be handed a list, and so the shape a scenario has to have is stated once. It was
+   * stated twice, as a `context.scenarios.find` and again as the prose saying what was missing, and the
+   * two static rules had already drifted apart over which spellings of a component a fault may name.
+   *
+   * The constant clauses live here and the resolved ones are bound at evaluation with
+   * `bindScenarioRequirement`, so a rule cannot search for a fault kind it did not declare.
+   */
+  readonly scenarioRequirement?: ScenarioRequirement;
 };
 
 export const clear = (detail?: string): RuleOutcome => ({

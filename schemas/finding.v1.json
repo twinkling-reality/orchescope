@@ -346,6 +346,158 @@
             "minLength": 1,
             "type": "string"
           },
+          "scenarioRequirement": {
+            "additionalProperties": false,
+            "properties": {
+              "evaluatorKinds": {
+                "items": {
+                  "anyOf": [
+                    {
+                      "const": "output_contains_all",
+                      "type": "string"
+                    },
+                    {
+                      "const": "output_contains_none",
+                      "type": "string"
+                    },
+                    {
+                      "const": "json_pointer_equals",
+                      "type": "string"
+                    },
+                    {
+                      "const": "effect_recorded",
+                      "type": "string"
+                    },
+                    {
+                      "const": "no_duplicate_effects",
+                      "type": "string"
+                    },
+                    {
+                      "const": "span_observed",
+                      "type": "string"
+                    },
+                    {
+                      "const": "metric_threshold",
+                      "type": "string"
+                    },
+                    {
+                      "const": "exit_code",
+                      "type": "string"
+                    },
+                    {
+                      "const": "model_judge",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              "faultKinds": {
+                "items": {
+                  "anyOf": [
+                    {
+                      "const": "model_timeout",
+                      "type": "string"
+                    },
+                    {
+                      "const": "model_rate_limited",
+                      "type": "string"
+                    },
+                    {
+                      "const": "model_server_error",
+                      "type": "string"
+                    },
+                    {
+                      "const": "model_malformed_structured_output",
+                      "type": "string"
+                    },
+                    {
+                      "const": "model_stream_interrupted",
+                      "type": "string"
+                    },
+                    {
+                      "const": "tool_timeout",
+                      "type": "string"
+                    },
+                    {
+                      "const": "tool_exception",
+                      "type": "string"
+                    },
+                    {
+                      "const": "tool_malformed_result",
+                      "type": "string"
+                    },
+                    {
+                      "const": "tool_stale_result",
+                      "type": "string"
+                    },
+                    {
+                      "const": "retrieval_empty",
+                      "type": "string"
+                    },
+                    {
+                      "const": "retrieval_slow",
+                      "type": "string"
+                    },
+                    {
+                      "const": "worker_unavailable",
+                      "type": "string"
+                    },
+                    {
+                      "const": "queue_delay",
+                      "type": "string"
+                    },
+                    {
+                      "const": "auth_expired",
+                      "type": "string"
+                    },
+                    {
+                      "const": "side_effect_partial_success",
+                      "type": "string"
+                    },
+                    {
+                      "const": "duplicate_response",
+                      "type": "string"
+                    },
+                    {
+                      "const": "context_corruption",
+                      "type": "string"
+                    },
+                    {
+                      "const": "prompt_injection_in_content",
+                      "type": "string"
+                    }
+                  ],
+                  "description": "Fault classes Orchescope can inject into an agent system."
+                },
+                "type": "array"
+              },
+              "faultTargets": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "prohibitedEffects": {
+                "type": "boolean"
+              },
+              "recordedScenarioIds": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "faultKinds",
+              "faultTargets",
+              "evaluatorKinds",
+              "prohibitedEffects"
+            ],
+            "type": "object"
+          },
           "severity": {
             "anyOf": [
               {

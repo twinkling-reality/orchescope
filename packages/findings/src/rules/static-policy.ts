@@ -1,10 +1,13 @@
 import {
   absenceEvidence,
   agree,
+  bindScenarioRequirement,
   CONFIDENCE_BANDS,
   derivedEvidence,
+  describeScenarioRequirement,
   formatCount,
   partOfAuditedSystem,
+  scenarioSatisfying,
 } from '@orchescope/domain';
 import {
   controlFlowCycleEdges,
@@ -25,6 +28,7 @@ import type {
   ComponentKind,
   Edge,
   EvidenceId,
+  ScenarioRequirement,
   SideEffectClass,
 } from '@orchescope/schema';
 import {
@@ -159,23 +163,43 @@ export const UNSAFE_RETRY_REMEDIATIONS = {
   }),
 } satisfies RemediationVariants;
 
-const duplicateRetryScenario = (
-  context: RuleContext,
-  target: Component,
-): RuleContext['scenarios'][number] | undefined =>
-  context.scenarios.find(
-    (scenario) =>
-      scenario.evaluators.some((evaluator) => evaluator.kind === 'no_duplicate_effects') &&
-      scenario.faults.some(
-        (fault) =>
-          (fault.target === target.identity.localName || fault.target === target.displayName) &&
-          (fault.kind === 'tool_timeout' || fault.kind === 'side_effect_partial_success'),
-      ),
-  );
+/**
+ * The names a fault may be aimed at for these components, the one to write leading.
+ *
+ * `identity.localName` leads because it is what a scenario author types and what the demonstration
+ * system's own scenarios use. The identifier and the display name are accepted because both are spellings
+ * this build has handed a reader of the same component, one in `--json` and one in the terminal document,
+ * and refusing a fault that names the component by a name this product printed would be a refusal nobody
+ * could act on.
+ */
+const faultTargetsOf = (components: readonly Component[]): readonly string[] => [
+  ...new Set(
+    components.flatMap((component) => [
+      component.identity.localName,
+      component.displayName,
+      component.id as string,
+    ]),
+  ),
+];
+
+/**
+ * A fault that makes the result of the operation ambiguous, and a check that counts the effect.
+ *
+ * Both halves are needed and neither is enough. A scenario that faults the call without counting effects
+ * says the retry happened; one that counts effects without faulting the call says nothing happened on a
+ * run where nothing went wrong.
+ */
+const UNSAFE_RETRY_SCENARIO: ScenarioRequirement = {
+  faultKinds: ['tool_timeout', 'side_effect_partial_success'],
+  faultTargets: [],
+  evaluatorKinds: ['no_duplicate_effects'],
+  prohibitedEffects: false,
+};
 
 export const unsafeRetryRule: Rule = {
   id: 'retry-around-non-idempotent-operation',
   remediations: UNSAFE_RETRY_REMEDIATIONS,
+  scenarioRequirement: UNSAFE_RETRY_SCENARIO,
   category: 'reliability',
   summary: 'A retry wrapped around an operation whose idempotency was not established.',
   evaluate: (context) => {
@@ -198,7 +222,10 @@ export const unsafeRetryRule: Rule = {
       const effect = retriedEffectOf(context, edge) ?? 'unknown';
 
       const source = context.graph.component(edge.from);
-      const scenario = duplicateRetryScenario(context, target);
+      const requirement = bindScenarioRequirement(UNSAFE_RETRY_SCENARIO, {
+        faultTargets: faultTargetsOf([target]),
+      });
+      const scenario = scenarioSatisfying(requirement, context.scenarios);
       const record = derivedEvidence({
         producer: PRODUCER,
         rule: 'retry-around-non-idempotent-operation',
@@ -241,7 +268,15 @@ export const unsafeRetryRule: Rule = {
         ),
         remediationVariant: 'no-idempotency-key',
         ...(scenario === undefined
-          ? {}
+          ? {
+              scenarioRequirement: requirement,
+              suggestedExperiment: {
+                description:
+                  'Write the scenario this needs, which orchescope init --scenario composes from this audit.',
+                command: ['orchescope', 'init', '--scenario'],
+                expectedSignal: 'one effect instead of two, with task success unchanged',
+              },
+            }
           : {
               suggestedExperiment: {
                 description: `Run the repository's ${scenario.id} scenario and count the resulting effects.`,
@@ -252,7 +287,7 @@ export const unsafeRetryRule: Rule = {
         goalEligible: scenario !== undefined,
         goalReason:
           scenario === undefined
-            ? 'No repository scenario both faults this operation after an ambiguous result and checks for duplicate effects.'
+            ? `No repository scenario meets what this needs: ${describeScenarioRequirement(requirement)}.`
             : `Repository scenario ${scenario.id} faults this operation and checks for duplicate effects.`,
         requiresRuntimeEvidence: true,
         tags: ['retry', 'idempotency'],
@@ -939,9 +974,32 @@ export const PROMPT_INJECTION_REMEDIATIONS = {
   }),
 } satisfies RemediationVariants;
 
+/**
+ * An instruction injected into content the system reads, and a run that would notice it being followed.
+ *
+ * The prohibited effect clause is what makes the scenario a boundary test rather than a transcript: an
+ * injection that changes nothing outside the system is an injection that failed, and a scenario naming no
+ * effect it must not produce cannot tell the two apart.
+ */
+/**
+ * How many untrusted sources one finding names, and therefore how many a fault may be aimed at.
+ *
+ * A ceiling on what a document states rather than a claim about how many exist: the explanation beside it
+ * counts the whole population, so a reader is never shown a list that stops without saying so.
+ */
+const MAX_NAMED_SOURCES = 5;
+
+const PROMPT_INJECTION_SCENARIO: ScenarioRequirement = {
+  faultKinds: ['prompt_injection_in_content'],
+  faultTargets: [],
+  evaluatorKinds: ['no_duplicate_effects'],
+  prohibitedEffects: true,
+};
+
 export const promptInjectionBoundaryRule: Rule = {
   id: 'prompt-injection-boundary',
   remediations: PROMPT_INJECTION_REMEDIATIONS,
+  scenarioRequirement: PROMPT_INJECTION_SCENARIO,
   category: 'security',
   summary: 'Places where content Orchescope cannot vouch for reaches a prompt.',
   evaluate: (context) => {
@@ -1002,24 +1060,21 @@ export const promptInjectionBoundaryRule: Rule = {
       );
     }
 
+    /*
+     * The sources the finding names, rather than every source in the graph.
+     *
+     * The search used to range over all of them while the draft below listed at most five, so a reader
+     * given the finding could not check the decision against the document they were given: eligibility
+     * turned on a source the document did not contain. A scenario that faults a source outside this list
+     * and no other still satisfies the requirement by aiming at `*`, which is the schema's own word for
+     * every match.
+     */
+    const namedSources = untrustedSources.slice(0, MAX_NAMED_SOURCES);
+    const requirement = bindScenarioRequirement(PROMPT_INJECTION_SCENARIO, {
+      faultTargets: faultTargetsOf(namedSources),
+    });
     const drafts: FindingDraft[] = prompts.map((prompt) => {
-      const sourceNames = new Set(
-        untrustedSources.flatMap((source) => [
-          source.id,
-          source.identity.localName,
-          source.displayName,
-        ]),
-      );
-      const scenario = context.scenarios.find(
-        (candidate) =>
-          candidate.faults.some(
-            (fault) =>
-              fault.kind === 'prompt_injection_in_content' &&
-              (fault.target === '*' || sourceNames.has(fault.target)),
-          ) &&
-          candidate.evaluators.some((evaluator) => evaluator.kind === 'no_duplicate_effects') &&
-          (candidate.expect?.prohibitedEffects?.length ?? 0) > 0,
-      );
+      const scenario = scenarioSatisfying(requirement, context.scenarios);
       const record = derivedEvidence({
         producer: PRODUCER,
         rule: 'prompt-injection-boundary',
@@ -1045,7 +1100,7 @@ export const promptInjectionBoundaryRule: Rule = {
         explanation: `This prompt contains substitution points, and the system also reads content from ${formatCount(untrustedSources.length, 'source')} that Orchescope cannot vouch for: retrieval results, tool results and MCP server output. Whether a substituted value comes from one of those sources cannot be established from syntax alone, so this is a boundary to review rather than a proven vulnerability.`,
         impact:
           'If retrieved or tool provided text reaches this prompt, instructions inside that text are indistinguishable from the system prompt.',
-        components: [prompt.id, ...untrustedSources.slice(0, 5).map((component) => component.id)],
+        components: [prompt.id, ...namedSources.map((component) => component.id)],
         newEvidence: [record],
         claimEvidence: {
           mechanism: [record.id],
@@ -1056,7 +1111,16 @@ export const promptInjectionBoundaryRule: Rule = {
         recommendation: PROMPT_INJECTION_REMEDIATIONS['interpolated-prompt'](),
         remediationVariant: 'interpolated-prompt',
         ...(scenario === undefined
-          ? {}
+          ? {
+              scenarioRequirement: requirement,
+              suggestedExperiment: {
+                description:
+                  'Write the scenario this needs, which orchescope init --scenario composes from this audit.',
+                command: ['orchescope', 'init', '--scenario'],
+                expectedSignal:
+                  'no duplicate or prohibited effect while the injected content is present',
+              },
+            }
           : {
               suggestedExperiment: {
                 description:
@@ -1069,7 +1133,7 @@ export const promptInjectionBoundaryRule: Rule = {
         goalEligible: scenario !== undefined,
         goalReason:
           scenario === undefined
-            ? 'No repository scenario injects an instruction into this untrusted source and checks duplicate and prohibited effects.'
+            ? `No repository scenario meets what this needs: ${describeScenarioRequirement(requirement)}.`
             : `Repository scenario ${scenario.id} injects an instruction into this untrusted source and checks duplicate and prohibited effects.`,
         requiresRuntimeEvidence: true,
         requiresHumanReview: true,

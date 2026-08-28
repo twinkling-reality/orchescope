@@ -10,6 +10,7 @@ import {
   NonNegativeInt,
   Timestamp,
 } from './primitives.ts';
+import { ScenarioRequirement } from './scenario-requirement.ts';
 import { SCHEMA_VERSIONS, schemaId } from './version.ts';
 
 /**
@@ -106,6 +107,14 @@ export const Finding = Type.Object(
     metrics: Type.Array(FindingMetric),
     recommendation: Type.Optional(Recommendation),
     suggestedExperiment: Type.Optional(SuggestedExperiment),
+    /**
+     * The scenario this finding needs and the repository does not have.
+     *
+     * Present exactly when the rule wanted a scenario and found none, so it reads as the specification of
+     * what is missing rather than as a description of what exists. Dropping it in that case, which is what
+     * happened before, withdrew the specification in the one case a reader needs it.
+     */
+    scenarioRequirement: Type.Optional(ScenarioRequirement),
     /** What must be true before this finding may be converted into an improvement goal. */
     goalReadiness: Type.Object(
       {
