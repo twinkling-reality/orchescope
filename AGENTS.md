@@ -84,6 +84,11 @@ Rules the tooling enforces:
   needs a repository in `tests/e2e/scenario-requirement-rules.test.ts` where the finding states what is
   missing and the product then satisfies it. One predicate searches and says what is absent: a rule that
   writes the search out longhand drifts from the sentence beside it, and two of them had.
+- A test double for the store or the workspace is written against the real type and shared, never as a
+  per-test object literal behind `as never`. `packages/usecases/test/store-double.ts` is the shape: a test
+  supplies documents rather than behaviour, the documents are built rather than cast, and anything the
+  double was not given throws its own name. A cast there is a promise that the compiler has been told to
+  stop checking, and what it hid last time was three store methods gaining a parameter.
 - A new adapter needs a fixture repository and a test asserting the components, the relations and the evidence.
 - Waits are event driven. A test that sleeps to fix flakiness will be rejected.
 - Time and randomness come from `fixedClock` and `seededRng` in tests, never from the platform.

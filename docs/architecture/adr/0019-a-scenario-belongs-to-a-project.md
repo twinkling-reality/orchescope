@@ -79,9 +79,12 @@ and could run them. After it, the copy's next `audit` rediscovers whatever scena
 and stores them under its own project. Nothing is lost that the copy declared.
 
 **Three store methods changed signature**, and the fake stores in `packages/usecases/test` did not fail to
-compile when they did, because they are structurally typed behind an `as never` cast. Only the runtime
-assertions caught them. That is recorded rather than fixed: making those fakes typed is a separate change
-with a wider blast radius than this one.
+compile when they did, because each test wrote its own object literal of lambdas behind an `as never` cast.
+Only the runtime assertions caught them, in four tests, none of which named the cause. **That has since
+been fixed**: those tests now share one store double written against the real `Store`, and one set of
+document builders with nothing cast in them. Re-running this change's signature edit against that double
+produces both a compile error and a runtime failure naming the project identifier arriving where a run
+identifier was expected.
 
 ## What the measurement said
 

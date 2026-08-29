@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { Finding, Goal } from '@orchescope/schema';
+import type { Finding } from '@orchescope/schema';
 import { judgeGoal } from '../src/goal.ts';
+import { storeDouble, workspaceDouble } from './store-double.ts';
+import * as documents from './stored-documents.ts';
 
 /**
  * Whether the finding a goal was cut from still fires.
@@ -10,17 +12,17 @@ import { judgeGoal } from '../src/goal.ts';
  * and may answer the same population with a strength after the risk has cleared.
  */
 
-const workspace = {
-  store: {
-    latestComparisonForGoal: () => undefined,
-    scenarioResults: () => [],
-  },
-} as never;
+const PROJECT = 'prj_0000000000000001';
 
-const goal = {
+const workspace = workspaceDouble({
+  projectId: PROJECT,
+  root: '/nowhere',
+  store: storeDouble({ projectId: PROJECT }).store,
+});
+
+const goal = documents.goal({
   id: 'OSC-GOAL-0001',
   findingId: 'OSC-REL-0001',
-  status: 'ready',
   affectedComponents: ['model:primary'],
   metadata: { ruleId: 'model-call-without-timeout' },
   acceptanceCriteria: [
@@ -30,18 +32,15 @@ const goal = {
       check: { kind: 'finding_resolved', findingId: 'OSC-REL-0001' },
     },
   ],
-  validationResults: [],
-} as unknown as Goal;
+});
 
-const finding = (polarity: 'risk' | 'strength'): Finding =>
-  ({
+const finding = (polarity: Finding['polarity']): Finding =>
+  documents.finding({
     id: 'OSC-REL-0001',
     ruleId: 'model-call-without-timeout',
     polarity,
     components: ['model:primary'],
-    edges: [],
-    metadata: {},
-  }) as unknown as Finding;
+  });
 
 describe('the finding a goal is judged against', () => {
   it('is unsatisfied while the risk still fires', () => {

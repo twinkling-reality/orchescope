@@ -3,8 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
-import type { Scenario } from '@orchescope/schema';
 import { loadScenario } from '../src/scenario.ts';
+import { storeDouble, workspaceDouble } from './store-double.ts';
+import * as documents from './stored-documents.ts';
 
 /**
  * A scenario is a file its author edits, and editing it used to do nothing.
@@ -48,27 +49,27 @@ after(() => {
   for (const root of roots) rmSync(root, { recursive: true, force: true });
 });
 
+const PROJECT = 'prj_0000000000000001';
+
 /** A workspace whose store holds one scenario recorded from a file, which the test then edits. */
 const workspaceWith = (fileText: string, storedRepetitions: number) => {
   const root = mkdtempSync(join(tmpdir(), 'orchescope-scenario-'));
   roots.push(root);
   mkdirSync(join(root, 'scenarios'), { recursive: true });
   writeFileSync(join(root, 'scenarios/example.yaml'), fileText);
-  const saved: Scenario[] = [];
-  return {
-    saved,
-    workspace: {
-      projectId: 'prj_test',
-      paths: { root },
-      store: {
-        scenarioById: (projectId: string, id: string) =>
-          projectId === 'prj_test' && id === 'example'
-            ? ({ id: 'example', repetitions: storedRepetitions } as unknown as Scenario)
-            : undefined,
-        scenarioSourceById: () => 'scenarios/example.yaml',
-        saveScenario: (scenario: Scenario) => saved.push(scenario),
+  const double = storeDouble({
+    projectId: PROJECT,
+    scenarios: [
+      {
+        scenario: documents.scenario({ id: 'example', repetitions: storedRepetitions }),
+        sourcePath: 'scenarios/example.yaml',
       },
-    } as never,
+    ],
+  });
+  return {
+    root,
+    double,
+    workspace: workspaceDouble({ projectId: PROJECT, root, store: double.store }),
   };
 };
 
@@ -84,9 +85,9 @@ describe('the scenario a run is loaded from', () => {
   });
 
   it('records what it read, so the next lookup does not have to read it again', () => {
-    const { workspace, saved } = workspaceWith(SCENARIO(1), 3);
+    const { workspace, double } = workspaceWith(SCENARIO(1), 3);
     loadScenario({ workspace, reference: 'example' });
-    assert.equal(saved[0]?.repetitions, 1);
+    assert.equal(double.savedScenarios[0]?.repetitions, 1);
   });
 
   /*
@@ -106,13 +107,8 @@ describe('the scenario a run is loaded from', () => {
 
   /* A deleted file leaves the stored copy as the last thing anybody recorded, which is what it is. */
   it('keeps the stored copy when the file it came from is gone', () => {
-    const { workspace } = workspaceWith(SCENARIO(1), 3);
-    rmSync(
-      join(
-        (workspace as unknown as { paths: { root: string } }).paths.root,
-        'scenarios/example.yaml',
-      ),
-    );
+    const { workspace, root } = workspaceWith(SCENARIO(1), 3);
+    rmSync(join(root, 'scenarios/example.yaml'));
     assert.equal(loadScenario({ workspace, reference: 'example' }).repetitions, 3);
   });
 });
