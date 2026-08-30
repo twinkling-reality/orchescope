@@ -272,7 +272,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: 'compare_runs',
     description:
-      'Compare a baseline against a candidate. Each side may be a run identifier, "latest", a scan identifier or a git revision. Returns per metric deltas with sample sizes and a verdict that refuses to call a latency win an improvement when task success fell.',
+      'Compare a baseline against a candidate. Each side may be a run identifier, "latest", a scan identifier, "latest-scan", or a git revision. Returns per metric deltas with sample sizes, a finding delta that includes occurrence scale, and a verdict. When metrics are absent, findings decide improved / unchanged / regressed.',
     input: Type.Object(
       {
         baseline: Type.String({ maxLength: 200 }),
@@ -287,7 +287,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: 'validate_improvement_goal',
     description:
-      'Judge a goal against its acceptance criteria using a comparison and the stored scenario results. A criterion the evidence cannot decide is reported as undecided rather than as satisfied.',
+      'Judge a goal against its acceptance criteria and return the comparison verdict (improved, unchanged, regressed, mixed, or insufficient evidence) alongside whether every criterion is satisfied. A criterion the evidence cannot decide is reported as undecided rather than as satisfied. The verdict is what distinguishes a partial improvement from a no-op from a regression when the finding still fires.',
     input: Type.Object(
       {
         goalId: Type.String({ maxLength: 40 }),

@@ -488,7 +488,8 @@ export const TIMEOUT_REMEDIATIONS = {
     summary: 'Set an explicit request timeout on the model client or the call site.',
     steps: [
       'Choose a timeout from the observed p95 latency plus headroom.',
-      'Set it at the client.',
+      'Set it on the client or call that produces the invokes_model edge this finding names.',
+      'A timeout on an OpenAI client in the same file does not clear an Agent constructed with a string model: that edge never carries the client. Clear it by removing the untimed string model pin, or by invoking the model through a client call this build reads a deadline on.',
     ],
     effort: 'small' as const,
     risk: 'low' as const,

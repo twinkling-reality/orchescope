@@ -55,8 +55,15 @@ export type CreateGoalInput = {
     readonly runIds: readonly string[];
     readonly samples: number;
   };
-  /** Why no comparison is prescribed, when none is. */
+  /** Why no run comparison is prescribed, when none is. */
   readonly comparisonUnavailable?: string;
+  /**
+   * The scan the finding was cut from.
+   *
+   * Frozen into the plan so a later audit can be compared as the same static work. Absent only when the
+   * caller has no scan, which is not a path `createGoalFromFinding` takes.
+   */
+  readonly baselineScanId?: string;
   /**
    * Runs that exercised the affected components, whether or not any of them can serve as a baseline.
    *
@@ -278,6 +285,18 @@ const validationPlanFor = (input: CreateGoalInput, goalId: string): ValidationPl
       purpose: `compare the rerun of ${baseline.scenarioId} against the recording of it this goal was cut from, attached to this goal`,
       command: ['orchescope', 'compare', baseline.runIds[0] as string, 'latest', '--goal', goalId],
     });
+  } else if (input.baselineScanId !== undefined) {
+    /*
+     * A static-only goal still has two executions of the same work: the scan the finding was cut from
+     * and the scan after the change. Prescribing that compare is what lets the judge answer improved /
+     * unchanged / regressed when no scenario run exists. It is not the run-against-itself hazard the
+     * metric path refuses: `latest-scan` is a different scan, produced by the audit command above.
+     */
+    commands.push({
+      purpose:
+        'compare the rescan against the scan this goal was cut from, so a finding that still fires can still be judged by whether it got better, worse or stayed the same',
+      command: ['orchescope', 'compare', input.baselineScanId, 'latest-scan', '--goal', goalId],
+    });
   }
   /*
    * The plan ends at the command that renders the decision.
@@ -322,6 +341,7 @@ const validationPlanFor = (input: CreateGoalInput, goalId: string): ValidationPl
         }
       : {}),
     ...(cannotDecide === undefined ? {} : { comparisonUnavailable: cannotDecide }),
+    ...(input.baselineScanId === undefined ? {} : { baselineScanId: input.baselineScanId }),
     ...(input.baselineBenchmarkId === undefined
       ? {}
       : { baselineBenchmarkId: input.baselineBenchmarkId }),

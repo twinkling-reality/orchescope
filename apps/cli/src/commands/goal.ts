@@ -142,12 +142,15 @@ const writeValidationText = (
     ? style.good('validated')
     : style.bad('not validated');
   context.stdout(`\n${style.bold(outcome.goal.id)} ${decision}: ${outcome.validation.summary}\n`);
-  if (outcome.comparison !== undefined) {
+  if (outcome.verdict !== undefined) {
     context.stdout(
-      style.dim(
-        `  judged against ${outcome.comparison.id}, which returned ${outcome.comparison.verdict.replaceAll('_', ' ')}\n`,
-      ),
+      `${style.bold('verdict')} ${outcome.verdict.replaceAll('_', ' ')}${
+        outcome.verdictReason === undefined ? '' : `: ${outcome.verdictReason}`
+      }\n`,
     );
+  }
+  if (outcome.comparison !== undefined) {
+    context.stdout(style.dim(`  judged against ${outcome.comparison.id}\n`));
   }
   for (const result of outcome.validation.outcomes) {
     context.stdout(
@@ -227,7 +230,19 @@ export const goalValidateCommand = (
         ok: true,
         command: 'goal validate',
         version: context.version,
-        data: { goal: outcome.goal, validation: outcome.validation },
+        data: {
+          goal: outcome.goal,
+          validation: outcome.validation,
+          ...(outcome.verdict === undefined
+            ? {}
+            : { verdict: outcome.verdict, verdictReason: outcome.verdictReason }),
+          ...(outcome.comparison === undefined
+            ? {}
+            : {
+                comparisonId: outcome.comparison.id,
+                findingDelta: outcome.comparison.findingDelta,
+              }),
+        },
       })}\n`,
     );
   } else {

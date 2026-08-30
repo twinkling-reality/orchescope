@@ -13,6 +13,7 @@ import {
   type RunObservation,
   samplesRequiredFor,
   runMeasuredNothing,
+  severityRank,
 } from '@orchescope/domain';
 import { diffGraphs } from '@orchescope/graph';
 import type {
@@ -20,6 +21,8 @@ import type {
   ComparisonSide,
   ComparisonVerdict,
   Finding,
+  FindingDelta,
+  FindingScaleChange,
   Goal,
   MetricDelta,
   RunRecord,
@@ -295,9 +298,9 @@ export const metricsForGoal = (goal: Goal): readonly string[] => {
   return [...new Set([...DEFAULT_COMPARED_METRICS, ...named])];
 };
 
-const verdictFrom = (
+const verdictFromMetrics = (
   deltas: readonly MetricDelta[],
-): { verdict: ComparisonVerdict; reason: string } => {
+): { verdict: ComparisonVerdict; reason: string } | undefined => {
   const success = deltas.find((delta) => delta.metric === 'successRate');
   const regressions = deltas.filter((delta) => delta.direction === 'regressed');
   const improvements = deltas.filter((delta) => delta.direction === 'improved');
@@ -311,21 +314,14 @@ const verdictFrom = (
   }
   /*
    * No delta at all is not the same as deltas that could not be called. It means neither side supplied a
-   * value for anything, which happens when the runs observed nothing, and "no metric moved enough to
-   * call" would report that void as a finding of stability.
+   * value for anything, which happens when the runs observed nothing. The caller may still have findings
+   * to judge; returning undefined lets finding judgement take over rather than reporting the void as
+   * stability or as a hard stop.
    */
-  if (deltas.length === 0) {
-    return {
-      verdict: 'insufficient_evidence',
-      reason: 'neither side carries a value for any metric, so nothing was compared',
-    };
-  }
+  if (deltas.length === 0) return undefined;
   if (improvements.length === 0 && regressions.length === 0) {
     return indeterminate.length === deltas.length
-      ? {
-          verdict: 'insufficient_evidence',
-          reason: `no metric produced a supportable direction: ${indeterminate[0]?.caveat ?? 'sample sizes were too small'}`,
-        }
+      ? undefined
       : { verdict: 'unchanged', reason: 'no metric moved enough to call' };
   }
   if (regressions.length > 0 && improvements.length > 0) {
@@ -343,6 +339,171 @@ const verdictFrom = (
   return {
     verdict: 'improved',
     reason: `${improvements.map((delta) => delta.metric).join(', ')} improved with no regression`,
+  };
+};
+
+/**
+ * How many instances one finding stands for.
+ *
+ * Grouping writes an `occurrences` metric when several drafts collapse into one. A single-instance finding
+ * carries no such metric, and the number of named components (or edges) is the honest scale: removing half
+ * the callers of an untimed model is an improvement even when the finding's identity still fires.
+ */
+const findingScale = (finding: Finding): number => {
+  const occurrences = finding.metrics?.find((metric) => metric.name === 'occurrences')?.value;
+  if (typeof occurrences === 'number' && Number.isFinite(occurrences) && occurrences > 0) {
+    return occurrences;
+  }
+  const subjects = Math.max(finding.components.length, finding.edges?.length ?? 0, 1);
+  return subjects;
+};
+
+/**
+ * Whether losing or gaining this finding is an improvement.
+ *
+ * A risk that stops firing is progress. A strength that stops firing is a regression. Info findings are
+ * treated with risks: they name gaps the audit was willing to report.
+ */
+const presenceDirection = (
+  polarity: Finding['polarity'],
+  change: 'resolved' | 'introduced',
+): 'improved' | 'regressed' => {
+  if (polarity === 'strength') return change === 'resolved' ? 'regressed' : 'improved';
+  return change === 'resolved' ? 'improved' : 'regressed';
+};
+
+const scaleDirection = (baseline: Finding, candidate: Finding): FindingScaleChange['direction'] => {
+  const baselineScale = findingScale(baseline);
+  const candidateScale = findingScale(candidate);
+  const severityDelta = severityRank(candidate.severity) - severityRank(baseline.severity);
+  if (baseline.polarity === 'strength') {
+    if (candidateScale > baselineScale || severityDelta > 0) return 'improved';
+    if (candidateScale < baselineScale || severityDelta < 0) return 'regressed';
+    return 'unchanged';
+  }
+  if (candidateScale < baselineScale && severityDelta <= 0) return 'improved';
+  if (candidateScale > baselineScale || severityDelta > 0) return 'regressed';
+  return 'unchanged';
+};
+
+export const diffFindings = (
+  baselineFindings: readonly Finding[],
+  candidateFindings: readonly Finding[],
+): FindingDelta => {
+  const resolved = baselineFindings.filter(
+    (finding) => !candidateFindings.some((candidate) => findingsShareIdentity(finding, candidate)),
+  );
+  const introduced = candidateFindings.filter(
+    (finding) => !baselineFindings.some((baseline) => findingsShareIdentity(baseline, finding)),
+  );
+  const pairs = candidateFindings.flatMap((candidate) => {
+    const baseline = baselineFindings.find((entry) => findingsShareIdentity(entry, candidate));
+    return baseline === undefined ? [] : [{ baseline, candidate }];
+  });
+  const scaleChanges = pairs
+    .map(({ baseline, candidate }) => {
+      const direction = scaleDirection(baseline, candidate);
+      return {
+        ruleId: candidate.ruleId,
+        baselineId: baseline.id,
+        candidateId: candidate.id,
+        baselineOccurrences: findingScale(baseline),
+        candidateOccurrences: findingScale(candidate),
+        direction,
+      };
+    })
+    .filter((change) => change.direction !== 'unchanged');
+  return {
+    resolved: resolved.map((finding) => finding.id),
+    introduced: introduced.map((finding) => finding.id),
+    unchanged: pairs.map(({ candidate }) => candidate.id),
+    ...(scaleChanges.length === 0 ? {} : { scaleChanges }),
+  };
+};
+
+const verdictFromFindings = (
+  baselineFindings: readonly Finding[],
+  candidateFindings: readonly Finding[],
+  delta: FindingDelta,
+): { verdict: ComparisonVerdict; reason: string } => {
+  const improvements: string[] = [];
+  const regressions: string[] = [];
+  for (const id of delta.resolved) {
+    const finding = baselineFindings.find((entry) => entry.id === id);
+    if (finding === undefined) continue;
+    const direction = presenceDirection(finding.polarity, 'resolved');
+    (direction === 'improved' ? improvements : regressions).push(`${finding.ruleId} resolved`);
+  }
+  for (const id of delta.introduced) {
+    const finding = candidateFindings.find((entry) => entry.id === id);
+    if (finding === undefined) continue;
+    const direction = presenceDirection(finding.polarity, 'introduced');
+    (direction === 'improved' ? improvements : regressions).push(`${finding.ruleId} introduced`);
+  }
+  for (const change of delta.scaleChanges ?? []) {
+    const label = `${change.ruleId} ${change.baselineOccurrences} -> ${change.candidateOccurrences}`;
+    if (change.direction === 'improved') improvements.push(label);
+    else if (change.direction === 'regressed') regressions.push(label);
+  }
+  if (improvements.length === 0 && regressions.length === 0) {
+    return {
+      verdict: 'unchanged',
+      reason:
+        baselineFindings.length === 0 && candidateFindings.length === 0
+          ? 'neither scan reported a finding'
+          : 'no finding was resolved, introduced or scaled',
+    };
+  }
+  if (improvements.length > 0 && regressions.length > 0) {
+    return {
+      verdict: 'mixed',
+      reason: `${improvements.join('; ')}; ${regressions.join('; ')}`,
+    };
+  }
+  if (regressions.length > 0) {
+    return { verdict: 'regressed', reason: regressions.join('; ') };
+  }
+  return { verdict: 'improved', reason: improvements.join('; ') };
+};
+
+/**
+ * Metrics decide when they can. Findings decide when metrics cannot.
+ *
+ * A scan-to-scan comparison has no run metrics, and that used to report `insufficient_evidence` even when
+ * the finding list had clearly moved. Round 3 of the agent comparison measured that hole: a binary
+ * `finding_resolved` failure was identical for a scale-down, a no-op and a scale-up of the same grouped
+ * finding. Finding judgement is what separates those three.
+ *
+ * When metrics already reached improved, regressed or mixed, that answer stands: task success and sample
+ * floors are the stronger claim. An `unchanged` metric verdict still yields to findings, because a static
+ * improvement that left run metrics alone is still an improvement.
+ */
+const decideVerdict = (input: {
+  readonly metricDeltas: readonly MetricDelta[];
+  readonly baselineFindings?: readonly Finding[];
+  readonly candidateFindings?: readonly Finding[];
+  readonly findingDelta?: FindingDelta;
+}): { verdict: ComparisonVerdict; reason: string } => {
+  const fromMetrics = verdictFromMetrics(input.metricDeltas);
+  const findingsReady =
+    input.baselineFindings !== undefined &&
+    input.candidateFindings !== undefined &&
+    input.findingDelta !== undefined;
+  if (fromMetrics !== undefined && fromMetrics.verdict !== 'unchanged') return fromMetrics;
+  if (findingsReady) {
+    return verdictFromFindings(
+      input.baselineFindings as readonly Finding[],
+      input.candidateFindings as readonly Finding[],
+      input.findingDelta as FindingDelta,
+    );
+  }
+  if (fromMetrics !== undefined) return fromMetrics;
+  return {
+    verdict: 'insufficient_evidence',
+    reason:
+      input.metricDeltas.length === 0
+        ? 'neither side carries a value for any metric, and no findings were compared'
+        : `no metric produced a supportable direction: ${input.metricDeltas.find((delta) => delta.direction === 'indeterminate')?.caveat ?? 'sample sizes were too small'}`,
   };
 };
 
@@ -426,7 +587,24 @@ export const compare = (input: CompareInput): Comparison => {
     .filter((delta): delta is MetricDelta => delta !== undefined)
     .filter((delta) => delta.baselineSamples > 0 || delta.candidateSamples > 0);
 
-  const decided = verdictFrom(metricDeltas);
+  const graphDelta =
+    input.baselineGraph !== undefined && input.candidateGraph !== undefined
+      ? diffGraphs(input.baselineGraph, input.candidateGraph)
+      : undefined;
+
+  const findingDelta =
+    input.baselineFindings !== undefined && input.candidateFindings !== undefined
+      ? diffFindings(input.baselineFindings, input.candidateFindings)
+      : undefined;
+
+  const decided = decideVerdict({
+    metricDeltas,
+    ...(input.baselineFindings === undefined ? {} : { baselineFindings: input.baselineFindings }),
+    ...(input.candidateFindings === undefined
+      ? {}
+      : { candidateFindings: input.candidateFindings }),
+    ...(findingDelta === undefined ? {} : { findingDelta }),
+  });
 
   const unmeasured =
     input.baselineRuns.filter(runMeasuredNothing).length +
@@ -457,38 +635,6 @@ export const compare = (input: CompareInput): Comparison => {
   ) {
     limitations.push('every metric was indeterminate, so this comparison supports no conclusion');
   }
-
-  const graphDelta =
-    input.baselineGraph !== undefined && input.candidateGraph !== undefined
-      ? diffGraphs(input.baselineGraph, input.candidateGraph)
-      : undefined;
-
-  const findingDelta =
-    input.baselineFindings !== undefined && input.candidateFindings !== undefined
-      ? {
-          resolved: input.baselineFindings
-            .filter(
-              (finding) =>
-                !input.candidateFindings?.some((candidate) =>
-                  findingsShareIdentity(finding, candidate),
-                ),
-            )
-            .map((finding) => finding.id),
-          introduced: input.candidateFindings
-            .filter(
-              (finding) =>
-                !input.baselineFindings?.some((baseline) =>
-                  findingsShareIdentity(baseline, finding),
-                ),
-            )
-            .map((finding) => finding.id),
-          unchanged: input.candidateFindings
-            .filter((finding) =>
-              input.baselineFindings?.some((baseline) => findingsShareIdentity(baseline, finding)),
-            )
-            .map((finding) => finding.id),
-        }
-      : undefined;
 
   return {
     schemaVersion: 1,

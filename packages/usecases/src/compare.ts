@@ -11,7 +11,7 @@ import { resolveRevision } from '@orchescope/workspace';
  * says out loud:
  *
  *  - a run identifier, or `latest`, compares measured runs and supports metric claims;
- *  - a scan identifier compares declared graphs and findings, and supports no metric claim;
+ *  - a scan identifier, or `latest-scan`, compares declared graphs and findings, and supports no metric claim;
  *  - a git reference resolves to a commit and compares the scans recorded at those commits, without executing
  *    anything, because running code from another revision is a decision for the operator rather than a side
  *    effect of asking for a comparison.
@@ -105,6 +105,30 @@ const sideFromRun = (
 };
 
 const resolveSide = (workspace: Workspace, reference: string, label: string): Resolved => {
+  if (reference === 'latest-scan') {
+    const latest = workspace.store.latestScan(workspace.projectId);
+    if (latest === undefined) {
+      throw new OrchescopeError(
+        'NOT_FOUND',
+        'No scan is stored, so "latest-scan" cannot be resolved.',
+        {
+          remediation: 'Record a scan with orchescope audit first.',
+        },
+      );
+    }
+    return {
+      side: {
+        kind: 'scan',
+        reference: latest.scanId,
+        label: `${label} (${latest.scanId})`,
+        runIds: [],
+        scanId: latest.scanId,
+      },
+      runs: [],
+      scanId: latest.scanId,
+    };
+  }
+
   if (reference === 'latest') {
     const summaries = workspace.store.listRuns({ projectId: workspace.projectId, limit: 10 });
     const runs = summaries

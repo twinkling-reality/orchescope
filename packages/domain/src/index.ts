@@ -15,6 +15,7 @@ export {
 export { canonicalJson, type JsonValue, stableJson } from './canonical-json.ts';
 export { type Clock, fixedClock, formatTimestamp } from './clock.ts';
 export { agree, formatCount } from './counting.ts';
+export { auditFingerprint } from './audit-fingerprint.ts';
 export { partOfDeclaredTopology } from './declared-topology.ts';
 export {
   type CostEstimate,

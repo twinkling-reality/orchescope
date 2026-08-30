@@ -8,6 +8,7 @@ export {
   compare,
   compareMetric,
   DEFAULT_COMPARED_METRICS,
+  diffFindings,
   metricsForGoal,
   type MetricSample,
   samplesFromRuns,

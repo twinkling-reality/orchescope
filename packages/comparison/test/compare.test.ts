@@ -602,3 +602,102 @@ describe('compare, the conditions each side ran under', () => {
     );
   });
 });
+
+/**
+ * Scan-to-scan finding judgement: the Round 3 hole.
+ *
+ * Binary `finding_resolved` treated a scale-down, a no-op and a scale-up of the same grouped finding as
+ * the same failure. With no run metrics, findings must decide improved / unchanged / regressed.
+ */
+describe('compare, finding scale decides when metrics cannot', () => {
+  const scanSide = (reference: string): ComparisonSide => ({
+    kind: 'scan',
+    reference,
+    label: reference,
+    runIds: [],
+    scanId: reference,
+  });
+
+  const grouped = (id: string, occurrences: number) =>
+    ({
+      id,
+      ruleId: 'model-call-without-timeout',
+      polarity: 'risk',
+      severity: 'medium',
+      components: ['model:shared'],
+      edges: [],
+      metrics: [
+        {
+          name: 'occurrences',
+          value: occurrences,
+          unit: 'occurrence',
+          sampleSize: occurrences,
+          basis: 'discovered',
+        },
+      ],
+      metadata: {},
+    }) as never;
+
+  it('calls a scale-down improved, equal scale unchanged, and a scale-up regressed', () => {
+    const improve = compare({
+      baseline: scanSide('scan_baseline'),
+      candidate: scanSide('scan_improve'),
+      baselineRuns: [],
+      candidateRuns: [],
+      baselineFindings: [grouped('OSC-BASE-0001', 6)],
+      candidateFindings: [grouped('OSC-CAND-0004', 4)],
+      now: NOW,
+    });
+    assert.equal(improve.verdict, 'improved');
+    assert.equal(improve.findingDelta?.scaleChanges?.[0]?.direction, 'improved');
+
+    const noop = compare({
+      baseline: scanSide('scan_baseline'),
+      candidate: scanSide('scan_noop'),
+      baselineRuns: [],
+      candidateRuns: [],
+      baselineFindings: [grouped('OSC-BASE-0001', 6)],
+      candidateFindings: [grouped('OSC-CAND-0006', 6)],
+      now: NOW,
+    });
+    assert.equal(noop.verdict, 'unchanged');
+
+    const regress = compare({
+      baseline: scanSide('scan_baseline'),
+      candidate: scanSide('scan_regress'),
+      baselineRuns: [],
+      candidateRuns: [],
+      baselineFindings: [grouped('OSC-BASE-0001', 6)],
+      candidateFindings: [grouped('OSC-CAND-0007', 7)],
+      now: NOW,
+    });
+    assert.equal(regress.verdict, 'regressed');
+    assert.equal(regress.findingDelta?.scaleChanges?.[0]?.direction, 'regressed');
+  });
+
+  it('calls an introduced risk a regression even when nothing was resolved', () => {
+    const result = compare({
+      baseline: scanSide('scan_baseline'),
+      candidate: scanSide('scan_worse'),
+      baselineRuns: [],
+      candidateRuns: [],
+      baselineFindings: [grouped('OSC-BASE-0001', 1)],
+      candidateFindings: [
+        grouped('OSC-CAND-0001', 1),
+        {
+          id: 'OSC-NEW-0002',
+          ruleId: 'prompt-injection-boundary',
+          polarity: 'risk',
+          severity: 'medium',
+          components: ['tool:add'],
+          edges: [],
+          metrics: [],
+          metadata: {},
+        } as never,
+      ],
+      now: NOW,
+    });
+    assert.equal(result.verdict, 'regressed');
+    assert.deepEqual(result.findingDelta?.introduced, ['OSC-NEW-0002']);
+  });
+});

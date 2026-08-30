@@ -1263,7 +1263,11 @@ describe('the fix offered for a model call with no timeout', () => {
 
   it('names the client when there is one to configure', () => {
     const recommendation = stepsFor({});
-    assert.ok(recommendation?.steps.some((step) => /Set it at the client/.test(step)));
+    assert.ok(
+      recommendation?.steps.some((step) =>
+        /Set it on the client or call that produces the invokes_model edge/.test(step),
+      ),
+    );
   });
 
   it('falls to the signal when a stored scan names no language', () => {

@@ -808,11 +808,28 @@ const validateImprovementGoal = (
     ...(comparison === undefined ? {} : { comparison }),
   });
   return {
-    text: `${outcome.goal.id}: ${outcome.validation.summary}`,
-    digest: outcome.validation.outcomes.map(criterionDigest),
+    text:
+      outcome.verdict === undefined
+        ? `${outcome.goal.id}: ${outcome.validation.summary}`
+        : `${outcome.goal.id}: ${outcome.verdict.replaceAll('_', ' ')} — ${outcome.validation.summary}`,
+    digest: [
+      ...(outcome.verdict === undefined
+        ? []
+        : [`verdict ${outcome.verdict}: ${outcome.verdictReason ?? ''}`]),
+      ...outcome.validation.outcomes.map(criterionDigest),
+    ],
     data: {
       validated: outcome.validation.validated,
       summary: outcome.validation.summary,
+      ...(outcome.verdict === undefined
+        ? {}
+        : { verdict: outcome.verdict, verdictReason: outcome.verdictReason }),
+      ...(outcome.comparison === undefined
+        ? {}
+        : {
+            comparisonId: outcome.comparison.id,
+            findingDelta: outcome.comparison.findingDelta,
+          }),
       outcomes: outcome.validation.outcomes.map((entry) => ({
         criterion: entry.criterion.id,
         statement: entry.criterion.statement,

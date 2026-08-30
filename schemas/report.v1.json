@@ -1714,6 +1714,59 @@
                 },
                 "type": "array"
               },
+              "scaleChanges": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "baselineId": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "baselineOccurrences": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "candidateId": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "candidateOccurrences": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "direction": {
+                      "anyOf": [
+                        {
+                          "const": "improved",
+                          "type": "string"
+                        },
+                        {
+                          "const": "regressed",
+                          "type": "string"
+                        },
+                        {
+                          "const": "unchanged",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "ruleId": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ruleId",
+                    "baselineId",
+                    "candidateId",
+                    "baselineOccurrences",
+                    "candidateOccurrences",
+                    "direction"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "unchanged": {
                 "items": {
                   "minLength": 1,
@@ -4330,6 +4383,10 @@
                   "type": "string"
                 },
                 "type": "array"
+              },
+              "baselineScanId": {
+                "minLength": 1,
+                "type": "string"
               },
               "commands": {
                 "items": {

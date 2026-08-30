@@ -44,6 +44,7 @@ const create = (input: {
   readonly evidence?: readonly Evidence[];
   readonly scenarioIds?: readonly string[];
   readonly baseline?: CreateGoalInput['baseline'];
+  readonly baselineScanId?: string;
   readonly exercisingRunIds?: readonly string[];
   readonly repetitions?: number;
 }) =>
@@ -55,6 +56,7 @@ const create = (input: {
     evidence: input.evidence ?? [],
     validationScenarioIds: input.scenarioIds ?? [],
     ...(input.baseline === undefined ? {} : { baseline: input.baseline }),
+    ...(input.baselineScanId === undefined ? {} : { baselineScanId: input.baselineScanId }),
     exercisingRunIds: input.exercisingRunIds ?? input.baseline?.runIds ?? [],
     repetitions: input.repetitions ?? 3,
   });
@@ -298,12 +300,28 @@ describe('createGoal, the criteria it is willing to be judged on', () => {
       'a criterion was stated that only a self comparison could satisfy',
     );
     assert.equal(
-      goal.validation.commands.some((entry) => entry.command.includes('compare')),
+      goal.validation.commands.some(
+        (entry) => entry.command.includes('compare') && entry.command.includes('latest'),
+      ),
       false,
-      'the plan prescribed a comparison whose candidate would be its own baseline',
+      'the plan prescribed a run comparison whose candidate would be its own baseline',
     );
     // The document says which half is missing rather than leaving a reader to notice the absence.
     assert.match(renderGoalMarkdown(goal), /which this plan does not rerun/);
+  });
+
+  it('prescribes a scan comparison when a baseline scan is frozen and no run comparison is reachable', () => {
+    const goal = create({ baselineScanId: 'scan_aaaaaaaaaaaaaaaa' });
+    const compare = goal.validation.commands.find((entry) => entry.command.includes('compare'));
+    assert.deepEqual(compare?.command, [
+      'orchescope',
+      'compare',
+      'scan_aaaaaaaaaaaaaaaa',
+      'latest-scan',
+      '--goal',
+      goal.id,
+    ]);
+    assert.equal(goal.validation.baselineScanId, 'scan_aaaaaaaaaaaaaaaa');
   });
 
   /* The two go together: a criterion is issued exactly when its deciding command is. */

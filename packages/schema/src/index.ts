@@ -28,6 +28,7 @@ export {
   ComparisonSideKind,
   ComparisonVerdict,
   FindingDelta,
+  FindingScaleChange,
   GraphDelta,
   MetricDelta,
 } from './comparison.ts';

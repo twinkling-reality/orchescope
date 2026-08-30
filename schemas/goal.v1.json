@@ -497,6 +497,10 @@
           },
           "type": "array"
         },
+        "baselineScanId": {
+          "minLength": 1,
+          "type": "string"
+        },
         "commands": {
           "items": {
             "additionalProperties": false,

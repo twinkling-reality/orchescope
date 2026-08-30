@@ -109,8 +109,20 @@ export const ValidationPlan = Type.Object(
      * Either no comparable pair exists, or one does and a term of it still cannot be decided: a criterion
      * about a quantile needs the samples that quantile needs, and a baseline is a recording that cannot be
      * re-run into existence. A reader needs the same thing in both cases, so one field carries both.
+     *
+     * Absence of a run comparison is not absence of every comparison: when `baselineScanId` is set the plan
+     * still prescribes a scan-to-scan compare that judges findings, which is the static half of the same
+     * work twice.
      */
     comparisonUnavailable: Type.Optional(NonEmptyString()),
+    /**
+     * The scan the finding was cut from, frozen so a later audit can be compared against the same work.
+     *
+     * Present whenever a scan produced the finding. The plan names it on `orchescope compare` with
+     * `latest-scan` as the candidate, so a static-only goal still has a three-way verdict even when no
+     * scenario run can serve as a metric baseline.
+     */
+    baselineScanId: Type.Optional(NonEmptyString()),
     baselineBenchmarkId: Type.Optional(NonEmptyString()),
     commands: Type.Array(
       Type.Object(

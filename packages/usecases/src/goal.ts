@@ -21,7 +21,7 @@ import type {
   Timestamp,
 } from '@orchescope/schema';
 import type { Workspace } from '@orchescope/workspace';
-
+import { compareUseCase } from './compare.ts';
 /**
  * The goal use case: turn a finding into a bounded goal, and later judge whether the change satisfied it.
  *
@@ -322,6 +322,7 @@ export const createGoalFromFinding = (request: CreateGoalRequest): CreateGoalRes
     evidence,
     validationScenarioIds: chosen.scenarioIds,
     exercisingRunIds: chosen.exercisingRunIds,
+    baselineScanId: scanId,
     ...(chosen.baseline === undefined ? {} : { baseline: chosen.baseline }),
     ...(chosen.comparisonUnavailable === undefined
       ? {}
@@ -362,26 +363,53 @@ export type ValidateGoalResult = {
   readonly goal: Goal;
   readonly validation: GoalValidation;
   /**
-   * The comparison that decided the metric criteria, when one did.
+   * The comparison that decided the metric criteria and the finding verdict, when one did.
    *
    * The caller resolves this silently when it is not passed, so without it a reader is told a goal was
    * refused and never told what refused it. A verdict whose evidence cannot be named is not something a
    * person can check.
    */
   readonly comparison?: Comparison;
+  /**
+   * The three-way (or five-way) answer the judge exists to give.
+   *
+   * Distinct from `validation.validated`, which is whether every acceptance criterion is satisfied. A
+   * change that reduces a grouped finding from six occurrences to four fails `finding_resolved` and
+   * still improves the system; the no-op and the regression also fail that criterion. Agents and the
+   * release gate score this field.
+   */
+  readonly verdict?: Comparison['verdict'];
+  readonly verdictReason?: string;
 };
 
 /**
- * The comparison that may decide this goal's metric criteria.
+ * The comparison that may decide this goal's metric criteria and its finding verdict.
  *
  * `compare --goal` is how a reader states which goal a comparison is evidence for, and it is the only
  * reason that link is recorded, so the judgement reads it back rather than asking for the identifier
  * again on the next command. Only a comparison made after the goal is eligible: an earlier one measured
  * the code the goal exists to change, and letting it decide a criterion would validate the change
  * against its own baseline, which is the mistake `scenarioPassesOutcome` already refuses to make.
+ *
+ * When the plan froze a baseline scan and nobody has run the prescribed compare yet, the judgement
+ * produces that scan-to-scan comparison itself. The plan still names the command; this is the same
+ * document an operator who typed it would get, so a validate that follows an audit is not silent for
+ * want of a middle step.
  */
-const comparisonForGoal = (workspace: Workspace, goal: Goal): Comparison | undefined =>
-  workspace.store.latestComparisonForGoal(goal.id, goal.createdAt);
+const comparisonForGoal = (workspace: Workspace, goal: Goal): Comparison | undefined => {
+  const recorded = workspace.store.latestComparisonForGoal(goal.id, goal.createdAt);
+  if (recorded !== undefined) return recorded;
+  const baselineScanId = goal.validation.baselineScanId;
+  if (baselineScanId === undefined) return undefined;
+  const latest = workspace.store.latestScan(workspace.projectId);
+  if (latest === undefined || latest.scanId === baselineScanId) return undefined;
+  return compareUseCase({
+    workspace,
+    baseline: baselineScanId,
+    candidate: 'latest-scan',
+    goalId: goal.id,
+  });
+};
 
 /**
  * Judges one goal against what the store holds.
@@ -528,5 +556,15 @@ export const validateGoalOutcome = (request: ValidateGoalRequest): ValidateGoalR
           ],
   };
   workspace.store.saveGoal(updated, workspace.projectId);
-  return { goal: updated, validation, ...(comparison === undefined ? {} : { comparison }) };
+  return {
+    goal: updated,
+    validation,
+    ...(comparison === undefined
+      ? {}
+      : {
+          comparison,
+          verdict: comparison.verdict,
+          verdictReason: comparison.verdictReason,
+        }),
+  };
 };

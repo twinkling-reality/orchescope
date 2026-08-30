@@ -99,11 +99,31 @@ export const GraphDelta = Type.Object(
 );
 export type GraphDelta = Static<typeof GraphDelta>;
 
+export const FindingScaleChange = Type.Object(
+  {
+    ruleId: NonEmptyString(),
+    baselineId: NonEmptyString(),
+    candidateId: NonEmptyString(),
+    baselineOccurrences: NonNegativeInt,
+    candidateOccurrences: NonNegativeInt,
+    direction: literals(['improved', 'regressed', 'unchanged'] as const),
+  },
+  { additionalProperties: false },
+);
+export type FindingScaleChange = Static<typeof FindingScaleChange>;
+
 export const FindingDelta = Type.Object(
   {
     resolved: Type.Array(NonEmptyString()),
     introduced: Type.Array(NonEmptyString()),
     unchanged: Type.Array(NonEmptyString()),
+    /**
+     * Shared identities whose occurrence scale or severity moved.
+     *
+     * Identity alone collapses a grouped finding whose title count moved (6→4 vs 6→6 vs 6→7) into
+     * "unchanged". Scale is what lets a static scan comparison distinguish those three.
+     */
+    scaleChanges: Type.Optional(Type.Array(FindingScaleChange)),
   },
   { additionalProperties: false },
 );

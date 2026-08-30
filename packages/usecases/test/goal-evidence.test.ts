@@ -242,9 +242,17 @@ describe('the runs a goal is judged against', () => {
     const goal = double.savedGoals[0] as Goal;
     assert.deepEqual(goal.validation.scenarioIds, []);
     assert.equal(
-      goal.validation.commands.some((entry) => entry.command[1] === 'compare'),
+      goal.validation.commands.some(
+        (entry) =>
+          entry.command[1] === 'compare' &&
+          entry.command.some((part) => typeof part === 'string' && part.startsWith('run_')),
+      ),
       false,
-      'the plan prescribed a comparison whose candidate nothing would produce',
+      'the plan prescribed a run comparison whose candidate nothing would produce',
+    );
+    assert.ok(
+      goal.validation.commands.some((entry) => entry.command.includes('latest-scan')),
+      'a scan comparison is still prescribed so findings can be judged',
     );
   });
 
