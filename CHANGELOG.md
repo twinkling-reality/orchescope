@@ -2,28 +2,77 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
-## Unreleased
+## 0.10.0
 
-Not published. What is here is the protocol recognition work and the record that reframes what this build
-claims. Read [ADR 0015](docs/architecture/adr/0015-the-asymmetric-invariant.md) first: the invariant this
-repository held, that its framework-blind layers are sufficient for correctness and framework adapters add
-resolution only, was measured false three times over the fifty six pinned repositories and is restated as an
-asymmetric one. What a run exercised is recognised without naming any framework. What a repository declares
-is recognised in detail only where a reader exists, and that set is a catalogue that decays.
+Release candidate dated 2026-08-30. The publication path chosen for this version is the local one documented in
+`docs/guides/release.md`: publish the exact blind-evaluated archive from `release/stage` with
+`npm publish --no-provenance`. This release therefore carries no registry attestation. The repository has no publish
+workflow or configured OIDC registry identity, so claiming provenance from the existing package-only workflow would
+be false.
 
-**Two published schema documents were removed.** `schemas/manifest.v1.json` and `schemas/manifest.v2.json`
-were neither emitted by `pnpm schemas` nor compared by its `--check`, and both published a `ComponentKind`
-enum omitting `workflow` and `workflow_step` while the live `ManifestV1` and `ManifestV2` readers accept
-both. An external author validating a version 1 manifest against the published file was told a kind was
-invalid that this build accepts. No document version moved and no reader changed: `MIN_READABLE_VERSIONS.manifest`
-is still 1, and the retained versions are exercised by `ManifestV1` and `ManifestV2` in
-`packages/schema/src/manifest.ts` rather than by a file nothing generated. `pnpm schemas --check` now fails
-on a schema document in that directory that nothing emits, which is the check that would have caught it.
+### The judge is the product claim
 
-**The corpus reports a recognition name that no pinned repository carries.** On its first run it found nine,
-including two the Model Context Protocol reader had gated on for as long as they had been wrong. A name is
-reported and never deleted automatically: fifty six repositories are not the world, and an unmatched name
-may be legitimate. What it may not be is unnoticed.
+`orchescope goal create` now freezes the baseline scan for a static goal and prints a plan that audits the changed
+repository, compares that baseline with `latest-scan`, and validates the goal against that exact comparison. The
+comparison document and `goal validate` surface the same verdict through the terminal, JSON and MCP:
+`improved`, `unchanged`, `regressed`, `mixed` or `insufficient_evidence`.
+
+When run metrics do not decide the answer, the comparison judges semantic finding resolution, introduction, severity
+and occurrence scale. A smaller unresolved risk can therefore be `improved`, an unchanged finding population is
+`unchanged`, and a larger or newly introduced risk is `regressed`; the boolean `validated` remains the separate answer
+to whether every acceptance criterion passed. Goal comparisons select repetitions of the same recorded work, named
+quantile criteria use their own sample floor, and differing scenario, variant or fault conditions are reported rather
+than silently treated as comparable.
+
+The commands recorded in [the judge measurement](docs/research/the-judge-measurement.md) produced the required
+three-way verdicts with `orchescope goal validate --json` on each measured third-party subject. That closes the product
+bet only for the judge: whether the same work improved, stayed unchanged or regressed. The earlier
+[Orchescope-against-an-agent measurement](docs/research/orchescope-against-an-agent.md) still says to abandon
+competition with a coding agent on static-audit breadth. This release does not turn the judge result into a claim that
+Orchescope finds more static issues than an agent.
+
+Raw audit JSON is not claimed to be byte-identical. `auditFingerprint` removes documented volatile timings and fresh
+display identifiers before reproducibility comparisons; semantic finding identity, scale, evidence population and the
+facts used by the judge remain in the fingerprint.
+
+### Changes that can move components, findings or coverage
+
+- Framework-blind model calls no longer turn their enclosing function into a hand-written agent. They produce an
+  inferred entry point, retain a model only when source settles it, and exclude embedding calls from generation. This
+  can remove false agent components, change relation endpoints and move downstream topology and policy findings.
+- Imported constructions from unclaimed distributions are refused from source-shaped construction evidence rather
+  than a small exact argument-name list. This can add source-located coverage gaps and prevent an unsupported
+  construction from disappearing behind “no agent system detected”; it does not invent an agent from `Agent`, model or
+  tool-shaped names.
+- Model Context Protocol servers are recognised from protocol-shaped server construction, capability registration,
+  handshake and transport evidence rather than from a publisher allowlist. Dotted imports, local re-exports and exact
+  package ownership are followed before adapter applicability is decided. This can add or remove MCP server/tool
+  components, relations and findings where the former name gates disagreed with source.
+- LangChain prompt-template and legacy-agent submodules already understood by their readers are now claimed by those
+  readers. Named object arguments and locally retained provider clients are followed further. These changes can add
+  exact prompts, calls and bounded refusals, while wrong-provider, local, type-only and unsupported shapes remain
+  excluded.
+- Runtime instrumentation records bounded repository source frames and reconciliation prefers that source identity over
+  a broad provider catalogue. This can move declared-versus-exercised gaps and findings when a runtime call can now be
+  joined to its exact repository declaration; a missing frame remains an explicit boundary.
+- Findings whose remediation requires a repository scenario now declare that requirement on the rule. Goal creation
+  composes the matching project scenario or refuses with the missing requirement, instead of printing a validation
+  path the repository cannot run. This moves goal eligibility and validation plans, not the underlying risk count.
+
+The acceptance repositories used after `0.9.2` are pinned as regression inputs at their exact revisions. The
+expectations retain both corrected outputs and honest completed-zero or bounded-refusal cases; those lineages are not
+blind holdouts for this release.
+
+### Schema and corpus integrity
+
+`schemas/manifest.v1.json` and `schemas/manifest.v2.json` were removed. They were neither emitted by `pnpm schemas` nor
+compared by `pnpm schemas --check`, and their `ComponentKind` enum rejected `workflow` and `workflow_step` even though
+the live `ManifestV1` and `ManifestV2` readers accept both. No manifest document version or reader changed; generated
+schema verification now rejects a document in `schemas/` that no generator owns.
+
+The first `pnpm corpus` run of the recognition-name check reported nine names that no pinned repository carried,
+including two stale Model Context Protocol gates. The check reports and retains an unmatched name for review rather
+than deleting it automatically: the corpus is a measured sample, not a claim about every repository.
 
 ## 0.9.2
 
