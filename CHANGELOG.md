@@ -4,11 +4,23 @@ Notable changes per released version. Nothing here is generated; a release is a 
 
 ## 0.10.0
 
-Release candidate dated 2026-08-30. The publication path chosen for this version is the local one documented in
-`docs/guides/release.md`: publish the exact blind-evaluated archive from `release/stage` with
+Released 2026-08-30 from npm as `orchescope@0.10.0`. The publication path was the local one documented in
+`docs/guides/release.md`: the exact blind-evaluated archive from `release/stage` was published with
 `npm publish --no-provenance`. This release therefore carries no registry attestation. The repository has no publish
 workflow or configured OIDC registry identity, so claiming provenance from the existing package-only workflow would
 be false.
+
+Downloading the published package with `npm pack orchescope@0.10.0` and comparing it with the archive produced by
+`pnpm package` confirms that the registry serves the exact evaluated bytes:
+
+```
+sha256  041420b8a0a4e7762d26f92977c85694c7309aab86e7ef4029de97890cbe813f
+```
+
+npm reported its usual `bin[orchescope]` normalization while publishing. The published and evaluated archives both
+have SHA-1 `fbc895ade13c23317abf5767c90a1609b23163e4`, and their package manifests retain the Orchescope executable.
+Installed from the registry, `npx orchescope@0.10.0 --version` and the global binary both report `0.10.0`;
+`orchescope doctor --json` reports `ok: true`, zero warnings, and both parser checks `ok`.
 
 ### The judge is the product claim
 
