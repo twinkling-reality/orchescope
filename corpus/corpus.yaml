@@ -4949,6 +4949,195 @@ repositories:
           - ruleId: observability-coverage
             severity: info
 
+  - name: trip-planner-ai-agent
+    source: git
+    url: https://github.com/senseirandystl/trip-planner-ai-agent.git
+    commit: ef29922019ad005bbaf74d2a76053b7ecb3a44c7
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive selected independently for the passing blind evaluation of candidate
+      8741bc8b. The application gives an OpenAI Responses client two concrete OpenStreetMap and Wikivoyage tools,
+      executes model-selected function calls, returns their outputs to the model, and enforces an eight-step ceiling.
+      Its Streamlit entry point turns a user's trip goal into that loop. This is a hand-written agent application,
+      not a framework-name fixture.
+
+      The passing candidate does not claim that loop as an agent. It reports the source-settled OpenAI provider and a
+      separately implemented bounded HTTP retry helper, marks the raw-client topology incomplete at the exact import,
+      and emits no absence strength. The corpus contract preserves that honest unsupported boundary together with the
+      exact three components, one retained relation and six evidence records measured from the packaged candidate.
+      The pinned tree is 89ca8093a1b5302f14295e5f434443fc1d68f2e9 with 21 tracked files and 75,315 blob bytes.
+      The root MIT LICENSE has SHA-256 7752a6a93d75903e92ef3d37901f6b77f47c158a89c878668e4aeb65d54740c7.
+      Runtime is not attempted because the target-owned path requires an OpenAI credential and a driven Streamlit
+      action; neither is substituted or fabricated.
+    acceptance:
+      expectedAgentSystemDetected: false
+      graphPopulation:
+        components: 3
+        edges: 1
+      exactIdsByKind:
+        entrypoint:
+          - entrypoint:request_json
+        external_service:
+          - external_service:unresolved-host-request_json
+        provider:
+          - provider:openai
+      absentKinds:
+        - agent
+        - agent_group
+        - model
+        - prompt
+        - tool
+        - workflow
+      absentComponentTerms:
+        - tripplanneragent
+        - search_pois
+        - retrieve_guides
+      absentEdgeKinds:
+        - calls_tool
+        - hands_off_to
+        - invokes_model
+      requiredEdges:
+        - kind: calls_service
+          from: entrypoint:request_json
+          to: external_service:unresolved-host-request_json
+          sourceFile: src/http_client.py
+          evidence:
+            - producer: adapter:effects
+              symbol: requests.request
+              sourceFile: src/http_client.py
+              startLine: 40
+              endLine: 47
+            - producer: adapter:effects
+              symbol: retry loop around requests.request
+              sourceFile: src/http_client.py
+              startLine: 38
+              endLine: 70
+      componentMetadata:
+        entrypoint:request_json:
+          inferredFrom: enclosing scope of an external effect
+        external_service:unresolved-host-request_json:
+          client: requests.request
+          urlIsDynamic: true
+        provider:openai:
+          client: OpenAI
+          compatibleClient: openai
+          providerBasis: library_default
+      componentDetails:
+        external_service:unresolved-host-request_json:
+          for: external_service
+          protocol: http
+      componentPermissions:
+        external_service:unresolved-host-request_json:
+          - kind: network
+            scope: unresolved-host:request_json
+            mode: write
+        provider:openai:
+          - kind: network
+            scope: openai
+            mode: write
+      componentEvidence:
+        entrypoint:request_json:
+          - producer: adapter:effects
+            symbol: request_json
+            sourceFile: src/http_client.py
+            startLine: 40
+            endLine: 47
+        external_service:unresolved-host-request_json:
+          - producer: adapter:effects
+            symbol: requests.request
+            sourceFile: src/http_client.py
+            startLine: 40
+            endLine: 47
+        provider:openai:
+          - producer: adapter:model-sdk
+            symbol: OpenAI
+            sourceFile: src/agent.py
+            startLine: 9
+            endLine: 9
+          - producer: adapter:model-sdk
+            symbol: OpenAI
+            sourceFile: src/agent.py
+            startLine: 109
+            endLine: 109
+      sourceCitations:
+        entrypoint:request_json:
+          - src/http_client.py
+        external_service:unresolved-host-request_json:
+          - src/http_client.py
+        provider:openai:
+          - src/agent.py
+      adapterApplicability:
+        adapter:model-sdk:
+          relevantImports: 1
+          distinctFiles: 1
+          omittedImports: 0
+          fileSample:
+            - module: openai
+              imported: OpenAI
+              sourceFile: src/agent.py
+              startLine: 9
+      adapterOutcomes:
+        adapter:model-sdk:
+          status: completed
+          componentsFound: 1
+          edgesFound: 0
+          filesInspected: 1
+        adapter:effects:
+          status: completed
+          componentsFound: 2
+          edgesFound: 2
+          filesInspected: 1
+      topology:
+        status: incomplete
+        unresolvedCount: 2
+        conditionalDestinations: 0
+        producerPopulations:
+          - adapterId: adapter:model-sdk
+            status: incomplete
+            inspectedInputs: 1
+            relationsFound: 0
+          - adapterId: adapter:effects
+            status: incomplete
+            inspectedInputs: 0
+            relationsFound: 2
+            scope: control_flow
+        requiredRefusals:
+          - kind: adapter_input
+            reason: >-
+              adapter:model-sdk recognized a raw client or wrapper but has not stated a closed topology population for
+              that producer.
+            sourceFile: src/agent.py
+            startLine: 9
+        requiredUnlocatedRefusals:
+          - kind: adapter_input
+            reason: adapter:effects did not state an inspected topology population for this applicable input.
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+        exactRisks:
+          - ruleId: observability-coverage
+            severity: info
+
+  - name: agent-trace-viewer
+    source: git
+    url: https://github.com/0xelitesystem/agent-trace-viewer.git
+    commit: 677478a73755ffbe2a9f1dea35645afda00d394c
+    kind: not_agent_system
+    why: >-
+      The exact MIT-licensed negative control selected independently for the passing blind evaluation of candidate
+      8741bc8b. Its complete executable surface is one dependency-free 401-line HTML file. It parses user-pasted
+      Anthropic, OpenAI or generic trace records, computes observed timing and token summaries, renders them, and
+      stores only the display theme. It makes no model call, selects or executes no action, launches no process, and
+      loads no executable dependency from the network.
+
+      The packaged candidate walks all four tracked files, finds no supported source file, reports zero components,
+      relations, findings, strengths and evidence, and leaves all eighteen adapters explicitly not applicable. This
+      entry is a precision ceiling for agent-adjacent trace vocabulary in an inert viewer; it is not evidence about
+      JavaScript or Python source the scanner did not inspect. The pinned tree is
+      9a71fbb6a290366db958aaf83c6ffae946c819d0 with 4 tracked files and 25,373 blob bytes. The root MIT LICENSE has
+      SHA-256 d19cd9fd264768c6777971a70e0169839675140d2abae4614b18dd93abd7bd03.
+
   - name: flask
     source: git
     url: https://github.com/pallets/flask.git

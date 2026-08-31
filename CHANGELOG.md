@@ -70,8 +70,16 @@ blind holdouts for this release.
 The first frozen `0.10.0` candidate, commit `205d1d5cf4637e1b49e0c986843a2ed2d19b49cd` with archive SHA-256
 `8fd6ebfde015ecabe2bfdc9128d06abeb102d0b54ecdbbf5db02cfd9d57f74aa`, was independently evaluated and blocked by
 that unsupported read-only claim. Its positive and negative are pinned as regressions at the exact measured
-revisions. The replacement candidate must pass the full release gates and a different unseen positive and negative
-pair before publication.
+revisions.
+
+The replacement candidate, commit `8741bc8b7d820d29a3a083875d8b87056f249bc0` with archive SHA-256
+`041420b8a0a4e7762d26f92977c85694c7309aab86e7ef4029de97890cbe813f`, passed a different independently selected
+positive and negative pair. The installed archive's positive audit covered 21 tracked paths, parsed 14/14 supported
+files, and reported 3 components, 1 relation, 1 information finding, 0 strengths and 6/6 evidence records. It did not
+claim the hand-written agent loop; two unresolved topology boundaries made that limitation explicit. The negative
+walked 4 tracked paths and reported 0 supported files, components, relations, findings, strengths and evidence, with
+all 18 adapters not applicable. Both lineages are pinned as regression inputs. Their corpus acceptance adds 66 exact
+semantic assertions and 11 injected negative shapes; it does not expand the release claim beyond the judge.
 
 ### Schema and corpus integrity
 

@@ -34,7 +34,8 @@ The [blocked a38ed43f evaluation](../research/a38ed43f-blocked-blind-evaluation.
 [passed 1642f0f6 evaluation](../research/1642f0f6-passed-blind-evaluation.md), the
 [0.9.1 acceptance holdouts](../research/0.9.1-acceptance-used-holdouts.md), and the
 [passed fdb11aa evaluation](../research/fdb11aa-passed-blind-evaluation.md), and the
-[blocked 205d1d5c evaluation](../research/205d1d5c-blocked-blind-evaluation.md) are durable records of completed
+[blocked 205d1d5c evaluation](../research/205d1d5c-blocked-blind-evaluation.md), and the
+[passed 8741bc8b evaluation](../research/8741bc8b-passed-blind-evaluation.md) are durable records of completed
 applications of this protocol. Every repository selected in a completed evaluation, and its source lineage, is
 part of a used population. Those repositories and their source lineages are permanently ineligible as blind holdouts
 at any revision. A blocked candidate can be refrozen only after a generalized correction, and every candidate requires

@@ -69,6 +69,8 @@ const passed092RecordPath = 'docs/research/fdb11aa-passed-blind-evaluation.md';
 const passed092Record = readFileSync(join(repositoryRoot, passed092RecordPath), 'utf8');
 const blocked010RecordPath = 'docs/research/205d1d5c-blocked-blind-evaluation.md';
 const blocked010Record = readFileSync(join(repositoryRoot, blocked010RecordPath), 'utf8');
+const passed010RecordPath = 'docs/research/8741bc8b-passed-blind-evaluation.md';
+const passed010Record = readFileSync(join(repositoryRoot, passed010RecordPath), 'utf8');
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
   readonly scripts: Readonly<Record<string, string>>;
 };
@@ -1273,6 +1275,70 @@ describe('the frozen pre-release blind evaluation protocol', () => {
     );
     assert.equal(
       entries.some((entry) => entry.url === 'https://github.com/Rxflex/agenttrace.git'),
+      true,
+    );
+  });
+
+  it('preserves the exact passing 0.10.0 replacement, pair and honest refusal', () => {
+    for (const fact of [
+      '8741bc8b7d820d29a3a083875d8b87056f249bc0',
+      'ba9ef0eac074002efb5e16b2cd124a3bd3e9c727',
+      '041420b8a0a4e7762d26f92977c85694c7309aab86e7ef4029de97890cbe813f',
+      'https://github.com/senseirandystl/trip-planner-ai-agent',
+      'ef29922019ad005bbaf74d2a76053b7ecb3a44c7',
+      '89ca8093a1b5302f14295e5f434443fc1d68f2e9',
+      '7752a6a93d75903e92ef3d37901f6b77f47c158a89c878668e4aeb65d54740c7',
+      'https://github.com/0xelitesystem/agent-trace-viewer',
+      '677478a73755ffbe2a9f1dea35645afda00d394c',
+      '9a71fbb6a290366db958aaf83c6ffae946c819d0',
+      'd19cd9fd264768c6777971a70e0169839675140d2abae4614b18dd93abd7bd03',
+      'e6f7a5daabfcea8e5e06c6c52eaa6fb6937e439a73f33426bac242972708738c',
+    ]) {
+      assert.ok(passed010Record.includes(fact), `0.10.0 passed record omitted ${fact}`);
+    }
+    assert.match(passed010Record, /release decision was \*\*PASS\*\*/);
+    assert.match(passed010Record, /three static-only components and one relation/);
+    assert.match(passed010Record, /Evidence coverage was 6\/6 with zero omissions/);
+    assert.match(passed010Record, /topology `incomplete` with two unresolved boundaries/);
+    assert.match(
+      passed010Record,
+      /zero components,\s+relations, findings, strengths, metrics and evidence records/,
+    );
+    assert.match(passed010Record, /All 18 adapters were explicitly `not_applicable`/);
+    assert.match(passed010Record, /No target runtime was executed/);
+    assert.ok(passed010Record.includes('`OPENAI_API_KEY`'), '0.10.0 passed record omitted key');
+    assert.match(
+      passed010Record,
+      /Credentials, model output,\s+external side effects and substitute execution were not guessed or fabricated/,
+    );
+    assert.doesNotMatch(
+      passed010Record,
+      /\/Users\/|\/tmp\/|orchescope-blind-|\brun_[0-9a-f]{8}|\bev_[0-9a-f]{8}|traceId|spanId/,
+    );
+  });
+
+  it('promotes both passing 0.10.0 lineages and retires them from blind selection', () => {
+    assert.match(
+      passed010Record,
+      /Both selected repositories and their source lineages are permanently ineligible as blind holdouts at any revision/,
+    );
+    assert.match(passed010Record, /different unseen positive and negative pair/);
+    assert.ok(protocol.includes('../research/8741bc8b-passed-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/8741bc8b-passed-blind-evaluation.md'));
+
+    const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
+    assert.equal(entries.filter((entry) => entry.name === 'trip-planner-ai-agent').length, 1);
+    assert.equal(entries.filter((entry) => entry.name === 'agent-trace-viewer').length, 1);
+    assert.equal(
+      entries.some(
+        (entry) => entry.url === 'https://github.com/senseirandystl/trip-planner-ai-agent.git',
+      ),
+      true,
+    );
+    assert.equal(
+      entries.some(
+        (entry) => entry.url === 'https://github.com/0xelitesystem/agent-trace-viewer.git',
+      ),
       true,
     );
   });

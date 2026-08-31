@@ -137,6 +137,11 @@ first frozen 0.10.0 artifact. Its positive is pinned as the exact LangGraph work
 negative is pinned as a distinct precision regression because a caller-controlled fetch init was called read only
 despite a source-visible POST caller. Neither lineage can be reused as an unseen holdout.
 
+The [passed 8741bc8b evaluation](../research/8741bc8b-passed-blind-evaluation.md) records the completed passing gate for
+the replacement 0.10.0 artifact. Its positive is pinned as an exact provider, external-effect, bounded-retry and
+honest raw-client-topology refusal; its negative is pinned as a distinct zero-output precision ceiling for an inert
+trace viewer. Neither lineage can be reused as an unseen holdout.
+
 `pnpm package` writes `release/release-summary.json`. Read it rather than trusting the exit code:
 
 | Field | What it has to say |
