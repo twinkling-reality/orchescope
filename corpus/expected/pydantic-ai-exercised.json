@@ -61,7 +61,7 @@
       "status": "not_applicable"
     },
     "adapter:mcp": {
-      "componentsFound": 36,
+      "componentsFound": 35,
       "edgesFound": 31,
       "filesInspected": 3,
       "status": "completed"
@@ -112,19 +112,19 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 485,
+      "agent": 484,
       "database": 1,
-      "entrypoint": 11,
+      "entrypoint": 12,
       "external_service": 9,
-      "mcp_server": 5,
+      "mcp_server": 4,
       "model": 21,
       "prompt": 28,
       "provider": 8,
       "retrieval": 1,
       "tool": 501
     },
-    "declaredInTest": 948,
-    "total": 1070
+    "declaredInTest": 947,
+    "total": 1069
   },
   "discardedRelations": [],
   "files": {
@@ -236,5 +236,18 @@
     ],
     "runs": 1,
     "spans": 4
-  }
+  },
+  "unclaimedImportedConstructions": [
+    "cohere.ToolChatMessageV2 is constructed at pydantic_ai_slim/pydantic_ai/models/cohere.py:376 and no adapter claims that distribution",
+    "cohere.ToolChatMessageV2 is constructed at pydantic_ai_slim/pydantic_ai/models/cohere.py:385 and no adapter claims that distribution",
+    "further unclaimed imported constructions were found and are omitted from this sample",
+    "groq.chat is constructed at pydantic_ai_slim/pydantic_ai/models/groq.py:619 and no adapter claims that distribution",
+    "groq.chat is constructed at pydantic_ai_slim/pydantic_ai/models/groq.py:628 and no adapter claims that distribution",
+    "huggingface_hub.ChatCompletionInputMessage is constructed at pydantic_ai_slim/pydantic_ai/models/huggingface.py:482 and no adapter claims that distribution",
+    "huggingface_hub.ChatCompletionOutputMessage is constructed at pydantic_ai_slim/pydantic_ai/models/huggingface.py:469 and no adapter claims that distribution",
+    "mistralai.AssistantMessage is constructed at pydantic_ai_slim/pydantic_ai/models/mistral.py:643 and no adapter claims that distribution",
+    "mistralai.ToolMessage is constructed at pydantic_ai_slim/pydantic_ai/models/mistral.py:587 and no adapter claims that distribution",
+    "mistralai.ToolMessage is constructed at pydantic_ai_slim/pydantic_ai/models/mistral.py:595 and no adapter claims that distribution",
+    "pydantic_ai_harness.DynamicWorkflow is constructed at .github/scripts/pydantic_ai_gh_aw_shim/cli.py:209 and no adapter claims that distribution"
+  ]
 }

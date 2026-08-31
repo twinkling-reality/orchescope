@@ -112,9 +112,9 @@
   "agentSystemDetected": true,
   "components": {
     "byKind": {
-      "agent": 295,
+      "agent": 294,
       "database": 1,
-      "entrypoint": 12,
+      "entrypoint": 13,
       "external_service": 10,
       "mcp_server": 16,
       "model": 7,
@@ -178,7 +178,7 @@
       "Triage Agent"
     ],
     "contradictions": 0,
-    "declaredComponents": 412,
+    "declaredComponents": 411,
     "declaredEdges": 587,
     "duplicateSideEffects": 0,
     "exercisedComponents": 2,
@@ -235,5 +235,14 @@
     ],
     "runs": 1,
     "spans": 5
-  }
+  },
+  "unclaimedImportedConstructions": [
+    "@openai/agents-extensions.aisdk is constructed at integration-tests/bun/aisdk.ts:27 and no adapter claims that distribution",
+    "@openai/agents-extensions.aisdk is constructed at integration-tests/cloudflare-workers/worker/src/index.ts:54 and no adapter claims that distribution",
+    "@openai/agents-extensions.aisdk is constructed at integration-tests/deno/aisdk.ts:21 and no adapter claims that distribution",
+    "@openai/agents-openai.OpenAIProvider is constructed at packages/agents/src/index.ts:6 and no adapter claims that distribution",
+    "@openai/agents-realtime.RealtimeAgent is constructed at examples/docs/readme/readme-voice-agent.ts:13 and no adapter claims that distribution",
+    "@openai/agents-realtime.RealtimeAgent is constructed at examples/realtime-demo/src/main.ts:25 and no adapter claims that distribution",
+    "@openai/agents-realtime.RealtimeAgent is constructed at examples/realtime-demo/src/main.ts:32 and no adapter claims that distribution"
+  ]
 }
