@@ -9,6 +9,11 @@ verdict: `improved`, `unchanged`, `regressed`, `mixed`, or `insufficient_evidenc
 It is built for developers, CI, and coding agents. It runs on your machine and does not call a model, upload your code,
 or send telemetry.
 
+![Codex uses Orchescope to compare a saved baseline with a candidate](https://raw.githubusercontent.com/twinkling-reality/orchescope/main/docs/images/orchescope-judge.gif)
+
+In this real Codex session, Codex calls Orchescope and gets a `regressed` verdict because duplicate side effects
+increased from 0 to 1.
+
 ## Install
 
 Node.js 24 or newer is required. Installation has no compiler step or native build.
