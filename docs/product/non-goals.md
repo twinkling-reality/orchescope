@@ -3,6 +3,15 @@
 Each of these is a deliberate decision, not a missing feature. Where a boundary might reasonably move later, the
 condition that would move it is stated.
 
+## Not a replacement for a coding agent
+
+A coding agent can read application-specific logic and unfamiliar frameworks that Orchescope's deterministic adapters do
+not understand. In the measured head-to-head audit, the coding agent found more true, checkable static issues on both
+repositories.
+
+Orchescope's role is narrower. It records or scans the same work twice and applies the same rules to the before-and-after
+evidence. The [measurement](../research/orchescope-against-an-agent.md) remains a limit on every static audit claim.
+
 ## Not a gateway or a proxy for your traffic
 
 Orchescope never sits between your agents and their providers in normal operation. It reads spans your system already
@@ -56,10 +65,19 @@ stream.
 Why: the questions worth asking span components. A retry around a non idempotent tool is not visible in either file
 alone; it is visible in the relation between them.
 
+## Not a comprehensive static auditor
+
+The source scan recognises only tested language, framework, protocol, and configuration patterns. It does not understand
+arbitrary application logic. Its finding count is not a measure of every issue in a repository.
+
+Why: a broad heuristic can produce a complete-looking graph from incomplete evidence. Orchescope reports unsupported and
+unparsed files instead. The exact tested surface is in [ecosystem support](../guides/ecosystem-support.md).
+
 ## Not a model based reviewer
 
-Nothing in Orchescope calls a model. Every finding comes from a deterministic rule over evidence, and a second run over
-the same revision reproduces it exactly. There is no setting that changes this.
+Nothing in Orchescope calls a model. Every finding comes from a deterministic rule over evidence. The same stable evidence
+and rules reproduce the same semantic result. Raw documents contain volatile timings and generated display IDs, so they
+are not claimed to be byte-for-byte identical. There is no setting that changes this.
 
 Why: an unreproducible claim is not evidence. A tool whose findings change between runs cannot be used as a gate. The
 decision and what would reverse it are in [ADR 0002](../architecture/adr/0002-deterministic-analysis.md).
@@ -79,8 +97,8 @@ system is safe, correct or complete. Coverage is reported alongside every result
 
 ## Not a universal parser
 
-Only ecosystems with a tested adapter are claimed, and the list is in the README. A file in an unsupported language is
-reported as not inspected.
+Only ecosystems with a tested adapter are claimed, and the list is in
+[ecosystem support](../guides/ecosystem-support.md). A file in an unsupported language is reported as not inspected.
 
 Why: a partial parse produces a partial graph that looks complete, which is worse than an honest gap. Anything not
 recognised can be declared in `.orchescope/manifest.yaml`, which is a first class input.

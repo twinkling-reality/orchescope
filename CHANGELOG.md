@@ -2,6 +2,27 @@
 
 Notable changes per released version. Nothing here is generated; a release is a person writing down what moved and why.
 
+## 0.10.1
+
+Released 2026-08-31 from npm as `orchescope@0.10.1`. This documentation-only patch uses the local publication path in
+`docs/guides/release.md` with `npm publish --no-provenance`, so it carries no registry attestation.
+
+The npm description now states the narrowed product claim: Orchescope is a local test harness that compares the same work
+before and after a change. The README leads with that judge, defines the beginner terms it uses, and states when the tool
+does and does not fit. It also keeps the measured static-audit loss to a coding agent visible rather than presenting
+source scan breadth as the differentiator.
+
+Detailed command, JSON, exit-status, cost, ecosystem, and runtime-join material moved from the README into linked guides.
+The README uses full GitHub links so those guides remain reachable from the npm package page, where the `docs/` directory
+is not part of the tarball.
+
+No analysis or execution behaviour changed. The package changes only its version, command help, metadata, and README.
+`pnpm package` produced a seven-file archive, installed it into a temporary prefix, and passed its audit smoke test:
+
+```
+sha256  106da8036a6f32b394315eb2fc3d9523eebf4107a1d37127d87c484320f810f9
+```
+
 ## 0.10.0
 
 Released 2026-08-30 from npm as `orchescope@0.10.0`. The publication path was the local one documented in

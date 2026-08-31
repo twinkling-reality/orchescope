@@ -1,13 +1,16 @@
 # Orchescope documentation
 
-Orchescope maps an agent system from its source, ingests what it does when it runs, and reports the difference. Start
-with the quickstart; read the architecture when you want to change something.
+Orchescope is a local test harness for AI agent systems. It compares the same work before and after a change and reports
+an evidence-backed verdict. Start with the quickstart. Use the reference guides when you need command, ecosystem, or
+security detail.
 
 ## Guides
 
 | Guide | Read it when |
 | --- | --- |
 | [Quickstart](guides/quickstart.md) | You have a repository and five minutes |
+| [CLI reference](guides/cli-reference.md) | You need commands, JSON output, exit status, or cost configuration |
+| [Ecosystem support](guides/ecosystem-support.md) | You need the exact tested source and runtime coverage |
 | [Static audit](guides/static-audit.md) | You want to know what the audit can and cannot see without running anything |
 | [Runtime tracing](guides/runtime-tracing.md) | You want the declared against exercised delta |
 | [Repository federation](guides/federation.md) | One traced system crosses independently versioned repositories |
@@ -56,6 +59,10 @@ Every persisted document is versioned and emitted as JSON Schema under `schemas/
 
 The evidence behind the product and stack decisions, recorded with sources and measurements.
 
+- [Orchescope against an agent](research/orchescope-against-an-agent.md): the measured static breadth loss and the reason
+  the product claim narrowed.
+- [The judge](research/the-judge.md): the design for the before-and-after verdict.
+- [The judge measurement](research/the-judge-measurement.md): the evidence behind the 0.10.0 release claim.
 - [The runtime join on code this repository did not write](research/runtime-join-on-third-party-code.md)
 - [Ecosystem analysis](research/ecosystem-analysis.md)
 - [Competitive boundary](research/competitive-boundary.md)

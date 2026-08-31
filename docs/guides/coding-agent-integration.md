@@ -1,8 +1,8 @@
 # Coding agent integration
 
-Orchescope is designed to be used by an agent as much as by a person. The same operations are available three ways: as
-commands with stable JSON output, as Model Context Protocol tools, and as a goal document written to be handed over as a
-task.
+Orchescope gives a coding agent a deterministic before-and-after test. It does not replace the agent's broader source
+review. The same comparison and goal operations are available three ways: commands with stable JSON fields, Model Context
+Protocol tools, and a goal document written to be handed over as a task.
 
 ## Register the server
 
@@ -53,7 +53,7 @@ Seventeen, and the read only ones are annotated as such so a client can decide w
 | `import_trace` | Imports OTLP JSON or newline delimited spans from a path inside the repository and stores a run |
 | `create_improvement_goal` | A goal and the prompt to implement it |
 | `compare_runs` | A verdict with per metric directions and sample sizes |
-| `validate_improvement_goal` | Per criterion outcomes, each satisfied, refused or undecided |
+| `validate_improvement_goal` | The comparison verdict plus per criterion outcomes |
 
 **Executing your system**, which requires `execution.allowProcessSpawn`:
 
@@ -95,10 +95,10 @@ finding returns the goal that already exists with `created: false`, so exploring
 files cannot be attributed to a measured outcome.
 
 **5. Verify.** Rerun the scenario, `compare_runs` against the baseline, then `validate_improvement_goal` with the comparison
-identifier. Each criterion comes back satisfied, refused or undecided with a reason.
+identifier. The response reports the comparison verdict and each criterion as satisfied, refused or undecided.
 
-**6. Report honestly.** An undecided criterion is not a pass. If the comparison says `indeterminate` because there were two
-runs, the answer is to run more repetitions, not to claim an improvement.
+**6. Report honestly.** An undecided criterion is not a pass. If the comparison reports insufficient evidence because the
+sample is too small, run more repetitions instead of claiming an improvement.
 
 ## Doing the same thing from a shell
 
@@ -159,5 +159,5 @@ large document never fills the conversation.
 Read only tools touch nothing. The three executing tools respect `execution.allowProcessSpawn` and are refused with the setting
 named when it is off, which lets you give an agent the analysis without giving it the ability to run your system.
 
-Nothing in Orchescope calls a model, so an agent asking it for an audit is not spending anything at a provider. What it
-gets back is deterministic and reproduces on a second run.
+Nothing in Orchescope calls a model, so an agent asking it for an audit is not spending anything at a provider. The rules
+are deterministic over the evidence supplied. Raw audit documents can still differ in volatile timings and display IDs.

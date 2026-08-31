@@ -5,8 +5,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Only frameworks with a tested adapter are claimed, and the list is in the README. Anything else can be declared in
-        `.orchescope/manifest.yaml`, which is a first class input rather than a fallback: see
+        Only frameworks with a tested adapter are claimed. The list is in docs/guides/ecosystem-support.md. Anything else
+        can be declared in `.orchescope/manifest.yaml`, which is a first class input rather than a fallback: see
         docs/guides/adapter-development.md.
   - type: input
     id: framework

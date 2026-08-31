@@ -1,98 +1,104 @@
 # Vision
 
-## The problem
+## Product claim
 
-An agent system is easy to build and hard to know. A repository declares agents, tools, prompts, retries and fallbacks;
-a running system exercises some of them, in an order nobody wrote down, with retries that may repeat effects the outside
-world can see. Between the two sits a gap that nothing currently reports.
+Orchescope is a local, deterministic test harness for AI agent systems. It records or scans the same work before and after
+a change, then reports `improved`, `unchanged`, `regressed`, `mixed`, or `insufficient_evidence` from the evidence it has.
 
-The gap is not a monitoring problem. Observability tools show what happened in production. Evaluation tools score answer
-quality. Neither answers the questions a team actually asks before shipping a change:
+An AI agent system is software in which one or more language-model-driven agents choose steps, call tools, or hand work
+to other agents. The product is for developers, CI, and coding agents that need a repeatable answer to one question: did
+this change help?
 
-- Which of the things we declared has any run ever exercised?
-- Which of the things our runs did was never declared anywhere?
-- Where does a retry sit in front of an operation whose repeat we cannot rule out?
-- Did adding a third agent buy anything, or did it only add latency and tokens?
-- If one tool times out, does the task degrade or collapse, and does an external effect happen twice?
-- We changed something. Did it help, on measured evidence, or does it only feel faster?
+This is narrower than the original audit claim. In a measured comparison, a coding agent found more checkable static
+issues across both repositories. Orchescope does not compete on static finding breadth. The
+[head-to-head result](../research/orchescope-against-an-agent.md) remains a product limit, and the
+[judge measurement](../research/the-judge-measurement.md) is the evidence for the narrower release claim.
 
-## What Orchescope is
+## The workflow
 
-A local tool that answers those questions with evidence, on your machine, from your own runs.
+1. Record a baseline scan or scenario run.
+2. Turn one eligible finding into a bounded goal, or choose one change to measure directly.
+3. Make the change.
+4. Repeat the same scan or scenario under the same declared conditions.
+5. Compare the evidence and report a verdict.
 
-Its centre is a **reconciliation**: one graph built from source and configuration, joined against one graph derived from
-ingested OpenTelemetry spans, pinned to a revision, producing four deltas.
+A **baseline** is the evidence before the change. A **scenario** is a checked-in recipe for one repeatable run, including
+the command, seed, repetitions, budgets, and evaluators. A source-only goal compares scans. A runtime goal compares the
+same scenario twice.
 
-1. **Declared and never exercised.** A tool configured and never called. A fallback that no run has taken.
-2. **Exercised and never declared.** A model, a service or a tool that runs but appears nowhere in the code you looked
-   at.
-3. **Contradicted declarations.** A retry declared as safe to repeat that repeated an effect. A timeout declared and not
-   honoured.
-4. **Duplicated external effects.** The same logical operation performed twice inside a single run, attributed to a
-   specific retry of a specific operation.
+The comparison verdict and goal validation are separate. The verdict says which direction the evidence moved. Validation
+says whether every acceptance criterion passed. Keeping both prevents a partial improvement, a no-op, and a regression
+from collapsing into the same failed boolean.
 
-Around that centre sit the things that make a delta actionable: scenarios that make a run repeatable, faults that make a
-failure reproducible, benchmarks that vary exactly one dimension, and a goal format that states what to change, what may
-be touched, and the command that decides whether it worked.
+## Evidence
 
-## Who it is for
+The judge can use:
 
-Primary:
+- supported source and configuration patterns, with file and line evidence
+- OpenTelemetry spans from the system while it runs
+- deterministic scenario evaluators and target-reported results
+- measured duration, completion, tokens, retries, interventions, and repeated effects
 
-- **The coding agent** doing the work. It needs a bounded task with acceptance criteria and a command that verifies the
-  outcome, not a prose suggestion. It invokes Orchescope over MCP or `--json`, reflects on the result, makes the change,
-  and asks again whether it helped.
+OpenTelemetry is a standard trace format. Orchescope joins the runtime graph derived from those spans to the graph it can
+read from source. That join can show what was declared but never exercised, what ran without a matching declaration, and
+where a runtime result contradicts a declaration.
 
-Secondary:
+The source scan is deliberately bounded. Unsupported syntax and languages are reported as coverage gaps. The runtime side
+does not make the static side comprehensive. Claims about supported ecosystems stay in
+[ecosystem support](../guides/ecosystem-support.md).
 
-- **The engineer who owns an agent system.** They install the CLI, glance at a calm terminal document while work runs,
-  and see the benefit when the loop closes. They do not maintain a website, and they do not live in a dashboard.
+## Users and surfaces
 
-## Surfaces
-
-| Surface | Audience | Job |
+| Surface | User | Job |
 | --- | --- | --- |
-| MCP | Coding agents | Run the loop: audit, goal, test, compare. Bounded output, explicit schemas. |
-| CLI `--json` | Agents and CI | Same facts as MCP, one document per command. |
-| CLI terminal | Humans | Install, run, watch progress, read a short document that says what was found and what to do next. |
-| SARIF / Mermaid | CI and pull requests | Optional artifacts, not a second product. |
+| CLI terminal | Developer | Run a test and read a short evidence document |
+| CLI `--json` | CI and coding agents | Consume one structured document per command |
+| MCP | Coding agents | Call the same audit, scenario, comparison, and goal operations as tools |
+| SARIF and Mermaid | CI and reviews | Export findings or a graph when another tool needs them |
 
-There is no browser workspace. A website is a burden humans do not want in this workflow, and agents cannot use it.
+MCP means Model Context Protocol, a standard way for an agent to call tools. There is no browser workspace.
+
+## Boundaries
+
+Orchescope is not:
+
+- an intelligent replacement for a coding agent
+- a comprehensive static auditor
+- a model-answer-quality evaluator
+- a hosted observability system
+- an automatic fixer
+- a safety certification or sandbox
+
+The complete reasoning is in [non goals](non-goals.md).
 
 ## Principles
 
-**Evidence or silence.** Every claim names what it came from and how it was established: observed in a trace, discovered
-in source, inferred by a rule, estimated from a model of the system, simulated under an injected fault, or interpreted by
-a language model and reviewed. A finding with no evidence is not reported.
+**Evidence or silence.** Every finding states its basis and points to the source location, span, scenario result, or metric
+that supports it.
 
-**Say what you could not see.** Coverage is part of the output. Files that could not be parsed, languages with no
-adapter, a scan that hit its limit, a quantile withheld for want of samples: all stated, every time. Silence about a gap
-reads as an absence of problems.
+**Coverage is part of the answer.** Unsupported files, missing spans, incomparable conditions, and small sample sizes are
+reported instead of hidden.
 
-**Deterministic first.** Parsing, graph construction, reconciliation and rule evaluation are deterministic and reproduce
-byte for byte. A language model is optional, off by default, used only where a deterministic method cannot reach, and its
-output is reviewed against evidence before it becomes a finding.
+**Same work twice.** A verdict compares the same source audit or the same declared scenario. Different conditions produce
+`insufficient_evidence`, not an invented direction.
 
-**Local by default.** No account, no telemetry, no gateway, no upload. Servers bind to loopback when a receiver is
-needed. State lives inside the repository being audited.
+**Deterministic judgement.** Orchescope does not call a model. The same stable evidence and rules produce the same semantic
+result. Raw documents may contain volatile timings and display IDs, which are excluded from reproducibility claims.
 
-**Refuse rather than downgrade.** An operation the configuration has not granted is refused with the name of the setting
-that would grant it. Nothing quietly runs in a weaker mode and reports as though it ran in the stronger one.
+**Local operation.** There is no account, telemetry, or upload. State lives in the repository. A target that Orchescope
+starts can still use its own network access and credentials.
 
-**A number without its uncertainty is a lie.** Sample sizes travel with every metric, quantiles are withheld below a
-threshold, and a latency improvement alongside a success decline is never reported as an improvement.
+**Refuse rather than weaken.** Missing permissions, missing evidence, and incompatible comparisons are named. Nothing
+silently runs in a weaker mode and reports as though the stronger operation completed.
 
-**Humans feel productive in the terminal.** Progress animates only while work runs. Indentation, colour and a clear
-region model make the document readable. Colour carries nothing a symbol and a word do not already say, so the same
-document reads under `NO_COLOR` and in a pipe.
+**Numbers keep their basis.** Metrics carry sample sizes. Quantiles are withheld when the sample is too small. A latency
+gain beside a success loss is not called an improvement.
 
-## How to tell whether it worked
+## Success test
 
-The product succeeds if an agent can take a finding, create a goal, make the change, run one command, and get an answer
-about whether the change helped that a person is willing to act on after a glance at the terminal or the CI log.
+The product succeeds when its printed plan separates a visible improvement, a no-op, and a visible regression on the same
+work, without asking the operator to infer the answer from an unmentioned side channel.
 
-That loop is covered end to end by `tests/e2e/improvement-loop.test.ts`, which discovers a duplicated refund in the
-demonstration system, creates the goal, applies the fix, and reruns the same scenario with the same seed. What it
-requires from measured runs is that the duplicate effect itself went from one to none and that the metric reads
-`improved`; the verdict over every metric together is allowed to be `improved` or `mixed`, because a change that fixes
-the duplicate while moving a second metric the other way is a real outcome and not a failed test.
+Version 0.10.0 met that test on two pinned third-party repositories for changes inside Orchescope's measured dimensions.
+It produced `improved`, `unchanged`, and `regressed` in the expected order. That result does not expand the static coverage
+claim, prove answer quality, or prove safety. See [the judge measurement](../research/the-judge-measurement.md).

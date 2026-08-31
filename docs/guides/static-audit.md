@@ -2,6 +2,10 @@
 
 What Orchescope can tell you without running anything, what it cannot, and how to read the difference.
 
+This is a bounded source scan, not a comprehensive code review. A measured coding agent found more checkable static issues
+on both repositories in the [head-to-head audit](../research/orchescope-against-an-agent.md). Use Orchescope's scan for
+the tested patterns and evidence it names, and read the coverage block before relying on absence.
+
 ```
 orchescope audit --runs 0
 ```

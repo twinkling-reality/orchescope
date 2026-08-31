@@ -233,8 +233,8 @@ export const w = new Worker({ name: 'billing' });
 
 Assert the identifiers, the relations and the evidence, not the count. A count passes for the wrong reasons.
 
-Then add the framework to the support table in the README, because that table is a claim and this test is what makes it
-true.
+Then add the framework to the table in [ecosystem support](ecosystem-support.md), because that table is a claim and this
+test is what makes it true.
 
 ## Then a corpus entry
 

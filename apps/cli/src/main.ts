@@ -81,7 +81,7 @@ const program = new Command();
 
 program
   .name('orchescope')
-  .description('Map, test, and improve agent systems.')
+  .description('Compare AI agent systems before and after a change.')
   .version(ORCHESCOPE_VERSION, '-v, --version')
   .option('--cwd <path>', 'repository to work in, defaults to the current directory')
   .option('--json', 'emit a single stable JSON document instead of human output')

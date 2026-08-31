@@ -3,7 +3,7 @@
   "version": "0.9.0",
   "private": true,
   "type": "module",
-  "description": "Workspace root for Orchescope: map, test, and improve agent systems.",
+  "description": "Workspace for Orchescope, a local test harness for AI agent systems.",
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.7.1",
   "engines": {

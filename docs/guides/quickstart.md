@@ -1,167 +1,146 @@
 # Quickstart
 
-Five minutes, one repository, no configuration.
+This guide compares the same work before and after one change. It uses a scenario because runtime evidence is the clearest
+way to see what Orchescope is for.
+
+An **AI agent system** is software in which language-model-driven agents choose steps, call tools, or hand work to other
+agents. A **scenario** is a checked-in recipe for running one piece of that system. A **baseline** is the result before a
+change.
 
 ## Install
 
-Node.js 24 or newer. No compiler, no native build.
+Node.js 24 or newer is required.
 
-```
+```sh
 npm install -g orchescope
-```
-
-```
 orchescope doctor
 ```
 
-`doctor` checks that this machine can run everything this build offers: the Node version, the bundled SQLite version, both
-parsers, the store, and the loopback receiver. Anything that fails is reported with what to do about it.
+`doctor` checks the Node version, parsers, local store, and loopback trace receiver. It does not run your agent system.
 
-## Audit
+## Create a repeatable scenario
 
-From the root of a repository containing an agent system:
+From the root of the agent system:
 
-```
-orchescope audit
-```
-
-One document, on standard output, and nothing on standard error once the work is done. A line's first
-column says what kind of line it is, a line that has a state says it in a second column, and the rest
-says the one sentence about it, so `grep` and `awk` read it as well as a person does:
-
-```
-demo            this project has 5 agents, 7 tools and 2 models
-                read from 23 of 23 files, with 10 runs on record
-
-problems        3 serious, 6 medium, 11 minor, worst first
-serious         tool_timeout on issue_refund: an outside effect happened twice
-serious         issue_refund is retried and nothing makes it safe to repeat
-serious         refund happened 2 times in one run
-more            17 more problems: orchescope audit --verbose
-
-missing         a verdict: the last comparison did not settle it
-run             orchescope test --scenario support-desk --repeat 5
+```sh
+orchescope init --scenario
 ```
 
-That is the default glance, and it answers four questions in the order a reader asks them.
+This writes `.orchescope/scenario.yaml`. Fill in `target.command` with a command that completes on its own. Then move the
+file into the directory Orchescope reads:
 
-- **What was audited.** The project name in column one, and what the project turned out to contain.
-  Agents, tools and models are named because they are what makes it an agent system; the part and link
-  counts a graph would report are on `--verbose`. The second line is coverage, and whether anything has
-  ever run.
-- **What is wrong.** The three worst problems, worst first, keyed by how bad each one is. `serious`
-  covers critical and high, `minor` covers low and info; the five severities the engine records are
-  exact and they are in `--verbose`, `--json` and MCP.
-- **What is still missing.** An audit is inventory. The `missing` row names the thing the loop would
-  produce and has not, which is the honest half of what this product claims.
-- **What to run.** One command, and it sits directly under the reason it is worth running.
-
-The five step loop, the reconciliation deltas, evidence bases, confidences and finding identifiers are
-on `orchescope audit --verbose`, and all of them are always in `audit --json` and MCP for agents.
-
-A repository where nothing was detected still gets a plain refusal, and the `missing` row is about the
-command printed under it rather than about a loop that has not started:
-
-```
-express         this project has 5 parts
-                read from 141 of 141 files, with no runs on record
-No agent system was detected: nothing looked like an agent, tool, or model.
-
-problems        1 medium
-medium          No runtime evidence has been collected
-
-missing         a description of this project that this build can read
-run             orchescope init --manifest
+```sh
+mkdir -p scenarios
+mv .orchescope/scenario.yaml scenarios/support-desk.yaml
 ```
 
-That writes `.orchescope/manifest.yaml` with the component kinds, edge kinds and side effect classes the validator
-accepts, and declares nothing until you fill it in. A manifest the validator rejects is reported as a failed adapter with
-the field that failed, never ignored. See [adapter-development.md](adapter-development.md).
+Set its `id` to `support-desk` and describe the work it runs. Keep the seed, repetition count, budgets, and evaluators in
+the file so both sides of the comparison use the same conditions. The
+[scenario testing guide](scenario-testing.md) explains every field and how the target can report success.
 
-## Agents and the same facts
+## Record the baseline
 
-The terminal is the human document. Coding agents should use `orchescope audit --json` or
-`orchescope mcp serve`: both return loop standing, the one next action, capabilities, and the answer to
-"did my last change help", so an agent does not scrape the terminal.
-
-That last one is `data.outcome`, and it takes no identifier, because an agent that has to already hold a
-goal id cannot ask the question after a fresh session:
-
-```json
-{
-  "verdict": "unchanged",
-  "verdictReason": "no metric moved enough to call",
-  "decided": false,
-  "goals": [
-    {
-      "goalId": "OSC-GOAL-0001",
-      "validated": false,
-      "blockedBy": ["the finding this goal was created from still fires after the rescan"]
-    }
-  ]
-}
-```
-
-`decided` is the field that matters. `unchanged` and `insufficient_evidence` are refusals, not results,
-so a caller that branches on `verdict` alone will read a refusal as an answer. `blockedBy` names why a
-goal did not validate, which is the part an agent can act on.
-
-## Add runtime evidence
-
-A static audit can tell you what exists. It cannot tell you what runs. Run your system under `trace`:
-
-```
-orchescope trace -- node src/main.js
-orchescope audit
-```
-
-`trace` starts a receiver on loopback, exports its address to your process as both `ORCHESCOPE_OTLP_ENDPOINT` and
-`OTEL_EXPORTER_OTLP_ENDPOINT`, runs the command, waits for the exporter to drain, and stores the spans as a run. If your
-system already emits OpenTelemetry, this works with no code change. If it does not, see
-[runtime-tracing.md](runtime-tracing.md).
-
-The second audit now has both sides, and the delta becomes the interesting part of the report.
-
-## Act on a finding
-
-```
-orchescope goals
-orchescope goal create OSC-REL-0004
-orchescope goal show OSC-GOAL-0001 --prompt
-```
-
-The prompt is what you hand to a coding agent or paste into an issue. It states the problem, the evidence, the paths that
-may be written, what must not change, the acceptance criteria, and the command that decides the outcome.
-
-## Verify the change
-
-```
+```sh
 orchescope test --scenario support-desk
-orchescope compare <baseline-run-id> <candidate-run-id> --goal OSC-GOAL-0001
-orchescope goal validate OSC-GOAL-0001 --comparison <comparison-id>
 ```
 
-The comparison reports per metric direction with sample sizes, and refuses to call a latency win an improvement when task
-success declined. The validation reports each criterion as satisfied, refused or undecided, with a reason.
+The result prints a run ID. Save it as the baseline. Orchescope reports the sample size behind each metric and withholds
+statistics that do not have enough samples.
 
-## Try it on the demonstration system
+## Make one change and rerun
 
-If you want to see the whole loop before pointing it at your own code, the repository contains a small multi agent system
-that runs offline with no credentials. From a clone of this repository:
+Change the agent system, then run the same scenario again:
 
+```sh
+orchescope test --scenario support-desk
 ```
+
+This prints the candidate run ID. Compare it with the baseline:
+
+```sh
+orchescope compare <baseline-run-id> <candidate-run-id>
+```
+
+The verdict is one of:
+
+| Verdict | Meaning |
+| --- | --- |
+| `improved` | At least one judged dimension improved and none regressed |
+| `unchanged` | No judged dimension moved enough to call |
+| `regressed` | At least one judged dimension got worse |
+| `mixed` | Improvements and regressions are both present |
+| `insufficient_evidence` | The runs are not comparable or do not contain a decidable signal |
+
+A faster run is not called an improvement when task success fell. For events that must never happen, such as a repeated
+external side effect, crossing from present to absent is a categorical change rather than a statistical claim.
+
+## Add source and runtime evidence
+
+Run an audit after you have a stored run:
+
+```sh
+orchescope audit
+```
+
+The audit scans supported source patterns and joins them to what the run exercised. It can report declarations that no
+run exercised, runtime components that the scan did not declare, contradictions, and repeated effects.
+
+The scan is not comprehensive. Read its coverage before relying on a finding count. The coverage names files it parsed,
+skipped, or could not inspect and adapters that did or did not apply. See
+[ecosystem support](ecosystem-support.md) and [static audit](static-audit.md).
+
+If the system already emits OpenTelemetry, `orchescope trace -- <command>` can collect those spans without a scenario.
+**OpenTelemetry** is a standard format for traces that describe what a program did while it ran. See
+[runtime tracing](runtime-tracing.md) for instrumented and uninstrumented systems.
+
+## Turn a finding into a measured goal
+
+```sh
+orchescope goals
+orchescope goal create <finding-id>
+orchescope goal show <goal-id> --prompt
+```
+
+The prompt gives a person or coding agent the evidence, allowed paths, acceptance criteria, and validation commands. A
+runtime goal reruns the recorded scenario. A source-only goal compares the scan before the change with the scan after it.
+
+Follow the commands printed in the goal. The final command reports both the comparison verdict and whether every
+acceptance criterion passed:
+
+```sh
+orchescope goal validate <goal-id>
+```
+
+Those are different questions. A change can be `improved` without fully clearing the finding it targeted.
+
+## Use it from CI or a coding agent
+
+Every command accepts `--json`. An installed binary writes one JSON document to standard output:
+
+```sh
+orchescope audit --json
+```
+
+When running the source build through pnpm, add `--silent` so pnpm does not put a banner before the JSON:
+
+```sh
+pnpm --silent orchescope --cwd apps/demo audit --json
+```
+
+`orchescope mcp serve` exposes the same operations through the **Model Context Protocol (MCP)**, a standard way for a
+coding agent to call tools. See [coding agent integration](coding-agent-integration.md).
+
+## Try the offline demonstration
+
+The repository contains a small agent system with deliberate weaknesses. It needs no credentials or paid model.
+
+```sh
+git clone https://github.com/twinkling-reality/orchescope
+cd orchescope
 pnpm install
 pnpm orchescope --cwd apps/demo test --scenario support-desk
 pnpm orchescope --cwd apps/demo audit
 ```
 
-It has deliberate weaknesses, including a retry around a refund whose idempotency is not established, so the report has
-something to show.
-
-## Where to next
-
-- [static-audit.md](static-audit.md): what the audit can and cannot see without running anything.
-- [runtime-tracing.md](runtime-tracing.md): getting spans in, including from a system that does not emit them yet.
-- [scenario-testing.md](scenario-testing.md): making a run repeatable.
-- [chaos-testing.md](chaos-testing.md): what one failure does to the whole task.
-- [coding-agent-integration.md](coding-agent-integration.md): wiring this into Claude Code or Codex.
+Before running your own system, read the safety warning in the [README](../../README.md#privacy-and-safety). Orchescope is
+not a sandbox, and a command it starts keeps your account's privileges.

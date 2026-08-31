@@ -1,7 +1,7 @@
 {
   "name": "orchescope",
-  "version": "0.10.0",
-  "description": "Map, test, and improve agent systems. A local first CLI and MCP tool that discovers, audits, benchmarks and resilience tests agentic systems.",
+  "version": "0.10.1",
+  "description": "A local test harness for AI agent systems. Compare the same work before and after a change.",
   "license": "Apache-2.0",
   "author": "Glendon Chin",
   "homepage": "https://github.com/twinkling-reality/orchescope#readme",
@@ -15,6 +15,10 @@
   "type": "module",
   "keywords": [
     "agents",
+    "ai-agents",
+    "testing",
+    "regression-testing",
+    "cli",
     "observability",
     "opentelemetry",
     "mcp",

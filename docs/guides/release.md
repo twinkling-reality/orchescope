@@ -210,11 +210,10 @@ gh release create v<version> \
   --title "orchescope <version>" --notes-file <the changelog section>
 ```
 
-The install section says "the same archive is attached to every release with its sha256 beside it", and a reader who
-follows that to an empty releases page has been told something untrue by the front page of the project. This step is
-here because it was not, and it lapsed for two versions without anything noticing.
+The release archive and checksum give a reader a way to compare the registry package with the artifact this repository
+produced. Do not claim they exist until the GitHub release contains both.
 
-Then read the install section of the README as a stranger would and correct anything the publish has just made untrue.
+Then read the README and package page as a stranger would and correct anything the publish has just made untrue.
 `release/release-summary.json` records `published: false` because the script that wrote it published nothing; it is not a
 claim about the registry.
 
