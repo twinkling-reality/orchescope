@@ -4680,6 +4680,275 @@ repositories:
           - ruleId: observability-coverage
             severity: info
 
+  - name: stocksense-ai
+    source: git
+    url: https://github.com/Spkap/StockSense-AI.git
+    commit: 7df3e802509ad2ebf62d91a313c9870432ba9f56
+    kind: agent_system
+    why: >-
+      The exact MIT-licensed positive selected independently for the blocked blind evaluation of candidate
+      205d1d5c. The application binds six tools to a Google-backed chat model, consumes model-selected tool calls,
+      executes those actions, and cycles from its agent node through its tool node under a ten-iteration state
+      ceiling. The FastAPI analysis endpoint invokes that compiled LangGraph application for a requested ticker.
+
+      The regression records only the output checked against pinned source. The LangGraph workflow and its agent and
+      tools steps remain exact source identities, the two-step cycle remains source cited, and unresolved entry and
+      effects populations remain explicit refusals rather than absence-based strengths. The Google model
+      constructions and declared tools are not promoted into identities this build cannot establish. The pinned tree
+      is c351356328d2fd0f7480664ea46296727b4c244f with 116 regular files and 757,691 blob bytes; its complete
+      source-manifest SHA-256 is c781e2cf2a71e1396cf4243bc0ca979f3f434ff722201e6f95167c06b5849b9b.
+      The root MIT LICENSE has SHA-256 044b02a0db62120645494e57a6f4978d26682b18004feb8abf40b4ae293ee5c6.
+      No runtime is attempted because the target-owned path requires live Gemini, NewsAPI and Supabase credentials
+      and separately driven server state.
+    acceptance:
+      graphPopulation:
+        components: 25
+        edges: 15
+      exactIdsByKind:
+        workflow:
+          - workflow:react_flow.py-graph
+        workflow_step:
+          - workflow_step:agent
+          - workflow_step:tools
+      absentKinds:
+        - agent
+        - agent_group
+        - model
+        - provider
+        - tool
+      absentComponentTerms:
+        - gemini
+        - google
+        - newsapi
+      requiredEdges:
+        - kind: transitions_to
+          from: workflow_step:agent
+          to: workflow_step:tools
+          sourceFile: stocksense/orchestration/react_flow.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_conditional_edges("agent") branch "tools"'
+              sourceFile: stocksense/orchestration/react_flow.py
+              startLine: 641
+              endLine: 648
+            - producer: adapter:langgraph
+              symbol: 'add_conditional_edges("agent") branch "tools"'
+              sourceFile: stocksense/orchestration/react_flow.py
+              startLine: 645
+              endLine: 645
+        - kind: transitions_to
+          from: workflow_step:tools
+          to: workflow_step:agent
+          sourceFile: stocksense/orchestration/react_flow.py
+          evidence:
+            - producer: adapter:langgraph
+              symbol: 'add_edge("tools", "agent")'
+              sourceFile: stocksense/orchestration/react_flow.py
+              startLine: 649
+              endLine: 649
+      componentMetadata:
+        workflow:react_flow.py-graph:
+          framework: langgraph
+          receiver: workflow
+        workflow_step:agent:
+          declaredName: agent
+          framework: langgraph
+          role: workflow_step
+        workflow_step:tools:
+          declaredName: tools
+          framework: langgraph
+          role: workflow_step
+      componentEvidence:
+        workflow:react_flow.py-graph:
+          - producer: adapter:langgraph
+            symbol: StateGraph
+            sourceFile: stocksense/orchestration/react_flow.py
+            startLine: 635
+            endLine: 635
+        workflow_step:agent:
+          - producer: adapter:langgraph
+            symbol: 'add_node("agent")'
+            sourceFile: stocksense/orchestration/react_flow.py
+            startLine: 637
+            endLine: 637
+        workflow_step:tools:
+          - producer: adapter:langgraph
+            symbol: 'add_node("tools")'
+            sourceFile: stocksense/orchestration/react_flow.py
+            startLine: 638
+            endLine: 638
+      sourceCitations:
+        workflow:react_flow.py-graph:
+          - stocksense/orchestration/react_flow.py
+        workflow_step:agent:
+          - stocksense/orchestration/react_flow.py
+        workflow_step:tools:
+          - stocksense/orchestration/react_flow.py
+      adapterOutcomes:
+        adapter:langgraph:
+          status: completed
+          componentsFound: 3
+          edgesFound: 4
+          filesInspected: 1
+        adapter:effects:
+          status: completed
+          componentsFound: 22
+          edgesFound: 11
+          filesInspected: 2
+      requiredUnclaimedImportedConstructions:
+        - sourceFile: stocksense/core/config.py
+          startLine: 54
+        - sourceFile: stocksense/core/config.py
+          startLine: 76
+        - sourceFile: stocksense/orchestration/react_flow.py
+          startLine: 566
+      topology:
+        status: incomplete
+        unresolvedCount: 2
+        conditionalDestinations: 2
+        producerPopulations:
+          - adapterId: adapter:langgraph
+            status: incomplete
+            inspectedInputs: 5
+            relationsFound: 4
+          - adapterId: adapter:effects
+            status: incomplete
+            inspectedInputs: 0
+            relationsFound: 11
+            scope: control_flow
+        requiredRefusals:
+          - kind: entry_boundary
+            reason: No supported entry boundary was found for this LangGraph construction.
+            sourceFile: stocksense/orchestration/react_flow.py
+            startLine: 635
+        requiredUnlocatedRefusals:
+          - kind: adapter_input
+            reason: adapter:effects did not state an inspected topology population for this applicable input.
+      findings:
+        strengths: 0
+        requiredRules:
+          - topology-shape
+          - observability-coverage
+        exactRisks:
+          - ruleId: topology-shape
+            severity: low
+          - ruleId: observability-coverage
+            severity: info
+
+  - name: agenttrace
+    source: git
+    url: https://github.com/Rxflex/agenttrace.git
+    commit: 012f137782cb576ce461b8b6523d2c5a16ba698a
+    kind: not_agent_system
+    why: >-
+      The exact MIT-licensed negative control selected independently for the blocked blind evaluation of candidate
+      205d1d5c. Its SDK wraps caller-owned functions to emit trace spans; its exporter batches and posts those events;
+      its backend ingests and persists them; and its frontend renders stored trace trees. The executable source does
+      not construct or drive an agent, invoke a model, choose tools or delegate those actions to downloaded code.
+
+      This negative contributes a distinct precision invariant. The target's fetchApi wrapper spreads a caller-owned
+      RequestInit object into fetch, and ingestEvents calls it with POST and a JSON body. The blocked candidate
+      nevertheless called that boundary read only and gave it network read permission while reporting the HTTP method
+      unknown. The corrected adapter leaves the method and side effect unknown, records the unsettled method in
+      metadata, and uses conservative network write permission. A bare fetch and a complete options object that names
+      no method remain specification-backed GET reads in generalized fixtures. The pinned tree is
+      142ae2cf07704913a39c321e212225a2c7b20be3 with 93 regular files and 218,725 blob bytes; its complete
+      source-manifest SHA-256 is 3390e9afe6b95c227d4d4a05af63dd6fc372f7898d8e8eb9eab14c61e031f2ec.
+      The root MIT LICENSE has SHA-256 fa1163673e715ae6406ae714fcaa83215b70c68afc3fbd83b47ce6d41faae698.
+    acceptance:
+      graphPopulation:
+        components: 2
+        edges: 1
+      exactIdsByKind:
+        entrypoint:
+          - entrypoint:fetchapi
+        external_service:
+          - external_service:unresolved-host-fetchapi
+      absentKinds:
+        - agent
+        - agent_group
+        - model
+        - prompt
+        - tool
+        - workflow
+      absentComponentTerms:
+        - agent
+        - llm
+        - model
+      absentEdgeKinds:
+        - calls_tool
+        - hands_off_to
+        - invokes_model
+      requiredEdges:
+        - kind: calls_service
+          from: entrypoint:fetchapi
+          to: external_service:unresolved-host-fetchapi
+          sourceFile: frontend/src/api/client.ts
+          evidence:
+            - producer: adapter:effects
+              symbol: fetch
+              sourceFile: frontend/src/api/client.ts
+              startLine: 31
+              endLine: 37
+      componentMetadata:
+        external_service:unresolved-host-fetchapi:
+          client: fetch
+          httpMethodUnresolved: true
+          urlIsDynamic: true
+      componentDetails:
+        external_service:unresolved-host-fetchapi:
+          for: external_service
+          protocol: http
+      componentPermissions:
+        external_service:unresolved-host-fetchapi:
+          - kind: network
+            scope: unresolved-host:fetchApi
+            mode: write
+      componentEvidence:
+        entrypoint:fetchapi:
+          - producer: adapter:effects
+            symbol: fetchApi
+            sourceFile: frontend/src/api/client.ts
+            startLine: 31
+            endLine: 37
+        external_service:unresolved-host-fetchapi:
+          - producer: adapter:effects
+            symbol: fetch
+            sourceFile: frontend/src/api/client.ts
+            startLine: 31
+            endLine: 37
+      sourceCitations:
+        entrypoint:fetchapi:
+          - frontend/src/api/client.ts
+        external_service:unresolved-host-fetchapi:
+          - frontend/src/api/client.ts
+      adapterOutcomes:
+        adapter:effects:
+          status: completed
+          componentsFound: 2
+          edgesFound: 1
+          filesInspected: 1
+      topology:
+        status: incomplete
+        unresolvedCount: 1
+        conditionalDestinations: 0
+        producerPopulations:
+          - adapterId: adapter:effects
+            status: incomplete
+            inspectedInputs: 0
+            relationsFound: 1
+            scope: control_flow
+        requiredUnlocatedRefusals:
+          - kind: adapter_input
+            reason: adapter:effects did not state an inspected topology population for this applicable input.
+      findings:
+        strengths: 0
+        requiredRules:
+          - observability-coverage
+        exactRisks:
+          - ruleId: observability-coverage
+            severity: info
+
   - name: flask
     source: git
     url: https://github.com/pallets/flask.git

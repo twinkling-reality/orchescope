@@ -67,6 +67,8 @@ const passed091RecordPath = 'docs/research/1642f0f6-passed-blind-evaluation.md';
 const passed091Record = readFileSync(join(repositoryRoot, passed091RecordPath), 'utf8');
 const passed092RecordPath = 'docs/research/fdb11aa-passed-blind-evaluation.md';
 const passed092Record = readFileSync(join(repositoryRoot, passed092RecordPath), 'utf8');
+const blocked010RecordPath = 'docs/research/205d1d5c-blocked-blind-evaluation.md';
+const blocked010Record = readFileSync(join(repositoryRoot, blocked010RecordPath), 'utf8');
 const manifest = JSON.parse(readFileSync(join(repositoryRoot, 'package.json'), 'utf8')) as {
   readonly scripts: Readonly<Record<string, string>>;
 };
@@ -1218,6 +1220,60 @@ describe('the frozen pre-release blind evaluation protocol', () => {
           entry.url === 'https://github.com/heswithme/claude-usage-analyzer.git',
       ),
       false,
+    );
+  });
+
+  it('preserves the exact blocked 0.10.0 candidate, pair and unsupported read claim', () => {
+    for (const fact of [
+      '205d1d5cf4637e1b49e0c986843a2ed2d19b49cd',
+      '9d4ce1f3e5218624574e95c81bd3646f1bf2eb66',
+      '8fd6ebfde015ecabe2bfdc9128d06abeb102d0b54ecdbbf5db02cfd9d57f74aa',
+      'https://github.com/Spkap/StockSense-AI',
+      '7df3e802509ad2ebf62d91a313c9870432ba9f56',
+      'c351356328d2fd0f7480664ea46296727b4c244f',
+      '044b02a0db62120645494e57a6f4978d26682b18004feb8abf40b4ae293ee5c6',
+      'https://github.com/Rxflex/agenttrace',
+      '012f137782cb576ce461b8b6523d2c5a16ba698a',
+      '142ae2cf07704913a39c321e212225a2c7b20be3',
+      'fa1163673e715ae6406ae714fcaa83215b70c68afc3fbd83b47ce6d41faae698',
+      'e34e65973e512779e55a608d42347ac73a4dffdcb8d17b4b5e9d16ba773ae1c1',
+    ]) {
+      assert.ok(blocked010Record.includes(fact), `0.10.0 blocked record omitted ${fact}`);
+    }
+    assert.match(blocked010Record, /release decision was \*\*BLOCK\*\*/);
+    assert.match(blocked010Record, /side effect `read_only` and network permission `read`/);
+    assert.match(blocked010Record, /HTTP method was `unknown`/);
+    assert.match(blocked010Record, /frontend\/src\/api\/client\.ts:92-98/);
+    assert.match(blocked010Record, /method: 'POST'/);
+    assert.match(
+      blocked010Record,
+      /a material claim\s+cites evidence that does not support that claim/,
+    );
+    assert.doesNotMatch(
+      blocked010Record,
+      /\/Users\/|\/tmp\/|orchescope-blind-|\brun_[0-9a-f]{8}|\bev_[0-9a-f]{8}|traceId|spanId/,
+    );
+  });
+
+  it('promotes both blocked 0.10.0 lineages and retires them from blind selection', () => {
+    assert.match(
+      blocked010Record,
+      /Both selected repositories and their source lineages are permanently\s+ineligible as blind holdouts at any revision/,
+    );
+    assert.match(blocked010Record, /different unseen positive and negative pair/);
+    assert.ok(protocol.includes('../research/205d1d5c-blocked-blind-evaluation.md'));
+    assert.ok(releaseGuide.includes('../research/205d1d5c-blocked-blind-evaluation.md'));
+
+    const entries = readCorpus(repositoryRoot) as readonly { name: string; url?: string }[];
+    assert.equal(entries.filter((entry) => entry.name === 'stocksense-ai').length, 1);
+    assert.equal(entries.filter((entry) => entry.name === 'agenttrace').length, 1);
+    assert.equal(
+      entries.some((entry) => entry.url === 'https://github.com/Spkap/StockSense-AI.git'),
+      true,
+    );
+    assert.equal(
+      entries.some((entry) => entry.url === 'https://github.com/Rxflex/agenttrace.git'),
+      true,
     );
   });
 

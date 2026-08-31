@@ -132,6 +132,11 @@ the frozen 0.9.2 artifact. Its positive is pinned as an exact Pydantic AI agent,
 bounded-refusal regression; its negative adds no duplicate precision entry; and neither lineage can be reused as an
 unseen holdout.
 
+The [blocked 205d1d5c evaluation](../research/205d1d5c-blocked-blind-evaluation.md) records the completed block for the
+first frozen 0.10.0 artifact. Its positive is pinned as the exact LangGraph workflow and cycle the scan found. Its
+negative is pinned as a distinct precision regression because a caller-controlled fetch init was called read only
+despite a source-visible POST caller. Neither lineage can be reused as an unseen holdout.
+
 `pnpm package` writes `release/release-summary.json`. Read it rather than trusting the exit code:
 
 | Field | What it has to say |

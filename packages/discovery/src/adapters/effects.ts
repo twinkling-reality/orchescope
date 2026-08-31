@@ -863,7 +863,9 @@ const discoverModelEndpoint = (input: {
 const statedMethodOf = (call: CallFact): string | undefined => {
   const last = calleeName(call);
   if (HTTP_METHOD_NAMES.has(last) && last !== 'fetch' && last !== 'request') return last;
-  const entries = objectArgument(call, 1);
+  const init = call.args[1];
+  if (init?.kind !== 'object' || init.complete === false) return undefined;
+  const entries = init.entries;
   return stringValue(findEntry(entries, 'method')?.value);
 };
 
@@ -1119,17 +1121,36 @@ const requestAt = (
  * a position this build has not settled: `axios({ method, url })` puts them first, and reading a default
  * there would answer read only about a POST.
  */
-const defaultMethodOf = (request: RequestCall): string | undefined =>
-  request.client === 'fetch' && request.url !== undefined ? 'get' : undefined;
+const defaultMethodOf = (call: CallFact, request: RequestCall): string | undefined => {
+  if (request.client !== 'fetch' || request.url === undefined) return undefined;
+  const init = call.args[1];
+  if (init === undefined) return 'get';
+  if (
+    init.kind === 'object' &&
+    init.complete !== false &&
+    findEntry(init.entries, 'method') === undefined
+  ) {
+    return 'get';
+  }
+  return undefined;
+};
 
-/** The method a request runs under, and whether the call site is where it was written down. */
-type RequestMethod = { readonly value: string | undefined; readonly stated: boolean };
+/** The method a request runs under, whether it was written there, and whether retained input can override it. */
+type RequestMethod = {
+  readonly value: string | undefined;
+  readonly stated: boolean;
+  readonly unsettled: boolean;
+};
 
 const methodOf = (call: CallFact, request: RequestCall): RequestMethod => {
   const stated = statedMethodOf(call);
-  return stated === undefined
-    ? { value: defaultMethodOf(request), stated: false }
-    : { value: stated, stated: true };
+  if (stated !== undefined) return { value: stated, stated: true, unsettled: false };
+  const defaulted = defaultMethodOf(call, request);
+  return {
+    value: defaulted,
+    stated: false,
+    unsettled: request.client === 'fetch' && call.args[1] !== undefined && defaulted === undefined,
+  };
 };
 
 /**
@@ -1148,6 +1169,7 @@ const requestMetadata = (
   ...(request.alias === undefined ? {} : { aliasOf: request.alias }),
   ...(method.value === undefined ? {} : { httpMethod: method.value }),
   ...(method.value === undefined || method.stated ? {} : { httpMethodDefaulted: true }),
+  ...(method.unsettled ? { httpMethodUnresolved: true } : {}),
   ...(request.url === undefined ? {} : { url: request.url }),
   ...(request.dynamic ? { urlIsDynamic: true } : {}),
   ...(request.hostFromTail ? { hostReadFromTail: true } : {}),
@@ -1216,7 +1238,8 @@ const discoverHttp = (
       continue;
     }
     const method = methodOf(call, request);
-    const effect = classifyEffect(operationNamedBy(call, request), method.value);
+    const classified = classifyEffect(operationNamedBy(call, request), method.value);
+    const effect = method.unsettled && classified === 'read_only' ? 'unknown' : classified;
     if (call.enclosingUnresolved === true && host === undefined) {
       ensureCaller(module, call, context, builder, found);
       found.unresolvedUnnamedAddresses += 1;

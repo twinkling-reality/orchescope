@@ -5660,6 +5660,58 @@ export const chargeInvoice = tool({
     );
   });
 
+  it('does not call an incomplete fetch options object read only', async () => {
+    const { result } = await scan(
+      payments(`const API_BASE_URL = 'https://api.example.com';
+
+async function fetchApi(endpoint: string, options: RequestInit = {}) {
+  const url = \`\${API_BASE_URL}\${endpoint}\`;
+  const response = await fetch(url, {
+    ...options,
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return response.json();
+}
+
+export const ingest = async (body: string) => fetchApi('/events', { method: 'POST', body });
+`),
+    );
+    const service = result.graph.components.find(
+      (component) => component.id === 'external_service:unresolved-host-fetchapi',
+    );
+    assert.ok(service !== undefined, 'the request was not discovered at all');
+    assert.equal(service.sideEffect, 'unknown');
+    assert.equal(service.metadata['httpMethod'], undefined);
+    assert.equal(service.metadata['httpMethodUnresolved'], true);
+    assert.equal(
+      service.permissions.find((permission) => permission.kind === 'network')?.mode,
+      'write',
+    );
+    const relation = result.graph.edges.find((edge) => edge.to === service.id);
+    assert.equal(relation?.metadata['httpMethod'], 'unknown');
+    assert.equal(relation?.metadata['sideEffect'], 'unknown');
+    assert.equal(service.sourceLocations[0]?.file, 'src/tools.ts');
+  });
+
+  it('defaults a complete fetch options object without a method to GET', async () => {
+    const { result } = await scan(
+      payments(`export const read = async () => {
+  const response = await fetch('https://api.example.com/events', {
+    headers: { Accept: 'application/json' },
+  });
+  return response.json();
+};
+`),
+    );
+    const service = result.graph.components.find(
+      (component) => component.id === 'external_service:api.example.com',
+    );
+    assert.ok(service !== undefined, 'the request was not discovered at all');
+    assert.equal(service.sideEffect, 'read_only');
+    assert.equal(service.metadata['httpMethod'], 'get');
+    assert.equal(service.metadata['httpMethodDefaulted'], true);
+  });
+
   /*
    * Only `fetch`, and only there. `axios({ method, url })` puts its options in the position this build
    * does not read, so a default applied to it would answer read only about a POST, which is the one

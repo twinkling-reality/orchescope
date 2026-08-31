@@ -58,10 +58,20 @@ facts used by the judge remain in the fingerprint.
 - Findings whose remediation requires a repository scenario now declare that requirement on the rule. Goal creation
   composes the matching project scenario or refuses with the missing requirement, instead of printing a validation
   path the repository cannot run. This moves goal eligibility and validation plans, not the underlying risk count.
+- A `fetch` request defaults to GET only when it has no init argument or a complete literal init with no method.
+  An incomplete, spread or caller-controlled init is reported with an unresolved HTTP method, unknown side effect and
+  conservative network write permission. This can move side-effect classes, permissions, retry findings and approval
+  findings that previously relied on a read-only claim unsupported by the cited request span.
 
 The acceptance repositories used after `0.9.2` are pinned as regression inputs at their exact revisions. The
 expectations retain both corrected outputs and honest completed-zero or bounded-refusal cases; those lineages are not
 blind holdouts for this release.
+
+The first frozen `0.10.0` candidate, commit `205d1d5cf4637e1b49e0c986843a2ed2d19b49cd` with archive SHA-256
+`8fd6ebfde015ecabe2bfdc9128d06abeb102d0b54ecdbbf5db02cfd9d57f74aa`, was independently evaluated and blocked by
+that unsupported read-only claim. Its positive and negative are pinned as regressions at the exact measured
+revisions. The replacement candidate must pass the full release gates and a different unseen positive and negative
+pair before publication.
 
 ### Schema and corpus integrity
 

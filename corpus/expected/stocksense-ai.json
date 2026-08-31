@@ -1,0 +1,165 @@
+{
+  "adapters": {
+    "adapter:agentflow": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:browser-use-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:crewai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:deep-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:effects": {
+      "componentsFound": 22,
+      "edgesFound": 11,
+      "filesInspected": 2,
+      "status": "completed"
+    },
+    "adapter:implementation-reach": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langchain-legacy-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langchain-v1-create-agent": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:langgraph": {
+      "componentsFound": 3,
+      "edgesFound": 4,
+      "filesInspected": 1,
+      "status": "completed"
+    },
+    "adapter:manifest": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:mcp": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:model-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:openai-agents": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:prompts": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:pydantic-ai": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:search-index": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:vercel-ai-sdk": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    },
+    "adapter:workers-bindings": {
+      "componentsFound": 0,
+      "edgesFound": 0,
+      "filesInspected": 0,
+      "status": "not_applicable"
+    }
+  },
+  "agentSystemDetected": true,
+  "components": {
+    "byKind": {
+      "entrypoint": 11,
+      "external_service": 11,
+      "workflow": 1,
+      "workflow_step": 2
+    },
+    "declaredInTest": 0,
+    "total": 25
+  },
+  "discardedRelations": [],
+  "files": {
+    "discovered": 98,
+    "inSupportedLanguages": 88,
+    "parsed": 88,
+    "skipped": 0,
+    "truncated": false
+  },
+  "findings": {
+    "byRule": {
+      "observability-coverage": 1,
+      "topology-shape": 1
+    },
+    "bySeverity": {
+      "info": 1,
+      "low": 1
+    },
+    "componentsByRule": {
+      "observability-coverage": 5,
+      "topology-shape": 2
+    },
+    "strengths": 0,
+    "total": 2
+  },
+  "foundNothing": [],
+  "kind": "agent_system",
+  "languagesNotAnalysed": [],
+  "name": "stocksense-ai",
+  "relations": {
+    "byKind": {
+      "calls_service": 11,
+      "contains": 2,
+      "transitions_to": 2
+    },
+    "total": 15
+  },
+  "unclaimedImportedConstructions": [
+    "langchain_core.ToolMessage is constructed at stocksense/orchestration/react_flow.py:566 and no adapter claims that distribution",
+    "langchain_google_genai.ChatGoogleGenerativeAI is constructed at stocksense/core/config.py:76 and no adapter claims that distribution",
+    "langchain_google_genai.GoogleGenerativeAI is constructed at stocksense/core/config.py:54 and no adapter claims that distribution",
+    "react.useState is constructed at frontend/src/hooks/useStreamingAnalysis.ts:48 and no adapter claims that distribution"
+  ]
+}
