@@ -11,9 +11,9 @@
   "dependencies": {
     "@orchescope/domain": "workspace:*",
     "@orchescope/schema": "workspace:*",
-    "oxc-parser": "0.141.0",
-    "smol-toml": "1.7.0",
+    "oxc-parser": "0.147.0",
+    "smol-toml": "1.8.0",
     "tree-sitter-python": "0.25.0",
-    "web-tree-sitter": "0.26.11"
+    "web-tree-sitter": "0.26.13"
   }
 }

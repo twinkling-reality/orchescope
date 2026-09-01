@@ -14,7 +14,7 @@
     "@orchescope/schema": "workspace:*",
     "@orchescope/source-analysis": "workspace:*",
     "@orchescope/traces": "workspace:*",
-    "smol-toml": "1.7.0",
+    "smol-toml": "1.8.0",
     "yaml": "2.9.0"
   },
   "devDependencies": {
