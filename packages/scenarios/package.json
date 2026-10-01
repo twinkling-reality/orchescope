@@ -13,7 +13,7 @@
     "@orchescope/runtime": "workspace:*",
     "@orchescope/schema": "workspace:*",
     "@orchescope/traces": "workspace:*",
-    "yaml": "2.9.0"
+    "yaml": "2.9.1"
   },
   "devDependencies": {
     "@orchescope/testkit": "workspace:*"
